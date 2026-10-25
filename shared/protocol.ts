@@ -45,6 +45,11 @@ export interface PromptPayload {
   text: string
   images: { name: string; mediaType: string; data: string }[]
 }
+/** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
+export interface UpdateOrder {
+  version: string
+  issuedAt: string
+}
 
 export interface SealedEntry {
   id: string
@@ -77,6 +82,8 @@ export interface MachineSummary {
   createdAt: string
   lastSeen: string | null
   online: boolean
+  /** Agent version installed on the machine, null until an agent that reports it connects. */
+  agentVersion: string | null
 }
 
 // agent -> relay
@@ -86,11 +93,14 @@ export type AgentMessage =
   | { t: 'meta'; sessionId: string; meta: Sealed }
   | { t: 'permission'; sessionId: string; request: SealedPermission }
   | { t: 'permission_closed'; sessionId: string; requestId: string }
+  // Sent by the channel that ran an update. `detail` is a sealed `{ text }` explaining a failure.
+  | { t: 'update_result'; ok: boolean; version: string | null; detail: Sealed | null }
 
 // relay -> agent
 export type RelayToAgent =
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny' }
+  | { t: 'update'; order: Sealed }
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -100,13 +110,15 @@ export interface HookPost {
 
 // relay -> app
 export type RelayToApp =
-  | { t: 'snapshot'; sessions: SessionSummary[]; machines: MachineSummary[] }
+  | { t: 'snapshot'; sessions: SessionSummary[]; machines: MachineSummary[]; latestAgentVersion: string }
   | { t: 'session'; session: SessionSummary }
   | { t: 'removed'; sessionId: string }
-  | { t: 'machines'; machines: MachineSummary[] }
+  | { t: 'machines'; machines: MachineSummary[]; latestAgentVersion: string }
   | { t: 'history'; sessionId: string; entries: SealedEntry[] }
   | { t: 'entries'; sessionId: string; entries: SealedEntry[]; reset: boolean }
   | { t: 'error'; message: string }
+  // `reason` when the relay could not ask the machine, `detail` when the agent tried and failed.
+  | { t: 'agent_update'; machineId: string; ok: boolean; reason?: 'offline' | 'unsupported'; detail?: Sealed | null }
 
 // app -> relay
 export type AppMessage =
@@ -114,3 +126,4 @@ export type AppMessage =
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny' }
   | { t: 'dismiss'; sessionId: string }
+  | { t: 'update_agent'; machineId: string; order: Sealed }

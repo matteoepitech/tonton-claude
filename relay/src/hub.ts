@@ -7,6 +7,8 @@ export interface SocketData {
   machineId: string | null
   /** Agent: the session it speaks for. App: the session it is watching. */
   sessionId: string | null
+  /** Agent: the installed version it reported, null for agents too old to update themselves. */
+  agentVersion: string | null
 }
 
 export type Socket = ServerWebSocket<SocketData>
@@ -37,6 +39,12 @@ export class Hub {
     return (this.machines.get(machineId)?.size ?? 0) > 0
   }
 
+  /** A socket of the machine whose agent knows how to update itself. */
+  updatableSocket(machineId: string): Socket | null {
+    for (const socket of this.machines.get(machineId) ?? []) if (socket.data.agentVersion) return socket
+    return null
+  }
+
   bindAgent(socket: Socket, sessionId: string) {
     this.agents.set(sessionKey(socket.data.accountId, sessionId), socket)
   }
@@ -49,7 +57,7 @@ export class Hub {
     return true
   }
 
-  sendToAgent(accountId: string, message: RelayToAgent): boolean {
+  sendToAgent(accountId: string, message: Exclude<RelayToAgent, { t: 'update' }>): boolean {
     const agent = this.agents.get(sessionKey(accountId, message.sessionId))
     if (!agent) return false
     agent.send(JSON.stringify(message))

@@ -1,8 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
 import { join } from 'node:path'
+import { AGENT_VERSION } from '../../shared/version'
 
-export const VERSION = '0.3.0'
+export const VERSION = AGENT_VERSION
 
 const HOME = process.env.TONTON_HOME || join(homedir(), '.tonton')
 
@@ -26,6 +27,8 @@ export interface AgentConfig {
   /** Account end-to-end key (base64url). Never sent to the relay. */
   key: string
   machine: string
+  /** Version of the binary installed in ~/.tonton/bin, written by `tonton install`. */
+  version?: string
 }
 
 export function loadConfig(): AgentConfig | null {
@@ -38,6 +41,7 @@ export function loadConfig(): AgentConfig | null {
       token: config.token,
       key: config.key,
       machine: config.machine || defaultMachineName(),
+      version: config.version,
     }
   } catch {
     return null
@@ -46,7 +50,12 @@ export function loadConfig(): AgentConfig | null {
 
 export function saveConfig(config: AgentConfig) {
   mkdirSync(paths.home, { recursive: true, mode: 0o700 })
-  writeFileSync(paths.config, JSON.stringify(config, null, 2), { mode: 0o600 })
+  writeFileSync(paths.config, JSON.stringify({ ...config, version: VERSION }, null, 2), { mode: 0o600 })
+}
+
+/** Read again on each use: an update replaces the binary under channels that keep running the old one. */
+export function installedVersion(): string {
+  return loadConfig()?.version ?? VERSION
 }
 
 export function defaultMachineName(): string {

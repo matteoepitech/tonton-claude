@@ -1,9 +1,10 @@
 import type { WebSocketHandler } from 'bun'
-import type { AgentMessage, AppMessage, RelayToApp } from '../../shared/protocol'
+import type { AgentMessage, AppMessage, RelayToAgent, RelayToApp } from '../../shared/protocol'
+import { AGENT_VERSION } from '../../shared/version'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
 import { MAX_WS_MESSAGE_BYTES } from './limits'
-import { isRequestId, isSealed, isSessionId, isText } from './validate'
+import { isRequestId, isSealed, isSessionId, isText, isVersion } from './validate'
 
 export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<SocketData> {
   return {
@@ -15,8 +16,15 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
       if (socket.data.role === 'app') {
         ctx.hub.addApp(socket)
         const { accountId } = socket.data
-        send(socket, { t: 'snapshot', sessions: ctx.sessions.list(accountId), machines: ctx.machineList(accountId) })
+        send(socket, {
+          t: 'snapshot',
+          sessions: ctx.sessions.list(accountId),
+          machines: ctx.machineList(accountId),
+          latestAgentVersion: AGENT_VERSION,
+        })
       } else {
+        const { machineId, agentVersion } = socket.data
+        if (machineId && agentVersion) ctx.agentVersions.set(machineId, agentVersion)
         ctx.hub.addMachineSocket(socket)
         onMachinePresence(ctx, socket)
       }
@@ -44,7 +52,12 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
 
 function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMessage) {
   const { accountId, machineId } = socket.data
-  if (!machineId || !isSessionId(message?.sessionId)) return
+  if (!machineId) return
+  if (message?.t === 'update_result') {
+    onUpdateResult(ctx, accountId, machineId, message)
+    return
+  }
+  if (!isSessionId(message?.sessionId)) return
   const sessionId = message.sessionId
   // Once announced, a socket only speaks for its own session.
   if (message.t !== 'hello' && socket.data.sessionId !== sessionId) return
@@ -109,7 +122,34 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     case 'dismiss':
       if (isSessionId(message.sessionId)) ctx.sessions.remove(accountId, message.sessionId)
       break
+    case 'update_agent':
+      if (isText(message.machineId, 32) && isSealed(message.order, 4096)) requestUpdate(ctx, socket, message.machineId, message.order)
+      break
   }
+}
+
+/** Hands the sealed order to one channel of the machine: running several updates at once would race on the binary. */
+function requestUpdate(ctx: RelayContext, app: Socket, machineId: string, order: string) {
+  const { accountId } = app.data
+  if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
+  const agent = ctx.hub.updatableSocket(machineId)
+  if (!agent) {
+    const reason = ctx.hub.isMachineOnline(machineId) ? 'unsupported' : 'offline'
+    send(app, { t: 'agent_update', machineId, ok: false, reason })
+    return
+  }
+  const update: RelayToAgent = { t: 'update', order }
+  agent.send(JSON.stringify(update))
+}
+
+function onUpdateResult(ctx: RelayContext, accountId: string, machineId: string, message: Extract<AgentMessage, { t: 'update_result' }>) {
+  const ok = message.ok === true
+  if (ok && isVersion(message.version)) {
+    ctx.agentVersions.set(machineId, message.version)
+    ctx.pushMachines(accountId)
+  }
+  const detail = isSealed(message.detail, 8192) ? message.detail : null
+  ctx.hub.sendToApps(accountId, { t: 'agent_update', machineId, ok, detail })
 }
 
 function onMachinePresence(ctx: RelayContext, socket: Socket) {

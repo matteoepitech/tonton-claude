@@ -6,7 +6,7 @@ import type { RelayContext } from './context'
 import { bearerToken, clientIp, fail, json, readJson } from './http'
 import type { SocketData } from './hub'
 import { installPs1, installSh } from './install-scripts'
-import { isSealed, isSessionId, isText } from './validate'
+import { isSealed, isSessionId, isText, isVersion } from './validate'
 
 type RelayServer = Server<SocketData>
 
@@ -75,7 +75,9 @@ async function agentRoute(ctx: RelayContext, req: Request, server: RelayServer, 
   }
   if (path === '/api/agent/ping') return json({ ok: true, machineId: machine.id })
   if (path === '/ws/agent') {
-    const data: SocketData = { role: 'agent', accountId: machine.accountId, machineId: machine.id, sessionId: null }
+    const version = req.headers.get('x-tonton-agent')
+    const agentVersion = isVersion(version) ? version : null
+    const data: SocketData = { role: 'agent', accountId: machine.accountId, machineId: machine.id, sessionId: null, agentVersion }
     return server.upgrade(req, { data }) ? undefined : fail(400, 'WebSocket expected.')
   }
 
@@ -94,7 +96,7 @@ function appRoute(ctx: RelayContext, req: Request, server: RelayServer, path: st
   }
 
   if (path === '/ws/app') {
-    const data: SocketData = { role: 'app', accountId, machineId: null, sessionId: null }
+    const data: SocketData = { role: 'app', accountId, machineId: null, sessionId: null, agentVersion: null }
     return server.upgrade(req, { data }) ? undefined : fail(400, 'WebSocket expected.')
   }
   if (path === '/api/ping') return json({ ok: true, accountId })
@@ -106,13 +108,17 @@ function appRoute(ctx: RelayContext, req: Request, server: RelayServer, path: st
     const machineId = machinePath[1]
     if (!ctx.registry.revokeMachine(accountId, machineId)) return fail(404, 'No such machine.')
     ctx.hub.disconnectMachine(machineId, 'revoked')
+    ctx.agentVersions.delete(machineId)
     ctx.sessions.removeMachine(accountId, machineId)
     ctx.pushMachines(accountId)
     return json({ ok: true })
   }
 
   if (path === '/api/account' && req.method === 'DELETE') {
-    for (const machine of ctx.registry.machines(accountId)) ctx.hub.disconnectMachine(machine.id, 'account deleted')
+    for (const machine of ctx.registry.machines(accountId)) {
+      ctx.hub.disconnectMachine(machine.id, 'account deleted')
+      ctx.agentVersions.delete(machine.id)
+    }
     ctx.hub.disconnectApps(accountId, 'account deleted')
     ctx.registry.deleteAccount(accountId)
     ctx.sessions.removeAccount(accountId)
