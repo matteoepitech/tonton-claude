@@ -1,6 +1,6 @@
 import AppKit
 
-/// On-screen panels of other apps that float above regular windows: Raycast (layer 8), Spotlight, alerts.
+/// On-screen panels of other apps that float above regular windows: launchers, Spotlight, alerts.
 /// The Dock's full-screen click-through windows and everything from the Dock layer up (menu bar, status items) are left out.
 enum FloatingWindows {
     /// Frames in AppKit screen coordinates.
