@@ -9,11 +9,6 @@ public struct RelayError: LocalizedError, Equatable {
     }
 }
 
-public struct Enrollment: Decodable, Equatable, Sendable {
-    public let code: String
-    public let expiresAt: String
-}
-
 /// HTTP calls to a relay. Stateless: the account (or the relay URL, before an account exists) is passed in.
 public struct RelayAPI: Sendable {
     private let session: URLSession
@@ -36,8 +31,11 @@ public struct RelayAPI: Sendable {
         _ = try await request("GET", account.relay, "/api/ping", token: account.token, as: Ping.self)
     }
 
-    public func newEnrollment(for account: Account) async throws -> Enrollment {
-        try await request("POST", account.relay, "/api/enrollments", token: account.token, as: Enrollment.self)
+    /// The join secret of the account token. `regenerate` replaces the current one and signs every machine out.
+    public func joinSecret(for account: Account, regenerate: Bool) async throws -> String {
+        struct Secret: Decodable { let secret: String }
+        let body = try JSONEncoder().encode(["regenerate": regenerate])
+        return try await request("POST", account.relay, "/api/account/token", token: account.token, body: body, as: Secret.self).secret
     }
 
     public func revokeMachine(_ machineId: String, of account: Account) async throws {
@@ -54,12 +52,17 @@ public struct RelayAPI: Sendable {
         relay.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
-    private func request<T: Decodable>(_ method: String, _ base: String, _ path: String, token: String?, as type: T.Type) async throws -> T
-    {
+    private func request<T: Decodable>(
+        _ method: String, _ base: String, _ path: String, token: String?, body: Data? = nil, as type: T.Type
+    ) async throws -> T {
         guard let url = URL(string: base + path) else { throw RelayError(message: "Invalid relay URL.") }
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.httpMethod = method
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {

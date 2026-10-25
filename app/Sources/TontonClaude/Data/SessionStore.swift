@@ -37,7 +37,9 @@ final class SessionStore: ObservableObject {
         self.settings = settings
         socket.onState = { [weak self] state in self?.socketStateChanged(state) }
         socket.onMessage = { [weak self] message in self?.handle(message) }
-        settings.$account.combineLatest(settings.$connectionEnabled)
+        // The join secret does not change the connection.
+        settings.$account.map { $0.map { [$0.relay, $0.token, $0.key] } }.removeDuplicates()
+            .combineLatest(settings.$connectionEnabled)
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.connect() }
@@ -216,9 +218,19 @@ final class SessionStore: ObservableObject {
         settings.account = account
     }
 
-    func newEnrollment() async throws -> Enrollment {
-        guard let account = settings.account else { throw RelayError(message: "No account.") }
-        return try await api.newEnrollment(for: account)
+    /// Asks the relay for the account token the first time. An account whose token was made on another Mac has to
+    /// regenerate it here.
+    func createMachineToken() async throws {
+        guard let account = settings.account, account.joinSecret == nil else { return }
+        settings.account = account.with(joinSecret: try await api.joinSecret(for: account, regenerate: false))
+    }
+
+    /// A new token and a new encryption key: every machine is signed out until it gets the new token, and other Macs
+    /// signed in to the account need the new recovery key.
+    func regenerateMachineToken() async throws {
+        guard let account = settings.account else { return }
+        let secret = try await api.joinSecret(for: account, regenerate: true)
+        settings.account = account.with(key: E2E.newKey(), joinSecret: secret)
     }
 
     func revoke(_ machine: MachineInfo) async throws {

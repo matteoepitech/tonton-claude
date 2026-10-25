@@ -19,39 +19,114 @@ struct MachinesPane: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
             }
-        } else if router.installing {
-            InstallSteps()
-        } else if store.machines.isEmpty {
-            Card {
-                VStack(spacing: 10) {
-                    IconTile(systemName: "desktopcomputer", size: 40)
-                    Text("No machines yet").font(.system(size: 14, weight: .medium))
-                    Text("Install the agent on a computer, then start claude there.")
+        } else {
+            TokenCard()
+            GroupLabel(text: "Machines")
+            if store.machines.isEmpty {
+                Card {
+                    Text("No machines yet. Run the install command on a computer, then start claude there.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textDim)
-                    Button {
-                        router.installing = true
-                    } label: {
-                        Label("Add machine", systemImage: "plus")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                }
+            } else {
+                Card {
+                    ForEach(Array(store.machines.enumerated()), id: \.element.id) { index, m in
+                        if index > 0 { Hairline() }
+                        MachineRow(machine: m)
                     }
-                    .buttonStyle(ThemeButtonStyle())
-                    .padding(.top, 6)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
+                Text("Hidden machines keep running, they just stay out of the notch. Revoking a machine signs it out for good.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textFaint)
+                    .padding(.top, 10)
             }
-        } else {
-            Card {
-                ForEach(Array(store.machines.enumerated()), id: \.element.id) { index, m in
-                    if index > 0 { Hairline() }
-                    MachineRow(machine: m)
-                }
-            }
-            Text("Hidden machines keep running, they just stay out of the notch. Revoking a machine signs it out for good.")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textFaint)
-                .padding(.top, 10)
         }
+    }
+}
+
+/// The account token and the install commands that carry it. One token for every machine, like a RustDesk server key.
+struct TokenCard: View {
+    @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var store: SessionStore
+    @State private var reveal = false
+    @State private var copied = false
+    @State private var busy = false
+    @State private var error: String?
+    @State private var confirmRegenerate = false
+
+    var body: some View {
+        let token = settings.account?.machineToken
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Your token").font(.system(size: 13, weight: .medium))
+                Text("Machines join your account with it: paste it in the install command, or in the agent's tray icon › Set token.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let token {
+                    HStack(spacing: 6) {
+                        Text(reveal ? token : "tonton_" + String(repeating: "•", count: 32))
+                            .font(Theme.mono)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .padding(.horizontal, 10)
+                            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 7).fill(Color.black.opacity(0.35)))
+                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.borderStrong))
+                        Button {
+                            reveal.toggle()
+                        } label: {
+                            Image(systemName: reveal ? "eye.slash" : "eye").frame(width: 14)
+                        }
+                        .buttonStyle(ThemeButtonStyle())
+                        Button(copied ? "Copied" : "Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(token, forType: .string)
+                            copied = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                        }
+                        .buttonStyle(ThemeButtonStyle())
+                        Button("Regenerate…") { confirmRegenerate = true }.buttonStyle(ThemeButtonStyle()).disabled(busy)
+                    }
+                } else if busy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button("Get a new token") { confirmRegenerate = true }.buttonStyle(ThemeButtonStyle())
+                }
+                if let error {
+                    Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(16)
+            if let token {
+                Hairline()
+                CodeRow(
+                    label: "Windows", hint: "PowerShell", command: InstallCommand.windows(token: token),
+                    masked: InstallCommand.windows(token: "tonton_•••"))
+                Hairline()
+                CodeRow(
+                    label: "macOS & Linux", hint: "Terminal", command: InstallCommand.unix(token: token),
+                    masked: InstallCommand.unix(token: "tonton_•••"))
+            }
+        }
+        .task { await run { try await store.createMachineToken() } }
+        .confirmationDialog("Regenerate the token?", isPresented: $confirmRegenerate) {
+            Button("Regenerate", role: .destructive) { Task { await run { try await store.regenerateMachineToken() } } }
+        } message: {
+            Text(
+                "The current token stops working right away: every machine is signed out until you give it the new one. "
+                    + "Other Macs signed in to this account need the new recovery key.")
+        }
+    }
+
+    private func run(_ work: () async throws -> Void) async {
+        busy = true
+        error = nil
+        do { try await work() } catch { self.error = error.localizedDescription }
+        busy = false
     }
 }
 
@@ -157,91 +232,6 @@ struct AgentUpdateButton: View {
         case nil:
             EmptyView()
         }
-    }
-}
-
-struct InstallSteps: View {
-    @EnvironmentObject var settings: AppSettings
-    @EnvironmentObject var store: SessionStore
-    @State private var enrollment: Enrollment?
-    @State private var error: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Step(
-                number: 1, title: "Install the agent",
-                detail: "Paste the line for the machine's system in a terminal. The code works once and expires in 15 minutes.")
-            Card {
-                if let enrollment, let account = settings.account {
-                    let code = InstallCommand.connectionCode(code: enrollment.code, key: account.key, relay: account.relay)
-                    let masked = "\(enrollment.code).•••@\(account.relay)"
-                    CodeRow(
-                        label: "Windows", hint: "PowerShell",
-                        command: InstallCommand.windows(connectionCode: code), masked: InstallCommand.windows(connectionCode: masked))
-                    Hairline()
-                    CodeRow(
-                        label: "macOS & Linux", hint: "Terminal",
-                        command: InstallCommand.unix(connectionCode: code), masked: InstallCommand.unix(connectionCode: masked))
-                    Hairline()
-                    HStack {
-                        Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(Theme.textFaint)
-                        Text("The command carries your encryption key: it is never sent to the relay.")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.textFaint)
-                        Spacer()
-                        Button("New code") { Task { await refresh() } }.buttonStyle(ThemeButtonStyle())
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                } else if let error {
-                    Row(title: "Could not create a code", detail: error) {
-                        Button("Retry") { Task { await refresh() } }.buttonStyle(ThemeButtonStyle())
-                    }
-                } else {
-                    HStack {
-                        Spacer(); ProgressView().controlSize(.small); Spacer()
-                    }.padding(24)
-                }
-            }
-            .padding(.leading, 34)
-            Step(
-                number: 2, title: "Start claude in a new terminal",
-                detail: "Confirm “I am using this for local development” once. The machine then shows up here and in the notch."
-            )
-            .padding(.top, 24)
-        }
-        .task { await refresh() }
-    }
-
-    private func refresh() async {
-        error = nil
-        do {
-            enrollment = try await store.newEnrollment()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-}
-
-struct Step: View {
-    let number: Int
-    let title: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(number)")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.text)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(Theme.raised))
-                .overlay(Circle().stroke(Theme.borderStrong))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 13, weight: .medium))
-                Text(detail).font(.system(size: 12)).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.bottom, 12)
     }
 }
 
