@@ -26,7 +26,7 @@ export function createFetchHandler(ctx: RelayContext) {
     if (ctx.failedAuth.isBlocked(ip)) return fail(429, 'Too many failed attempts, try again later.')
 
     if (path === '/api/accounts' && req.method === 'POST') return createAccount(ctx, req, ip)
-    if (path === '/api/machines/claim' && req.method === 'POST') return claimMachine(ctx, req, ip)
+    if (path === '/api/machines/join' && req.method === 'POST') return joinMachine(ctx, req, ip)
     if (path === '/api/hook' || path === '/api/agent/ping' || path === '/ws/agent') return agentRoute(ctx, req, server, path, ip)
     return appRoute(ctx, req, server, path, ip)
   }
@@ -40,19 +40,33 @@ function createAccount(ctx: RelayContext, req: Request, ip: string): Response {
   return json({ accountId: account.id, token: account.token })
 }
 
-async function claimMachine(ctx: RelayContext, req: Request, ip: string): Promise<Response> {
-  if (!ctx.claims.hit(ip)) return fail(429, 'Too many enrollment attempts.')
-  const body = await readJson<{ code?: unknown; name?: unknown }>(req, 16_384)
-  if (!isText(body?.code, 32) || !isSealed(body?.name, 4096)) return fail(400, 'Bad request.')
+async function joinMachine(ctx: RelayContext, req: Request, ip: string): Promise<Response> {
+  if (!ctx.claims.hit(ip)) return fail(429, 'Too many attempts to join.')
+  const body = await readJson<{ account?: unknown; secret?: unknown; name?: unknown }>(req, 16_384)
+  if (!isText(body?.account, 32) || !isText(body?.secret, 64) || !isSealed(body?.name, 4096)) return fail(400, 'Bad request.')
 
-  const result = ctx.registry.claimEnrollment(body.code, body.name)
+  const result = ctx.registry.joinMachine(body.account, body.secret, body.name)
   if (!result.ok && result.reason === 'machine-limit') return fail(403, 'This account reached its machine limit.')
   if (!result.ok) {
     ctx.failedAuth.hit(ip)
-    return fail(401, 'Unknown or expired code. Create a new one from the app.')
+    return fail(401, 'This token is no longer valid. Copy the current one from Tonton Claude › Machines.')
   }
   ctx.pushMachines(result.machine.accountId)
   return json({ machineId: result.machine.id, token: result.token })
+}
+
+/** Creates the account token, or replaces it and signs out every machine that joined with the previous one. */
+async function accountToken(ctx: RelayContext, req: Request, accountId: string): Promise<Response> {
+  const body = await readJson<{ regenerate?: unknown }>(req, 1024)
+  const result = ctx.registry.newJoinSecret(accountId, body?.regenerate === true)
+  if (!result) return fail(409, 'This account already has a token. Copy it from the Mac where it was created, or regenerate it.')
+  for (const machineId of result.revoked) {
+    ctx.hub.disconnectMachine(machineId, 'token regenerated')
+    ctx.agentVersions.delete(machineId)
+    ctx.sessions.removeMachine(accountId, machineId)
+  }
+  if (result.revoked.length) ctx.pushMachines(accountId)
+  return json({ secret: result.secret })
 }
 
 async function agentRoute(ctx: RelayContext, req: Request, server: RelayServer, path: string, ip: string): Promise<Response | undefined> {
@@ -82,7 +96,7 @@ async function agentRoute(ctx: RelayContext, req: Request, server: RelayServer, 
   return new Response('ok')
 }
 
-function appRoute(ctx: RelayContext, req: Request, server: RelayServer, path: string, ip: string): Response | undefined {
+async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, path: string, ip: string): Promise<Response | undefined> {
   const accountId = ctx.registry.authenticateAccount(bearerToken(req))
   if (!accountId) {
     ctx.failedAuth.hit(ip)
@@ -94,7 +108,7 @@ function appRoute(ctx: RelayContext, req: Request, server: RelayServer, path: st
     return server.upgrade(req, { data }) ? undefined : fail(400, 'WebSocket expected.')
   }
   if (path === '/api/ping') return json({ ok: true, accountId })
-  if (path === '/api/enrollments' && req.method === 'POST') return json(ctx.registry.createEnrollment(accountId))
+  if (path === '/api/account/token' && req.method === 'POST') return accountToken(ctx, req, accountId)
   if (path === '/api/machines' && req.method === 'GET') return json(ctx.machineList(accountId))
 
   const machinePath = MACHINE_PATH.exec(path)

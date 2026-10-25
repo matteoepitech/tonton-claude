@@ -31,9 +31,7 @@ export function safeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-/** Twelve upper-case alphanumeric characters, easy to read in a terminal. */
-export function newEnrollmentCode(): string {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const bytes = randomBytes(12)
-  return Array.from(bytes, b => alphabet[b % alphabet.length]).join('')
+/** The secret of an account token, which lets machines join the account. */
+export function newJoinSecret(): string {
+  return randomBytes(SECRET_BYTES).toString('base64url')
 }

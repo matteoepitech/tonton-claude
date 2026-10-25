@@ -7,7 +7,6 @@ export const MAX_BLOB_BYTES = 8 * 1024 * 1024
 export const MAX_PENDING_PERMISSIONS = 10
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
-export const ENROLLMENT_TTL_MS = 15 * 60_000
 export const FINISHED_SESSION_TTL_MS = 6 * 60 * 60_000
 
 export const RATE_LIMITS = {
