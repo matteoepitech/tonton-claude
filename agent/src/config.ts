@@ -24,6 +24,8 @@ export const paths = {
 
 export interface AgentConfig {
   server: string
+  /** Account the machine joined, from its token. */
+  account?: string
   machineId: string
   /** Machine token issued by the relay at enrollment. */
   token: string
@@ -42,6 +44,7 @@ export function loadConfig(): AgentConfig | null {
     if (!config.server || !config.token || !config.key || !config.machineId) return null
     return {
       server: config.server.replace(/\/+$/, ''),
+      account: config.account,
       machineId: config.machineId,
       token: config.token,
       key: config.key,

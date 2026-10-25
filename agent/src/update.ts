@@ -109,8 +109,8 @@ async function verified(release: string, name: string, sums: Map<string, string>
 }
 
 async function run(command: string[]): Promise<{ exitCode: number; output: string }> {
-  // Without TONTON_ENROLL, install reuses the machine's enrollment.
-  const env = { ...process.env, TONTON_ENROLL: '' }
+  // Without TONTON_TOKEN, install keeps the machine's connection.
+  const env = { ...process.env, TONTON_TOKEN: '' }
   const child = Bun.spawn(command, { env, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', windowsHide: true })
   const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
   return { exitCode, output: stderr.trim() || stdout }

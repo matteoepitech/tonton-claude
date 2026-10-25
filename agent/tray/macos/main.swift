@@ -1,5 +1,5 @@
 // Menu bar icon of the Tonton Claude agent on macOS, started by `tonton service`.
-// It shows the status the service writes and runs `tonton relay` to change relay.
+// It shows the status the service writes and runs `tonton token` to connect to a relay and account.
 // Exit codes read by the service: 0 Quit, 2 service gone, 3 icon hidden.
 // Built by the release workflow: swiftc -O agent/tray/macos/main.swift -o tonton-tray
 import AppKit
@@ -54,7 +54,6 @@ final class Tray: NSObject, NSApplicationDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let title = NSMenuItem(title: "Tonton Claude", action: nil, keyEquivalent: "")
     private let state = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
-    private var relay = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installEditMenu()
@@ -66,7 +65,7 @@ final class Tray: NSObject, NSApplicationDelegate {
         menu.addItem(title)
         menu.addItem(state)
         menu.addItem(.separator())
-        menu.addItem(action("Change Relay…", #selector(changeRelay)))
+        menu.addItem(action("Set Token…", #selector(setToken)))
         menu.addItem(action("Open Log", #selector(openLog)))
         menu.addItem(action("Hide This Icon", #selector(hideIcon)))
         menu.addItem(.separator())
@@ -87,40 +86,38 @@ final class Tray: NSObject, NSApplicationDelegate {
         guard let data = FileManager.default.contents(atPath: options.status),
             let status = try? JSONDecoder().decode(ServiceStatus.self, from: data)
         else { return }
-        relay = status.relay ?? ""
         let host = status.relay.flatMap { URL(string: $0)?.host } ?? ""
         state.title =
             switch status.state {
             case "connected": "Connected to \(host)"
             case "connecting": "Connecting to \(host)…"
-            case "revoked": "Signed out by \(host)"
+            case "revoked": "Token no longer valid: set the new one"
             default: "Not set up"
             }
         title.title = "Tonton Claude \(status.version)"
         item.button?.toolTip = "Tonton Claude: \(state.title)"
     }
 
-    @objc private func changeRelay() {
+    @objc private func setToken() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Change relay"
-        alert.informativeText =
-            "Enter the relay address, or the connection code from Tonton Claude › Machines › Add machine to join another account."
+        alert.messageText = "Set token"
+        alert.informativeText = "Paste the token from Tonton Claude › Machines on your Mac."
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 24))
-        field.stringValue = relay
+        field.placeholderString = "tonton_…"
         alert.accessoryView = field
         alert.addButton(withTitle: "Connect")
         alert.addButton(withTitle: "Cancel")
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty, value != relay else { return }
+        guard !value.isEmpty else { return }
         DispatchQueue.global().async {
-            let (ok, output) = self.runTonton(["relay", value])
+            let (ok, output) = self.runTonton(["token", value])
             DispatchQueue.main.async {
                 let result = NSAlert()
                 result.alertStyle = ok ? .informational : .warning
-                result.messageText = ok ? "Relay changed" : "Could not change relay"
+                result.messageText = ok ? "Connected" : "Could not use this token"
                 result.informativeText = output
                 NSApp.activate(ignoringOtherApps: true)
                 result.runModal()
@@ -167,7 +164,7 @@ final class Tray: NSObject, NSApplicationDelegate {
         return (process.terminationStatus == 0, output.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// Without a main menu, ⌘V and the other editing shortcuts do nothing in the relay field.
+    /// Without a main menu, ⌘V and the other editing shortcuts do nothing in the token field.
     private func installEditMenu() {
         let edit = NSMenu(title: "Edit")
         edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")

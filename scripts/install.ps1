@@ -1,13 +1,13 @@
 # Tonton Claude agent, Windows. Published with each release:
-#   $env:TONTON_ENROLL='<code>'; irm https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.ps1 | iex
-# TONTON_ENROLL is the connection code from the app (Machines > Add machine). Without it, an enrolled machine updates.
+#   $env:TONTON_TOKEN='<token>'; irm https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.ps1 | iex
+# TONTON_TOKEN is the token from the app (Machines). Without it, a connected machine updates.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $Repo = 'matteoepitech/tonton-claude'
 $Version = '__VERSION__'
 
-if (-not $env:TONTON_ENROLL -and -not (Test-Path (Join-Path $HOME '.tonton\config.json'))) {
-  throw 'Missing TONTON_ENROLL. Copy the install command from Tonton Claude > Machines > Add machine.'
+if (-not $env:TONTON_TOKEN -and -not (Test-Path (Join-Path $HOME '.tonton\config.json'))) {
+  throw 'Missing TONTON_TOKEN. Copy the install command from Tonton Claude > Machines.'
 }
 
 # The claude launcher lives in the PowerShell profile, which only loads if scripts are allowed.
@@ -35,4 +35,4 @@ if (-not $expected -or (Get-FileHash -Algorithm SHA256 $download).Hash -ne $expe
 # A running exe can't be overwritten on Windows, but it can be renamed.
 if (Test-Path $exe) { Move-Item -Force $exe "$exe.old-$([DateTime]::Now.Ticks)" }
 Move-Item -Force $download $exe
-try { & $exe install } finally { Remove-Item Env:TONTON_ENROLL -ErrorAction SilentlyContinue }
+try { & $exe install } finally { Remove-Item Env:TONTON_TOKEN -ErrorAction SilentlyContinue }

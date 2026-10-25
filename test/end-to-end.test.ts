@@ -84,9 +84,10 @@ beforeAll(async () => {
   otherAccountToken = (await (await api('/api/accounts', { method: 'POST' })).json()).token
   key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
 
-  const { code } = await (await api('/api/enrollments', { method: 'POST', token: accountToken })).json()
+  const { secret } = await (await api('/api/account/token', { method: 'POST', token: accountToken, body: '{}' })).json()
   const name = await seal(key, { name: 'PC-Test' })
-  machine = await (await api('/api/machines/claim', { method: 'POST', body: JSON.stringify({ code, name }) })).json()
+  const joinRequest = { account: account.accountId, secret, name }
+  machine = await (await api('/api/machines/join', { method: 'POST', body: JSON.stringify(joinRequest) })).json()
 
   const home = join(dir, 'agent')
   mkdirSync(join(home, 'run'), { recursive: true })

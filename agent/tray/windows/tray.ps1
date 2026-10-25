@@ -1,5 +1,5 @@
 # Tray icon of the Tonton Claude agent on Windows, started hidden by `tonton service`.
-# It shows the status the service writes and runs `tonton relay` to change relay.
+# It shows the status the service writes and runs `tonton token` to connect to a relay and account.
 # Exit codes read by the service: 0 Quit, 2 service gone, 3 icon hidden. ASCII only: Windows PowerShell 5.1 reads it as ANSI.
 param(
   [Parameter(Mandatory)] [string] $Tonton,
@@ -13,7 +13,6 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing, Microsoft.VisualBas
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $script:exitCode = 0
-$script:relay = ''
 
 $tray = New-Object System.Windows.Forms.NotifyIcon
 $tray.Icon = New-Object System.Drawing.Icon($Icon)
@@ -25,7 +24,7 @@ $title.Enabled = $false
 $state = $menu.Items.Add('Starting...')
 $state.Enabled = $false
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
-$change = $menu.Items.Add('Change relay...')
+$setToken = $menu.Items.Add('Set token...')
 $openLog = $menu.Items.Add('Open log')
 $hide = $menu.Items.Add('Hide this icon')
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
@@ -65,12 +64,11 @@ function Update-State {
   } catch {
     return
   }
-  $script:relay = if ($status.relay) { [string]$status.relay } else { '' }
   $relayHost = if ($status.relay) { ([Uri]$status.relay).Host } else { '' }
   $state.Text = switch ($status.state) {
     'connected' { "Connected to $relayHost" }
     'connecting' { "Connecting to $relayHost..." }
-    'revoked' { "Signed out by $relayHost" }
+    'revoked' { 'Token no longer valid: set the new one' }
     default { 'Not set up' }
   }
   $title.Text = "Tonton Claude $($status.version)"
@@ -79,11 +77,11 @@ function Update-State {
   $tray.Text = if ($tooltip.Length -gt 63) { $tooltip.Substring(0, 63) } else { $tooltip }
 }
 
-$change.add_Click({
-  $prompt = "Relay address, or the connection code from Tonton Claude > Machines > Add machine to join another account."
-  $value = [Microsoft.VisualBasic.Interaction]::InputBox($prompt, 'Change relay', $script:relay).Trim()
-  if (-not $value -or $value -eq $script:relay) { return }
-  $result = Invoke-Tonton @('relay', $value)
+$setToken.add_Click({
+  $prompt = 'Paste the token from Tonton Claude > Machines on your Mac.'
+  $value = [Microsoft.VisualBasic.Interaction]::InputBox($prompt, 'Set token', '').Trim()
+  if (-not $value) { return }
+  $result = Invoke-Tonton @('token', $value)
   $kind = if ($result.Ok) { [System.Windows.Forms.MessageBoxIcon]::Information } else { [System.Windows.Forms.MessageBoxIcon]::Error }
   [void][System.Windows.Forms.MessageBox]::Show($result.Text, 'Tonton Claude', [System.Windows.Forms.MessageBoxButtons]::OK, $kind)
   Update-State

@@ -1,23 +1,26 @@
-// The background service against two real relays: it keeps the machine online, and `tonton relay` moves it.
+// The background service against two real relays: it keeps the machine online, follows `tonton token`, and is signed
+// out when the account token is regenerated.
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { seal } from '../agent/src/crypto'
 import type { ServiceStatus } from '../agent/src/service/status'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
+import { encodeAccountToken } from '../shared/account-token'
 import type { MachineSummary, RelayToApp } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-service-'))
 const home = join(dir, 'agent')
 const env = { ...process.env, TONTON_HOME: home, TONTON_SERVICE: 'off' } as Record<string, string>
-const key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
+const newKey = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
 
+/** A relay with an account and the app's socket on it. */
 interface Relay {
   stop(): void
   url: string
+  accountId: string
   token: string
   machines: MachineSummary[]
 }
@@ -28,8 +31,8 @@ let service: ReturnType<typeof Bun.spawn>
 async function relayWithApp(name: string): Promise<Relay> {
   const relay = startRelay(loadConfig({ PORT: '0', TONTON_DATA_DIR: join(dir, name) }))
   const url = `http://127.0.0.1:${relay.server.port}`
-  const { token } = await (await fetch(`${url}/api/accounts`, { method: 'POST' })).json()
-  const result: Relay = { stop: relay.stop, url, token, machines: [] }
+  const { accountId, token } = await (await fetch(`${url}/api/accounts`, { method: 'POST' })).json()
+  const result: Relay = { stop: relay.stop, url, accountId, token, machines: [] }
   const socket = new WebSocket(`${url.replace('http', 'ws')}/ws/app`, { headers: { authorization: `Bearer ${token}` } } as never)
   socket.onmessage = event => {
     const message = JSON.parse(String(event.data)) as RelayToApp
@@ -40,10 +43,15 @@ async function relayWithApp(name: string): Promise<Relay> {
   return result
 }
 
-async function connectionCode(relay: Relay, server = relay.url): Promise<string> {
-  const response = await fetch(`${relay.url}/api/enrollments`, { method: 'POST', headers: { authorization: `Bearer ${relay.token}` } })
-  const { code } = await response.json()
-  return `${code}.${key}@${server}`
+/** What the app shows in Machines: a new secret, and with `regenerate` a new key too. */
+async function machineToken(relay: Relay, regenerate = false): Promise<string> {
+  const response = await fetch(`${relay.url}/api/account/token`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${relay.token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ regenerate }),
+  })
+  const { secret } = await response.json()
+  return encodeAccountToken({ relay: relay.url, account: relay.accountId, secret, key: newKey() })
 }
 
 async function tonton(...args: string[]) {
@@ -71,18 +79,15 @@ async function eventually<T>(read: () => T | undefined | null | false, label: st
 
 let first: Relay
 let second: Relay
+let firstToken: string
+let secondToken: string
 
 beforeAll(async () => {
   first = await relayWithApp('first')
   second = await relayWithApp('second')
-  // Enrolled on the first relay, as the install script would leave it.
-  const { code } = await (
-    await fetch(`${first.url}/api/enrollments`, { method: 'POST', headers: { authorization: `Bearer ${first.token}` } })
-  ).json()
-  const name = await seal(key, { name: 'PC-Service' })
-  const machine = await (await fetch(`${first.url}/api/machines/claim`, { method: 'POST', body: JSON.stringify({ code, name }) })).json()
   mkdirSync(home, { recursive: true })
-  writeFileSync(join(home, 'config.json'), JSON.stringify({ server: first.url, ...machine, key, machine: 'PC-Service' }))
+  firstToken = await machineToken(first)
+  expect((await tonton('token', firstToken)).exitCode).toBe(0)
   service = Bun.spawn(['bun', AGENT, 'service'], { env, stdout: 'ignore', stderr: 'ignore' })
 })
 
@@ -104,29 +109,36 @@ test('only one service runs per machine', async () => {
   expect(service.exitCode).toBeNull()
 })
 
-test('an address the relay does not know this machine at is refused', async () => {
-  const result = await tonton('relay', second.url)
+test('the same token again changes nothing', async () => {
+  expect(await tonton('token', firstToken)).toEqual({ exitCode: 0, output: `Already connected to ${new URL(first.url).host}.` })
+  expect(first.machines).toHaveLength(1)
+})
+
+test('anything but a token is refused with a hint', async () => {
+  const result = await tonton('token', first.url)
   expect(result.exitCode).toBe(1)
-  expect(result.output).toContain('does not know this machine')
+  expect(result.output).toContain('This is not a Tonton Claude token')
 })
 
-test('another address of the same relay keeps the enrollment', async () => {
-  const alias = first.url.replace('127.0.0.1', 'localhost')
-  const result = await tonton('relay', `${alias}/`)
-  expect(result).toEqual({ exitCode: 0, output: `Now using ${new URL(alias).host}.` })
-  await eventually(() => status()?.relay === alias && status()?.state === 'connected', 'the service on the new address')
-})
-
-test('a connection code moves the machine to another relay and account, the service follows', async () => {
-  const result = await tonton('relay', await connectionCode(second))
-  expect(result).toEqual({ exitCode: 0, output: `Connected to ${new URL(second.url).host} as "PC-Service".` })
+test('the token of another relay moves the machine there, the service follows', async () => {
+  secondToken = await machineToken(second)
+  const result = await tonton('token', secondToken)
+  expect(result.exitCode).toBe(0)
+  expect(result.output).toStartWith(`Connected to ${new URL(second.url).host} as `)
   await eventually(() => second.machines[0]?.online, 'the machine on the second relay')
   await eventually(() => first.machines[0] && !first.machines[0].online, 'the machine gone from the first relay')
   expect(status()).toMatchObject({ state: 'connected', relay: second.url })
 })
 
-test('garbage is refused with a hint', async () => {
-  const result = await tonton('relay', 'not a relay')
-  expect(result.exitCode).toBe(1)
-  expect(result.output).toContain('Enter a relay address')
+test('regenerating the token signs the machine out; only the new token brings it back', async () => {
+  const next = await machineToken(second, true)
+  await eventually(() => status()?.state === 'revoked', 'the service signed out')
+  expect(second.machines).toHaveLength(0)
+
+  const refused = await tonton('token', secondToken)
+  expect(refused).toEqual({ exitCode: 1, output: 'This token is no longer valid. Copy the current one from Tonton Claude › Machines.' })
+
+  expect((await tonton('token', next)).exitCode).toBe(0)
+  await eventually(() => status()?.state === 'connected', 'the service back with the new token')
+  expect(second.machines.filter(machine => machine.online)).toHaveLength(1)
 })

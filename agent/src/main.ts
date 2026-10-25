@@ -4,14 +4,14 @@ import { runHook } from './hook'
 import { install, status, uninstall } from './install'
 import { restartService } from './service/control'
 import { runService } from './service/index'
-import { switchRelay } from './switch-relay'
+import { useToken } from './token'
 
 const USAGE = `Tonton Claude ${VERSION}
 
-  tonton status                     check the setup and the connection
-  tonton relay [address | code]     show or change the relay (a code from the app joins another account)
-  tonton tray on|off                show or hide the tray icon
-  tonton install                    update this machine (TONTON_ENROLL=<code> to enroll it)
+  tonton status              check the setup and the connection
+  tonton token [token]       show the relay, or connect to the relay and account of a token from the app
+  tonton tray on|off         show or hide the tray icon
+  tonton install             update this machine (TONTON_TOKEN=<token> to connect it)
   tonton uninstall`
 
 const [command, ...args] = process.argv.slice(2)
@@ -27,8 +27,8 @@ switch (command) {
   case 'service':
     await runService(args)
     break
-  case 'relay':
-    await relay(args[0])
+  case 'token':
+    await token(args[0])
     break
   case 'tray':
     tray(args[0])
@@ -50,13 +50,14 @@ switch (command) {
     console.log(USAGE)
 }
 
-async function relay(input: string | undefined) {
+async function token(input: string | undefined) {
   if (!input) {
-    console.log(loadConfig()?.server ?? 'Not set up. Use the connection code from Tonton Claude › Machines › Add machine.')
+    const config = loadConfig()
+    console.log(config ? `Connected to ${config.server}` : 'Not set up. Copy the token from Tonton Claude › Machines on your Mac.')
     return
   }
   try {
-    console.log(await switchRelay(input))
+    console.log(await useToken(input))
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)
