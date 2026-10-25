@@ -34,32 +34,45 @@ public struct WireMachine: Decodable, Sendable {
     public let createdAt: String
     public let lastSeen: String?
     public let online: Bool
+    public let agentVersion: String?
 }
 
 /// Messages the relay sends to the app.
 public enum RelayMessage: Decodable, Sendable {
-    case snapshot(sessions: [WireSession], machines: [WireMachine])
+    /// `latestAgentVersion` is the agent the relay offers, missing on relays that predate agent updates.
+    case snapshot(sessions: [WireSession], machines: [WireMachine], latestAgentVersion: String?)
     case session(WireSession)
     case removed(sessionId: String)
-    case machines([WireMachine])
+    case machines([WireMachine], latestAgentVersion: String?)
     case history(sessionId: String, entries: [WireEntry])
     case entries(sessionId: String, entries: [WireEntry])
     case error(String)
+    /// `reason` when the relay could not reach the agent, `detail` (sealed) when the agent tried and failed.
+    case agentUpdate(machineId: String, ok: Bool, reason: String?, detail: String?)
     case unknown
 
-    private enum Keys: String, CodingKey { case t, sessions, machines, session, sessionId, entries, message }
+    private enum Keys: String, CodingKey {
+        case t, sessions, machines, session, sessionId, entries, message, latestAgentVersion, machineId, ok, reason, detail
+    }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: Keys.self)
         func value<T: Decodable>(_ key: Keys) throws -> T { try container.decode(T.self, forKey: key) }
+        func optional(_ key: Keys) throws -> String? { try container.decodeIfPresent(String.self, forKey: key) }
         switch try container.decode(String.self, forKey: .t) {
-        case "snapshot": self = .snapshot(sessions: try value(.sessions), machines: try value(.machines))
+        case "snapshot":
+            let latest = try optional(.latestAgentVersion)
+            self = .snapshot(sessions: try value(.sessions), machines: try value(.machines), latestAgentVersion: latest)
         case "session": self = .session(try value(.session))
         case "removed": self = .removed(sessionId: try value(.sessionId))
-        case "machines": self = .machines(try value(.machines))
+        case "machines":
+            self = .machines(try value(.machines), latestAgentVersion: try optional(.latestAgentVersion))
         case "history": self = .history(sessionId: try value(.sessionId), entries: try value(.entries))
         case "entries": self = .entries(sessionId: try value(.sessionId), entries: try value(.entries))
         case "error": self = .error(try value(.message))
+        case "agent_update":
+            let (reason, detail) = (try optional(.reason), try optional(.detail))
+            self = .agentUpdate(machineId: try value(.machineId), ok: try value(.ok), reason: reason, detail: detail)
         default: self = .unknown
         }
     }
@@ -86,6 +99,7 @@ public struct OutgoingImage: Codable, Sendable {
 }
 
 struct PromptPayload: Codable { let text: String; let images: [OutgoingImage] }
+struct UpdateOrder: Codable { let version: String; let issuedAt: String }
 
 enum ISO8601 {
     private static let withFraction: ISO8601DateFormatter = {

@@ -2,8 +2,9 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { PromptPayload, RelayToAgent } from '../../../shared/protocol'
 import { loadConfig, paths } from '../config'
-import { open } from '../crypto'
+import { open, seal } from '../crypto'
 import { log } from '../log'
+import { applyUpdate } from '../update'
 import { Conversation } from './conversation'
 import { ChannelServer } from './mcp'
 import { RelayConnection } from './relay-connection'
@@ -32,11 +33,24 @@ export async function runChannel() {
   const relay = new RelayConnection(config, {
     connected: () => conversation?.announce(),
     message: message => {
-      if (conversation && message.sessionId === conversation.link.sessionId) void onRelayMessage(message)
+      if (message.t === 'update') void update(message.order)
+      else if (conversation && message.sessionId === conversation.link.sessionId) void onRelayMessage(message)
     },
   })
 
-  const onRelayMessage = async (message: RelayToAgent) => {
+  const update = async (order: string) => {
+    try {
+      const version = await applyUpdate(config, order)
+      log('agent updated', { version })
+      relay.post(async () => ({ t: 'update_result', ok: true, version, detail: null }))
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error)
+      log('agent update failed', text)
+      relay.post(async () => ({ t: 'update_result', ok: false, version: null, detail: await seal(config.key, { text }) }))
+    }
+  }
+
+  const onRelayMessage = async (message: Exclude<RelayToAgent, { t: 'update' }>) => {
     if (message.t === 'verdict') {
       conversation?.resolvePermission(message.requestId)
       await mcp.answerPermission(message.requestId, message.behavior)

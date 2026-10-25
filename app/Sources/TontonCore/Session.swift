@@ -97,13 +97,30 @@ public struct MachineInfo: Identifiable, Equatable, Sendable {
     public let createdAt: Date
     public let lastSeen: Date?
     public let online: Bool
+    /// Installed agent version. Unknown for agents older than 0.4.0, and for machines not seen since the relay started.
+    public let agentVersion: String?
 
-    public init(id: String, name: String, platform: String?, createdAt: Date, lastSeen: Date?, online: Bool) {
+    public init(id: String, name: String, platform: String?, createdAt: Date, lastSeen: Date?, online: Bool, agentVersion: String?) {
         self.id = id
         self.name = name
         self.platform = platform
         self.createdAt = createdAt
         self.lastSeen = lastSeen
         self.online = online
+        self.agentVersion = agentVersion
+    }
+
+    public enum AgentUpdate: Equatable, Sendable {
+        /// The agent updates itself when asked.
+        case oneClick
+        /// The agent is too old to update itself: the install command must run once more on the machine.
+        case manual
+    }
+
+    /// How the machine's agent can be brought to `latest`, nil when it is up to date or its version is unknown.
+    public func agentUpdate(to latest: String?) -> AgentUpdate? {
+        guard let latest else { return nil }
+        guard let agentVersion else { return online ? .manual : nil }
+        return agentVersion.compare(latest, options: .numeric) == .orderedAscending ? .oneClick : nil
     }
 }

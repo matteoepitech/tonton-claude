@@ -1,5 +1,5 @@
 import type { AgentMessage, RelayToAgent } from '../../../shared/protocol'
-import type { AgentConfig } from '../config'
+import { type AgentConfig, installedVersion } from '../config'
 import { log } from '../log'
 
 const MAX_BACKOFF_MS = 30_000
@@ -30,7 +30,8 @@ export class RelayConnection {
     if (this.stopped) return
     const url = `${this.config.server.replace(/^http/, 'ws')}/ws/agent`
     // Bun accepts headers on the WebSocket constructor; the DOM typings do not know about it.
-    const socket = new WebSocket(url, { headers: { authorization: `Bearer ${this.config.token}` } } as unknown as string[])
+    const headers = { authorization: `Bearer ${this.config.token}`, 'x-tonton-agent': installedVersion() }
+    const socket = new WebSocket(url, { headers } as unknown as string[])
     this.socket = socket
 
     socket.onopen = () => {

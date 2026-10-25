@@ -28,6 +28,9 @@ Everything you need to run your own relay, understand the security model or hack
   its own token, revocable from the app. The relay stores SHA-256 hashes of tokens and codes, never the secrets.
 - **No secret in URLs.** Install scripts are public and generic; the code and the key travel in the `TONTON_ENROLL` variable
   of the command you paste. The key itself is never sent to the relay.
+- **Agent updates.** Only the app can ask a machine to update: the order is sealed with the account key and expires after
+  10 minutes, so the relay can neither forge nor replay it. The agent downloads its new build from the relay, as the install
+  script does, and checks the version it reports before swapping it in.
 - **Abuse limits.** Per-IP rate limits on sign-ups, enrollment and failed authentications; caps on machines and sessions per account.
 
 What a relay can still see: that an account exists, how many machines and sessions it has, session states (working, waiting…)
@@ -41,6 +44,9 @@ and timing.
 - Adds a `claude` launcher to your zsh, bash or PowerShell profile, which starts Claude Code with the Tonton Claude channel.
 
 `tonton status` checks the connection, `tonton uninstall` removes everything.
+
+Updates from the app replace the binary in `~/.tonton/bin` and run the install step again. Sessions already running keep the
+previous agent until claude restarts.
 
 | How claude is started | Status and conversation | Messages from the notch | Permissions from the notch |
 |---|---|---|---|
@@ -101,8 +107,10 @@ git tag -s v0.3.0 -m "v0.3.0"
 git push origin v0.3.0
 ```
 
-The version shown in the app comes from the tag. Locally, `app/scripts/build-app.sh --universal && app/scripts/make-dmg.sh`
-produces the same image in `app/build/`.
+The version shown in the app comes from the tag. The agent has its own version in `shared/version.ts`: bump it when the agent
+changes and redeploy the relay, which builds and serves the agents. Machines then offer the update in the app.
+
+Locally, `app/scripts/build-app.sh --universal && app/scripts/make-dmg.sh` produces the same image in `app/build/`.
 
 Without further setup the app is ad-hoc signed, and macOS asks users to confirm the first launch. To sign it with a
 Developer ID and notarize it, add these repository secrets:

@@ -75,8 +75,12 @@ struct MachineRow: View {
                 Text(subtitle(sessions: sessions.count))
                     .font(.system(size: 11.5, design: .monospaced))
                     .foregroundStyle(Theme.textFaint)
+                if let error = store.updateErrors[machine.id] {
+                    Text(error).font(.system(size: 11.5)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
+            AgentUpdateButton(machine: machine)
             HStack(spacing: 5) {
                 Circle().fill(machine.online ? Theme.success : Theme.textFaint).frame(width: 6, height: 6)
                 Text(live > 0 ? "\(live) live" : (machine.online ? "Online" : "Offline")).font(.system(size: 12)).foregroundStyle(
@@ -105,7 +109,8 @@ struct MachineRow: View {
 
     private func subtitle(sessions: Int) -> String {
         let when = (machine.lastSeen ?? machine.createdAt).formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
-        return "\(sessions) session\(sessions == 1 ? "" : "s") · seen \(when)"
+        let version = machine.agentVersion.map { " · agent \($0)" } ?? ""
+        return "\(sessions) session\(sessions == 1 ? "" : "s") · seen \(when)\(version)"
     }
 
     /// The reported platform, or for older agents the one of their sessions, or a guess from the name.
@@ -118,6 +123,39 @@ struct MachineRow: View {
         default:
             let name = machine.name.uppercased()
             return name.contains("WIN") || name.hasPrefix("DESKTOP-") || name.contains("PC") ? "pc" : "laptopcomputer"
+        }
+    }
+}
+
+/// Updates the machine's agent in one click, or for agents too old to do it, copies the command to run there once.
+struct AgentUpdateButton: View {
+    let machine: MachineInfo
+    @EnvironmentObject var store: SessionStore
+    @State private var copied = false
+
+    var body: some View {
+        let latest = store.latestAgentVersion ?? ""
+        switch machine.agentUpdate(to: store.latestAgentVersion) {
+        case .oneClick:
+            if store.updatingMachines.contains(machine.id) {
+                ProgressView().controlSize(.small).frame(width: 60)
+            } else {
+                Button("Update") { store.updateAgent(machine) }
+                    .buttonStyle(ThemeButtonStyle(primary: true))
+                    .help("Install agent \(latest) on this machine. Running sessions switch to it when they restart.")
+            }
+        case .manual:
+            Button(copied ? "Copied" : "Update…") {
+                guard let command = store.manualUpdateCommand(for: machine) else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(command, forType: .string)
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+            }
+            .buttonStyle(ThemeButtonStyle())
+            .help("This agent is too old to update from here. Copies the command to paste once in a terminal on the machine.")
+        case nil:
+            EmptyView()
         }
     }
 }
