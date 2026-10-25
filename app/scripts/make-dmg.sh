@@ -11,15 +11,29 @@ APP=build/TontonClaude.app
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
 DMG=build/TontonClaude-$VERSION.dmg
 
-DMGBUILD_VERSION=1.6.7
-VENV=build/dmgbuild-$DMGBUILD_VERSION
-if [ ! -x "$VENV/bin/dmgbuild" ]; then
+# One venv per set of requirements, rebuilt when it no longer runs (e.g. its Python went away with a Homebrew upgrade).
+REQUIREMENTS=scripts/dmgbuild-requirements.txt
+VENV=build/dmgbuild-$(shasum -a 256 "$REQUIREMENTS" | cut -c1-12)
+if ! "$VENV/bin/python" -c 'import dmgbuild' 2>/dev/null; then
+  rm -rf "$VENV"
   python3 -m venv "$VENV"
-  "$VENV/bin/pip" install --quiet --disable-pip-version-check "dmgbuild==$DMGBUILD_VERSION"
+  "$VENV/bin/pip" install --quiet --disable-pip-version-check --require-hashes --only-binary :all: -r "$REQUIREMENTS"
 fi
 
+swift scripts/make-dmg-background.swift build/dmg
 rm -f "$DMG"
-"$VENV/bin/dmgbuild" -s scripts/dmg-settings.py -D app="$APP" -D resources=Resources "Tonton Claude" "$DMG"
+"$VENV/bin/dmgbuild" -s scripts/dmg-settings.py -D app="$APP" -D layout=scripts/dmg-layout.json \
+  -D background=build/dmg/dmg-background.png -D icon=Resources/AppIcon.icns "Tonton Claude" "$DMG"
+
+# dmgbuild ignores a failed copy of the app, so check the copy before signing and publishing the image. No --strict:
+# hide_extensions puts Finder info on the bundle, which it reports as detritus.
+MOUNT=$(mktemp -d)
+hdiutil attach -quiet -nobrowse -noautoopen -readonly -mountpoint "$MOUNT" "$DMG"
+INTACT=1
+diff -rq "$APP" "$MOUNT/Tonton Claude.app" && codesign --verify --deep "$MOUNT/Tonton Claude.app" || INTACT=0
+hdiutil detach -quiet "$MOUNT"
+rmdir "$MOUNT" 2>/dev/null || true
+[ $INTACT = 1 ] || { echo "the app in $DMG differs from $APP" >&2; exit 1; }
 
 if [ -n "$CODESIGN_IDENTITY" ]; then
   codesign --force --timestamp --sign "$CODESIGN_IDENTITY" "$DMG"
