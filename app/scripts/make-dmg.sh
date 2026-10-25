@@ -1,5 +1,6 @@
 #!/bin/sh
-# Packs app/build/TontonClaude.app into app/build/TontonClaude-<version>.dmg, with a link to /Applications to drag it onto.
+# Packs app/build/TontonClaude.app into app/build/TontonClaude-<version>.dmg: an installer window with the app, an arrow
+# and a link to Applications, laid out by dmgbuild (scripts/dmg-settings.py).
 # With CODESIGN_IDENTITY the image is signed; with APPLE_ID, APPLE_TEAM_ID and APPLE_APP_PASSWORD it is also notarized
 # and stapled, so Gatekeeper opens it without warnings.
 set -e
@@ -10,12 +11,15 @@ APP=build/TontonClaude.app
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
 DMG=build/TontonClaude-$VERSION.dmg
 
-STAGING=$(mktemp -d)
-trap 'rm -rf "$STAGING"' EXIT
-cp -R "$APP" "$STAGING/Tonton Claude.app"
-ln -s /Applications "$STAGING/Applications"
+DMGBUILD_VERSION=1.6.7
+VENV=build/dmgbuild-$DMGBUILD_VERSION
+if [ ! -x "$VENV/bin/dmgbuild" ]; then
+  python3 -m venv "$VENV"
+  "$VENV/bin/pip" install --quiet --disable-pip-version-check "dmgbuild==$DMGBUILD_VERSION"
+fi
+
 rm -f "$DMG"
-hdiutil create -quiet -volname "Tonton Claude" -srcfolder "$STAGING" -fs HFS+ -format UDZO "$DMG"
+"$VENV/bin/dmgbuild" -s scripts/dmg-settings.py -D app="$APP" -D resources=Resources "Tonton Claude" "$DMG"
 
 if [ -n "$CODESIGN_IDENTITY" ]; then
   codesign --force --timestamp --sign "$CODESIGN_IDENTITY" "$DMG"
