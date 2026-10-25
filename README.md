@@ -52,6 +52,7 @@ Open Tonton Claude, go to **Settings › Relay** and click **Create account**. U
 **3. Add your machines**
 
 In **Settings › Machines**, click **Add machine**, copy the line for that computer and paste it in a terminal there.
+The agent comes from the same release and runs in the background, with an icon next to the clock to change relay.
 
 **4. Start claude**
 
@@ -69,9 +70,11 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Which machines?** Anything that runs Claude Code: Windows, macOS and Linux.
 - **First launch.** Claude Code asks you to confirm "I am using this for local development" once per launch, because the
   feature Tonton Claude uses is still in preview.
-- **Updating agents.** When a machine runs an older agent, **Update agent** shows up next to it in the notch and in
-  **Settings › Machines**: one click and it installs the new one. Agents installed before 0.4.0 need the install command once
-  more, which the app copies for you.
+- **Updating agents.** When a machine runs an older agent than your app, **Update agent** shows up next to it in the notch
+  and in **Settings › Machines**: one click and it installs the matching release. Agents installed before 0.4.0 need the
+  install command once more, which the app copies for you.
+- **Changing relay.** Click the Tonton Claude icon next to the clock on that machine › **Change relay…**, like in RustDesk.
+  Paste an address, or a connection code from the app to join another relay or account.
 - **Shortcuts.** <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>N</kbd> opens the notch, <kbd>⌘</kbd> <kbd>1</kbd>…<kbd>9</kbd> jumps between sessions,
   <kbd>esc</kbd> closes it.
 
