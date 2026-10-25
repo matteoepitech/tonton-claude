@@ -7,8 +7,11 @@ import TontonCore
 final class SessionStore: ObservableObject {
     @Published private(set) var sessions: [SessionSummary] = []
     @Published private(set) var machines: [MachineInfo] = []
-    /// The agent version the relay offers to machines.
-    @Published private(set) var latestAgentVersion: String?
+    /// Machines are offered the agent released with this app. Development builds (0.0.0) offer nothing.
+    let agentVersion: String? = {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return version == "0.0.0" ? nil : version
+    }()
     /// Machines asked to update that have not answered yet.
     @Published private(set) var updatingMachines: Set<String> = []
     @Published private(set) var updateErrors: [String: String] = [:]
@@ -92,16 +95,14 @@ final class SessionStore: ObservableObject {
     private func handle(_ message: RelayMessage) {
         guard let vault else { return }
         switch message {
-        case .snapshot(let wireSessions, let wireMachines, let latest):
+        case .snapshot(let wireSessions, let wireMachines):
             machines = vault.machines(wireMachines)
-            latestAgentVersion = latest
             sessions = sorted(wireSessions.map { vault.session($0, machines: machines) })
             if selectedId == nil || !sessions.contains(where: { $0.id == selectedId }) { selectedId = preferredSelection() }
         case .session(let wire):
             update(vault.session(wire, machines: machines))
-        case .machines(let wireMachines, let latest):
+        case .machines(let wireMachines):
             machines = vault.machines(wireMachines)
-            latestAgentVersion = latest
         case .removed(let sessionId):
             sessions.removeAll { $0.id == sessionId }
             entries[sessionId] = nil
@@ -168,7 +169,7 @@ final class SessionStore: ObservableObject {
     // MARK: Agent updates
 
     func updateAgent(_ machine: MachineInfo) {
-        guard let latest = latestAgentVersion, !updatingMachines.contains(machine.id),
+        guard let latest = agentVersion, !updatingMachines.contains(machine.id),
             let order = try? vault?.sealUpdateOrder(version: latest)
         else { return }
         updatingMachines.insert(machine.id)
@@ -187,7 +188,7 @@ final class SessionStore: ObservableObject {
         let name = machines.first { $0.id == machineId }?.name ?? "the machine"
         let message =
             switch reason {
-            case "offline": "\(name) is offline. Start claude there, then update it."
+            case "offline": "\(name) is offline. Check that it is on and that the Tonton Claude agent runs there."
             case "unsupported": "The agent on \(name) is too old to update itself. Run the install command there once more."
             default: "Could not update \(name): \(detail ?? "unknown error")."
             }
@@ -195,11 +196,10 @@ final class SessionStore: ObservableObject {
         lastError = message
     }
 
-    /// The command that updates an agent too old to update itself: the install script, without an enrollment code.
-    func manualUpdateCommand(for machine: MachineInfo) -> String? {
-        guard let relay = settings.account?.relay else { return nil }
+    /// The command that updates an agent too old to update itself: the install script, without a connection code.
+    func manualUpdateCommand(for machine: MachineInfo) -> String {
         let platform = machine.platform ?? sessions.first { $0.machineId == machine.id }?.platform
-        return platform == "win32" ? "irm \(relay)/install.ps1 | iex" : "curl -fsSL \(relay)/install.sh | sh"
+        return platform == "win32" ? InstallCommand.windows() : InstallCommand.unix()
     }
 
     // MARK: Account

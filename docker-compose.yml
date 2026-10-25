@@ -1,12 +1,14 @@
 services:
   tonton:
-    build: .
+    image: ghcr.io/matteoepitech/tonton-claude-relay:latest
     restart: unless-stopped
     ports:
       - "7777:7777"
     environment:
-      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL to the https address of your relay}
       TONTON_REGISTRATION: ${TONTON_REGISTRATION:-open}
       TONTON_ADMIN_TOKEN: ${TONTON_ADMIN_TOKEN:-}
     volumes:
-      - ./data:/data
+      - tonton-data:/data
+
+volumes:
+  tonton-data:

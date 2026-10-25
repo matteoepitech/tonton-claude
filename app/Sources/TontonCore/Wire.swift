@@ -39,11 +39,10 @@ public struct WireMachine: Decodable, Sendable {
 
 /// Messages the relay sends to the app.
 public enum RelayMessage: Decodable, Sendable {
-    /// `latestAgentVersion` is the agent the relay offers, missing on relays that predate agent updates.
-    case snapshot(sessions: [WireSession], machines: [WireMachine], latestAgentVersion: String?)
+    case snapshot(sessions: [WireSession], machines: [WireMachine])
     case session(WireSession)
     case removed(sessionId: String)
-    case machines([WireMachine], latestAgentVersion: String?)
+    case machines([WireMachine])
     case history(sessionId: String, entries: [WireEntry])
     case entries(sessionId: String, entries: [WireEntry])
     case error(String)
@@ -52,7 +51,7 @@ public enum RelayMessage: Decodable, Sendable {
     case unknown
 
     private enum Keys: String, CodingKey {
-        case t, sessions, machines, session, sessionId, entries, message, latestAgentVersion, machineId, ok, reason, detail
+        case t, sessions, machines, session, sessionId, entries, message, machineId, ok, reason, detail
     }
 
     public init(from decoder: Decoder) throws {
@@ -61,12 +60,10 @@ public enum RelayMessage: Decodable, Sendable {
         func optional(_ key: Keys) throws -> String? { try container.decodeIfPresent(String.self, forKey: key) }
         switch try container.decode(String.self, forKey: .t) {
         case "snapshot":
-            let latest = try optional(.latestAgentVersion)
-            self = .snapshot(sessions: try value(.sessions), machines: try value(.machines), latestAgentVersion: latest)
+            self = .snapshot(sessions: try value(.sessions), machines: try value(.machines))
         case "session": self = .session(try value(.session))
         case "removed": self = .removed(sessionId: try value(.sessionId))
-        case "machines":
-            self = .machines(try value(.machines), latestAgentVersion: try optional(.latestAgentVersion))
+        case "machines": self = .machines(try value(.machines))
         case "history": self = .history(sessionId: try value(.sessionId), entries: try value(.entries))
         case "entries": self = .entries(sessionId: try value(.sessionId), entries: try value(.entries))
         case "error": self = .error(try value(.message))

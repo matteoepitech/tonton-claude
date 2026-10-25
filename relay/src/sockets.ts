@@ -1,6 +1,5 @@
 import type { WebSocketHandler } from 'bun'
 import type { AgentMessage, AppMessage, RelayToAgent, RelayToApp } from '../../shared/protocol'
-import { AGENT_VERSION } from '../../shared/version'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
 import { MAX_WS_MESSAGE_BYTES } from './limits'
@@ -16,12 +15,7 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
       if (socket.data.role === 'app') {
         ctx.hub.addApp(socket)
         const { accountId } = socket.data
-        send(socket, {
-          t: 'snapshot',
-          sessions: ctx.sessions.list(accountId),
-          machines: ctx.machineList(accountId),
-          latestAgentVersion: AGENT_VERSION,
-        })
+        send(socket, { t: 'snapshot', sessions: ctx.sessions.list(accountId), machines: ctx.machineList(accountId) })
       } else {
         const { machineId, agentVersion } = socket.data
         if (machineId && agentVersion) ctx.agentVersions.set(machineId, agentVersion)

@@ -110,10 +110,10 @@ export interface HookPost {
 
 // relay -> app
 export type RelayToApp =
-  | { t: 'snapshot'; sessions: SessionSummary[]; machines: MachineSummary[]; latestAgentVersion: string }
+  | { t: 'snapshot'; sessions: SessionSummary[]; machines: MachineSummary[] }
   | { t: 'session'; session: SessionSummary }
   | { t: 'removed'; sessionId: string }
-  | { t: 'machines'; machines: MachineSummary[]; latestAgentVersion: string }
+  | { t: 'machines'; machines: MachineSummary[] }
   | { t: 'history'; sessionId: string; entries: SealedEntry[] }
   | { t: 'entries'; sessionId: string; entries: SealedEntry[]; reset: boolean }
   | { t: 'error'; message: string }

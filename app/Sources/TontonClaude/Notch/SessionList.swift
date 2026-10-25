@@ -67,7 +67,7 @@ struct NotchAgentUpdate: View {
     @EnvironmentObject var store: SessionStore
 
     var body: some View {
-        switch machine.agentUpdate(to: store.latestAgentVersion) {
+        switch machine.agentUpdate(to: store.agentVersion) {
         case .oneClick:
             if store.updatingMachines.contains(machine.id) {
                 HStack(spacing: 4) {
@@ -76,7 +76,7 @@ struct NotchAgentUpdate: View {
                 }
             } else {
                 pill("Update agent") { store.updateAgent(machine) }
-                    .help("Install agent \(store.latestAgentVersion ?? "") on \(machine.name)")
+                    .help("Install agent \(store.agentVersion ?? "") on \(machine.name)")
             }
         case .manual:
             pill("Update agent") { AppDelegate.shared?.showSettings(pane: .machines) }

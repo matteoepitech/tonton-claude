@@ -1,3 +1,4 @@
+import { VERSION } from '../../shared/version'
 import { loadConfig, type RelayConfig } from './config'
 import { RelayContext } from './context'
 import type { SocketData } from './hub'
@@ -24,5 +25,5 @@ export function startRelay(config: RelayConfig) {
 if (import.meta.main) {
   const config = loadConfig()
   const { server } = startRelay(config)
-  console.log(`Tonton Claude relay listening on :${server.port} (registration ${config.registration})`)
+  console.log(`Tonton Claude relay ${VERSION} listening on :${server.port} (registration ${config.registration})`)
 }

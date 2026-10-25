@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to the same branch cancels the run it replaces.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   relay-and-agent:
     runs-on: ubuntu-latest
@@ -16,6 +21,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun test
+      - run: sh -n scripts/install.sh && sh -n scripts/install-relay.sh
 
   mac-app:
     runs-on: macos-15
@@ -24,6 +30,20 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
-      - run: swift format lint --strict --recursive Sources Tests
+      - run: swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos
       - run: swift build
       - run: swift test
+      - run: swiftc -O ../agent/tray/macos/main.swift -o "$RUNNER_TEMP/tonton-tray"
+
+  windows-scripts:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse the PowerShell scripts
+        shell: powershell
+        run: |
+          foreach ($file in 'scripts/install.ps1', 'agent/tray/windows/tray.ps1') {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$null, [ref]$errors)
+            if ($errors) { $errors | ForEach-Object { Write-Error "${file}: $_" }; exit 1 }
+          }
