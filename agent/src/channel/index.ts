@@ -2,9 +2,9 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { PromptPayload, RelayToAgent } from '../../../shared/protocol'
 import { loadConfig, paths } from '../config'
-import { open, seal } from '../crypto'
+import { open } from '../crypto'
 import { log } from '../log'
-import { applyUpdate } from '../update'
+import { handleUpdateOrder } from '../update'
 import { Conversation } from './conversation'
 import { ChannelServer } from './mcp'
 import { RelayConnection } from './relay-connection'
@@ -30,25 +30,13 @@ export async function runChannel() {
   const canChat = process.env.TONTON_CHANNEL === '1'
   log('channel started', { parent: process.ppid, canChat, cwd: process.cwd() })
 
-  const relay = new RelayConnection(config, {
+  const relay: RelayConnection = new RelayConnection(config, 'channel', {
     connected: () => conversation?.announce(),
     message: message => {
-      if (message.t === 'update') void update(message.order)
+      if (message.t === 'update') void handleUpdateOrder(config, message.order, relay)
       else if (conversation && message.sessionId === conversation.link.sessionId) void onRelayMessage(message)
     },
   })
-
-  const update = async (order: string) => {
-    try {
-      const version = await applyUpdate(config, order)
-      log('agent updated', { version })
-      relay.post(async () => ({ t: 'update_result', ok: true, version, detail: null }))
-    } catch (error) {
-      const text = error instanceof Error ? error.message : String(error)
-      log('agent update failed', text)
-      relay.post(async () => ({ t: 'update_result', ok: false, version: null, detail: await seal(config.key, { text }) }))
-    }
-  }
 
   const onRelayMessage = async (message: Exclude<RelayToAgent, { t: 'update' }>) => {
     if (message.t === 'verdict') {

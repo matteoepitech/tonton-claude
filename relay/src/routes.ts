@@ -1,16 +1,13 @@
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Server } from 'bun'
 import type { HookPost } from '../../shared/protocol'
+import { RELEASES_URL } from '../../shared/version'
 import type { RelayContext } from './context'
 import { bearerToken, clientIp, fail, json, readJson } from './http'
 import type { SocketData } from './hub'
-import { installPs1, installSh } from './install-scripts'
 import { isSealed, isSessionId, isText, isVersion } from './validate'
 
 type RelayServer = Server<SocketData>
 
-const AGENT_BINARY = /^tonton-[a-z0-9-]+(\.exe)?$/
 const MACHINE_PATH = /^\/api\/machines\/([A-Za-z0-9_-]{12})$/
 
 export function createFetchHandler(ctx: RelayContext) {
@@ -19,12 +16,10 @@ export function createFetchHandler(ctx: RelayContext) {
     const path = url.pathname
 
     if (path === '/health') return new Response('ok')
-    if (path.startsWith('/dl/')) return downloadAgent(ctx, path.slice(4))
-    if (path === '/install.sh' || path === '/install.ps1') {
-      const publicUrl = ctx.config.publicUrl ?? `${url.protocol}//${url.host}`
-      const script = path === '/install.sh' ? installSh(publicUrl) : installPs1(publicUrl)
-      return new Response(script, { headers: { 'content-type': 'text/plain; charset=utf-8' } })
-    }
+    // Agents and install scripts used to be served here: they are published with the releases now. Old commands that
+    // update an enrolled machine (`irm <relay>/install.ps1 | iex`) keep working.
+    if (path === '/install.sh' || path === '/install.ps1') return Response.redirect(`${RELEASES_URL}/latest/download${path}`, 302)
+    if (path.startsWith('/dl/')) return Response.redirect(`${RELEASES_URL}/latest`, 302)
     if (!path.startsWith('/api/') && !path.startsWith('/ws/')) return fail(404, 'not found')
 
     const ip = clientIp(req, server, ctx.config.trustProxy)
@@ -35,13 +30,6 @@ export function createFetchHandler(ctx: RelayContext) {
     if (path === '/api/hook' || path === '/api/agent/ping' || path === '/ws/agent') return agentRoute(ctx, req, server, path, ip)
     return appRoute(ctx, req, server, path, ip)
   }
-}
-
-function downloadAgent(ctx: RelayContext, name: string): Response {
-  if (!AGENT_BINARY.test(name)) return fail(404, 'not found')
-  const file = join(ctx.config.distDir, name)
-  if (!existsSync(file)) return fail(404, 'This agent build is not available on this relay.')
-  return new Response(Bun.file(file), { headers: { 'content-disposition': `attachment; filename="${name}"` } })
 }
 
 function createAccount(ctx: RelayContext, req: Request, ip: string): Response {
@@ -76,8 +64,14 @@ async function agentRoute(ctx: RelayContext, req: Request, server: RelayServer, 
   if (path === '/api/agent/ping') return json({ ok: true, machineId: machine.id })
   if (path === '/ws/agent') {
     const version = req.headers.get('x-tonton-agent')
-    const agentVersion = isVersion(version) ? version : null
-    const data: SocketData = { role: 'agent', accountId: machine.accountId, machineId: machine.id, sessionId: null, agentVersion }
+    const data: SocketData = {
+      role: 'agent',
+      accountId: machine.accountId,
+      machineId: machine.id,
+      sessionId: null,
+      agentVersion: isVersion(version) ? version : null,
+      service: req.headers.get('x-tonton-role') === 'service',
+    }
     return server.upgrade(req, { data }) ? undefined : fail(400, 'WebSocket expected.')
   }
 
@@ -96,7 +90,7 @@ function appRoute(ctx: RelayContext, req: Request, server: RelayServer, path: st
   }
 
   if (path === '/ws/app') {
-    const data: SocketData = { role: 'app', accountId, machineId: null, sessionId: null, agentVersion: null }
+    const data: SocketData = { role: 'app', accountId, machineId: null, sessionId: null, agentVersion: null, service: false }
     return server.upgrade(req, { data }) ? undefined : fail(400, 'WebSocket expected.')
   }
   if (path === '/api/ping') return json({ ok: true, accountId })

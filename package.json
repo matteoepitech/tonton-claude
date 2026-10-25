@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "relay": "bun run relay/src/main.ts",
-    "build:agent": "bun run scripts/build-agent.ts",
+    "build": "bun run scripts/build.ts",
     "test": "bun test",
     "check": "biome check . && tsc --noEmit -p .",
     "format": "biome check --write ."

@@ -134,8 +134,8 @@ struct AgentUpdateButton: View {
     @State private var copied = false
 
     var body: some View {
-        let latest = store.latestAgentVersion ?? ""
-        switch machine.agentUpdate(to: store.latestAgentVersion) {
+        let latest = store.agentVersion ?? ""
+        switch machine.agentUpdate(to: store.agentVersion) {
         case .oneClick:
             if store.updatingMachines.contains(machine.id) {
                 ProgressView().controlSize(.small).frame(width: 60)
@@ -146,7 +146,7 @@ struct AgentUpdateButton: View {
             }
         case .manual:
             Button(copied ? "Copied" : "Update…") {
-                guard let command = store.manualUpdateCommand(for: machine) else { return }
+                let command = store.manualUpdateCommand(for: machine)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(command, forType: .string)
                 copied = true
@@ -173,17 +173,15 @@ struct InstallSteps: View {
                 detail: "Paste the line for the machine's system in a terminal. The code works once and expires in 15 minutes.")
             Card {
                 if let enrollment, let account = settings.account {
-                    let enroll = "\(enrollment.code).\(account.key)"
-                    let masked = "\(enrollment.code).•••"
+                    let code = InstallCommand.connectionCode(code: enrollment.code, key: account.key, relay: account.relay)
+                    let masked = "\(enrollment.code).•••@\(account.relay)"
                     CodeRow(
                         label: "Windows", hint: "PowerShell",
-                        command: "$env:TONTON_ENROLL='\(enroll)'; irm \(account.relay)/install.ps1 | iex",
-                        masked: "$env:TONTON_ENROLL='\(masked)'; irm \(account.relay)/install.ps1 | iex")
+                        command: InstallCommand.windows(connectionCode: code), masked: InstallCommand.windows(connectionCode: masked))
                     Hairline()
                     CodeRow(
                         label: "macOS & Linux", hint: "Terminal",
-                        command: "curl -fsSL \(account.relay)/install.sh | TONTON_ENROLL='\(enroll)' sh",
-                        masked: "curl -fsSL \(account.relay)/install.sh | TONTON_ENROLL='\(masked)' sh")
+                        command: InstallCommand.unix(connectionCode: code), masked: InstallCommand.unix(connectionCode: masked))
                     Hairline()
                     HStack {
                         Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(Theme.textFaint)

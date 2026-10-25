@@ -9,6 +9,8 @@ export interface SocketData {
   sessionId: string | null
   /** Agent: the installed version it reported, null for agents too old to update themselves. */
   agentVersion: string | null
+  /** Agent: the machine's background service rather than the channel of a session. */
+  service: boolean
 }
 
 export type Socket = ServerWebSocket<SocketData>
@@ -39,10 +41,10 @@ export class Hub {
     return (this.machines.get(machineId)?.size ?? 0) > 0
   }
 
-  /** A socket of the machine whose agent knows how to update itself. */
+  /** A socket of the machine whose agent knows how to update itself, the background service when it runs. */
   updatableSocket(machineId: string): Socket | null {
-    for (const socket of this.machines.get(machineId) ?? []) if (socket.data.agentVersion) return socket
-    return null
+    const sockets = [...(this.machines.get(machineId) ?? [])].filter(socket => socket.data.agentVersion)
+    return sockets.find(socket => socket.data.service) ?? sockets[0] ?? null
   }
 
   bindAgent(socket: Socket, sessionId: string) {

@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
 import { join } from 'node:path'
-import { AGENT_VERSION } from '../../shared/version'
+import { VERSION } from '../../shared/version'
 
-export const VERSION = AGENT_VERSION
+export { VERSION }
 
 const HOME = process.env.TONTON_HOME || join(homedir(), '.tonton')
 
@@ -16,6 +16,9 @@ export const paths = {
   inbox: join(HOME, 'inbox'),
   log: join(HOME, 'tonton.log'),
   config: join(HOME, 'config.json'),
+  /** Written by the background service, read by its tray icon. */
+  status: join(HOME, 'status.json'),
+  servicePid: join(HOME, 'service.pid'),
   claudeSettings: join(homedir(), '.claude', 'settings.json'),
 }
 
@@ -29,6 +32,8 @@ export interface AgentConfig {
   machine: string
   /** Version of the binary installed in ~/.tonton/bin, written by `tonton install`. */
   version?: string
+  /** False once the user hid the tray icon. */
+  tray?: boolean
 }
 
 export function loadConfig(): AgentConfig | null {
@@ -42,6 +47,7 @@ export function loadConfig(): AgentConfig | null {
       key: config.key,
       machine: config.machine || defaultMachineName(),
       version: config.version,
+      tray: config.tray,
     }
   } catch {
     return null
@@ -50,7 +56,7 @@ export function loadConfig(): AgentConfig | null {
 
 export function saveConfig(config: AgentConfig) {
   mkdirSync(paths.home, { recursive: true, mode: 0o700 })
-  writeFileSync(paths.config, JSON.stringify({ ...config, version: VERSION }, null, 2), { mode: 0o600 })
+  writeFileSync(paths.config, JSON.stringify(config, null, 2), { mode: 0o600 })
 }
 
 /** Read again on each use: an update replaces the binary under channels that keep running the old one. */

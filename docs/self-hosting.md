@@ -6,16 +6,19 @@ Everything you need to run your own relay, understand the security model or hack
 
 ```
 [claude on Windows ×N] ──┐
-[claude on a Mac]      ──┼── agent (hooks + channel) ──▶ relay ──WebSocket──▶ Tonton Claude.app (notch)
-[claude on Linux]      ──┘        sealed blobs only        tonton.d3l.tech or your own
+[claude on a Mac]      ──┼── agent (service + hooks + channel) ──▶ relay ──WebSocket──▶ Tonton Claude.app (notch)
+[claude on Linux]      ──┘             sealed blobs only            tonton.d3l.tech or your own
 ```
+
+Like RustDesk, everything you install comes from the [GitHub releases](https://github.com/matteoepitech/tonton-claude/releases):
+the app, the agents and the relay. The relay only relays: updating the app and the agents never requires touching it.
 
 | Part | Role |
 |---|---|
-| `agent/` | One binary per machine. Claude Code hooks report status; an MCP *channel* streams the transcript, injects messages from the notch and relays permission prompts. |
-| `relay/` | The relay (Bun). Accounts and machines in SQLite, live sessions in memory with a memory budget, WebSocket routing, install scripts and agent binaries. |
+| `agent/` | One binary per machine. A background service keeps the machine reachable and shows a tray icon to change relay; Claude Code hooks report status; an MCP *channel* streams the transcript, injects messages from the notch and relays permission prompts. |
+| `relay/` | The relay. Accounts and machines in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
 | `app/` | The macOS app living in the notch (SwiftUI), plus its settings window. |
-| `deploy/` | systemd unit and deploy script for a self-hosted relay. |
+| `scripts/` | Builds, and the install scripts published with each release. |
 
 ## Security model
 
@@ -26,11 +29,12 @@ Everything you need to run your own relay, understand the security model or hack
   routes opaque blobs: whoever runs it cannot read them.
 - **Per-machine credentials.** A machine joins with a single-use enrollment code that expires after 15 minutes and receives
   its own token, revocable from the app. The relay stores SHA-256 hashes of tokens and codes, never the secrets.
-- **No secret in URLs.** Install scripts are public and generic; the code and the key travel in the `TONTON_ENROLL` variable
-  of the command you paste. The key itself is never sent to the relay.
+- **No secret in URLs.** Install scripts are public and generic; the connection code (enrollment code, key and relay address)
+  travels in the `TONTON_ENROLL` variable of the command you paste. The key itself is never sent to the relay.
+- **Verified downloads.** Install scripts and updates check every file against the `SHA256SUMS` of its release.
 - **Agent updates.** Only the app can ask a machine to update: the order is sealed with the account key and expires after
-  10 minutes, so the relay can neither forge nor replay it. The agent downloads its new build from the relay, as the install
-  script does, and checks the version it reports before swapping it in.
+  10 minutes, so the relay can neither forge nor replay it. The agent downloads the release from GitHub, never from the
+  relay, and checks the version it reports before swapping it in.
 - **Abuse limits.** Per-IP rate limits on sign-ups, enrollment and failed authentications; caps on machines and sessions per account.
 
 What a relay can still see: that an account exists, how many machines and sessions it has, session states (working, waiting…)
@@ -39,14 +43,24 @@ and timing.
 ## What the installer changes on a machine
 
 - Puts the agent in `~/.tonton/` (config readable by you only).
+- Starts its background service at login: a `Run` entry on Windows, a LaunchAgent on macOS, a user systemd unit on Linux.
+  The service keeps the machine online in the app, applies updates and shows the tray icon (Windows, macOS).
 - Adds hooks to `~/.claude/settings.json` (a backup is kept next to it).
 - Registers the `tonton` MCP server for Claude Code.
 - Adds a `claude` launcher to your zsh, bash or PowerShell profile, which starts Claude Code with the Tonton Claude channel.
 
 `tonton status` checks the connection, `tonton uninstall` removes everything.
 
-Updates from the app replace the binary in `~/.tonton/bin` and run the install step again. Sessions already running keep the
-previous agent until claude restarts.
+**Changing relay.** Click the tray icon › **Change relay…**, or run `tonton relay`:
+
+- with an address (`tonton relay https://new.example.com`), to reach the same relay at another address;
+- with a connection code from **Machines › Add machine** in the app, to join another relay or account.
+
+Running sessions switch on their next start. On Linux servers without a desktop there is no tray: use the command. A user
+service only runs while you are logged in, unless you enable lingering: `loginctl enable-linger $USER`.
+
+Updates from the app replace the binaries in `~/.tonton/bin` and run the install step again. Sessions already running keep
+the previous agent until claude restarts.
 
 | How claude is started | Status and conversation | Messages from the notch | Permissions from the notch |
 |---|---|---|---|
@@ -57,30 +71,29 @@ On first launch, Claude Code asks you to confirm "I am using this for local deve
 
 ## Running your own relay
 
-The relay is a single Bun process behind any HTTPS reverse proxy with WebSocket support.
+The relay is a single executable behind any HTTPS reverse proxy with WebSocket support. It only needs updating when its own
+code changes: new versions of the app and the agents work with it.
 
-**systemd (recommended)**, on a Debian/Ubuntu host with Bun in `/opt/bun`:
+**systemd**, on a Linux server (x64 or arm64). Run the same line again to update:
 
 ```sh
-deploy/deploy.sh root@your-host     # syncs to /opt/tonton, builds the agents, installs and restarts tonton.service
+curl -fsSL https://github.com/matteoepitech/tonton-claude/releases/latest/download/install-relay.sh | sudo sh
 ```
 
-To keep your host and SSH options out of the repository, copy `deploy/deploy.env.example` to `deploy/deploy.env`
-(git-ignored) and run `deploy/deploy.sh` without arguments.
-
-Configuration lives in `/etc/tonton/tonton.env`:
+It installs `/usr/local/bin/tonton-relay` and `tonton.service`, which runs as an unprivileged user with a strict systemd
+sandbox; data goes to `/var/lib/tonton`. Configuration lives in `/etc/tonton/tonton.env`:
 
 | Variable | Meaning |
 |---|---|
-| `PUBLIC_URL` | Public HTTPS address, used in install scripts |
+| `PORT` | Port the reverse proxy targets, 7777 by default |
 | `TONTON_REGISTRATION` | `open` (anyone can create an account) or `closed` |
 | `TONTON_ADMIN_TOKEN` | With `closed`, the bearer token allowed to create accounts (24+ characters) |
 | `TONTON_TRUST_PROXY` | `1` to read the client IP from `X-Forwarded-For`. Only behind a reverse proxy that sets it. |
 
-The unit runs as an unprivileged user with a strict systemd sandbox; data goes to `/var/lib/tonton`.
-
-**Docker**: `PUBLIC_URL=https://relay.example.com docker compose up -d`. Data is kept in `./data`.
-Note that Docker publishes ports around `ufw`.
+**Docker**: the image `ghcr.io/matteoepitech/tonton-claude-relay` is published with each release, for amd64 and arm64.
+`docker compose up -d` with the `docker-compose.yml` of this repository; data is kept in the `tonton-data` volume. Add
+[Watchtower](https://containrrr.dev/watchtower/) to follow new releases automatically. Note that Docker publishes ports
+around `ufw`.
 
 Then in the app: Settings › Relay › Self-hosted, enter your URL and create an account.
 
@@ -89,26 +102,28 @@ Then in the app: Settings › Relay › Self-hosted, enter your URL and create a
 ```sh
 bun install
 bun run relay                  # relay on :7777, data in ./data
-bun run build:agent            # agent binaries in dist/
+bun run build                  # agents and relay executables in dist/ (bun run build windows: one target)
 bun run check                  # Biome (format + lint) and the TypeScript compiler
 bun test                       # unit tests and the end-to-end test
 cd app && swift test           # TontonCore tests (crypto, wire format, models)
 cd app && ./scripts/build-app.sh --install    # the macOS app
 ```
 
-`TONTON_HOME` runs an agent with an isolated config directory.
+`TONTON_HOME` runs an agent with an isolated config directory, and `TONTON_SERVICE=off` keeps it away from your login items.
+The macOS tray icon is a separate Swift program: `swiftc -O agent/tray/macos/main.swift -o ~/.tonton/bin/tonton-tray`.
 
 ## Releasing
 
-Pushing a version tag builds the macOS app for Apple silicon and Intel and publishes a GitHub release with the DMG:
+Pushing a version tag publishes everything at that version: the app (DMG), the agents, their install scripts, the relay
+(executables, install script, Docker image) and a `SHA256SUMS`:
 
 ```sh
-git tag -s v0.3.0 -m "v0.3.0"
-git push origin v0.3.0
+git tag -s v0.4.0 -m "v0.4.0"
+git push origin v0.4.0
 ```
 
-The version shown in the app comes from the tag. The agent has its own version in `shared/version.ts`: bump it when the agent
-changes and redeploy the relay, which builds and serves the agents. Machines then offer the update in the app.
+Once the new app is installed, it offers its version to every machine: one click on **Update agent** in the notch or in
+Settings › Machines. The first time, the Docker image is private on GitHub: make it public in the package settings.
 
 Locally, `app/scripts/build-app.sh --universal && app/scripts/make-dmg.sh` produces the same image in `app/build/`.
 

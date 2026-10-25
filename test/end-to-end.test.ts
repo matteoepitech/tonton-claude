@@ -6,15 +6,24 @@ import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { open, seal } from '../agent/src/crypto'
-import { agentBinaryName } from '../agent/src/update'
+import { agentBinaryName, TRAY_HELPER_NAME } from '../agent/src/update'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import type { RelayToApp, SessionSummary } from '../shared/protocol'
-import { AGENT_VERSION } from '../shared/version'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-e2e-'))
-const relay = startRelay(loadConfig({ PORT: '0', TONTON_DATA_DIR: join(dir, 'data'), DIST_DIR: join(dir, 'dist') }))
+const relay = startRelay(loadConfig({ PORT: '0', TONTON_DATA_DIR: join(dir, 'data') }))
+// Stands in for the GitHub releases the agent updates from.
+const releaseFiles = new Map<string, string>()
+const releases = Bun.serve({
+  port: 0,
+  fetch: req => {
+    const file = releaseFiles.get(new URL(req.url).pathname)
+    return file === undefined ? new Response('not found', { status: 404 }) : new Response(file)
+  },
+})
+const NEW_VERSION = '9.9.9'
 const base = `http://127.0.0.1:${relay.server.port}`
 const sessionId = `session-${Date.now()}`
 const transcript = join(dir, 'transcript.jsonl')
@@ -91,7 +100,13 @@ beforeAll(async () => {
     JSON.stringify({ sessionId, transcriptPath: transcript, cwd: '/home/x/SecretProject' }),
   )
 
-  const env = { ...process.env, TONTON_HOME: home, TONTON_CHANNEL: '1' } as Record<string, string>
+  const env = {
+    ...process.env,
+    TONTON_HOME: home,
+    TONTON_CHANNEL: '1',
+    TONTON_SERVICE: 'off',
+    TONTON_RELEASES_URL: `http://127.0.0.1:${releases.port}`,
+  } as Record<string, string>
   claude = new Client({ name: 'claude-code', version: 'test' })
   claude.fallbackNotificationHandler = async notification => {
     notifications.push(notification)
@@ -116,6 +131,7 @@ afterAll(async () => {
   stranger?.socket.close()
   await claude?.close()
   relay.stop()
+  releases.stop(true)
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -171,16 +187,15 @@ describe('end to end', () => {
     expect(await open<{ text: string }>(key, live.entries[0].blob)).toMatchObject({ text: 'done' })
   })
 
-  test('the app sees the version installed on the machine and the one offered', async () => {
+  test('the app sees the version installed on the machine', async () => {
     const snapshot = app.messages.find(m => m.t === 'snapshot')
     if (snapshot?.t !== 'snapshot') throw new Error('no snapshot')
-    expect(snapshot.latestAgentVersion).toBe(AGENT_VERSION)
     expect(snapshot.machines[0].agentVersion).toBe('0.3.0')
   })
 
   test('an update order sealed with another key is refused by the agent', async () => {
     const foreignKey = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
-    const order = await seal(foreignKey, { version: AGENT_VERSION, issuedAt: new Date().toISOString() })
+    const order = await seal(foreignKey, { version: NEW_VERSION, issuedAt: new Date().toISOString() })
     stranger.socket.send(JSON.stringify({ t: 'update_agent', machineId: machine.machineId, order }))
     app.socket.send(JSON.stringify({ t: 'update_agent', machineId: machine.machineId, order }))
     const result = await eventually(() => app.messages.find(m => m.t === 'agent_update'), 'the refusal')
@@ -192,32 +207,53 @@ describe('end to end', () => {
     expect(stranger.messages.some(m => m.t === 'agent_update')).toBe(false)
   })
 
-  test.skipIf(process.platform === 'win32')('one click updates the agent: download, swap and reinstall', async () => {
-    // Stands in for the relay's build: reports the new version, and its install step records the version like the real one.
-    const home = join(dir, 'agent')
-    const build = `#!/bin/sh
-case "$1" in
-  version) echo ${AGENT_VERSION} ;;
-  install) sed -i.bak 's/"0.3.0"/"${AGENT_VERSION}"/' "$TONTON_HOME/config.json" && echo "$@" > "$TONTON_HOME/installed" ;;
-esac
-`
-    mkdirSync(join(dir, 'dist'), { recursive: true })
-    writeFileSync(join(dir, 'dist', agentBinaryName()), build)
-    mkdirSync(join(home, 'bin'), { recursive: true })
-    writeFileSync(join(home, 'bin', 'tonton'), 'old build')
-
-    const order = await seal(key, { version: AGENT_VERSION, issuedAt: new Date().toISOString() })
+  test.skipIf(process.platform === 'win32')('a build that does not match the release checksums is refused', async () => {
+    releaseFiles.set(`/download/v${NEW_VERSION}/SHA256SUMS`, `${'0'.repeat(64)}  ${agentBinaryName()}\n`)
+    releaseFiles.set(`/download/v${NEW_VERSION}/${agentBinaryName()}`, 'tampered')
+    const order = await seal(key, { version: NEW_VERSION, issuedAt: new Date().toISOString() })
     app.messages.length = 0
     app.socket.send(JSON.stringify({ t: 'update_agent', machineId: machine.machineId, order }))
-    const result = await eventually(() => app.messages.find(m => m.t === 'agent_update'), 'the update')
-    expect(result).toMatchObject({ ok: true })
-    const machines = await eventually(() => app.messages.find(m => m.t === 'machines'), 'the new version')
-    if (machines.t !== 'machines') throw new Error('unexpected message')
-    expect(machines.machines[0].agentVersion).toBe(AGENT_VERSION)
-    expect(readFileSync(join(home, 'bin', 'tonton'), 'utf8')).toBe(build)
-    expect(readFileSync(join(home, 'installed'), 'utf8').trim()).toBe(`install --server ${base}`)
-    expect(existsSync(join(home, 'bin', 'tonton-update'))).toBe(false)
+    const result = await eventually(() => app.messages.find(m => m.t === 'agent_update'), 'the refusal')
+    if (result.t !== 'agent_update') throw new Error('unexpected message')
+    expect(await open<{ text: string }>(key, result.detail as string)).toEqual({ text: `${agentBinaryName()} does not match its checksum` })
   })
+
+  test.skipIf(process.platform === 'win32')(
+    'one click updates the agent from the releases: download, check, swap and reinstall',
+    async () => {
+      // Reports the new version, and its install step records the version like the real one.
+      const home = join(dir, 'agent')
+      const build = `#!/bin/sh
+case "$1" in
+  version) echo ${NEW_VERSION} ;;
+  install) sed -i.bak 's/"0.3.0"/"${NEW_VERSION}"/' "$TONTON_HOME/config.json" && echo "$@" > "$TONTON_HOME/installed" ;;
+esac
+`
+      const tray = 'menu bar icon'
+      const sha256 = (text: string) => new Bun.CryptoHasher('sha256').update(text).digest('hex')
+      releaseFiles.set(`/download/v${NEW_VERSION}/${agentBinaryName()}`, build)
+      releaseFiles.set(`/download/v${NEW_VERSION}/${TRAY_HELPER_NAME}`, tray)
+      releaseFiles.set(
+        `/download/v${NEW_VERSION}/SHA256SUMS`,
+        `${sha256(build)}  ${agentBinaryName()}\n${sha256(tray)}  ${TRAY_HELPER_NAME}\n`,
+      )
+      mkdirSync(join(home, 'bin'), { recursive: true })
+      writeFileSync(join(home, 'bin', 'tonton'), 'old build')
+
+      const order = await seal(key, { version: NEW_VERSION, issuedAt: new Date().toISOString() })
+      app.messages.length = 0
+      app.socket.send(JSON.stringify({ t: 'update_agent', machineId: machine.machineId, order }))
+      const result = await eventually(() => app.messages.find(m => m.t === 'agent_update'), 'the update')
+      expect(result).toMatchObject({ ok: true })
+      const machines = await eventually(() => app.messages.find(m => m.t === 'machines'), 'the new version')
+      if (machines.t !== 'machines') throw new Error('unexpected message')
+      expect(machines.machines[0].agentVersion).toBe(NEW_VERSION)
+      expect(readFileSync(join(home, 'bin', 'tonton'), 'utf8')).toBe(build)
+      expect(readFileSync(join(home, 'installed'), 'utf8').trim()).toBe('install --no-restart')
+      expect(existsSync(join(home, 'bin', 'tonton-update'))).toBe(false)
+      if (process.platform === 'darwin') expect(readFileSync(join(home, 'bin', 'tonton-tray'), 'utf8')).toBe(tray)
+    },
+  )
 
   test('revoking the machine signs it out and removes its sessions', async () => {
     expect((await api(`/api/machines/${machine.machineId}`, { method: 'DELETE', token: otherAccountToken })).status).toBe(404)

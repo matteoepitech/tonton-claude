@@ -8,7 +8,7 @@ import TontonCore
 final class NotchPanel: NSPanel {
     /// In use: above the menu bar, so the open notch hangs from the camera.
     static let raisedLevel = NSWindow.Level.statusBar + 1
-    /// While another app has the keyboard (Raycast, Spotlight, an alert, a pinned notch left open): behind it.
+    /// While another app has the keyboard (a launcher, Spotlight, an alert, a pinned notch left open): behind it.
     static let loweredLevel = NSWindow.Level.normal
 
     init(size: CGSize) {
@@ -122,7 +122,7 @@ final class NotchWindowController {
     }
 
     /// Makes Tonton Claude the active app: macOS only shows the text cursor in the active app, and tools acting on the frontmost
-    /// app (Raycast's "Paste to…", dictation) then target the chat.
+    /// app (a launcher's paste action, dictation) then target the chat.
     private func takeFocus() {
         // The cooperative `NSApp.activate()` is refused to an accessory app that is not in front; this one is honoured.
         if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
@@ -144,7 +144,7 @@ final class NotchWindowController {
         if state.pinned { panel.level = NotchPanel.loweredLevel } else { collapse() }
     }
 
-    /// Panels of other apps (Raycast, Spotlight, alerts) open without any notification to this app, even when they take the
+    /// Panels of other apps (launchers, Spotlight, alerts) open without any notification to this app, even when they take the
     /// keyboard: while the notch is open, check for one over it and step behind it until it closes.
     private func watchFloatingWindows() {
         overlapTask?.cancel()
@@ -292,11 +292,11 @@ final class NotchWindowController {
         }
     }
 
-    /// Clicks in floating panels (Raycast, Spotlight) are ignored: picking a clipboard item must not close the chat it pastes into.
+    /// Clicks in floating panels (launchers, Spotlight) are ignored: picking a clipboard item must not close the chat it pastes into.
     private func clickedOutside() {
         let pointer = NSEvent.mouseLocation
         guard state.mode == .expanded, !state.pinned, !shapeFrame(NotchState.expandedSize).contains(pointer) else { return }
-        // Raycast may already be gone when this runs: the last check of the watch counts too.
+        // The panel may already be gone when this runs: the last check of the watch counts too.
         guard !behindFloatingWindow, !FloatingWindows.contain(pointer) else { return }
         collapse()
     }

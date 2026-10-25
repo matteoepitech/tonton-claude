@@ -1,21 +1,26 @@
-import { chmodSync, existsSync, renameSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { UpdateOrder } from '../../shared/protocol'
-import { isOlder, VERSION_PATTERN } from '../../shared/version'
+import { isOlder, RELEASES_URL, VERSION_PATTERN } from '../../shared/version'
+import type { RelayConnection } from './channel/relay-connection'
 import { type AgentConfig, installedVersion, paths } from './config'
-import { open } from './crypto'
-import { IS_WINDOWS } from './install/system'
+import { open, seal } from './crypto'
+import { binaryPath, IS_WINDOWS, moveExecutable, replaceExecutable, trayHelperPath } from './install/system'
+import { log } from './log'
+import { restartService } from './service/control'
 
 /** Older orders are refused so the relay cannot replay one later. Generous for machines whose clock drifts. */
 const ORDER_TTL_MS = 10 * 60_000
-const DOWNLOAD_TIMEOUT_MS = 120_000
+const DOWNLOAD_TIMEOUT_MS = 180_000
 
 let running = false
 
-/** Name of this machine's build on the relay, as in the install scripts. */
+/** Name of this machine's build in the releases. */
 export function agentBinaryName(platform: string = process.platform, arch: string = process.arch): string {
   return platform === 'win32' ? `tonton-windows-${arch}.exe` : `tonton-${platform}-${arch}`
 }
+
+export const TRAY_HELPER_NAME = 'tonton-tray-darwin'
 
 /** Checks that the order comes from the account owner and is recent. */
 export async function readOrder(key: string, sealed: string, now = Date.now()): Promise<UpdateOrder> {
@@ -27,10 +32,35 @@ export async function readOrder(key: string, sealed: string, now = Date.now()): 
   return order
 }
 
+/** `SHA256SUMS` lines: `<hex digest>  <file name>`. */
+export function parseChecksums(text: string): Map<string, string> {
+  const sums = new Map<string, string>()
+  for (const line of text.split('\n')) {
+    const match = /^([0-9a-f]{64})\s+\*?(\S+)$/.exec(line.trim())
+    if (match) sums.set(match[2], match[1])
+  }
+  return sums
+}
+
+/** Runs an order from the app and reports back. The service restarts on the new binary once the answer is out. */
+export async function handleUpdateOrder(config: AgentConfig, order: string, relay: RelayConnection) {
+  const before = installedVersion()
+  try {
+    const version = await applyUpdate(config, order)
+    log('agent updated', { from: before, to: version })
+    relay.post(async () => ({ t: 'update_result', ok: true, version, detail: null }))
+    await relay.flushed()
+    if (version !== before) setTimeout(() => restartService(), 500)
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error)
+    log('agent update failed', text)
+    relay.post(async () => ({ t: 'update_result', ok: false, version: null, detail: await seal(config.key, { text }) }))
+  }
+}
+
 /**
- * Replaces the installed agent with the relay's build, then runs its install step like the install script does, so
- * hooks, MCP server and launchers follow the new version. Running sessions keep the old binary until they restart.
- * Returns the installed version.
+ * Installs the release named in the order, as the install script does: downloads this machine's build, checks it
+ * against the release's SHA256SUMS, swaps it in and runs its install step. Returns the installed version.
  */
 export async function applyUpdate(config: AgentConfig, sealedOrder: string): Promise<string> {
   if (running) throw new Error('an update is already running')
@@ -39,24 +69,22 @@ export async function applyUpdate(config: AgentConfig, sealedOrder: string): Pro
     const order = await readOrder(config.key, sealedOrder)
     if (!isOlder(installedVersion(), order.version)) return installedVersion()
 
-    const response = await fetch(`${config.server}/dl/${agentBinaryName()}`, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) })
-    if (!response.ok) throw new Error(`download failed (HTTP ${response.status})`)
-    const staged = join(paths.bin, IS_WINDOWS ? 'tonton-update.exe' : 'tonton-update')
-    await Bun.write(staged, response)
-    chmodSync(staged, 0o755)
+    const release = `${RELEASES_URL}/download/v${order.version}`
+    const sums = parseChecksums(await (await download(`${release}/SHA256SUMS`)).text())
+    const binary = await verified(release, agentBinaryName(), sums)
+    const tray = process.platform === 'darwin' ? await verified(release, TRAY_HELPER_NAME, sums) : null
 
+    const staged = join(paths.bin, IS_WINDOWS ? 'tonton-update.exe' : 'tonton-update')
+    replaceExecutable(staged, binary)
     const reported = (await run([staged, 'version'])).output.trim()
     if (reported !== order.version) {
       rmSync(staged, { force: true })
       throw new Error(`the downloaded agent is ${reported || 'unreadable'}, expected ${order.version}`)
     }
 
-    const binary = join(paths.bin, IS_WINDOWS ? 'tonton.exe' : 'tonton')
-    // A running exe can't be overwritten on Windows, but it can be renamed. Elsewhere the rename swaps it atomically.
-    if (IS_WINDOWS && existsSync(binary)) renameSync(binary, `${binary}.old-${Date.now()}`)
-    renameSync(staged, binary)
-
-    const install = await run([binary, 'install', '--server', config.server])
+    moveExecutable(staged, binaryPath())
+    if (tray) replaceExecutable(trayHelperPath(), tray)
+    const install = await run([binaryPath(), 'install', '--no-restart'])
     if (install.exitCode !== 0) throw new Error(`the install step failed: ${lastLine(install.output)}`)
     return installedVersion()
   } finally {
@@ -64,10 +92,26 @@ export async function applyUpdate(config: AgentConfig, sealedOrder: string): Pro
   }
 }
 
+async function download(url: string): Promise<Response> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) }).catch(() => null)
+  if (!response) throw new Error(`could not reach ${new URL(url).host}`)
+  if (!response.ok) throw new Error(`download failed: ${url.split('/').pop()} (HTTP ${response.status})`)
+  return response
+}
+
+async function verified(release: string, name: string, sums: Map<string, string>): Promise<Uint8Array> {
+  const expected = sums.get(name)
+  if (!expected) throw new Error(`${name} is not part of this release`)
+  const data = await (await download(`${release}/${name}`)).bytes()
+  const actual = new Bun.CryptoHasher('sha256').update(data).digest('hex')
+  if (actual !== expected) throw new Error(`${name} does not match its checksum`)
+  return data
+}
+
 async function run(command: string[]): Promise<{ exitCode: number; output: string }> {
   // Without TONTON_ENROLL, install reuses the machine's enrollment.
   const env = { ...process.env, TONTON_ENROLL: '' }
-  const child = Bun.spawn(command, { env, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
+  const child = Bun.spawn(command, { env, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', windowsHide: true })
   const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
   return { exitCode, output: stderr.trim() || stdout }
 }

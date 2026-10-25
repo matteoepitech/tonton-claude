@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { isOlder } from '../../shared/version'
 import { seal } from '../src/crypto'
-import { agentBinaryName, readOrder } from '../src/update'
+import { agentBinaryName, parseChecksums, readOrder } from '../src/update'
 
 const newKey = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
 const minutes = (count: number) => count * 60_000
@@ -44,4 +44,11 @@ test('versions compare numerically', () => {
   expect(isOlder('0.9.0', '0.10.0')).toBe(true)
   expect(isOlder('1.0.0', '0.10.0')).toBe(false)
   expect(isOlder('0.4.0', '0.4.0')).toBe(false)
+})
+
+test('release checksums are read from SHA256SUMS', () => {
+  const sums = parseChecksums(`${'a'.repeat(64)}  tonton-linux-x64\n${'b'.repeat(64)} *tonton-windows-x64.exe\n\nnot a line\n`)
+  expect(sums.get('tonton-linux-x64')).toBe('a'.repeat(64))
+  expect(sums.get('tonton-windows-x64.exe')).toBe('b'.repeat(64))
+  expect(sums.size).toBe(2)
 })

@@ -1,5 +1,4 @@
 import type { MachineSummary } from '../../shared/protocol'
-import { AGENT_VERSION } from '../../shared/version'
 import type { RelayConfig } from './config'
 import { Hub } from './hub'
 import { RATE_LIMITS } from './limits'
@@ -42,7 +41,7 @@ export class RelayContext {
   }
 
   pushMachines(accountId: string) {
-    this.hub.sendToApps(accountId, { t: 'machines', machines: this.machineList(accountId), latestAgentVersion: AGENT_VERSION })
+    this.hub.sendToApps(accountId, { t: 'machines', machines: this.machineList(accountId) })
   }
 
   dispose() {
