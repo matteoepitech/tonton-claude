@@ -53,13 +53,24 @@ public struct SessionVault: Sendable {
                 platform: name?.platform,
                 createdAt: ISO8601.parse($0.createdAt) ?? .distantPast,
                 lastSeen: $0.lastSeen.flatMap(ISO8601.parse),
-                online: $0.online
+                online: $0.online,
+                agentVersion: $0.agentVersion
             )
         }
     }
 
     public func sealPrompt(text: String, images: [OutgoingImage]) throws -> String {
         try E2E.seal(PromptPayload(text: text, images: images), with: key)
+    }
+
+    /// Agents only obey orders sealed with the account key and issued in the last minutes.
+    public func sealUpdateOrder(version: String, issuedAt: Date = Date()) throws -> String {
+        try E2E.seal(UpdateOrder(version: version, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
+    }
+
+    /// The text of a sealed `{ text }` detail, such as the reason an agent update failed.
+    public func detailText(_ blob: String?) -> String? {
+        open(blob, as: StatusDetail.self)?.text
     }
 
     public func sealMachineName(_ name: String) throws -> String {

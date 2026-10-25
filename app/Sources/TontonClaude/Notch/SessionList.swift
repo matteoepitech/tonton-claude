@@ -33,11 +33,17 @@ struct SessionListView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2, pinnedViews: []) {
                     ForEach(machines, id: \.self) { machine in
-                        Text(machine.uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.top, 8)
+                        HStack(spacing: 4) {
+                            Text(machine.uppercased())
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 4)
+                            if let info = store.machines.first(where: { $0.id == groups[machine]?.first?.machineId }) {
+                                NotchAgentUpdate(machine: info)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.top, 8)
                         ForEach(groups[machine]!) { s in
                             SessionRow(session: s, selected: s.id == store.selectedId, showCost: settings.showCosts)
                                 .contentShape(Rectangle())
@@ -52,6 +58,46 @@ struct SessionListView: View {
             }
             .scrollIndicators(.never)
         }
+    }
+}
+
+/// Shown next to a machine's name when its agent is out of date.
+struct NotchAgentUpdate: View {
+    let machine: MachineInfo
+    @EnvironmentObject var store: SessionStore
+
+    var body: some View {
+        switch machine.agentUpdate(to: store.latestAgentVersion) {
+        case .oneClick:
+            if store.updatingMachines.contains(machine.id) {
+                HStack(spacing: 4) {
+                    ProgressView().controlSize(.mini)
+                    Text("Updating").font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary)
+                }
+            } else {
+                pill("Update agent") { store.updateAgent(machine) }
+                    .help("Install agent \(store.latestAgentVersion ?? "") on \(machine.name)")
+            }
+        case .manual:
+            pill("Update agent") { AppDelegate.shared?.showSettings(pane: .machines) }
+                .help("This agent is too old to update from here: Settings › Machines gives the command to run once on \(machine.name)")
+        case nil:
+            EmptyView()
+        }
+    }
+
+    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: "arrow.up.circle.fill").font(.system(size: 9))
+                Text(title).font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Theme.accent.opacity(0.16)))
+        }
+        .buttonStyle(.plain)
     }
 }
 
