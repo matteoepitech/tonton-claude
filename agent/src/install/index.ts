@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { normalizeServer, parseEnrollment } from '../../../shared/enrollment'
 import { type AgentConfig, defaultMachineName, loadConfig, paths, saveConfig, VERSION } from '../config'
-import { seal } from '../crypto'
+import { registerAutostart, restartService, runningServicePid, stopService } from '../service/control'
+import { installTrayFiles } from '../service/tray'
+import { claim } from '../switch-relay'
 import { type ClaudeSettings, withoutTontonHooks, withTontonHooks } from './claude-settings'
 import { removeLauncher, withLauncher } from './shell-profile'
 import { installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
-
-/** `TONTON_ENROLL` is `<code>.<key>`: the code is a single-use credential for the relay, the key never leaves the machine. */
-const ENROLLMENT = /^([A-Z0-9]{12})\.([A-Za-z0-9_-]{43})$/
 
 const done = (message: string) => console.log(`  \x1b[32m✓\x1b[0m ${message}`)
 const warn = (message: string) => console.log(`  \x1b[33m!\x1b[0m ${message}`)
@@ -22,16 +22,33 @@ function option(args: string[], name: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined
 }
 
+/**
+ * Sets the machine up, or updates it when it is already enrolled. Run by the install scripts with TONTON_ENROLL, and by
+ * updates from the app with `--no-restart` (the service restarts itself once it has reported).
+ */
 export async function install(args: string[]) {
   const previous = loadConfig()
-  const server = (option(args, 'server') ?? previous?.server)?.replace(/\/+$/, '')
   const machine = option(args, 'name') ?? previous?.machine ?? defaultMachineName()
-  const enrollment = (option(args, 'enroll') ?? process.env.TONTON_ENROLL ?? '').trim()
-  if (!server) fatal('Usage: TONTON_ENROLL=<code.key> tonton install --server https://relay.example.com [--name "PC-Windows"]')
+  const code = (option(args, 'enroll') ?? process.env.TONTON_ENROLL ?? '').trim()
+  const updating = args.includes('--no-restart')
 
   console.log(`\nTonton Claude ${VERSION}, installing on "${machine}"\n`)
-  const config = enrollment ? await enroll(server, machine, enrollment) : reuse(previous, server, machine)
-  saveConfig(config)
+  let config: AgentConfig
+  if (code) {
+    const enrollment = parseEnrollment(code) ?? fatal('The connection code is malformed. Copy the install command again from the app.')
+    // Codes from apps before 0.4.0 carry no relay: the install script passed it with --server.
+    const server = enrollment.server ?? normalizeServer(option(args, 'server') ?? '') ?? previous?.server
+    if (!server) fatal('The connection code has no relay address. Copy the install command again from the app.')
+    config = await claim(server, machine, enrollment).catch(error => fatal(error.message))
+    done(`machine enrolled on ${new URL(server).host}`)
+  } else if (previous) {
+    config = { ...previous, machine }
+    done(`already enrolled on ${new URL(previous.server).host}, updating`)
+  } else {
+    fatal('Missing TONTON_ENROLL. Copy the install command from Tonton Claude › Machines › Add machine.')
+  }
+  // A manual install brings a hidden tray icon back; an update from the app leaves it as the user set it.
+  saveConfig({ ...config, version: VERSION, tray: updating ? previous?.tray : undefined })
   done('config saved to ~/.tonton/config.json (readable by you only)')
 
   const binary = installBinary()
@@ -40,35 +57,18 @@ export async function install(args: string[]) {
   if (registerMcpServer(binary)) done('MCP server "tonton" registered for Claude Code')
   else warn(`could not run "claude mcp add". Run it by hand: claude mcp add --scope user tonton -- "${binary}" channel`)
   installLaunchers()
+  await installTrayFiles()
+  if (registerAutostart()) done('background service starts at login')
+  else warn('no user systemd here: the background service does not start at login. Sessions still work.')
+  if (!updating) {
+    restartService({ reload: true })
+    done('background service started')
+  }
 
   console.log(`
 All set. Open a new terminal and run \x1b[1mclaude\x1b[0m as usual: the session shows up in your Mac's notch.
 On first launch, Claude Code asks you to confirm the development channel: pick "I am using this for local development".
 `)
-}
-
-async function enroll(server: string, machine: string, enrollment: string): Promise<AgentConfig> {
-  const match = ENROLLMENT.exec(enrollment)
-  if (!match) fatal('TONTON_ENROLL is malformed. Copy the install command again from the app.')
-  const [, code, key] = match
-  const response = await fetch(`${server}/api/machines/claim`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code, name: await seal(key, { name: machine, platform: process.platform }) }),
-  }).catch(() => null)
-  if (!response) fatal(`relay not reachable (${server})`)
-  const body = (await response.json().catch(() => ({}))) as { machineId?: string; token?: string; error?: string }
-  if (!response.ok || !body.machineId || !body.token) fatal(body.error ?? `enrollment failed (HTTP ${response.status})`)
-  done(`machine enrolled on ${new URL(server).host}`)
-  return { server, machineId: body.machineId, token: body.token, key, machine }
-}
-
-function reuse(previous: AgentConfig | null, server: string, machine: string): AgentConfig {
-  if (!previous || previous.server !== server) {
-    fatal('Missing TONTON_ENROLL. Copy the install command from Tonton Claude > Machines > Add machine.')
-  }
-  done('reusing the existing enrollment')
-  return { ...previous, machine }
 }
 
 function readClaudeSettings(): { settings: ClaudeSettings; raw: string | null } | null {
@@ -111,6 +111,8 @@ function installLaunchers() {
 
 export async function uninstall() {
   console.log('\nUninstalling Tonton Claude\n')
+  stopService()
+  done('background service stopped and removed from login items')
   const current = readClaudeSettings()
   if (current?.raw) {
     writeClaudeSettings(withoutTontonHooks(current.settings))
@@ -122,7 +124,8 @@ export async function uninstall() {
     if (existsSync(file)) writeFileSync(file, removeLauncher(readFileSync(file, 'utf8')))
   }
   done('claude launcher removed from shell profiles')
-  for (const name of ['config.json', 'run', 'inbox']) rmSync(join(paths.home, name), { recursive: true, force: true })
+  for (const name of ['config.json', 'run', 'inbox', 'status.json', 'service.pid', 'tray.ps1', 'tonton.ico'])
+    rmSync(join(paths.home, name), { recursive: true, force: true })
   done(`files removed. The binary stays in ${paths.bin}: delete the folder by hand if you want.`)
 }
 
@@ -141,5 +144,8 @@ export async function status() {
   const launchers = shellProfiles().filter(({ file }) => existsSync(file) && readFileSync(file, 'utf8').includes('# >>> tonton >>>'))
   if (launchers.length) done(`claude launcher in ${launchers.map(p => p.file).join(', ')}`)
   else warn('no claude launcher found in your shell profiles: run the install again')
+  const service = runningServicePid()
+  if (service) done(`background service running (pid ${service})`)
+  else warn('background service not running: run the install again')
   console.log(`  channel: ${process.env.TONTON_CHANNEL === '1' ? 'active in this shell' : 'start claude from a new terminal to enable it'}`)
 }
