@@ -1,0 +1,180 @@
+import type { Entry, ImageData } from '../../../shared/protocol'
+
+// Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
+
+const MAX_TOOL_RESULT_CHARS = 4000
+const MAX_IMAGE_BASE64 = 4 * 1024 * 1024
+const MAX_SUMMARY_CHARS = 300
+/** Internal tools that would only add noise to the conversation. */
+const HIDDEN_TOOLS = new Set(['ToolSearch'])
+/** Wrapped user content that Claude Code adds and that should not appear as a message. */
+const INTERNAL_USER_TAGS = /^\s*<(local-command-stdout|local-command-caveat|command-message|system-reminder)/
+
+/** Which input field describes a tool call best, per tool. */
+const SUMMARY_FIELDS: Record<string, string[]> = {
+  Bash: ['command'],
+  Read: ['file_path'],
+  Write: ['file_path'],
+  Edit: ['file_path'],
+  MultiEdit: ['file_path'],
+  NotebookEdit: ['notebook_path'],
+  WebFetch: ['url'],
+  WebSearch: ['query'],
+  Agent: ['description', 'prompt'],
+  Task: ['description', 'prompt'],
+}
+const FALLBACK_SUMMARY_FIELDS = ['description', 'command', 'file_path', 'path', 'url', 'query', 'pattern', 'prompt']
+
+export interface ParsedLine {
+  entries: Entry[]
+  title?: string
+  costUSD?: number
+}
+
+interface Block {
+  type: string
+  [field: string]: unknown
+}
+
+interface TranscriptLine {
+  type?: string
+  subtype?: string
+  uuid?: string
+  timestamp?: string
+  isSidechain?: boolean
+  isMeta?: boolean
+  origin?: { kind?: string }
+  aiTitle?: string
+  totalCostUSD?: number
+  message?: { content?: string | Block[] }
+}
+
+export function parseLine(raw: string): ParsedLine {
+  const result: ParsedLine = { entries: [] }
+  let line: TranscriptLine
+  try {
+    line = JSON.parse(raw)
+  } catch {
+    return result
+  }
+  if (!line || typeof line !== 'object' || line.isSidechain) return result
+
+  if (line.type === 'ai-title' && typeof line.aiTitle === 'string') result.title = line.aiTitle
+  if (line.type === 'cost-state' && typeof line.totalCostUSD === 'number') result.costUSD = line.totalCostUSD
+
+  const id = line.uuid ?? `${line.type}-${line.timestamp}`
+  const ts = line.timestamp ?? new Date().toISOString()
+  if (line.type === 'system' && line.subtype === 'compact_boundary') {
+    result.entries.push({ id, ts, kind: 'system', text: 'Conversation compacted' })
+  }
+
+  // Messages sent from the notch arrive through the channel and are stored as meta user messages.
+  const fromChannel = line.origin?.kind === 'channel'
+  if ((line.type !== 'user' && line.type !== 'assistant') || (line.isMeta && !fromChannel) || !line.message) return result
+
+  const content = line.message.content
+  if (line.type === 'user') result.entries.push(...userEntries(id, ts, content))
+  else if (Array.isArray(content)) result.entries.push(...assistantEntries(id, ts, content))
+  return result
+}
+
+function userEntries(id: string, ts: string, content: string | Block[] | undefined): Entry[] {
+  if (typeof content === 'string') return compact([userMessage(id, ts, content, [])])
+  if (!Array.isArray(content)) return []
+
+  const entries: Entry[] = []
+  const texts: string[] = []
+  const images: ImageData[] = []
+  content.forEach((block, index) => {
+    if (block.type === 'text' && typeof block.text === 'string') texts.push(block.text)
+    else if (block.type === 'image') addImage(images, block)
+    else if (block.type === 'tool_result' && !isToolSchemaResult(block)) entries.push(toolResult(`${id}:${index}`, ts, block))
+  })
+  return compact([...entries, userMessage(id, ts, texts.join('\n'), images)])
+}
+
+function assistantEntries(id: string, ts: string, content: Block[]): Entry[] {
+  return compact(
+    content.map((block, index): Entry | null => {
+      const entryId = `${id}:${index}`
+      if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+        return { id: entryId, ts, kind: 'assistant', text: block.text }
+      }
+      if (block.type === 'tool_use' && typeof block.name === 'string' && !HIDDEN_TOOLS.has(block.name)) {
+        return {
+          id: entryId,
+          ts,
+          kind: 'tool',
+          toolUseId: String(block.id),
+          name: block.name,
+          summary: toolSummary(block.name, block.input),
+        }
+      }
+      return null
+    }),
+  )
+}
+
+function userMessage(id: string, ts: string, raw: string, images: ImageData[]): Entry | null {
+  const channel = /<channel source="[^"]*tonton[^"]*"[^>]*>([\s\S]*?)<\/channel>/.exec(raw)
+  if (channel) return { id, ts, kind: 'user', text: channel[1].trim(), viaNotch: true, ...(images.length ? { images } : {}) }
+  if (INTERNAL_USER_TAGS.test(raw)) return null
+  if (/^\s*<task-notification>/.test(raw)) {
+    const summary = /<summary>([\s\S]*?)<\/summary>/.exec(raw)?.[1]?.trim()
+    return { id, ts, kind: 'system', text: summary ?? 'Background task finished' }
+  }
+  if (/^\[Request interrupted by user/.test(raw)) return { id, ts, kind: 'system', text: 'Interrupted by user' }
+
+  const command = /<command-name>([^<]*)<\/command-name>[\s\S]*?(?:<command-args>([^<]*)<\/command-args>)?/.exec(raw)
+  if (command) return { id, ts, kind: 'system', text: `${command[1]} ${command[2] ?? ''}`.trim() }
+
+  const text = raw.replace(/<pasted_content[^>]*>|<\/pasted_content>/g, '')
+  if (!text.trim() && images.length === 0) return null
+  return { id, ts, kind: 'user', text, ...(images.length ? { images } : {}) }
+}
+
+/** ToolSearch results only load tool schemas. */
+function isToolSchemaResult(block: Block): boolean {
+  const content = block.content
+  return Array.isArray(content) && content.length > 0 && content.every((part: Block) => part.type === 'tool_reference')
+}
+
+function toolResult(id: string, ts: string, block: Block): Entry {
+  const images: ImageData[] = []
+  let text = ''
+  if (typeof block.content === 'string') {
+    text = block.content
+  } else if (Array.isArray(block.content)) {
+    for (const part of block.content as Block[]) {
+      if (part.type === 'text' && typeof part.text === 'string') text += (text ? '\n' : '') + part.text
+      else if (part.type === 'image') addImage(images, part)
+    }
+  }
+  if (text.length > MAX_TOOL_RESULT_CHARS) {
+    text = `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n… (${text.length - MAX_TOOL_RESULT_CHARS} characters truncated)`
+  }
+  const toolUseId = String(block.tool_use_id)
+  return { id, ts, kind: 'tool_result', toolUseId, text, isError: block.is_error === true, ...(images.length ? { images } : {}) }
+}
+
+function addImage(images: ImageData[], block: Block) {
+  const source = block.source as { type?: string; data?: unknown; media_type?: string } | undefined
+  if (source?.type === 'base64' && typeof source.data === 'string' && source.data.length <= MAX_IMAGE_BASE64) {
+    images.push({ mediaType: source.media_type ?? 'image/png', data: source.data })
+  }
+}
+
+export function toolSummary(name: string, input: unknown): string {
+  const fields = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  const pick = (keys: string[]) => keys.map(key => fields[key]).find((v): v is string => typeof v === 'string' && v.length > 0)
+
+  let summary: string | undefined
+  if (name === 'Grep' || name === 'Glob') summary = [pick(['pattern']), pick(['path'])].filter(Boolean).join(' in ')
+  else if (name === 'TodoWrite') summary = 'Updated the task list'
+  else summary = pick(SUMMARY_FIELDS[name] ?? FALLBACK_SUMMARY_FIELDS) ?? Object.values(fields).find(v => typeof v === 'string')
+
+  const oneLine = (summary ?? '').replace(/\s+/g, ' ').trim()
+  return oneLine.length > MAX_SUMMARY_CHARS ? `${oneLine.slice(0, MAX_SUMMARY_CHARS)}…` : oneLine
+}
+
+const compact = <T>(items: (T | null)[]): T[] => items.filter((item): item is T => item !== null)
