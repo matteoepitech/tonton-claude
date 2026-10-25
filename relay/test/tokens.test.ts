@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { issueToken, newEnrollmentCode, parseToken, safeEqual } from '../src/tokens'
+import { issueToken, newJoinSecret, parseToken, safeEqual } from '../src/tokens'
 
 describe('tokens', () => {
   test('an issued token parses back to the same id and secret hash', () => {
@@ -16,8 +16,8 @@ describe('tokens', () => {
     expect(parseToken('', 'tm')).toBeNull()
   })
 
-  test('enrollment codes are 12 unambiguous characters', () => {
-    const code = newEnrollmentCode()
-    expect(code).toMatch(/^[A-HJ-NP-Z2-9]{12}$/)
+  test('join secrets are 256 random bits', () => {
+    expect(newJoinSecret()).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(newJoinSecret()).not.toBe(newJoinSecret())
   })
 })

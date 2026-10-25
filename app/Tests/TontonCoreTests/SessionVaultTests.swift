@@ -72,13 +72,27 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertNil(vault.machines(wire)[0].agentUpdate(to: "0.4.0"))
     }
 
-    func testInstallCommandsCarryTheRelayInTheConnectionCode() {
-        let code = InstallCommand.connectionCode(code: "ABCDEFGHJKMN", key: "k", relay: "https://relay.example.com")
-        XCTAssertEqual(code, "ABCDEFGHJKMN.k@https://relay.example.com")
+    func testInstallCommandsCarryTheToken() {
         let releases = "https://github.com/matteoepitech/tonton-claude/releases/latest/download"
-        XCTAssertEqual(InstallCommand.windows(connectionCode: code), "$env:TONTON_ENROLL='\(code)'; irm \(releases)/install.ps1 | iex")
-        XCTAssertEqual(InstallCommand.unix(connectionCode: code), "curl -fsSL \(releases)/install.sh | TONTON_ENROLL='\(code)' sh")
-        XCTAssertEqual(InstallCommand.unix(), "curl -fsSL \(releases)/install.sh | sh")
+        XCTAssertEqual(InstallCommand.windows(token: "tonton_x"), "$env:TONTON_TOKEN='tonton_x'; irm \(releases)/install.ps1 | iex")
+        XCTAssertEqual(InstallCommand.unix(token: "tonton_x"), "curl -fsSL \(releases)/install.sh | TONTON_TOKEN='tonton_x' sh")
+        XCTAssertEqual(InstallCommand.windows(), "irm \(releases)/install.ps1 | iex")
+    }
+
+    func testTheMachineTokenHoldsWhatAnAgentNeeds() throws {
+        let account = Account(relay: "https://relay.example.com", accountId: "abcdefghijkl", token: "ta_x", key: E2E.newKey())
+        XCTAssertNil(account.machineToken)
+        let token = try XCTUnwrap(account.with(joinSecret: "s").machineToken)
+        XCTAssertTrue(token.hasPrefix("tonton_"))
+        let json = try XCTUnwrap(Data(base64URLEncoded: String(token.dropFirst("tonton_".count))))
+        XCTAssertEqual(
+            try JSONDecoder().decode([String: String].self, from: json),
+            ["relay": "https://relay.example.com", "account": "abcdefghijkl", "secret": "s", "key": account.key])
+    }
+
+    func testRecoveryKeysKeepTheJoinSecret() throws {
+        let account = Account(relay: "https://r", accountId: "a", token: "t", key: E2E.newKey(), joinSecret: "s")
+        XCTAssertEqual(Account(recoveryKey: account.recoveryKey), account)
     }
 
     func testAgentUpdateKind() {

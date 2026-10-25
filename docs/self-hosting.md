@@ -27,15 +27,18 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 - **End-to-end encryption.** The app generates a 256-bit key on your Mac. Conversations, prompts, images, permission prompts,
   machine names, project paths and status texts are sealed with AES-256-GCM before they leave a machine. The relay stores and
   routes opaque blobs: whoever runs it cannot read them.
-- **Per-machine credentials.** A machine joins with a single-use enrollment code that expires after 15 minutes and receives
-  its own token, revocable from the app. The relay stores SHA-256 hashes of tokens and codes, never the secrets.
-- **No secret in URLs.** Install scripts are public and generic; the connection code (enrollment code, key and relay address)
-  travels in the `TONTON_ENROLL` variable of the command you paste. The key itself is never sent to the relay.
+- **Account token.** Machines join with the account token shown in the app: the relay address, a join secret and the
+  end-to-end key, like a RustDesk key. The relay keeps a hash of the secret. Regenerating the token replaces the secret and
+  the key and signs every machine out.
+- **Per-machine credentials.** Each machine that joins receives its own credential, revocable from the app. The relay stores
+  SHA-256 hashes of credentials and secrets, never the secrets themselves.
+- **No secret in URLs.** Install scripts are public and generic; the token travels in the `TONTON_TOKEN` variable of the
+  command you paste. The key it holds is never sent to the relay.
 - **Verified downloads.** Install scripts and updates check every file against the `SHA256SUMS` of its release.
 - **Agent updates.** Only the app can ask a machine to update: the order is sealed with the account key and expires after
   10 minutes, so the relay can neither forge nor replay it. The agent downloads the release from GitHub, never from the
   relay, and checks the version it reports before swapping it in.
-- **Abuse limits.** Per-IP rate limits on sign-ups, enrollment and failed authentications; caps on machines and sessions per account.
+- **Abuse limits.** Per-IP rate limits on sign-ups, joins and failed authentications; caps on machines and sessions per account.
 
 What a relay can still see: that an account exists, how many machines and sessions it has, session states (working, waiting…)
 and timing.
@@ -51,10 +54,8 @@ and timing.
 
 `tonton status` checks the connection, `tonton uninstall` removes everything.
 
-**Changing relay.** Click the tray icon › **Change relay…**, or run `tonton relay`:
-
-- with an address (`tonton relay https://new.example.com`), to reach the same relay at another address;
-- with a connection code from **Machines › Add machine** in the app, to join another relay or account.
+**Changing relay or account.** Click the tray icon › **Set token…** and paste the token from the app, or run
+`tonton token <token>`.
 
 Running sessions switch on their next start. On Linux servers without a desktop there is no tray: use the command. A user
 service only runs while you are logged in, unless you enable lingering: `loginctl enable-linger $USER`.

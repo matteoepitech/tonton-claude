@@ -37,7 +37,6 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 final class SettingsRouter: ObservableObject {
     static let shared = SettingsRouter()
     @Published var pane: SettingsPane = AppSettings.shared.isConfigured ? .machines : .server
-    @Published var installing = false
 }
 
 struct SettingsView: View {
@@ -91,25 +90,14 @@ struct PageHeader: View {
     var body: some View {
         HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(pane == .machines && router.installing ? "Add a machine" : pane.title)
+                Text(pane.title)
                     .font(Theme.title(22))
                     .tracking(-0.4)
-                Text(pane == .machines && router.installing ? "Two steps, about a minute." : pane.subtitle)
+                Text(pane.subtitle)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textDim)
             }
             Spacer()
-            if pane == .machines {
-                if router.installing {
-                    Button("Done") { router.installing = false }.buttonStyle(ThemeButtonStyle())
-                } else {
-                    Button {
-                        router.installing = true
-                    } label: {
-                        Label("Add machine", systemImage: "plus")
-                    }.buttonStyle(ThemeButtonStyle(primary: true))
-                }
-            }
         }
         .padding(.bottom, 28)
     }
@@ -140,7 +128,6 @@ struct Sidebar: View {
                 ForEach(SettingsPane.allCases) { pane in
                     NavRow(pane: pane, selected: router.pane == pane) {
                         router.pane = pane
-                        router.installing = false
                     }
                 }
             }

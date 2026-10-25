@@ -10,14 +10,31 @@ public struct Account: Codable, Equatable, Sendable {
     public let token: String
     /// Base64url AES-256 key.
     public let key: String
+    /// Lets machines join the account, through the account token. Missing until the app asks the relay for one.
+    public let joinSecret: String?
 
     private static let recoveryPrefix = "tonton1."
 
-    public init(relay: String, accountId: String, token: String, key: String) {
+    public init(relay: String, accountId: String, token: String, key: String, joinSecret: String? = nil) {
         self.relay = relay
         self.accountId = accountId
         self.token = token
         self.key = key
+        self.joinSecret = joinSecret
+    }
+
+    /// The token machines join the account with, like a RustDesk server key: `tonton_` and base64url JSON holding the
+    /// relay, the account, the join secret and the end-to-end key. Mirrors shared/account-token.ts.
+    public var machineToken: String? {
+        struct Payload: Encodable { let relay: String; let account: String; let secret: String; let key: String }
+        guard let joinSecret,
+            let json = try? JSONEncoder().encode(Payload(relay: relay, account: accountId, secret: joinSecret, key: key))
+        else { return nil }
+        return "tonton_" + json.base64URLEncodedString()
+    }
+
+    public func with(key: String? = nil, joinSecret: String?) -> Account {
+        Account(relay: relay, accountId: accountId, token: token, key: key ?? self.key, joinSecret: joinSecret)
     }
 
     /// Restores an account from its recovery key; nil if the string is not one.

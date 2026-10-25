@@ -1,8 +1,8 @@
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { ENROLLMENT_TTL_MS, MAX_MACHINES_PER_ACCOUNT } from './limits'
-import { issueToken, newEnrollmentCode, parseToken, safeEqual, sha256 } from './tokens'
+import { MAX_MACHINES_PER_ACCOUNT } from './limits'
+import { issueToken, newJoinSecret, parseToken, safeEqual, sha256 } from './tokens'
 
 export interface Machine {
   id: string
@@ -13,7 +13,7 @@ export interface Machine {
   lastSeen: string | null
 }
 
-export type ClaimResult = { ok: true; machine: Machine; token: string } | { ok: false; reason: 'invalid-code' | 'machine-limit' }
+export type JoinResult = { ok: true; machine: Machine; token: string } | { ok: false; reason: 'invalid-token' | 'machine-limit' }
 
 // The first schema predates versioning, hence IF NOT EXISTS: it must apply cleanly to existing databases.
 const MIGRATIONS = [
@@ -36,6 +36,9 @@ const MIGRATIONS = [
      account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
      expires_at INTEGER NOT NULL
    );`,
+  // Machines join with the account token instead of single-use codes.
+  `ALTER TABLE accounts ADD COLUMN join_hash BLOB;
+   DROP TABLE enrollments;`,
 ]
 
 interface MachineRow {
@@ -100,33 +103,38 @@ export class Registry {
     return row && safeEqual(row.secret_hash, parsed.secretHash) ? toMachine(row) : null
   }
 
-  createEnrollment(accountId: string): { code: string; expiresAt: string } {
-    this.db.query('DELETE FROM enrollments WHERE expires_at < ?').run(Date.now())
-    const code = newEnrollmentCode()
-    const expiresAt = Date.now() + ENROLLMENT_TTL_MS
-    this.db.query('INSERT INTO enrollments (code_hash, account_id, expires_at) VALUES (?, ?, ?)').run(sha256(code), accountId, expiresAt)
-    return { code, expiresAt: new Date(expiresAt).toISOString() }
+  /**
+   * The secret machines join the account with. A new one replaces the previous: every machine that joined with it is
+   * signed out, and their ids are returned. Without `regenerate`, an account that already has one keeps it.
+   */
+  newJoinSecret(accountId: string, regenerate: boolean): { secret: string; revoked: string[] } | null {
+    return this.db.transaction(() => {
+      const row = this.db.query('SELECT join_hash FROM accounts WHERE id = ?').get(accountId) as { join_hash: Uint8Array | null } | null
+      if (!row || (row.join_hash && !regenerate)) return null
+      const revoked = row.join_hash
+        ? (this.db.query('DELETE FROM machines WHERE account_id = ? RETURNING id').all(accountId) as { id: string }[]).map(m => m.id)
+        : []
+      const secret = newJoinSecret()
+      this.db.query('UPDATE accounts SET join_hash = ? WHERE id = ?').run(sha256(secret), accountId)
+      return { secret, revoked }
+    })()
   }
 
-  /** Consumes a single-use enrollment code and registers the machine. */
-  claimEnrollment(code: string, nameBlob: string): ClaimResult {
-    return this.db.transaction((): ClaimResult => {
-      const enrollment = this.db
-        .query('DELETE FROM enrollments WHERE code_hash = ? RETURNING account_id, expires_at')
-        .get(sha256(code.trim().toUpperCase())) as { account_id: string; expires_at: number } | null
-      if (!enrollment || enrollment.expires_at < Date.now()) return { ok: false, reason: 'invalid-code' }
+  /** Registers a machine that holds the account token. */
+  joinMachine(accountId: string, secret: string, nameBlob: string): JoinResult {
+    return this.db.transaction((): JoinResult => {
+      const row = this.db.query('SELECT join_hash FROM accounts WHERE id = ?').get(accountId) as { join_hash: Uint8Array | null } | null
+      if (!row?.join_hash || !safeEqual(row.join_hash, sha256(secret))) return { ok: false, reason: 'invalid-token' }
 
-      const { count } = this.db.query('SELECT COUNT(*) AS count FROM machines WHERE account_id = ?').get(enrollment.account_id) as {
-        count: number
-      }
+      const { count } = this.db.query('SELECT COUNT(*) AS count FROM machines WHERE account_id = ?').get(accountId) as { count: number }
       if (count >= MAX_MACHINES_PER_ACCOUNT) return { ok: false, reason: 'machine-limit' }
 
       const { id, token, secretHash } = issueToken('tm')
       const createdAt = now()
       this.db
         .query('INSERT INTO machines (id, account_id, secret_hash, name_blob, created_at) VALUES (?, ?, ?, ?, ?)')
-        .run(id, enrollment.account_id, secretHash, nameBlob, createdAt)
-      return { ok: true, token, machine: { id, accountId: enrollment.account_id, nameBlob, createdAt, lastSeen: null } }
+        .run(id, accountId, secretHash, nameBlob, createdAt)
+      return { ok: true, token, machine: { id, accountId, nameBlob, createdAt, lastSeen: null } }
     })()
   }
 

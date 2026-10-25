@@ -18,9 +18,12 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
+const secrets = new Map<string, string>()
+
+/** Joins a machine with the account token, created on first use. */
 const enroll = (accountId: string, name = 'sealed-name') => {
-  const { code } = registry.createEnrollment(accountId)
-  const result = registry.claimEnrollment(code, name)
+  if (!secrets.has(accountId)) secrets.set(accountId, registry.newJoinSecret(accountId, false)?.secret ?? '')
+  const result = registry.joinMachine(accountId, secrets.get(accountId) ?? '', name)
   if (!result.ok) throw new Error(result.reason)
   return result
 }
@@ -42,19 +45,40 @@ describe('accounts', () => {
   })
 })
 
-describe('enrollment', () => {
-  test('a code enrolls exactly one machine', () => {
+describe('account token', () => {
+  test('any number of machines join with it', () => {
     const account = registry.createAccount()
-    const { code } = registry.createEnrollment(account.id)
-    const first = registry.claimEnrollment(code, 'blob')
-    expect(first.ok).toBe(true)
-    expect(registry.claimEnrollment(code, 'blob')).toEqual({ ok: false, reason: 'invalid-code' })
+    const secret = registry.newJoinSecret(account.id, false)?.secret ?? ''
+    expect(registry.joinMachine(account.id, secret, 'one').ok).toBe(true)
+    expect(registry.joinMachine(account.id, secret, 'two').ok).toBe(true)
+    expect(registry.machines(account.id)).toHaveLength(2)
   })
 
-  test('codes are case-insensitive and trimmed', () => {
+  test('a wrong secret or another account joins nothing', () => {
+    const alice = registry.createAccount()
+    const bob = registry.createAccount()
+    const secret = registry.newJoinSecret(alice.id, false)?.secret ?? ''
+    registry.newJoinSecret(bob.id, false)
+    expect(registry.joinMachine(alice.id, `${secret}x`, 'blob')).toEqual({ ok: false, reason: 'invalid-token' })
+    expect(registry.joinMachine(bob.id, secret, 'blob')).toEqual({ ok: false, reason: 'invalid-token' })
+    expect(registry.joinMachine(registry.createAccount().id, secret, 'blob')).toEqual({ ok: false, reason: 'invalid-token' })
+  })
+
+  test('is kept unless regenerated', () => {
     const account = registry.createAccount()
-    const { code } = registry.createEnrollment(account.id)
-    expect(registry.claimEnrollment(`  ${code.toLowerCase()} `, 'blob').ok).toBe(true)
+    expect(registry.newJoinSecret(account.id, false)?.revoked).toEqual([])
+    expect(registry.newJoinSecret(account.id, false)).toBeNull()
+  })
+
+  test('regenerating it signs out every machine and the previous token joins nothing', () => {
+    const account = registry.createAccount()
+    const previous = registry.newJoinSecret(account.id, false)?.secret ?? ''
+    const { machine, token } = registry.joinMachine(account.id, previous, 'blob') as { machine: { id: string }; token: string }
+    const next = registry.newJoinSecret(account.id, true)
+    expect(next?.revoked).toEqual([machine.id])
+    expect(registry.authenticateMachine(token)).toBeNull()
+    expect(registry.joinMachine(account.id, previous, 'blob').ok).toBe(false)
+    expect(registry.joinMachine(account.id, next?.secret ?? '', 'blob').ok).toBe(true)
   })
 
   test('machine tokens authenticate their machine', () => {
@@ -67,8 +91,7 @@ describe('enrollment', () => {
   test('an account cannot exceed its machine limit', () => {
     const account = registry.createAccount()
     for (let i = 0; i < MAX_MACHINES_PER_ACCOUNT; i++) enroll(account.id)
-    const { code } = registry.createEnrollment(account.id)
-    expect(registry.claimEnrollment(code, 'blob')).toEqual({ ok: false, reason: 'machine-limit' })
+    expect(registry.joinMachine(account.id, secrets.get(account.id) ?? '', 'blob')).toEqual({ ok: false, reason: 'machine-limit' })
   })
 })
 

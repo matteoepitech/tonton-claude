@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { normalizeServer, parseEnrollment } from '../../../shared/enrollment'
-import { type AgentConfig, defaultMachineName, loadConfig, paths, saveConfig, VERSION } from '../config'
+import { parseAccountToken } from '../../../shared/account-token'
+import { defaultMachineName, loadConfig, paths, saveConfig, VERSION } from '../config'
 import { registerAutostart, restartService, runningServicePid, stopService } from '../service/control'
 import { installTrayFiles } from '../service/tray'
-import { claim } from '../switch-relay'
+import { useToken } from '../token'
 import { type ClaudeSettings, withoutTontonHooks, withTontonHooks } from './claude-settings'
 import { removeLauncher, withLauncher } from './shell-profile'
 import { installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
@@ -23,30 +23,26 @@ function option(args: string[], name: string): string | undefined {
 }
 
 /**
- * Sets the machine up, or updates it when it is already enrolled. Run by the install scripts with TONTON_ENROLL, and by
+ * Sets the machine up, or updates it when it is already connected. Run by the install scripts with TONTON_TOKEN, and by
  * updates from the app with `--no-restart` (the service restarts itself once it has reported).
  */
 export async function install(args: string[]) {
   const previous = loadConfig()
   const machine = option(args, 'name') ?? previous?.machine ?? defaultMachineName()
-  const code = (option(args, 'enroll') ?? process.env.TONTON_ENROLL ?? '').trim()
+  const token = (option(args, 'token') ?? process.env.TONTON_TOKEN ?? '').trim()
   const updating = args.includes('--no-restart')
 
   console.log(`\nTonton Claude ${VERSION}, installing on "${machine}"\n`)
-  let config: AgentConfig
-  if (code) {
-    const enrollment = parseEnrollment(code) ?? fatal('The connection code is malformed. Copy the install command again from the app.')
-    // Codes from apps before 0.4.0 carry no relay: the install script passed it with --server.
-    const server = enrollment.server ?? normalizeServer(option(args, 'server') ?? '') ?? previous?.server
-    if (!server) fatal('The connection code has no relay address. Copy the install command again from the app.')
-    config = await claim(server, machine, enrollment).catch(error => fatal(error.message))
-    done(`machine enrolled on ${new URL(server).host}`)
+  if (previous && machine !== previous.machine) saveConfig({ ...previous, machine })
+  if (token) {
+    if (!parseAccountToken(token)) fatal('TONTON_TOKEN is not a Tonton Claude token. Copy the install command again from the app.')
+    done(await useToken(token).catch(error => fatal(error.message)))
   } else if (previous) {
-    config = { ...previous, machine }
-    done(`already enrolled on ${new URL(previous.server).host}, updating`)
+    done(`already connected to ${new URL(previous.server).host}, updating`)
   } else {
-    fatal('Missing TONTON_ENROLL. Copy the install command from Tonton Claude › Machines › Add machine.')
+    fatal('Missing TONTON_TOKEN. Copy the install command from Tonton Claude › Machines.')
   }
+  const config = loadConfig() ?? fatal('The configuration could not be saved.')
   // A manual install brings a hidden tray icon back; an update from the app leaves it as the user set it.
   saveConfig({ ...config, version: VERSION, tray: updating ? previous?.tray : undefined })
   done('config saved to ~/.tonton/config.json (readable by you only)')

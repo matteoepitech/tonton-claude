@@ -1,13 +1,13 @@
 #!/bin/sh
 # Tonton Claude agent, macOS and Linux. Published with each release:
-#   curl -fsSL https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.sh | TONTON_ENROLL='<code>' sh
-# TONTON_ENROLL is the connection code from the app (Machines > Add machine). Without it, an enrolled machine updates.
+#   curl -fsSL https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.sh | TONTON_TOKEN='<token>' sh
+# TONTON_TOKEN is the token from the app (Machines). Without it, a connected machine updates.
 set -e
 REPO=matteoepitech/tonton-claude
 VERSION=__VERSION__
 
-if [ -z "$TONTON_ENROLL" ] && [ ! -f "$HOME/.tonton/config.json" ]; then
-  echo "Missing TONTON_ENROLL. Copy the install command from Tonton Claude > Machines > Add machine." >&2
+if [ -z "$TONTON_TOKEN" ] && [ ! -f "$HOME/.tonton/config.json" ]; then
+  echo "Missing TONTON_TOKEN. Copy the install command from Tonton Claude > Machines." >&2
   exit 1
 fi
 
