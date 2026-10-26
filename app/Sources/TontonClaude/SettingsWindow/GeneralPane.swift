@@ -62,6 +62,15 @@ struct GeneralPane: View {
                         settings.editor = EditorChoice(rawValue: $0) ?? .defaultApp
                     }
                 }
+                Hairline()
+                Row(title: "Terminal", detail: "Sessions on this Mac open their folder in it.") {
+                    ChoiceMenu(
+                        selection: settings.terminal.available.rawValue,
+                        options: TerminalChoice.installed.map { ($0.rawValue, $0.label) }
+                    ) {
+                        settings.terminal = TerminalChoice(rawValue: $0) ?? .terminal
+                    }
+                }
             }
             GroupLabel(text: "Quick replies")
             Card {

@@ -79,6 +79,7 @@ enum EditorChoice: String, CaseIterable, Identifiable {
     /// This editor, or the default app once it has been uninstalled.
     var available: EditorChoice { self == .defaultApp || appURL != nil ? self : .defaultApp }
 
+    /// Opens a file, or a folder as a project.
     func open(_ path: String) {
         let file = URL(fileURLWithPath: path)
         if let appURL {
@@ -86,5 +87,43 @@ enum EditorChoice: String, CaseIterable, Identifiable {
         } else {
             NSWorkspace.shared.open(file)
         }
+    }
+}
+
+/// The terminal that opens the folder of a session running on this Mac. Terminals that are not installed are left out.
+enum TerminalChoice: String, CaseIterable, Identifiable {
+    case terminal, iterm, ghostty, warp
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .terminal: "Terminal"
+        case .iterm: "iTerm"
+        case .ghostty: "Ghostty"
+        case .warp: "Warp"
+        }
+    }
+
+    private var bundleIdentifier: String {
+        switch self {
+        case .terminal: "com.apple.Terminal"
+        case .iterm: "com.googlecode.iterm2"
+        case .ghostty: "com.mitchellh.ghostty"
+        case .warp: "dev.warp.Warp-Stable"
+        }
+    }
+
+    private var appURL: URL? { NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) }
+
+    static var installed: [TerminalChoice] { allCases.filter { $0 == .terminal || $0.appURL != nil } }
+
+    /// This terminal, or Terminal once it has been uninstalled.
+    var available: TerminalChoice { appURL != nil ? self : .terminal }
+
+    /// A new window in the folder.
+    func open(_ folder: String) {
+        guard let appURL = available.appURL else { return }
+        NSWorkspace.shared.open(
+            [URL(fileURLWithPath: folder, isDirectory: true)], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
     }
 }
