@@ -17,7 +17,7 @@ struct ChatItemView: View {
         case .system(let e):
             Text(e.text ?? "")
                 .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Theme.tertiary)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -44,7 +44,7 @@ struct UserBubble: View {
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.accent.opacity(pending ? 0.35 : 0.8)))
                 }
                 if viaNotch || pending {
-                    Text(pending ? "sending…" : "from the notch").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    Text(pending ? "sending…" : "from the notch").font(.system(size: 9)).foregroundStyle(Theme.tertiary)
                 }
             }
         }
@@ -108,7 +108,7 @@ struct ToolRow: View {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 10)).frame(width: 14)
                 Text(call.name ?? "?").font(.system(size: 11, weight: .semibold))
-                Text(call.summary ?? "").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+                Text(call.summary ?? "").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
                 if let path = call.filePath, FileManager.default.fileExists(atPath: path) {
@@ -119,7 +119,7 @@ struct ToolRow: View {
                         Image(systemName: "arrow.up.forward.square").font(.system(size: 10))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.secondary)
                     .help(editor == .defaultApp ? "Open" : "Open in \(editor.label)")
                 }
                 if running {
@@ -127,7 +127,7 @@ struct ToolRow: View {
                 } else if result?.isError == true {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 10)).foregroundStyle(.red)
                 } else if result != nil {
-                    Image(systemName: "checkmark").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    Image(systemName: "checkmark").font(.system(size: 9)).foregroundStyle(Theme.tertiary)
                 }
             }
             .contentShape(Rectangle())

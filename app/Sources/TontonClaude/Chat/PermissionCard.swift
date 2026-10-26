@@ -46,7 +46,7 @@ struct PermissionCard: View {
                 Text("Allow \(request.toolName)?").font(.system(size: 12, weight: .bold))
                 Spacer()
             }
-            Text(request.description).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(request.description).font(.system(size: 11)).foregroundStyle(Theme.secondary)
             if !request.inputPreview.isEmpty {
                 Text(request.inputPreview)
                     .font(.system(size: 10, design: .monospaced))

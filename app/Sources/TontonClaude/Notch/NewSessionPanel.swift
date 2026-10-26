@@ -28,14 +28,14 @@ struct NewSessionPanel: View {
                     Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
                 .help("Close (esc)")
             }
             .padding(.bottom, 10)
             if machines.isEmpty {
                 Text("No machine is linked to the account yet. Add one in Settings › Machines.")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.secondary)
             } else {
                 machinePicker(machines)
                 if let machine, machine.startableTools.count > 1 { toolPicker(machine) }
@@ -121,8 +121,8 @@ struct NewSessionPanel: View {
     private func folderField(_ machine: MachineInfo?) -> some View {
         let startable = machine != nil && RecentFolders.isStartable(folder) && store.connection == .connected
         return HStack(spacing: 8) {
-            Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(.secondary)
-            TextField("", text: $folder, prompt: Text("~/code/project").foregroundStyle(Theme.ink.opacity(0.35)))
+            Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(Theme.secondary)
+            TextField("", text: $folder, prompt: Text("~/code/project").foregroundStyle(Theme.textFaint))
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, design: .monospaced))
                 .focused($focused)
@@ -146,10 +146,10 @@ struct NewSessionPanel: View {
     @ViewBuilder private func recentFolders(_ machine: MachineInfo) -> some View {
         let folders = store.recentFolders(on: machine.id)
         if !folders.isEmpty {
-            Text("RECENT").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.top, 10).padding(.bottom, 2)
+            Text("RECENT").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary).padding(.top, 10).padding(.bottom, 2)
             ForEach(folders, id: \.self) { recent in
                 HStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 10)).foregroundStyle(.tertiary)
+                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 10)).foregroundStyle(Theme.tertiary)
                     Text(recent).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.head)
                     Spacer(minLength: 0)
                 }
@@ -208,7 +208,7 @@ private struct LaunchCard: View {
                         Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.secondary)
                     .help("Dismiss")
                 }
             }
@@ -264,14 +264,14 @@ private struct LaunchCard: View {
     }
 
     private func screenText(_ screen: String) -> some View {
-        Text(screen).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+        Text(screen).font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
     }
 
     private func caption(_ text: String) -> some View {
-        Text(text).font(.system(size: 11)).foregroundStyle(.secondary)
+        Text(text).font(.system(size: 11)).foregroundStyle(Theme.secondary)
     }
 }
 

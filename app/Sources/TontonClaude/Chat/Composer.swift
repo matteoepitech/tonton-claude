@@ -47,7 +47,7 @@ struct Composer: View {
             if !session.canChat {
                 Text(readOnlyReason)
                     .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.secondary)
             } else if let attachError {
                 Text(attachError).font(.system(size: 10)).foregroundStyle(Theme.danger)
             }
@@ -100,7 +100,7 @@ struct Composer: View {
                     }
                     .buttonStyle(.plain)
                     .background(Capsule().fill(Theme.ink.opacity(0.08)))
-                    .overlay(Capsule().stroke(Theme.ink.opacity(0.1)))
+                    .overlay(Capsule().stroke(Theme.line(0.1)))
                     .help("Send “\(reply)”")
                 }
             }
@@ -146,7 +146,7 @@ struct Composer: View {
                 "\(attachments.count) attachment\(attachments.count == 1 ? "" : "s") · \(AttachmentBudget.describe(total)) of \(AttachmentBudget.describe(AttachmentBudget.maxTotalBytes))"
             )
             .font(.system(size: 9))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(Theme.tertiary)
         }
     }
 
@@ -155,7 +155,7 @@ struct Composer: View {
             Image(nsImage: attachment.thumbnail).resizable().frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: 1) {
                 Text(attachment.name).font(.system(size: 11, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                Text(AttachmentBudget.describe(attachment.data.count)).font(.system(size: 9)).foregroundStyle(.secondary)
+                Text(AttachmentBudget.describe(attachment.data.count)).font(.system(size: 9)).foregroundStyle(Theme.secondary)
             }
         }
         .padding(.horizontal, 8)
@@ -207,7 +207,7 @@ struct Composer: View {
                 .onSubmit(send)
             Button(action: enqueue) { Image(systemName: "text.line.last.and.arrowtriangle.forward").font(.system(size: 13)) }
                 .buttonStyle(.plain)
-                .foregroundStyle(canSend ? .primary : .secondary)
+                .foregroundStyle(canSend ? AnyShapeStyle(.primary) : Theme.secondary)
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
                 .help("Send after Claude's current turn (⌘⇧↩)")
@@ -256,12 +256,12 @@ struct Composer: View {
                     Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
                 .help("Cancel")
             }
             ForEach(template.variables, id: \.self) { name in
                 HStack(spacing: 8) {
-                    Text(name).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).frame(width: 90, alignment: .leading)
+                    Text(name).font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(1).frame(width: 90, alignment: .leading)
                     TextField("", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }))
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
@@ -275,7 +275,7 @@ struct Composer: View {
             HStack(alignment: .bottom) {
                 Text(template.filled(values.filter { !$0.value.isEmpty }))
                     .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Theme.tertiary)
                     .lineLimit(2)
                 Spacer(minLength: 8)
                 Button("Insert") { insertFilled(template) }.buttonStyle(.plain).font(.system(size: 11, weight: .semibold))
@@ -322,11 +322,12 @@ struct Composer: View {
     private var queueList: some View {
         let items = queues.items(for: session.id)
         return VStack(alignment: .leading, spacing: 4) {
-            Text("QUEUED · sent one per turn").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+            Text("QUEUED · sent one per turn").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.tertiary)
             ForEach(Array(items.enumerated()), id: \.element.id) { index, message in
                 HStack(spacing: 6) {
-                    Text("\(index + 1)").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.secondary).frame(
-                        width: 12)
+                    Text("\(index + 1)").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.secondary)
+                        .frame(
+                            width: 12)
                     Text(message.text.isEmpty ? "\(message.images.count) image(s)" : message.text)
                         .font(.system(size: 11)).lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: 4)
@@ -346,7 +347,7 @@ struct Composer: View {
     private func queueButton(_ symbol: String, _ help: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).font(.system(size: 9, weight: .bold)) }
             .buttonStyle(.plain)
-            .foregroundStyle(disabled ? .tertiary : .secondary)
+            .foregroundStyle(disabled ? Theme.tertiary : Theme.secondary)
             .disabled(disabled)
             .help(help)
     }

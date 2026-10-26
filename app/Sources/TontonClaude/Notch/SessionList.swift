@@ -16,8 +16,8 @@ struct SessionListView: View {
             if store.hasSessions {
                 HStack(spacing: 4) {
                     HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(.secondary)
-                        TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(Theme.ink.opacity(0.35)))
+                        Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(Theme.secondary)
+                        TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(Theme.textFaint))
                             .textFieldStyle(.plain)
                             .font(.system(size: 11))
                     }
@@ -95,17 +95,18 @@ struct SessionListView: View {
     @ViewBuilder private var messageResults: some View {
         let matches = ConversationSearch.search(query, sessions: store.orderedSessions, entries: store.entries)
         let projects = Dictionary(store.sessions.map { ($0.id, $0.project) }) { first, _ in first }
-        Text("MESSAGES").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.top, 10)
+        Text("MESSAGES").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
+            .padding(.horizontal, 8).padding(.top, 10)
         if matches.isEmpty {
             Text("Nothing found in the conversations opened since Tonton Claude started, or on this Mac.")
                 .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Theme.tertiary)
                 .padding(.horizontal, 8)
         }
         ForEach(matches) { match in
             VStack(alignment: .leading, spacing: 2) {
                 Text(projects[match.sessionId] ?? "").font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                Text(match.snippet).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                Text(match.snippet).font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
@@ -126,23 +127,23 @@ struct SessionListView: View {
         HStack(spacing: 4) {
             switch section.kind {
             case .pinned:
-                Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(.secondary)
-                Text("PINNED").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(Theme.secondary)
+                Text("PINNED").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
                 Spacer(minLength: 4)
             case .thisMac:
                 if let style = store.thisMac.flatMap({ settings.machineStyles[$0] }), !style.isEmpty {
                     MachineBadge(style: style, size: 9)
                 } else {
-                    Image(systemName: "laptopcomputer").font(.system(size: 9)).foregroundStyle(.secondary)
+                    Image(systemName: "laptopcomputer").font(.system(size: 9)).foregroundStyle(Theme.secondary)
                 }
-                Text("THIS MAC").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Text("THIS MAC").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
                 Spacer(minLength: 4)
                 if let info = store.machines.first(where: { $0.id == store.thisMac }) { NotchAgentUpdate(machine: info) }
             case .machine(let machine):
                 if let style = section.sessions.first.flatMap({ settings.machineStyles[$0.machineId] }) {
                     MachineBadge(style: style, size: 9)
                 }
-                Text(machine.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Text(machine.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
                 Spacer(minLength: 4)
                 if let info = store.machines.first(where: { $0.id == section.sessions.first?.machineId }) {
                     NotchAgentUpdate(machine: info)
@@ -165,7 +166,7 @@ struct NotchAgentUpdate: View {
             if store.updatingMachines.contains(machine.id) {
                 HStack(spacing: 4) {
                     ProgressView().controlSize(.mini)
-                    Text("Updating").font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary)
+                    Text("Updating").font(.system(size: 9, weight: .medium)).foregroundStyle(Theme.secondary)
                 }
             } else {
                 pill("Update agent") { store.updateAgent(machine) }
@@ -216,29 +217,29 @@ struct SessionRow: View {
                     Text(session.project).font(.system(size: 12, weight: .semibold)).lineLimit(1).layoutPriority(1)
                     if let machine {
                         if let machineStyle { MachineBadge(style: machineStyle, size: 9) }
-                        Text(machine).font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
+                        Text(machine).font(.system(size: 10)).foregroundStyle(Theme.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 4)
                     if let shortcut {
-                        Text("⌘\(shortcut)").font(.system(size: 9, weight: .medium)).foregroundStyle(.tertiary)
+                        Text("⌘\(shortcut)").font(.system(size: 9, weight: .medium)).foregroundStyle(Theme.tertiary)
                     }
                     if !session.pendingPermissions.isEmpty {
                         Image(systemName: "lock.fill").font(.system(size: 9)).foregroundStyle(Theme.accent)
                     }
                     Text(session.lastActivity, style: .relative)
                         .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.tertiary)
                         .lineLimit(1)
                         .frame(maxWidth: 70, alignment: .trailing)
                 }
                 HStack(alignment: .top, spacing: 6) {
                     Text(session.title ?? session.lastMessage ?? session.status.label)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.secondary)
                         .lineLimit(2)
                     Spacer(minLength: 0)
                     if showCost, let cost = session.costUSD, cost > 0 {
-                        Text(String(format: "$%.2f", cost)).font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                        Text(String(format: "$%.2f", cost)).font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.tertiary)
                     }
                 }
                 if session.status.needsAttention || session.status.isLive && session.limitToWatch() != nil {
@@ -284,7 +285,7 @@ struct ToolMark: View {
     var body: some View {
         Image(systemName: tool.symbol)
             .font(.system(size: size, weight: .semibold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.secondary)
             .help(tool.label)
             .accessibilityLabel(tool.label)
     }

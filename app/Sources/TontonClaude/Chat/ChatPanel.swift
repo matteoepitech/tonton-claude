@@ -178,7 +178,7 @@ struct ChatHeader: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Theme.secondary)
         .disabled(!session.acceptsCommands)
         .help(session.acceptsCommands ? "Run a command in the session" : "Commands wait until the session is done")
     }
@@ -191,7 +191,7 @@ struct ChatHeader: View {
             Image(systemName: "stop.circle").font(.system(size: 11))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Theme.secondary)
         .help("Interrupt, like Escape in the terminal (⌘.)")
     }
 
@@ -200,13 +200,13 @@ struct ChatHeader: View {
             HStack(spacing: 6) {
                 StatusDot(status: session.status, limit: session.fiveHourLimit)
                 Text(session.project).font(.system(size: 13, weight: .bold))
-                Text("·").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("·").font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 ToolMark(tool: session.codingTool, size: 10)
                 if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11) }
-                Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
-                    Text(String(format: "$%.2f", cost)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                    Text(String(format: "$%.2f", cost)).font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.secondary)
                         .help("Estimated by \(session.codingTool.label) at list price")
                 }
                 Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
@@ -232,21 +232,21 @@ struct ChatHeader: View {
                 .buttonStyle(.plain)
                 .menuIndicator(.hidden)
                 .fixedSize()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
                 .help("Export the conversation, images included, or share it read-only")
             }
             HStack {
-                Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(1)
                 Spacer()
                 if let model = session.modelName {
-                    Text(model).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                    Text(model).font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
                         .help("The model Claude Code uses in this session")
                 }
                 if let context = session.context { ContextGauge(context: context) }
                 if settings.showCosts, let tokens = session.tokens {
                     Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.secondary)
                         .fixedSize()
                         .help(
                             "\(tokens.input.formatted()) input, \(tokens.cacheRead.formatted()) read from the cache, "

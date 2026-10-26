@@ -93,6 +93,7 @@ final class WhatsNewModel: ObservableObject {
 struct WhatsNewView: View {
     @ObservedObject var model: WhatsNewModel
     let close: () -> Void
+    /// Observed so the window redraws when the theme or Increase Contrast changes.
     @EnvironmentObject var settings: AppSettings
 
     private var page: URL? {
@@ -132,7 +133,7 @@ struct WhatsNewView: View {
         }
         .foregroundStyle(Theme.text)
         .environment(\.colorScheme, Theme.palette.scheme)
-        .id(settings.theme)
+        .id(Theme.palette)
         .ignoresSafeArea()
     }
 
