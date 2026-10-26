@@ -149,7 +149,10 @@ public struct AchievementProgress: Codable, Equatable, Sendable {
         if !working.isEmpty {
             let today = UsageHistory.day(now, calendar: calendar)
             if activeDays.last != today {
-                activeDays = Array((activeDays.filter { $0 != today } + [today]).sorted().suffix(Self.streakDays))
+                // By date, not by count: a day from a clock set ahead (or another time zone) must not push out a real one.
+                let oldest = calendar.date(byAdding: .day, value: -Self.streakDays, to: calendar.startOfDay(for: now)) ?? now
+                let cutoff = UsageHistory.day(oldest, calendar: calendar)
+                activeDays = Set(activeDays + [today]).filter { $0 >= cutoff && $0 <= today }.sorted()
             }
             if streak(now: now, calendar: calendar) >= Self.streakDays { earned.insert(.weekStreak) }
         }

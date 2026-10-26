@@ -200,7 +200,6 @@ struct GeneralPane: View {
     }
 }
 
-/// Every badge, unlocked ones in color.
 /// How far a locked achievement is: `42/100` over a thin bar.
 private struct GoalGauge: View {
     let goal: AchievementGoal
@@ -220,6 +219,7 @@ private struct GoalGauge: View {
     }
 }
 
+/// Every badge, unlocked ones in color.
 private struct AchievementsList: View {
     @ObservedObject private var store = AchievementStore.shared
 

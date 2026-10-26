@@ -50,11 +50,13 @@ final class AchievementStore: ObservableObject {
 
     @Published var progress: AchievementProgress {
         didSet {
-            // Every update goes through here, most of them changing nothing.
-            guard progress != oldValue, let data = try? JSONEncoder().encode(progress) else { return }
+            // Every update goes through here, and most change nothing that is saved (a turn starting or ending).
+            guard let data = try? JSONEncoder().encode(progress), data != saved else { return }
+            saved = data
             UserDefaults.standard.set(data, forKey: "achievements")
         }
     }
+    private var saved: Data?
 
     init() {
         progress =

@@ -81,6 +81,29 @@ final class AchievementsTests: XCTestCase {
         XCTAssertEqual(other.activeDays.count, 1)
     }
 
+    func testADayAheadOfTodayDoesNotBreakAStreak() {
+        var progress = AchievementProgress()
+        let day = { (offset: Int) in self.noon + Double(offset) * 86400 }
+        for offset in 0..<6 { _ = progress.sessionsChanged([session("a")], now: day(offset), calendar: calendar) }
+        // A flight east: one reading lands on the day after next.
+        _ = progress.sessionsChanged([session("a")], now: day(7), calendar: calendar)
+        XCTAssertEqual(progress.sessionsChanged([session("a")], now: day(6), calendar: calendar), [.weekStreak])
+    }
+
+    func testEverythingCountedIsSaved() throws {
+        var progress = AchievementProgress()
+        _ = progress.sessionsChanged([session("a", platform: "linux")], now: noon, calendar: calendar)
+        let call = Entry(id: "e", ts: "2026-10-26T10:00:00Z", kind: .tool, toolUseId: "toolu_1", name: "Read")
+        _ = progress.count(["a": [call]])
+        let saved = try JSONDecoder().decode(AchievementProgress.self, from: JSONEncoder().encode(progress))
+        XCTAssertEqual(saved.activeDays, progress.activeDays)
+        XCTAssertEqual(saved.platforms, ["linux"])
+        XCTAssertEqual(saved.toolCalls, 1)
+        var again = saved
+        XCTAssertEqual(again.count(["a": [call]]), [])
+        XCTAssertEqual(again.toolCalls, 1)
+    }
+
     func testSessionsOnEveryPlatform() {
         var progress = AchievementProgress()
         _ = progress.sessionsChanged([session("a", platform: "darwin"), session("b", platform: "freebsd")], now: noon, calendar: calendar)
