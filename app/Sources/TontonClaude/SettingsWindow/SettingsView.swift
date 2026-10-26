@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case machines, notch, general, server
+    case machines, usage, notch, general, server
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .machines: "Machines"
+        case .usage: "Usage"
         case .notch: "Notch"
         case .general: "General"
         case .server: "Relay"
@@ -16,6 +17,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .machines: "Computers running Claude Code with the Tonton Claude agent."
+        case .usage: "What your sessions cost, per day, machine and project."
         case .notch: "How the notch opens and lets you know when a session needs you."
         case .general: "Startup, menu bar and keyboard shortcuts."
         case .server: "The relay server that connects your machines to this Mac."
@@ -25,6 +27,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .machines: "desktopcomputer"
+        case .usage: "chart.bar.xaxis"
         case .notch: "macbook"
         case .general: "gearshape"
         case .server: "point.3.connected.trianglepath.dotted"
@@ -54,6 +57,7 @@ struct SettingsView: View {
                     Group {
                         switch router.pane {
                         case .machines: MachinesPane()
+                        case .usage: UsagePane(usage: store.usage)
                         case .notch: NotchPane()
                         case .general: GeneralPane()
                         case .server: RelayPane()

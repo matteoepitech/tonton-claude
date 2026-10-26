@@ -61,6 +61,8 @@ final class SessionStore: ObservableObject {
     private let api = RelayAPI()
     private var vault: SessionVault?
     private let localWatcher = LocalSessionWatcher()
+    /// Cost and tokens per day, for Settings › Usage.
+    private(set) lazy var usage = UsageRecorder(sessions: sessionsPublisher)
     /// One per reset time of the sessions a usage limit stopped.
     private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()
@@ -82,6 +84,7 @@ final class SessionStore: ObservableObject {
             .sink { [weak self] sessions, hidden in self?.scheduleLimitResets(sessions.filter { !hidden.contains($0.machine) }) }
             .store(in: &subscriptions)
         limitLifted.sink { [weak self] sessions in self?.continueAfterLimit(sessions) }.store(in: &subscriptions)
+        _ = usage
     }
 
     func toggleAutoContinue(_ sessionId: String) {
