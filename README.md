@@ -72,6 +72,10 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **From a browser or a phone.** `tonton-web.html`, published with each release, shows your sessions in any browser:
   open it, paste the recovery key from **Settings › Relay**, and chat, answer requests and stop sessions from there.
   It decrypts in the page, so the key never reaches the relay. It needs a relay from 0.8.0 or later.
+- **Showing a teammate.** In a conversation, the share menu › **Share read-only** copies a key for one session, valid for
+  an hour, a day or a week. Your teammate pastes it in `tonton-web.html` and follows that session live, without being
+  able to write to it. It has its own key: your account key stays with you. **Settings › Relay** lists the shares and
+  revokes them.
 - **OpenCode?** Yes: the installer adds a plugin to OpenCode when it finds it, and its sessions work in the notch like
   Claude Code's: messages, permissions, auto-approve rules, compact and interrupt. On this Mac, OpenCode 2's sessions
   show up and take messages even without the agent.

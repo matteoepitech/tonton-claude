@@ -165,6 +165,33 @@ export interface StartDetail {
   /** Once `started`. */
   sessionId?: string
 }
+/**
+ * Sealed by the app with the account key: also give this session's conversation to a read-only share, sealed with the
+ * share's own key. The teammate who gets the share key reads that session only, and the account key never leaves.
+ */
+export interface ShareOrder {
+  shareId: string
+  sessionId: string
+  /** Base64url AES-256 key of the share. */
+  key: string
+  /** The agent stops sealing for the share then, whatever the relay says. */
+  expiresAt: string
+}
+/** What a read-only share shows, sealed with the share key. The machine and the folder stay with the account. */
+export interface SharedInfo {
+  project: string
+  title?: string
+  /** `opencode`, missing for Claude Code. */
+  tool?: 'opencode'
+}
+/** A read-only share of one session, as the account lists it: never its token nor its key. */
+export interface ShareSummary {
+  id: string
+  sessionId: string
+  createdAt: string
+  expiresAt: string
+  viewers: number
+}
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
   version: string
@@ -221,6 +248,9 @@ export type AgentMessage =
   | { t: 'health'; health: Sealed }
   // A start from the app: `sessionId` once claude runs.
   | { t: 'session_start'; launchId: string; state: StartState; detail: Sealed }
+  // A read-only share of the session: `info` is a `SharedInfo`, it and the entries sealed with the share key.
+  | { t: 'share_info'; sessionId: string; shareId: string; info: Sealed }
+  | { t: 'share_entries'; sessionId: string; shareId: string; entries: SealedEntry[]; reset: boolean }
 
 // relay -> agent
 export type RelayToAgent =
@@ -231,6 +261,10 @@ export type RelayToAgent =
   | { t: 'rules'; rules: Sealed }
   | { t: 'start_session'; launchId: string; order: Sealed }
   | { t: 'start_answer'; launchId: string; answer: Sealed }
+  // A `ShareOrder` sealed by the app: to the session's channel when the app shares it, and again when the channel connects.
+  | { t: 'share'; sessionId: string; shareId: string; order: Sealed }
+  // The share was revoked or expired: stop sealing for it.
+  | { t: 'unshare'; sessionId: string; shareId: string }
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -269,3 +303,14 @@ export type AppMessage =
   | { t: 'rules'; machineId: string; rules: Sealed }
   | { t: 'start_session'; machineId: string; launchId: string; order: Sealed }
   | { t: 'start_answer'; machineId: string; launchId: string; answer: Sealed }
+  // After `POST /api/shares` made the share: its order, for the session's agent.
+  | { t: 'share'; sessionId: string; shareId: string; order: Sealed }
+
+// relay -> viewer (/ws/share, with a share token): one session, read only.
+export type RelayToViewer =
+  | { t: 'shared'; status: SessionStatus; info: Sealed | null; entries: SealedEntry[] }
+  | { t: 'shared_info'; info: Sealed }
+  | { t: 'shared_entries'; entries: SealedEntry[]; reset: boolean }
+  | { t: 'shared_status'; status: SessionStatus }
+  // Revoked or expired: the socket closes after it.
+  | { t: 'share_ended' }

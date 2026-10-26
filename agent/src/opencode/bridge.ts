@@ -1,9 +1,11 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { open, seal } from '../../../shared/crypto'
 import type { Entry, PromptPayload, RelayToAgent, SealedEntry, SessionCommand, SessionInfo } from '../../../shared/protocol'
 import { withAttachments } from '../channel'
+import { projectOf } from '../channel/conversation'
 import { RelayConnection } from '../channel/relay-connection'
+import { SessionShares } from '../channel/shares'
 import { claimCommand, whyInvalid } from '../channel/terminal'
 import { type AgentConfig, loadConfig, paths } from '../config'
 import { postHook } from '../hook'
@@ -39,6 +41,8 @@ class Link {
   private readonly fromNotch: string[] = []
   /** OpenCode 1 takes the model with each message: the one the notch switched to, if it did. */
   private chosenModel: { providerID: string; modelID: string } | undefined
+  /** Read-only shares of this session, as for Claude Code. */
+  private readonly shares: SessionShares
 
   constructor(
     readonly sessionId: string,
@@ -47,6 +51,12 @@ class Link {
     private readonly send: Send,
   ) {
     this.relay = new RelayConnection(config, 'channel', { connected: () => this.announce(), message: message => this.onRelay(message) })
+    this.shares = new SessionShares(
+      () => sessionId,
+      config.key,
+      build => this.relay.post(build),
+      () => this.entries,
+    )
     this.relay.connect()
   }
 
@@ -55,6 +65,7 @@ class Link {
     this.entries = [...this.entries, ...marked].slice(-BACKLOG_SIZE)
     if (marked.length)
       this.relay.post(async () => ({ t: 'entries', sessionId: this.sessionId, entries: await this.seal(marked), reset: false }))
+    this.shares.entries(marked)
   }
 
   /** OpenCode's own history arrived: it replaces what the relay holds. */
@@ -63,14 +74,13 @@ class Link {
     this.entries = history.map(entry => known.get(entry.id) ?? entry).slice(-BACKLOG_SIZE)
     const entries = this.entries
     this.relay.post(async () => ({ t: 'entries', sessionId: this.sessionId, entries: await this.seal(entries), reset: true }))
+    this.shares.entries(entries, true)
   }
 
   postMeta() {
-    this.relay.post(async () => ({
-      t: 'meta',
-      sessionId: this.sessionId,
-      meta: await seal(this.config.key, this.tracker.meta(this.sessionId)),
-    }))
+    const meta = this.tracker.meta(this.sessionId)
+    this.relay.post(async () => ({ t: 'meta', sessionId: this.sessionId, meta: await seal(this.config.key, meta) }))
+    this.shares.setInfo({ project: projectOf(this.cwd() ?? process.cwd()), title: meta.title, tool: 'opencode' })
   }
 
   /** Shows a request in the notch, unless an auto-approve rule from the app answers it. */
@@ -105,8 +115,7 @@ class Link {
   /** Everything the relay needs after a (re)connection. */
   private announce() {
     const cwd = this.cwd() ?? process.cwd()
-    const project = basename(cwd.replace(/\\/g, '/').replace(/\/+$/, '')) || cwd
-    const info: SessionInfo = { machine: this.config.machine, platform: process.platform, cwd, project, tool: 'opencode' }
+    const info: SessionInfo = { machine: this.config.machine, platform: process.platform, cwd, project: projectOf(cwd), tool: 'opencode' }
     const { sessionId, entries } = this
     this.relay.post(async () => ({ t: 'hello', sessionId, info: await seal(this.config.key, info), channel: true }))
     this.relay.post(async () => ({ t: 'entries', sessionId, entries: await this.seal(entries), reset: true }))
@@ -117,7 +126,9 @@ class Link {
   private onRelay(message: RelayToAgent) {
     if (message.t === 'rules') void receiveRules(this.config.key, message.rules)
     if (!('sessionId' in message) || message.sessionId !== this.sessionId) return
-    if (message.t === 'verdict') {
+    if (message.t === 'share') this.shares.receive(message.shareId, message.order)
+    else if (message.t === 'unshare') this.shares.remove(message.shareId)
+    else if (message.t === 'verdict') {
       const permission = [...this.pending.values()].find(item => shortId(item.requestId) === message.requestId)
       if (!permission) return
       const decision = message.behavior === 'allow' ? 'once' : 'reject'

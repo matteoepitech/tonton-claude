@@ -374,6 +374,17 @@ main > p {
   min-height: 1.5em;
 }
 
+.shell[data-view="shared"] {
+  grid-template-columns: 1fr;
+}
+.ended {
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--dim);
+  text-align: center;
+}
+
 @media (max-width: 720px) {
   .shell {
     grid-template-columns: 1fr;

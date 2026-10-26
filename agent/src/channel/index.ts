@@ -40,11 +40,15 @@ export async function runChannel() {
       else if (message.t === 'rules') void receiveRules(config.key, message.rules)
       else if (message.t === 'start_session') receiveStartOrder(config, message.launchId, message.order, relay)
       else if (message.t === 'start_answer') void handleStartAnswer(config, message.launchId, message.answer)
-      else if (conversation && message.sessionId === conversation.link.sessionId) void onRelayMessage(message)
+      else if (conversation && message.sessionId === conversation.link.sessionId) {
+        if (message.t === 'share') conversation.shares.receive(message.shareId, message.order)
+        else if (message.t === 'unshare') conversation.shares.remove(message.shareId)
+        else void onRelayMessage(message)
+      }
     },
   })
 
-  const onRelayMessage = async (message: Extract<RelayToAgent, { sessionId: string }>) => {
+  const onRelayMessage = async (message: Extract<RelayToAgent, { t: 'prompt' | 'verdict' }>) => {
     if (message.t === 'verdict') {
       conversation?.resolvePermission(message.requestId)
       await mcp.answerPermission(message.requestId, message.behavior)

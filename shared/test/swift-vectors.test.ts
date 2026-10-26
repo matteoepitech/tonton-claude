@@ -6,6 +6,7 @@ import { chatItems } from '../chat'
 import { open } from '../crypto'
 import { modelFamily, modelName } from '../model'
 import { acceptsCommands, displayStatusText, type Session } from '../session'
+import { parseShareLink } from '../share-link'
 import { Vault } from '../vault'
 import { parseRelayMessage } from '../wire'
 import vectors from './swift-vectors.json'
@@ -42,6 +43,13 @@ describe('vectors from the Swift implementation', () => {
   test('the account token the app shows is read as the app wrote it', () => {
     const { token, ...fields } = vectors.accountToken
     expect(parseAccountToken(token)).toEqual(fields)
+  })
+
+  test('the share key the app copies is read as the app wrote it', () => {
+    const { text, ...fields } = vectors.shareLink
+    expect(parseShareLink(text)).toEqual(fields)
+    // From the address bar too: the web app takes it after the #.
+    expect(parseShareLink(`#${text}`)).toEqual(fields)
   })
 
   test('machines and sessions read the same as in the app', async () => {

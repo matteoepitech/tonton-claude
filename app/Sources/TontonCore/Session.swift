@@ -306,4 +306,13 @@ public struct MachineInfo: Identifiable, Equatable, Sendable {
         guard let agentVersion else { return online ? .manual : nil }
         return agentVersion.compare(latest, options: .numeric) == .orderedAscending ? .oneClick : nil
     }
+
+    /// Agents from this version seal a copy of a session for a read-only share; older ones ignore the order.
+    public static let sharesSince = "0.8.0"
+
+    /// Development builds report 0.0.0 and run the current code.
+    public var sealsShares: Bool {
+        guard let agentVersion else { return false }
+        return agentVersion == "0.0.0" || agentVersion.compare(Self.sharesSince, options: .numeric) != .orderedAscending
+    }
 }

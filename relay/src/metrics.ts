@@ -3,12 +3,13 @@
 import type { SessionStatus } from '../../shared/protocol'
 import { VERSION } from '../../shared/version'
 
-export type Role = 'app' | 'agent'
+/** A viewer is a teammate's browser on a read-only share. */
+export type Role = 'app' | 'agent' | 'viewer'
 
 /** WebSocket traffic since the relay started. */
 export class Traffic {
-  readonly messages = { received: { app: 0, agent: 0 }, sent: { app: 0, agent: 0 } }
-  readonly bytes = { received: { app: 0, agent: 0 }, sent: { app: 0, agent: 0 } }
+  readonly messages = { received: { app: 0, agent: 0, viewer: 0 }, sent: { app: 0, agent: 0, viewer: 0 } }
+  readonly bytes = { received: { app: 0, agent: 0, viewer: 0 }, sent: { app: 0, agent: 0, viewer: 0 } }
 
   count(direction: 'received' | 'sent', role: Role, bytes: number) {
     this.messages[direction][role]++
@@ -53,6 +54,7 @@ function metric(name: string, type: 'gauge' | 'counter', help: string, samples: 
 const perRole = (values: Record<Role, number>): Sample[] => [
   [{ role: 'app' }, values.app],
   [{ role: 'agent' }, values.agent],
+  [{ role: 'viewer' }, values.viewer],
 ]
 
 export function renderMetrics(counts: RelayCounts): string {
@@ -65,7 +67,12 @@ export function renderMetrics(counts: RelayCounts): string {
     metric('tonton_accounts', 'gauge', 'Accounts on the relay.', [[{}, counts.accounts]]),
     metric('tonton_machines', 'gauge', 'Machines that joined an account.', [[{}, counts.machines]]),
     metric('tonton_machines_online', 'gauge', 'Machines with at least one connection.', [[{}, counts.machinesOnline]]),
-    metric('tonton_sockets', 'gauge', 'Open WebSockets: Mac apps, and agent services and sessions.', perRole(counts.sockets)),
+    metric(
+      'tonton_sockets',
+      'gauge',
+      'Open WebSockets: Mac apps, agent services and sessions, and viewers of read-only shares.',
+      perRole(counts.sockets),
+    ),
     metric(
       'tonton_sessions',
       'gauge',

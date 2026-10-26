@@ -15,6 +15,12 @@ export const MAX_RULES_BYTES = 64 * 1024
 export const MAX_START_ORDER_BYTES = 8192
 /** A sealed question claude asks before a started session runs, with the screen it shows. */
 export const MAX_START_DETAIL_BYTES = 16 * 1024
+/** Read-only shares an account can hold at once, how many people may watch one, and how long one may last. */
+export const MAX_SHARES_PER_ACCOUNT = 10
+export const MAX_VIEWERS_PER_SHARE = 20
+export const MAX_SHARE_HOURS = 30 * 24
+/** The sealed copy of a shared conversation, kept in memory only: the agent sends it again when it reconnects. */
+export const MAX_SHARE_BYTES = 4 * 1024 * 1024
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
 export const FINISHED_SESSION_TTL_MS = 6 * 60 * 60_000

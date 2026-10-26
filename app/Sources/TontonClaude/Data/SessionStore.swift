@@ -501,6 +501,49 @@ final class SessionStore: ObservableObject {
         return platform == "win32" ? InstallCommand.windows() : InstallCommand.unix()
     }
 
+    // MARK: Read-only shares
+
+    /// The account's shares still running, as the relay last listed them.
+    @Published private(set) var shares: [ShareSummary] = []
+
+    /// Only sessions an agent sends to the relay: the share's copy is sealed by that agent.
+    func canShare(_ session: SessionSummary) -> Bool {
+        connection == .connected && relaySessions.contains { $0.id == session.id }
+    }
+
+    /// Makes a share of the session and asks its agent to seal a copy for it. Returns what the teammate pastes.
+    func share(_ session: SessionSummary, for duration: ShareDuration) async throws -> ShareLink {
+        guard let account = settings.account, let vault, connection == .connected else {
+            throw RelayError(message: "Connect to the relay to share a session.")
+        }
+        if let machine = machines.first(where: { $0.id == session.machineId }), !machine.sealsShares {
+            throw RelayError(message: "The agent on \(machine.name) is too old to share a session. Update agent first.")
+        }
+        let created: (id: String, token: String, expiresAt: String)
+        do {
+            created = try await api.createShare(of: session.id, hours: duration.hours, for: account)
+        } catch let error as RelayError where error.message == "not found" {
+            throw RelayError(message: "This relay is too old to share sessions: it needs 0.8.0 or later.")
+        }
+        let key = E2E.newKey()
+        let order = try vault.sealShareOrder(shareId: created.id, sessionId: session.id, shareKey: key, expiresAt: created.expiresAt)
+        socket.send(["t": "share", "sessionId": session.id, "shareId": created.id, "order": order])
+        await refreshShares()
+        return ShareLink(relay: account.relay, token: created.token, key: key)
+    }
+
+    func refreshShares() async {
+        guard let account = settings.account else { return }
+        if let listed = try? await api.shares(of: account) { shares = listed }
+    }
+
+    /// Closes the teammates' pages at once, and the agent stops sealing for it.
+    func revokeShare(_ id: String) async throws {
+        guard let account = settings.account else { return }
+        try await api.revokeShare(id, of: account)
+        shares.removeAll { $0.id == id }
+    }
+
     // MARK: Account
 
     func createAccount(on relay: String) async throws {

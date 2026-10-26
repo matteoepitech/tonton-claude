@@ -5,6 +5,7 @@ import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import type { SessionLink } from './session-link'
+import { SessionShares } from './shares'
 import { COMMANDS } from './terminal'
 
 const BACKLOG_SIZE = 400
@@ -38,6 +39,8 @@ export class Conversation {
   private usageTimer: Timer | null = null
   private readonly pending = new Map<string, PendingPermission>()
   private readonly tailer: Tailer | null
+  /** Read-only shares of this session: each gets its own sealed copy. */
+  readonly shares: SessionShares
 
   constructor(
     readonly link: SessionLink,
@@ -46,6 +49,12 @@ export class Conversation {
     private readonly canChat: boolean,
     private readonly post: Post,
   ) {
+    this.shares = new SessionShares(
+      () => link.sessionId,
+      key,
+      post,
+      () => withoutOldImages(this.entries),
+    )
     this.tailer = link.transcriptPath
       ? new Tailer(link.transcriptPath, {
           lines: (lines, initial) => this.onLines(lines, initial),
@@ -73,10 +82,9 @@ export class Conversation {
   /** Everything the relay needs after a (re)connection. */
   announce() {
     const { sessionId } = this.link
-    const cwd = this.link.cwd ?? process.cwd()
-    const project = basename(cwd.replace(/\\/g, '/').replace(/\/+$/, '')) || cwd
+    const cwd = this.cwd()
     const backlog = withoutOldImages(this.entries)
-    const info = { machine: this.machine, platform: process.platform, cwd, project }
+    const info = { machine: this.machine, platform: process.platform, cwd, project: projectOf(cwd) }
     this.post(async () => ({ t: 'hello', sessionId, info: await seal(this.key, info), channel: this.canChat }))
     this.post(async () => ({ t: 'entries', sessionId, entries: await this.sealEntries(backlog), reset: true }))
     this.postMeta()
@@ -88,6 +96,7 @@ export class Conversation {
     const entry: Entry = { id: `notice-${crypto.randomUUID()}`, ts: new Date().toISOString(), kind: 'system', text }
     this.entries.push(entry)
     this.post(async () => ({ t: 'entries', sessionId: this.link.sessionId, entries: await this.sealEntries([entry]), reset: false }))
+    this.shares.entries([entry])
   }
 
   addPermission(requestId: string, detail: PermissionDetail) {
@@ -130,6 +139,7 @@ export class Conversation {
 
     const { sessionId } = this.link
     if (fresh.length) this.post(async () => ({ t: 'entries', sessionId, entries: await this.sealEntries(fresh), reset: false }))
+    this.shares.entries(fresh)
     if (metaChanged || fresh.some(e => e.kind === 'assistant' || e.kind === 'user')) this.postMeta()
 
     // Once the tool ran or the turn moved on, a relayed prompt was answered (here or in the terminal).
@@ -206,6 +216,11 @@ export class Conversation {
       model: this.model,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
+    this.shares.setInfo({ project: projectOf(this.cwd()), title: this.title })
+  }
+
+  private cwd(): string {
+    return this.link.cwd ?? process.cwd()
   }
 
   private postPermission(requestId: string) {
@@ -223,6 +238,8 @@ export class Conversation {
     return Promise.all(entries.map(async entry => ({ id: entry.id, ts: entry.ts, blob: await seal(this.key, entry) })))
   }
 }
+
+export const projectOf = (cwd: string) => basename(cwd.replace(/\\/g, '/').replace(/\/+$/, '')) || cwd
 
 function addTokens(total: TokenCounts | undefined, response: TokenCounts): TokenCounts {
   return {

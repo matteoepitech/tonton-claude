@@ -185,6 +185,7 @@ struct AccountView: View {
                 }
                 .padding(16)
             }
+            SharesSection()
             HStack(spacing: 8) {
                 if let error { Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger) }
                 Spacer()
@@ -222,5 +223,56 @@ extension RelayLatency.Level {
         case .fair: Theme.warning
         case .high: Theme.danger
         }
+    }
+}
+
+/// The read-only shares still running, made from the share menu of a conversation, with a way to end each.
+private struct SharesSection: View {
+    @EnvironmentObject var store: SessionStore
+    @State private var error: String?
+
+    var body: some View {
+        GroupLabel(text: "Read-only shares")
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(
+                    "A teammate reads one session in the web app with the key you copied, and nothing else. Revoking closes their page at once."
+                )
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+                if store.shares.isEmpty {
+                    Text("No shares. Make one from the share menu of a conversation.").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                ForEach(store.shares) { share in
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(project(of: share)).font(.system(size: 12, weight: .semibold))
+                            Text(details(of: share)).font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Revoke") {
+                            Task {
+                                do { try await store.revokeShare(share.id) } catch { self.error = error.localizedDescription }
+                            }
+                        }
+                        .buttonStyle(ThemeButtonStyle())
+                    }
+                }
+                if let error { Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger) }
+            }
+            .padding(16)
+        }
+        .task { await store.refreshShares() }
+    }
+
+    private func project(of share: ShareSummary) -> String {
+        store.sessions.first { $0.id == share.sessionId }.map { $0.title ?? $0.project } ?? "A session no longer listed"
+    }
+
+    private func details(of share: ShareSummary) -> String {
+        let ends = share.expires.map { "ends \($0.formatted(.relative(presentation: .named)))" } ?? "running"
+        let viewers = share.viewers == 0 ? "nobody watching" : share.viewers == 1 ? "1 viewer" : "\(share.viewers) viewers"
+        return "\(viewers) · \(ends)"
     }
 }

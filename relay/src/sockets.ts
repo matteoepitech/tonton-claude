@@ -8,6 +8,7 @@ import {
   MAX_RULES_BYTES,
   MAX_START_DETAIL_BYTES,
   MAX_START_ORDER_BYTES,
+  MAX_VIEWERS_PER_SHARE,
   MAX_WS_MESSAGE_BYTES,
 } from './limits'
 import { isLaunchId, isRequestId, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
@@ -19,6 +20,10 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
     sendPings: true,
 
     open(socket) {
+      if (socket.data.role === 'viewer') {
+        openViewer(ctx, socket)
+        return
+      }
       if (socket.data.role === 'app') {
         ctx.hub.addApp(socket)
         const { accountId } = socket.data
@@ -36,12 +41,17 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
     message(socket, raw) {
       ctx.hub.traffic.count('received', socket.data.role, Buffer.byteLength(raw))
       const message = parse(raw)
-      if (!message) return
+      // A viewer only reads.
+      if (!message || socket.data.role === 'viewer') return
       if (socket.data.role === 'agent') handleAgentMessage(ctx, socket, message as AgentMessage)
       else handleAppMessage(ctx, socket, message as AppMessage)
     },
 
     close(socket) {
+      if (socket.data.role === 'viewer') {
+        ctx.hub.removeViewer(socket)
+        return
+      }
       if (socket.data.role === 'app') {
         ctx.hub.removeApp(socket)
         return
@@ -87,6 +97,25 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
       if (!ctx.sessions.agentConnected(accountId, machineId, sessionId, message.info, message.channel === true)) return
       socket.data.sessionId = sessionId
       ctx.hub.bindAgent(socket, sessionId)
+      // The session's shares, for the agent to seal a copy for each.
+      for (const share of ctx.registry.shares(accountId, sessionId)) {
+        if (share.order) ctx.hub.send(socket, { t: 'share', sessionId, shareId: share.id, order: share.order })
+      }
+      break
+    }
+    case 'share_info': {
+      if (!isShareOf(ctx, accountId, sessionId, message.shareId) || !isSealed(message.info, MAX_START_DETAIL_BYTES)) return
+      ctx.shares.setInfo(message.shareId, message.info)
+      ctx.hub.sendToViewers(message.shareId, { t: 'shared_info', info: message.info })
+      break
+    }
+    case 'share_entries': {
+      if (!isShareOf(ctx, accountId, sessionId, message.shareId) || !Array.isArray(message.entries)) return
+      const entries = message.entries.filter(e => isText(e?.id, 200) && isText(e?.ts, 64) && isSealed(e?.blob))
+      const reset = message.reset === true
+      const fresh = ctx.shares.addEntries(message.shareId, entries, reset)
+      if (reset) ctx.hub.sendToViewers(message.shareId, { t: 'shared_entries', entries: ctx.shares.get(message.shareId).entries, reset })
+      else if (fresh.length) ctx.hub.sendToViewers(message.shareId, { t: 'shared_entries', entries: fresh, reset })
       break
     }
     case 'entries': {
@@ -159,6 +188,13 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     case 'update_agent':
       if (isText(message.machineId, 32) && isSealed(message.order, 4096)) requestUpdate(ctx, socket, message.machineId, message.order)
       break
+    case 'share': {
+      const { sessionId, shareId, order } = message
+      if (!isSessionId(sessionId) || !isText(shareId, 32) || !isSealed(order, MAX_START_ORDER_BYTES)) return
+      if (ctx.registry.setShareOrder(accountId, shareId, sessionId, order))
+        ctx.hub.sendToAgent(accountId, { t: 'share', sessionId, shareId, order })
+      break
+    }
     case 'rules': {
       const { machineId, rules } = message
       if (!isText(machineId, 32) || !isSealed(rules, MAX_RULES_BYTES)) return
@@ -192,6 +228,22 @@ function onUpdateResult(ctx: RelayContext, accountId: string, machineId: string,
   const detail = isSealed(message.detail, 8192) ? message.detail : null
   ctx.hub.sendToApps(accountId, { t: 'agent_update', machineId, ok, detail })
 }
+
+/** What a teammate sees first: the session's status, and the copy its agent sealed for the share. */
+function openViewer(ctx: RelayContext, socket: Socket) {
+  const { accountId, sessionId, shareId } = socket.data
+  if (!shareId || !sessionId) return
+  if (!ctx.hub.addViewer(socket, MAX_VIEWERS_PER_SHARE)) {
+    socket.close(4002, 'too many viewers')
+    return
+  }
+  const status = ctx.sessions.list(accountId).find(session => session.id === sessionId)?.status ?? 'offline'
+  const { info, entries } = ctx.shares.get(shareId)
+  ctx.hub.send(socket, { t: 'shared', status, info, entries })
+}
+
+const isShareOf = (ctx: RelayContext, accountId: string, sessionId: string, shareId: unknown): shareId is string =>
+  isText(shareId, 32) && ctx.registry.share(accountId, shareId)?.sessionId === sessionId
 
 function onMachinePresence(ctx: RelayContext, socket: Socket) {
   if (socket.data.machineId) ctx.registry.touchMachine(socket.data.machineId)

@@ -129,6 +129,27 @@ Open it from disk, or put it on any static host: it has no server side.
 - Its Content-Security-Policy allows its own inline script and style, and WebSocket connections, nothing else. It never
   puts what a session says into the page as HTML.
 
+### Read-only shares
+
+A share lets a teammate follow one session from the web app, without the account key.
+
+- The app asks the relay for a share (`POST /api/shares` with the session and a duration of 1 to 720 hours). The relay
+  answers with an id and a `ts_…` token, keeps a hash of the token, and lists the share in `GET /api/shares`.
+- The app makes a random key for the share and sends the session's agent a `ShareOrder` sealed with the account key:
+  the share id, the session id, the share key and when it ends. The relay stores it and hands it to the agent each
+  time the session connects. The agent drops an order for another session, a past one, or one that does not open with
+  the account key.
+- The agent then sends a second copy of the conversation, sealed with the share key, plus the project and the title.
+  The relay keeps that copy in memory only (4 MB per share at most) and sends it to `/ws/share`, which opens with the
+  share token (as a header, or as the subprotocol `bearer.<token>` next to `tonton`) and reads only.
+- The share key is `tontonshare1.` followed by base64url JSON of the relay, the token and the key. Whoever holds it reads
+  that session and nothing else. The relay sees the same as for the rest: ids, a status, sizes and sealed blobs.
+- Revoking (`DELETE /api/shares/<id>`) or the end of the share closes the viewers' sockets and tells the agent to stop.
+  The agent also stops at the end date by itself. The relay has to cooperate for a revocation before that date, as it
+  does for signing out a machine.
+- An account holds 10 shares at most, and a share 20 viewers. Sessions only on this Mac, read without the agent, cannot
+  be shared: there is no agent to seal the copy.
+
 ## Running your own relay
 
 The relay is a single executable behind any HTTPS reverse proxy with WebSocket support. It only needs updating when its own

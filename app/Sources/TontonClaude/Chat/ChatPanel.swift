@@ -98,6 +98,23 @@ struct ChatHeader: View {
     @EnvironmentObject var store: SessionStore
     @EnvironmentObject var settings: AppSettings
     @State private var confirming: SessionCommandName?
+    @State private var shareNote: String?
+
+    /// Makes a read-only share and copies its key, for a teammate to paste in the web app.
+    private func share(for duration: ShareDuration) {
+        Task {
+            do {
+                let link = try await store.share(session, for: duration)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(link.string, forType: .string)
+                shareNote = "Share key copied, valid for \(duration.label)"
+                try? await Task.sleep(for: .seconds(5))
+                shareNote = nil
+            } catch {
+                store.lastError = error.localizedDescription
+            }
+        }
+    }
 
     /// Saves the conversation as Markdown or as a standalone HTML page, images included (see ConversationExport).
     private func export(_ format: ConversationExport.Format) {
@@ -196,6 +213,15 @@ struct ChatHeader: View {
                 Menu {
                     Button("Markdown…") { export(.markdown) }
                     Button("HTML page…") { export(.html) }
+                    if store.canShare(session) {
+                        Divider()
+                        // A teammate reads this session, and only it, in the web app. Nothing they do reaches it.
+                        Menu("Share read-only") {
+                            ForEach(ShareDuration.allCases) { duration in
+                                Button("For \(duration.label)") { share(for: duration) }
+                            }
+                        }
+                    }
                 } label: {
                     Image(systemName: "square.and.arrow.up").font(.system(size: 11))
                 }
@@ -204,7 +230,7 @@ struct ChatHeader: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .foregroundStyle(.secondary)
-                .help("Export the conversation, images included")
+                .help("Export the conversation, images included, or share it read-only")
             }
             HStack {
                 Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
@@ -224,6 +250,9 @@ struct ChatHeader: View {
                                 + "\(tokens.cacheWrite.formatted()) written to it, \(tokens.output.formatted()) output")
                 }
                 if session.canChat, let reset = session.stoppedUntil() { autoContinueToggle(until: reset) }
+                if let shareNote {
+                    Text(shareNote).font(.system(size: 10)).foregroundStyle(Theme.accent).lineLimit(1)
+                }
                 if let err = store.lastError {
                     Text(err).font(.system(size: 10)).foregroundStyle(.red).lineLimit(1)
                         .onTapGesture { store.lastError = nil }

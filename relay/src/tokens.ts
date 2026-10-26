@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 
 // Tokens are `<kind>_<id>_<secret>`. The id locates the row, only a hash of the secret is stored.
-export type TokenKind = 'ta' | 'tm' // account (Mac app), machine (agent)
+export type TokenKind = 'ta' | 'tm' | 'ts' // account (Mac app), machine (agent), read-only share (a teammate)
 
 const ID_BYTES = 9 // 12 base64url characters
 const SECRET_BYTES = 32 // 43 base64url characters

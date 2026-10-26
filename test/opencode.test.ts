@@ -7,8 +7,8 @@ import { join } from 'node:path'
 import type { PluginCommand } from '../agent/src/opencode/bridge'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
-import { open, seal } from '../shared/crypto'
-import type { Entry, RelayToApp, SessionInfo, SessionMeta, SessionSummary } from '../shared/protocol'
+import { newAccountKey, open, seal } from '../shared/crypto'
+import type { Entry, RelayToApp, RelayToViewer, SessionInfo, SessionMeta, SessionSummary, SharedInfo } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const FIXTURE = join(import.meta.dir, '../agent/test/fixtures/opencode-2.0.32.jsonl')
@@ -18,6 +18,7 @@ const relay = startRelay(loadConfig({ PORT: '0', TONTON_DATA_DIR: join(dir, 'dat
 const base = `http://127.0.0.1:${relay.server.port}`
 
 let key: string
+let accountToken: string
 let machineId: string
 let home: string
 let bridge: ReturnType<typeof Bun.spawn>
@@ -67,6 +68,7 @@ const sealedCommand = (name: string) =>
 
 beforeAll(async () => {
   const account = await (await api('/api/accounts', { method: 'POST' })).json()
+  accountToken = account.token
   key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
   const { secret } = await (await api('/api/account/token', { method: 'POST', token: account.token, body: '{}' })).json()
   const joinRequest = { account: account.accountId, secret, name: await seal(key, { name: 'Linux-Box' }) }
@@ -233,6 +235,25 @@ describe('OpenCode through the relay', () => {
       tool: 'opencode',
     })
     expect(commands).toContainEqual({ op: 'history', sessionID: started, directory: '/Users/me/code/new' })
+  })
+
+  test('a read-only share gets the conversation sealed with its own key, as for Claude Code', async () => {
+    const body = JSON.stringify({ sessionId: SESSION, hours: 1 })
+    const created = await (await api('/api/shares', { method: 'POST', token: accountToken, body })).json()
+    const shareKey = newAccountKey()
+    const order = await seal(key, { shareId: created.id, sessionId: SESSION, key: shareKey, expiresAt: created.expiresAt })
+    app.send(JSON.stringify({ t: 'share', sessionId: SESSION, shareId: created.id, order }))
+    const viewer = new WebSocket(`${base.replace('http', 'ws')}/ws/share`, ['tonton', `bearer.${created.token}`])
+    const seen: RelayToViewer[] = []
+    viewer.onmessage = event => seen.push(JSON.parse(String(event.data)))
+    const shared = await eventually(() => seen.findLast(m => m.t === 'shared_entries' && m.entries.length >= 5), 'the shared copy')
+    if (shared.t !== 'shared_entries') throw new Error('unexpected message')
+    const entries = await Promise.all(shared.entries.map(entry => open<Entry>(shareKey, entry.blob)))
+    expect(entries.map(entry => entry.kind)).toContain('tool_result')
+    const info = await eventually(() => seen.find(m => m.t === 'shared_info'), 'the shared info')
+    if (info.t !== 'shared_info') throw new Error('unexpected message')
+    expect(await open<SharedInfo>(shareKey, info.info)).toEqual({ project: 'shop', title: 'Probe title', tool: 'opencode' })
+    viewer.close()
   })
 
   test('its sessions end with OpenCode', async () => {
