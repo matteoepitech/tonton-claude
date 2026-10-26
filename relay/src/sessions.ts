@@ -8,6 +8,7 @@ import {
   MAX_SESSION_BYTES,
   MAX_SESSIONS_PER_ACCOUNT,
 } from './limits'
+import { SESSION_STATUSES } from './metrics'
 
 export interface SessionListener {
   updated(accountId: string, session: SessionSummary): void
@@ -55,6 +56,21 @@ export class SessionStore {
 
   history(accountId: string, sessionId: string): SealedEntry[] {
     return this.get(accountId, sessionId)?.history ?? []
+  }
+
+  /** Totals over every account, for the metrics page. */
+  stats(): { byStatus: Record<SessionStatus, number>; entries: number; bytes: number } {
+    const byStatus = Object.fromEntries(SESSION_STATUSES.map(status => [status, 0])) as Record<SessionStatus, number>
+    let entries = 0
+    let bytes = 0
+    for (const sessions of this.accounts.values()) {
+      for (const session of sessions.values()) {
+        byStatus[session.status]++
+        entries += session.history.length
+        bytes += session.historyBytes
+      }
+    }
+    return { byStatus, entries, bytes }
   }
 
   applyHook(accountId: string, machineId: string, { event, detail }: HookPost) {

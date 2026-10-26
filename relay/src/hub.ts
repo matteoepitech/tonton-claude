@@ -1,8 +1,9 @@
 import type { ServerWebSocket } from 'bun'
 import type { RelayToAgent, RelayToApp } from '../../shared/protocol'
+import { type Role, Traffic } from './metrics'
 
 export interface SocketData {
-  role: 'agent' | 'app'
+  role: Role
   accountId: string
   machineId: string | null
   /** Agent: the session it speaks for. App: the session it is watching. */
@@ -20,6 +21,8 @@ export class Hub {
   private readonly apps = new Map<string, Set<Socket>>()
   private readonly agents = new Map<string, Socket>()
   private readonly machines = new Map<string, Set<Socket>>()
+  /** Every message goes through `send`, so that it is counted. */
+  readonly traffic = new Traffic()
 
   addApp(socket: Socket) {
     addTo(this.apps, socket.data.accountId, socket)
@@ -35,6 +38,17 @@ export class Hub {
 
   removeMachineSocket(socket: Socket) {
     if (socket.data.machineId) removeFrom(this.machines, socket.data.machineId, socket)
+  }
+
+  /** Open sockets per role, and machines with at least one of them. */
+  counts(): { sockets: Record<Role, number>; machinesOnline: number } {
+    const total = (map: Map<string, Set<Socket>>) => [...map.values()].reduce((sum, set) => sum + set.size, 0)
+    return { sockets: { app: total(this.apps), agent: total(this.machines) }, machinesOnline: this.machines.size }
+  }
+
+  send(socket: Socket, message: RelayToAgent | RelayToApp) {
+    const raw = JSON.stringify(message)
+    this.sendRaw(socket, raw, Buffer.byteLength(raw))
   }
 
   isMachineOnline(machineId: string): boolean {
@@ -68,21 +82,28 @@ export class Hub {
   sendToAgent(accountId: string, message: Extract<RelayToAgent, { sessionId: string }>): boolean {
     const agent = this.agents.get(sessionKey(accountId, message.sessionId))
     if (!agent) return false
-    agent.send(JSON.stringify(message))
+    this.send(agent, message)
     return true
   }
 
   /** To every connection of the machine: its service and the channel of each session. */
   sendToMachine(machineId: string, message: RelayToAgent) {
     const raw = JSON.stringify(message)
-    for (const socket of this.machines.get(machineId) ?? []) socket.send(raw)
+    const bytes = Buffer.byteLength(raw)
+    for (const socket of this.machines.get(machineId) ?? []) this.sendRaw(socket, raw, bytes)
   }
 
   sendToApps(accountId: string, message: RelayToApp, filter?: (socket: Socket) => boolean) {
     const sockets = this.apps.get(accountId)
     if (!sockets?.size) return
     const raw = JSON.stringify(message)
-    for (const socket of sockets) if (!filter || filter(socket)) socket.send(raw)
+    const bytes = Buffer.byteLength(raw)
+    for (const socket of sockets) if (!filter || filter(socket)) this.sendRaw(socket, raw, bytes)
+  }
+
+  private sendRaw(socket: Socket, raw: string, bytes: number) {
+    this.traffic.count('sent', socket.data.role, bytes)
+    socket.send(raw)
   }
 
   disconnectMachine(machineId: string, reason: string) {

@@ -169,6 +169,13 @@ export class Registry {
     return rows.map(toMachine)
   }
 
+  counts(): { accounts: number; machines: number } {
+    return this.db.query('SELECT (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COUNT(*) FROM machines) AS machines').get() as {
+      accounts: number
+      machines: number
+    }
+  }
+
   touchMachine(machineId: string) {
     this.db.query('UPDATE machines SET last_seen = ? WHERE id = ?').run(now(), machineId)
   }
