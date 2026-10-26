@@ -18,6 +18,8 @@ public enum Transcript {
         public var contextWindow: Int?
         /// Claude Code compacted the conversation: the context starts over.
         public var compacted = false
+        /// The model that wrote this response, such as `claude-opus-4-5-20251101`.
+        public var model: String?
     }
 
     public struct ResponseUsage: Equatable, Sendable {
@@ -59,6 +61,11 @@ public enum Transcript {
             if type == "five_hour" { result.fiveHourLimit = limit } else if type.hasPrefix("seven_day") { result.sevenDayLimit = limit }
         }
         if type == "assistant" { result.usage = responseUsage(line) }
+        if type == "assistant", let model = (line["message"] as? [String: Any])?["model"] as? String, model != "<synthetic>",
+            (1...100).contains(model.count)
+        {
+            result.model = model
+        }
         if type == "assistant", let model = line["requestedModel"] as? String {
             result.contextWindow = model.lowercased().hasSuffix("[1m]") ? 1_000_000 : 200_000
         }

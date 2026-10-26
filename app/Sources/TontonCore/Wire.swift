@@ -98,6 +98,10 @@ struct SessionMeta: Codable {
     var context: WireContext?
     /// Missing from older agents.
     var terminal: Bool?
+    /// The commands the agent can type. Missing from agents that only know `compact` and `clear`.
+    var commands: [String]?
+    /// The model's API id. Missing from older agents.
+    var model: String?
 }
 struct WireContext: Codable { let usedTokens: Int; let windowTokens: Int? }
 struct WireUsageLimit: Codable { let usedPercent: Double; let resetsAt: String }

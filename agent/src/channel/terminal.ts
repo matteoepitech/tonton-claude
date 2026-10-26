@@ -2,7 +2,7 @@
 // Claude Code reads `/compact` there as text, but a session running in tmux can be typed into like a keyboard would.
 
 import { join } from 'node:path'
-import type { SessionCommand } from '../../../shared/protocol'
+import type { ModelAlias, SessionCommand } from '../../../shared/protocol'
 import { claimOnce } from '../once'
 
 /** The tmux server and pane of a Claude Code process, from the environment its hooks inherit. */
@@ -11,7 +11,8 @@ export interface TerminalPane {
   pane: string
 }
 
-export const COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear']
+export const COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear', 'model']
+const MODELS: readonly ModelAlias[] = ['opus', 'sonnet', 'haiku']
 /** Older commands are refused so the relay cannot replay one later, as with update orders. */
 const COMMAND_TTL_MS = 10 * 60_000
 const COMMAND_ID = /^[a-z0-9-]{8,64}$/
@@ -36,8 +37,8 @@ export function runCommand(
   { run, now = Date.now(), tmux = runTmux }: { run: string; now?: number; tmux?: Tmux },
 ): CommandResult {
   const refuse = (why: string): CommandResult => ({ typed: false, why })
-  if (!COMMANDS.includes(command.name) || command.sessionId !== sessionId || !COMMAND_ID.test(command.id))
-    return refuse('The command is not for this session.')
+  const text = commandText(command)
+  if (!text || command.sessionId !== sessionId || !COMMAND_ID.test(command.id)) return refuse('The command is not for this session.')
   if (!(Math.abs(now - Date.parse(command.issuedAt)) <= COMMAND_TTL_MS))
     return refuse('The command expired. Check the clock of this machine.')
   if (!terminal) return refuse('This session does not run in tmux, so commands from the notch cannot be typed in it.')
@@ -48,11 +49,18 @@ export function runCommand(
   if (!screen.ok) return refuse(`tmux could not read the terminal: ${screen.output}`)
   const busy = whyBusy(screen.output)
   if (busy) return refuse(busy)
-  // Literally, then Enter: the text is a fixed command name, never something from the relay.
-  const typed = tmux(terminal, ['send-keys', '-t', terminal.pane, '-l', `/${command.name}`])
+  // Literally, then Enter: the text comes from the lists above, never from the relay.
+  const typed = tmux(terminal, ['send-keys', '-t', terminal.pane, '-l', text])
   if (!typed.ok) return refuse(`tmux could not type in the terminal: ${typed.output}`)
   tmux(terminal, ['send-keys', '-t', terminal.pane, 'Enter'])
   return { typed: true }
+}
+
+/** What to type for a known command, or null. A model is one of the aliases, and only `/model` takes one. */
+function commandText({ name, model }: SessionCommand): string | null {
+  if (!COMMANDS.includes(name)) return null
+  if (name !== 'model') return model === undefined ? `/${name}` : null
+  return model !== undefined && MODELS.includes(model) ? `/model ${model}` : null
 }
 
 /** Enter must only submit the command: not while Claude works, nor on a question with its own choices. */

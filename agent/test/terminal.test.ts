@@ -57,6 +57,12 @@ describe('runCommand', () => {
     expect(fake.typed).toHaveLength(2)
   })
 
+  test('switches the model to one of the aliases', () => {
+    const fake = fakeTmux()
+    expect(runCommand(command({ name: 'model', model: 'haiku' }), 's1', pane, { run: dir, tmux: fake.tmux })).toEqual({ typed: true })
+    expect(fake.typed).toEqual([['-l', '/model haiku'], ['Enter']])
+  })
+
   test('refuses commands for another session, unknown, expired, with odd ids, or for a session outside tmux', () => {
     const fake = fakeTmux()
     const refused = (sent: SessionCommand, terminal: TerminalPane | null = pane) => {
@@ -66,6 +72,12 @@ describe('runCommand', () => {
     expect(refused(command({ sessionId: 's2' }))).toBe('The command is not for this session.')
     expect(refused(command({ name: 'login' as SessionCommand['name'] }))).toBe('The command is not for this session.')
     expect(refused(command({ id: '../../config' }))).toBe('The command is not for this session.')
+    // Only `/model` takes a model, and only one of the aliases: nothing else from the relay is typed.
+    expect(refused(command({ name: 'model' }))).toBe('The command is not for this session.')
+    expect(refused(command({ name: 'model', model: 'opus; rm -rf ~' as SessionCommand['model'] }))).toBe(
+      'The command is not for this session.',
+    )
+    expect(refused(command({ name: 'clear', model: 'opus' }))).toBe('The command is not for this session.')
     expect(refused(command({ issuedAt: '2020-01-01T00:00:00Z' }))).toContain('expired')
     expect(refused(command(), null)).toContain('does not run in tmux')
     expect(fake.typed).toEqual([])

@@ -76,13 +76,18 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let sevenDayLimit: UsageLimit?
     /// Runs in tmux, so the notch can type slash commands in it.
     public let terminal: Bool
+    /// The commands its agent can type there.
+    public let commands: Set<SessionCommandName>
+    /// The API id of the model it uses (`claude-opus-4-5-20251101`). Nil with older agents, and before Claude Code says.
+    public let model: String?
 
     public init(
         id: String, machineId: String, machine: String, platform: String?, cwd: String, project: String, title: String?,
         status: SessionStatus,
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
         startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
-        sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil, context: ContextUsage? = nil, terminal: Bool = false
+        sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil, context: ContextUsage? = nil, terminal: Bool = false,
+        commands: Set<SessionCommandName> = SessionCommandName.original, model: String? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -105,6 +110,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.tokens = tokens
         self.context = context
         self.terminal = terminal
+        self.commands = commands
+        self.model = model
     }
 
     /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the

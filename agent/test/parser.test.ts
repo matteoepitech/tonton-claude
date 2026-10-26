@@ -147,6 +147,15 @@ describe('parseLine', () => {
     expect(parseLine(line({ type: 'system', subtype: 'compact_boundary' })).compacted).toBe(true)
   })
 
+  test('each response names the model that wrote it', () => {
+    const model = (fields: object) => parseLine(line({ type: 'assistant', message: { content: [], ...fields } })).model
+    expect(model({ model: 'claude-opus-5-5' })).toBe('claude-opus-5-5')
+    expect(model({ model: 'claude-haiku-4-5-20251001' })).toBe('claude-haiku-4-5-20251001')
+    expect(model({ model: '<synthetic>' })).toBeUndefined()
+    expect(model({})).toBeUndefined()
+    expect(parseLine(line({ type: 'user', message: { model: 'claude-opus-5-5', content: 'x' } })).model).toBeUndefined()
+  })
+
   test('garbage and subagent lines are ignored', () => {
     expect(parseLine('{not json').entries).toEqual([])
     expect(parseLine(line({ type: 'user', isSidechain: true, message: { content: 'x' } })).entries).toEqual([])

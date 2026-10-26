@@ -80,9 +80,10 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Starting a session.** <kbd>+</kbd> in the open notch, or <kbd>⌘</kbd> <kbd>N</kbd>, starts claude in a folder of any
   machine, in a tmux session you can attach to later. The machine needs tmux, so not Windows. The questions Claude Code
   asks on the way, like trusting the folder, show up in the notch: nothing is confirmed for you.
-- **Slash commands.** Claude Code doesn't let a channel run `/compact` or `/clear`, so the notch types them in the
-  session's terminal instead. That works for sessions running in tmux, like the ones started from the notch: a terminal
-  icon in the session's header, once Claude is done. `/clear` asks first.
+- **Slash commands.** Claude Code doesn't let a channel run `/compact`, `/clear` or `/model`, so the notch types them in
+  the session's terminal instead. That works for sessions running in tmux, like the ones started from the notch: a
+  terminal icon in the session's header, once Claude is done. `/clear` asks first, and **Model** switches to Opus, Sonnet
+  or Haiku. The header shows the model of every session.
 - **Behind a proxy.** The agent goes through `HTTPS_PROXY` and skips the hosts in `NO_PROXY`, like curl. Set them before
   running the install line: the background service keeps the ones it was installed with. See
   [the details](docs/self-hosting.md#behind-a-proxy).

@@ -3,12 +3,16 @@ import Foundation
 /// Slash commands the notch types in a session's terminal. A channel can't run them, but a session running in tmux can be
 /// typed into, and its agent does it.
 public enum SessionCommandName: String, Codable, CaseIterable, Sendable {
-    case compact, clear
+    case compact, clear, model
+
+    /// What agents that type in a terminal knew before `model`, and don't list.
+    public static let original: Set<SessionCommandName> = [.compact, .clear]
 
     public var label: String {
         switch self {
         case .compact: "Compact the conversation"
         case .clear: "Clear the conversation…"
+        case .model: "Model"
         }
     }
 
@@ -22,6 +26,8 @@ struct SessionCommand: Codable, Equatable {
     let sessionId: String
     let id: String
     let issuedAt: String
+    /// For `model` only.
+    var model: ModelFamily?
 }
 
 extension SessionSummary {
@@ -29,4 +35,8 @@ extension SessionSummary {
     public var acceptsCommands: Bool {
         terminal && canChat && agentOnline && (status == .idle || status == .waiting)
     }
+
+    /// The model it uses now, as Claude Code's menu names it.
+    public var modelName: String? { model.map(ModelName.display) }
+    public var modelFamily: ModelFamily? { model.flatMap(ModelName.family) }
 }
