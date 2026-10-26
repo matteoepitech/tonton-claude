@@ -1,4 +1,5 @@
 import SwiftUI
+import TontonCore
 
 struct NotchRootView: View {
     @EnvironmentObject var state: NotchState
@@ -46,22 +47,25 @@ struct NotchRootView: View {
     }
 }
 
-/// Frosted glass: solid black where it meets the camera housing, then the desktop shows through, blurred.
+/// Frosted glass: solid black where it meets the camera housing, then the desktop shows through, blurred, as much as the
+/// transparency setting lets it.
 struct GlassBackground: View {
     let headerHeight: CGFloat
+    @EnvironmentObject var settings: AppSettings
 
     var body: some View {
         GeometryReader { geo in
             let h = max(geo.size.height, 1)
             let solid = headerHeight / h
+            let veil = GlassVeil(transparency: settings.notchTransparency)
             ZStack {
                 VisualEffect(material: .hudWindow, alwaysActive: true)
                 LinearGradient(
                     stops: [
                         .init(color: .black, location: 0),
                         .init(color: .black, location: solid),
-                        .init(color: .black.opacity(0.62), location: min(solid + 0.1, 1)),
-                        .init(color: .black.opacity(0.45), location: 1),
+                        .init(color: .black.opacity(veil.top), location: min(solid + 0.1, 1)),
+                        .init(color: .black.opacity(veil.bottom), location: 1),
                     ], startPoint: .top, endPoint: .bottom)
                 RadialGradient(
                     colors: [Theme.accent.opacity(0.05), .clear], center: .bottomLeading, startRadius: 0, endRadius: geo.size.width * 0.7)
