@@ -89,17 +89,19 @@ export interface Session {
   sevenDayLimit: UsageWindow | null
   /** Runs in tmux, so a client can have its agent type slash commands in it. */
   terminal: boolean
-  /** The commands its agent can type there. */
+  /** What its agent runs for it: Claude Code in tmux types them, OpenCode runs them through its API. */
   commands: SessionCommand['name'][]
   /** The API id of the model it uses (`claude-opus-4-5-20251101`). Null with older agents, and before Claude Code says. */
   model: string | null
+  /** The coding agent running it: `opencode`, or null for Claude Code and older agents. */
+  tool: string | null
 }
 
 /** What agents that type in a terminal knew before `model`, and do not list. */
 export const ORIGINAL_COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear']
 
 /** Every command this client can send. */
-export const COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear', 'model']
+export const COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear', 'model', 'interrupt']
 
 export interface Machine {
   id: string
@@ -126,9 +128,21 @@ export function displayStatusText(session: Pick<Session, 'status' | 'statusText'
   return text
 }
 
-/** Its agent can type in its terminal, and Claude waits at its prompt: Enter then only submits the command. */
-export const acceptsCommands = (session: Session): boolean =>
-  session.terminal && session.canChat && session.agentOnline && (session.status === 'idle' || session.status === 'waiting')
+/**
+ * Its agent runs the command now: slash commands while the session waits at its prompt, where Enter only submits them,
+ * and an interruption while it works. Like `SessionSummary.accepts` in the Mac app.
+ */
+export function accepts(session: Session, command: SessionCommand['name']): boolean {
+  if (!session.commands.includes(command) || !session.canChat || !session.agentOnline) return false
+  return command === 'interrupt' ? session.status === 'working' : session.status === 'idle' || session.status === 'waiting'
+}
+
+/** The slash commands of a session's menu: the model has its own, interrupting its own button. */
+export const menuCommands = (session: Session): SessionCommand['name'][] =>
+  (['compact', 'clear'] as const).filter(name => session.commands.includes(name))
+
+/** One of the slash commands can run now. */
+export const acceptsCommands = (session: Session): boolean => menuCommands(session).some(name => accepts(session, name))
 
 /** Live sessions first, then the most recently active, like the notch's list. */
 export function sortSessions(sessions: readonly Session[]): Session[] {

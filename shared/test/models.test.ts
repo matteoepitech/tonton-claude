@@ -39,6 +39,7 @@ const session = (fields: Partial<Session>): Session => ({
   terminal: false,
   commands: ['compact', 'clear'],
   model: null,
+  tool: null,
   ...fields,
 })
 

@@ -75,8 +75,10 @@ export class Vault {
       fiveHourLimit: usageWindow(meta?.fiveHourLimit),
       sevenDayLimit: usageWindow(meta?.sevenDayLimit),
       terminal: meta?.terminal ?? false,
-      commands: meta?.commands ? COMMANDS.filter(name => meta.commands?.includes(name)) : [...ORIGINAL_COMMANDS],
+      // Older agents type the original commands in tmux only, and never interrupt.
+      commands: meta?.commands ? COMMANDS.filter(name => meta.commands?.includes(name)) : meta?.terminal ? [...ORIGINAL_COMMANDS] : [],
       model: meta?.model ?? null,
+      tool: info?.tool ?? null,
     }
   }
 

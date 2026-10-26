@@ -38,7 +38,7 @@ final class SessionStore: ObservableObject {
     @Published private var relayEntries: [String: [Entry]] = [:]
     @Published private var localEntries: [String: [Entry]] = [:]
     /// The relay's history once it arrived, this Mac's transcript until then.
-    var entries: [String: [Entry]] { localEntries.merging(relayEntries) { _, relay in relay } }
+    var entries: [String: [Entry]] { LocalSessions.entries(local: localEntries, relay: relayEntries) }
     @Published private(set) var connection: ConnectionState = .notConfigured
     @Published private(set) var latency: RelayLatency?
     @Published var selectedId: String? {

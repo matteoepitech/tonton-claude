@@ -87,7 +87,14 @@ public enum RelayMessage: Decodable, Sendable {
 
 // Plaintext payloads inside sealed fields.
 
-struct SessionInfo: Codable { let machine: String; let platform: String?; let cwd: String; let project: String }
+struct SessionInfo: Codable {
+    let machine: String
+    let platform: String?
+    let cwd: String
+    let project: String
+    /// Missing for Claude Code, and from older agents.
+    var tool: String? = nil
+}
 struct SessionMeta: Codable {
     let title: String?
     let costUSD: Double?
@@ -98,7 +105,7 @@ struct SessionMeta: Codable {
     var context: WireContext?
     /// Missing from older agents.
     var terminal: Bool?
-    /// The commands the agent can type. Missing from agents that only know `compact` and `clear`.
+    /// The commands the agent runs for this session. Missing from older agents: `compact` and `clear` with `terminal`.
     var commands: [String]?
     /// The model's API id. Missing from older agents.
     var model: String?

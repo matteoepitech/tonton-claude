@@ -96,7 +96,13 @@ const tokenCounts = (value: unknown): TokenCounts => {
 
 export const decodeSessionInfo = decoder(
   (f): SessionInfo =>
-    compact({ machine: text(f.machine), platform: optional(f.platform, text), cwd: text(f.cwd), project: text(f.project) }),
+    compact({
+      machine: text(f.machine),
+      platform: optional(f.platform, text),
+      cwd: text(f.cwd),
+      project: text(f.project),
+      tool: optional(f.tool, text) as SessionInfo['tool'],
+    }),
 )
 
 export const decodeSessionMeta = decoder(

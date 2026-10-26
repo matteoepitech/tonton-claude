@@ -11,6 +11,7 @@ WebSocket relay, and everything that describes what Claude is doing is end-to-en
 
 ```
 claude ─ hooks + MCP channel ─▶ agent ──sealed blobs──▶ relay ──WebSocket──▶ macOS app (notch)
+opencode ─ Tonton plugin ──────▶ agent
 ```
 
 | Path | What | Language |
@@ -76,6 +77,12 @@ in `relay/src/limits.ts`.
 **Claude Code is a moving target.** Transcripts (`agent/src/transcript/parser.ts`) are not a public format: skip what you
 don't recognize, never throw. Channels are a research preview started with `--dangerously-load-development-channels`
 (see `agent/src/install/shell-profile.ts`).
+
+**Claude Code and OpenCode.** Tonton shows the sessions of both, and every feature works with both. Claude Code goes
+through hooks, the MCP channel and its transcripts (`agent/src/channel`, `agent/src/transcript`); OpenCode through
+Tonton's plugin and the `tonton opencode` bridge (`agent/src/opencode`), whose events are no more public than the
+transcripts: skip what you don't recognize, never throw. A change for one tool comes with the same change for the other,
+tested on both sides. When it really cannot work for one (Claude plan limits do not exist in OpenCode), say why in the PR.
 
 **Three platforms.** The agent runs on Windows, macOS and Linux: use `node:path`, no POSIX-only shell calls, and keep
 `scripts/install.sh` and `scripts/install.ps1` in step.

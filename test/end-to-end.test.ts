@@ -172,7 +172,8 @@ describe('end to end', () => {
 
   test('a slash command for a session outside tmux comes back as a note in the conversation, not as a message', async () => {
     const meta = await eventually(() => latestSession(app)?.meta, 'the meta')
-    expect(await open(key, meta)).toMatchObject({ terminal: false, commands: ['compact', 'clear', 'model'] })
+    // Outside tmux nothing can be typed: the agent offers no command, and refuses one sent anyway.
+    expect(await open(key, meta)).toMatchObject({ terminal: false, commands: [] })
     const before = app.messages.length
     const delivered = notifications.length
     const command = { name: 'compact', sessionId, id: `command-${Date.now()}`, issuedAt: new Date().toISOString() }

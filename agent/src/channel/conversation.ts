@@ -201,7 +201,8 @@ export class Conversation {
       lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
       ...this.usage,
       terminal: Boolean(this.link.tmux),
-      commands: COMMANDS,
+      // Without tmux nothing can be typed: the notch offers no command.
+      commands: this.link.tmux ? [...COMMANDS] : [],
       model: this.model,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))

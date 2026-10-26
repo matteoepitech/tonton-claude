@@ -17,6 +17,25 @@ public enum Mascot {
         }
     }
 
+    /// How many pixels to move a pose so what it draws sits in the middle of its square, as the session count beside it
+    /// does: the sleeping and waving poses leave their bottom rows empty. Whole pixels keep him sharp, and one shift for
+    /// all the frames of a pose keeps him from jumping while he moves.
+    public static func centering(_ pose: Pose) -> (x: Int, y: Int) {
+        var columns: [Int] = []
+        var rows: [Int] = []
+        for frame in frames(pose) {
+            for (y, row) in frame.enumerated() {
+                for (x, character) in row.enumerated() where character != "." {
+                    columns.append(x)
+                    rows.append(y)
+                }
+            }
+        }
+        guard let left = columns.min(), let right = columns.max(), let top = rows.min(), let bottom = rows.max() else { return (0, 0) }
+        let shift = { (low: Int, high: Int) in Int((Double(size - 1 - high - low) / 2).rounded(.toNearestOrEven)) }
+        return (shift(left, right), shift(top, bottom))
+    }
+
     /// One string per row. `#` body, `o` eye, `-` closed eye, `h` hand, `k` keyboard, `z` a snore, `.` nothing.
     public static func frames(_ pose: Pose) -> [[String]] {
         switch pose {

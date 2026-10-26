@@ -34,6 +34,19 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertEqual(session.displayStatusText, "Wants to use Bash")
         XCTAssertEqual(session.pendingPermissions.map(\.toolName), ["Bash"])
         XCTAssertGreaterThan(session.lastActivity, session.startedAt)
+        // Sessions from agents that don't say which tool runs them are Claude Code's.
+        XCTAssertNil(session.tool)
+    }
+
+    func testOpenCodeSessionsSayItInTheirInfo() throws {
+        let info = SessionInfo(machine: "PC", platform: "linux", cwd: "/code/shop", project: "shop", tool: "opencode")
+        let json = """
+            {"id":"ses_1","machineId":"m1","status":"working","agentOnline":true,"canChat":false,"info":"\(try sealed(info))",
+             "meta":null,"statusDetail":null,"pendingPermissions":[],"startedAt":"2026-10-25T10:00:00Z","lastActivity":"2026-10-25T10:00:00Z"}
+            """
+        let session = vault.session(try JSONDecoder().decode(WireSession.self, from: Data(json.utf8)), machines: [])
+        XCTAssertEqual(session.tool, "opencode")
+        XCTAssertEqual(session.project, "shop")
     }
 
     func testTheFiveHourLimitComesWithTheMeta() throws {

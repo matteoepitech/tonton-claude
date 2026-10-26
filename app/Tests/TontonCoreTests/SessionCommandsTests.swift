@@ -55,6 +55,20 @@ final class SessionCommandsTests: XCTestCase {
         XCTAssertFalse(SessionCommandName.compact.needsConfirmation)
     }
 
+    func testInterruptingIsForAWorkingSessionWhoseAgentSaysItCan() {
+        let older = session(status: .working)
+        XCTAssertEqual(older.commands, [.compact, .clear])
+        XCTAssertFalse(older.accepts(.interrupt))
+        let working = SessionSummary(
+            id: "s1", machineId: "m1", machine: "PC", platform: nil, cwd: "/x", project: "x", title: nil, status: .working, statusText: nil,
+            agentOnline: true, canChat: true, pendingPermissions: [], costUSD: nil, startedAt: now, lastActivity: now, lastMessage: nil,
+            terminal: false, commands: [.compact, .interrupt], tool: "opencode")
+        XCTAssertTrue(working.accepts(.interrupt))
+        XCTAssertFalse(working.accepts(.compact))
+        XCTAssertFalse(working.accepts(.clear))
+        XCTAssertEqual(working.menuCommands, [.compact])
+    }
+
     func testTheAgentSaysWhetherTheSessionRunsInTmux() throws {
         func wire(_ meta: SessionMeta) throws -> WireSession {
             let json = """
@@ -70,10 +84,11 @@ final class SessionCommandsTests: XCTestCase {
         // Agents from before `model` don't list their commands, and can't switch it.
         XCTAssertEqual(vault.session(try wire(meta), machines: []).commands, [.compact, .clear])
         XCTAssertNil(vault.session(try wire(meta), machines: []).model)
-        meta.commands = ["compact", "clear", "model", "interrupt"]
+        // A newer agent says what it runs; names this app does not know are left out.
+        meta.commands = ["compact", "clear", "model", "interrupt", "rewind"]
         meta.model = "claude-sonnet-5-5"
         let session = vault.session(try wire(meta), machines: [])
-        XCTAssertEqual(session.commands, [.compact, .clear, .model])
+        XCTAssertEqual(session.commands, [.compact, .clear, .model, .interrupt])
         XCTAssertEqual(session.modelName, "Sonnet 5.5")
         XCTAssertEqual(session.modelFamily, .sonnet)
     }

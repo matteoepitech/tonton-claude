@@ -76,10 +76,12 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let sevenDayLimit: UsageLimit?
     /// Runs in tmux, so the notch can type slash commands in it.
     public let terminal: Bool
-    /// The commands its agent can type there.
+    /// What the notch can ask the session's agent to run: Claude Code in tmux types them, OpenCode runs them through its API.
     public let commands: Set<SessionCommandName>
     /// The API id of the model it uses (`claude-opus-4-5-20251101`). Nil with older agents, and before Claude Code says.
     public let model: String?
+    /// The coding agent running the session, as the agent reports it: `opencode`, or nil for Claude Code and older agents.
+    public let tool: String?
 
     public init(
         id: String, machineId: String, machine: String, platform: String?, cwd: String, project: String, title: String?,
@@ -87,7 +89,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
         startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
         sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil, context: ContextUsage? = nil, terminal: Bool = false,
-        commands: Set<SessionCommandName> = SessionCommandName.original, model: String? = nil
+        commands: Set<SessionCommandName>? = nil, model: String? = nil, tool: String? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -110,8 +112,10 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.tokens = tokens
         self.context = context
         self.terminal = terminal
-        self.commands = commands
+        // Older agents type the original commands in tmux only, and never interrupt.
+        self.commands = commands ?? (terminal ? SessionCommandName.original : [])
         self.model = model
+        self.tool = tool
     }
 
     /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the

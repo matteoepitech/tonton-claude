@@ -33,6 +33,8 @@ export interface SessionInfo {
   platform?: string
   cwd: string
   project: string
+  /** The coding agent running the session. Missing for Claude Code, and from older agents. */
+  tool?: 'opencode'
 }
 /** How much of a Claude plan's usage window is spent, as Claude Code reports it. */
 export interface UsageLimit {
@@ -66,7 +68,10 @@ export interface SessionMeta {
   sevenDayLimit?: UsageLimit
   /** The session runs in tmux, so the notch can type slash commands in it. Missing from older agents. */
   terminal?: boolean
-  /** The commands this agent can type. Agents that send `terminal` without it only know `compact` and `clear`. */
+  /**
+   * The commands the agent can run in this session: Claude Code in tmux types them, OpenCode runs them through its API.
+   * Agents that send `terminal` without it only know `compact` and `clear`.
+   */
   commands?: SessionCommand['name'][]
   /** The model that last answered or that the session switched to, as Claude Code names it (`claude-opus-4-5-20251101`).
    * Missing from older agents, and until Claude Code reports it. */
@@ -88,7 +93,7 @@ export interface PromptPayload {
 }
 /** Bound to its session and run once, so the relay can neither move a `/clear` to another session nor replay it. */
 export interface SessionCommand {
-  name: 'compact' | 'clear' | 'model'
+  name: 'compact' | 'clear' | 'model' | 'interrupt'
   sessionId: string
   /** Random, safe as a file name. */
   id: string

@@ -58,6 +58,8 @@ and timing.
 - Adds hooks to `~/.claude/settings.json` (a backup is kept next to it).
 - Registers the `tonton` MCP server for Claude Code.
 - Adds a `claude` launcher to your zsh, bash or PowerShell profile, which starts Claude Code with the Tonton Claude channel.
+- When OpenCode is set up, adds `tonton-claude.js` to its plugins folder (`~/.config/opencode/plugins`). OpenCode loads it
+  on its next start (`opencode service restart` with OpenCode 2), and its sessions show up next to Claude Code's.
 
 `tonton status` checks the connection, `tonton uninstall` removes everything.
 
@@ -74,6 +76,7 @@ the previous agent until claude restarts.
 |---|---|---|---|
 | `claude` in a terminal (launcher installed) | ✅ | ✅ | ✅ |
 | Any other way (IDE, script, cmd.exe…) | ✅ | read only | — |
+| OpenCode (1 or 2) | ✅ | ✅ | ✅ |
 
 On first launch, Claude Code asks you to confirm "I am using this for local development": channels are still a research preview.
 

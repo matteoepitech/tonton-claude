@@ -1,0 +1,190 @@
+// Real relay and real `tonton opencode` bridge, fed the events of a real OpenCode 2 run, with a client playing the app
+// and the test playing Tonton's plugin: it reads what the bridge asks OpenCode to do on its stdout.
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { PluginCommand } from '../agent/src/opencode/bridge'
+import { loadConfig } from '../relay/src/config'
+import { startRelay } from '../relay/src/main'
+import { open, seal } from '../shared/crypto'
+import type { Entry, RelayToApp, SessionInfo, SessionMeta, SessionSummary } from '../shared/protocol'
+
+const AGENT = join(import.meta.dir, '../agent/src/main.ts')
+const FIXTURE = join(import.meta.dir, '../agent/test/fixtures/opencode-2.0.32.jsonl')
+const SESSION = 'ses_e872d9012ffeqUp0ZMJp9G4Gx2'
+const dir = mkdtempSync(join(tmpdir(), 'tonton-opencode-e2e-'))
+const relay = startRelay(loadConfig({ PORT: '0', TONTON_DATA_DIR: join(dir, 'data') }))
+const base = `http://127.0.0.1:${relay.server.port}`
+
+let key: string
+let machineId: string
+let bridge: ReturnType<typeof Bun.spawn>
+const messages: RelayToApp[] = []
+const raw: string[] = []
+const commands: PluginCommand[] = []
+let app: WebSocket
+let events = 0
+
+const api = (path: string, init: RequestInit & { token?: string } = {}) =>
+  fetch(base + path, {
+    ...init,
+    headers: { 'content-type': 'application/json', ...(init.token ? { authorization: `Bearer ${init.token}` } : {}) },
+  })
+
+async function eventually<T>(read: () => T | undefined | false, label: string): Promise<T> {
+  for (let i = 0; i < 100; i++) {
+    const value = read()
+    if (value) return value
+    await Bun.sleep(50)
+  }
+  throw new Error(`timed out waiting for ${label}`)
+}
+
+const latest = (): SessionSummary | undefined => {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message.t === 'session' && message.session.id === SESSION) return message.session
+    if (message.t === 'snapshot') return message.sessions.find(s => s.id === SESSION)
+  }
+}
+
+/** An OpenCode 2 event, as the plugin forwards it. */
+function emit(type: string, data: object) {
+  bridge.stdin.write(
+    `${JSON.stringify({ id: `evt_test_${++events}`, created: Date.now(), type, data: { sessionID: SESSION, ...data } })}\n`,
+  )
+  bridge.stdin.flush()
+}
+
+const sealedCommand = (name: string) =>
+  seal(key, {
+    text: '',
+    images: [],
+    command: { name, sessionId: SESSION, id: `command-${crypto.randomUUID()}`, issuedAt: new Date().toISOString() },
+  })
+
+beforeAll(async () => {
+  const account = await (await api('/api/accounts', { method: 'POST' })).json()
+  key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
+  const { secret } = await (await api('/api/account/token', { method: 'POST', token: account.token, body: '{}' })).json()
+  const joinRequest = { account: account.accountId, secret, name: await seal(key, { name: 'Linux-Box' }) }
+  const machine = await (await api('/api/machines/join', { method: 'POST', body: JSON.stringify(joinRequest) })).json()
+  machineId = machine.machineId
+
+  const home = join(dir, 'agent')
+  mkdirSync(home, { recursive: true })
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ server: base, ...machine, key, machine: 'Linux-Box', version: '0.6.0' }))
+
+  app = new WebSocket(`${base.replace('http', 'ws')}/ws/app`, { headers: { authorization: `Bearer ${account.token}` } } as never)
+  app.onmessage = event => {
+    raw.push(String(event.data))
+    messages.push(JSON.parse(String(event.data)))
+  }
+  await new Promise(resolve => (app.onopen = resolve))
+
+  bridge = Bun.spawn(['bun', AGENT, 'opencode'], {
+    env: { ...process.env, TONTON_HOME: home, TONTON_SERVICE: 'off' },
+    stdin: 'pipe',
+    stdout: 'pipe',
+  })
+  void (async () => {
+    let buffer = ''
+    for await (const chunk of bridge.stdout as ReadableStream<Uint8Array>) {
+      buffer += new TextDecoder().decode(chunk)
+      for (let newline = buffer.indexOf('\n'); newline >= 0; newline = buffer.indexOf('\n')) {
+        commands.push(JSON.parse(buffer.slice(0, newline)))
+        buffer = buffer.slice(newline + 1)
+      }
+    }
+  })()
+  bridge.stdin.write(readFileSync(FIXTURE, 'utf8'))
+  bridge.stdin.flush()
+}, 20_000)
+
+afterAll(() => {
+  bridge?.kill()
+  app?.close()
+  relay.stop()
+  rmSync(dir, { recursive: true, force: true })
+})
+
+describe('OpenCode through the relay', () => {
+  test('the session shows up as OpenCode, done, and the notch can write to it', async () => {
+    const session = await eventually(() => latest()?.agentOnline && latest()?.status === 'idle' && latest(), 'the session to finish')
+    expect(session.canChat).toBe(true)
+    const info = await open<SessionInfo>(key, session.info as string)
+    expect(info).toMatchObject({ machine: 'Linux-Box', cwd: '/Users/me/code/shop', project: 'shop', tool: 'opencode' })
+    const meta = await eventually(() => latest()?.meta, 'the meta')
+    expect(await open<SessionMeta>(key, meta)).toMatchObject({ title: 'Probe title', commands: ['compact', 'interrupt'] })
+    // The bridge asks OpenCode for the window of its models, and for the history of a session it meets halfway.
+    expect(commands).toContainEqual({ op: 'models' })
+    expect(commands).toContainEqual({ op: 'history', sessionID: SESSION, directory: '/Users/me/code/shop' })
+  })
+
+  test('the app decrypts the conversation, the relay only sees ciphertext', async () => {
+    app.send(JSON.stringify({ t: 'subscribe', sessionId: SESSION }))
+    const history = await eventually(() => {
+      const found = messages.findLast(m => m.t === 'history' && m.sessionId === SESSION)
+      return found?.t === 'history' && found.entries.length >= 5 && found
+    }, 'the history')
+    if (history.t !== 'history') throw new Error('unexpected message')
+    const entries = await Promise.all(history.entries.map(entry => open<Entry>(key, entry.blob)))
+    expect(entries.map(entry => entry.kind)).toEqual(['user', 'tool', 'assistant', 'tool_result', 'assistant'])
+    for (const secret of ['Say hi', 'hi-from-probe', 'Probe title', 'shop', 'Linux-Box']) expect(raw.join('')).not.toContain(secret)
+  })
+
+  test('a message from the notch reaches OpenCode, and comes back marked as sent from the notch', async () => {
+    app.send(JSON.stringify({ t: 'prompt', sessionId: SESSION, payload: await seal(key, { text: 'Ship it', images: [] }) }))
+    await eventually(() => commands.some(c => c.op === 'prompt' && c.text === 'Ship it'), 'the prompt')
+    const before = messages.length
+    emit('session.inbox.enqueued', { inboxID: 'msg_ship', item: { type: 'user', payload: { text: 'Ship it' } } })
+    const live = await eventually(() => messages.slice(before).find(m => m.t === 'entries'), 'the entry')
+    if (live.t !== 'entries') throw new Error('unexpected message')
+    expect(await open<Entry>(key, live.entries[0].blob)).toMatchObject({ kind: 'user', text: 'Ship it', viaNotch: true })
+  })
+
+  test('a permission shows in the notch, and the answer from the app goes back to OpenCode', async () => {
+    emit('permission.asked', { id: 'per_deploy', action: 'shell', resources: ['./deploy.sh'], source: { type: 'tool', id: 'call_2' } })
+    const session = await eventually(() => latest()?.pendingPermissions.length && latest(), 'the request')
+    expect(await open(key, session.pendingPermissions[0].blob)).toEqual({
+      toolName: 'Bash',
+      description: './deploy.sh',
+      inputPreview: '{"command":"./deploy.sh"}',
+    })
+    app.send(JSON.stringify({ t: 'verdict', sessionId: SESSION, requestId: 'per_deploy', behavior: 'deny' }))
+    await eventually(() => commands.find(c => c.op === 'reply' && c.requestID === 'per_deploy'), 'the reply')
+    expect(commands.find(c => c.op === 'reply')).toMatchObject({ decision: 'reject' })
+    await eventually(() => latest()?.pendingPermissions.length === 0, 'the request to close')
+  })
+
+  test('an auto-approve rule from the app answers OpenCode without asking', async () => {
+    const rules = await seal(key, { rules: [{ tool: 'Bash', pattern: 'npm test' }], issuedAt: new Date().toISOString() })
+    app.send(JSON.stringify({ t: 'rules', machineId, rules }))
+    await Bun.sleep(300)
+    emit('permission.asked', { id: 'per_tests', action: 'shell', resources: ['npm test'], source: { type: 'tool', id: 'call_3' } })
+    await eventually(() => commands.find(c => c.op === 'reply' && c.requestID === 'per_tests'), 'the automatic reply')
+    expect(commands.find(c => c.op === 'reply' && c.requestID === 'per_tests')).toMatchObject({ decision: 'once' })
+    expect(latest()?.pendingPermissions.some(p => p.requestId === 'per_tests')).toBe(false)
+  })
+
+  test('compact and interrupt run through OpenCode, clear says why it cannot', async () => {
+    app.send(JSON.stringify({ t: 'prompt', sessionId: SESSION, payload: await sealedCommand('compact') }))
+    app.send(JSON.stringify({ t: 'prompt', sessionId: SESSION, payload: await sealedCommand('interrupt') }))
+    await eventually(() => commands.some(c => c.op === 'compact') && commands.some(c => c.op === 'interrupt'), 'the commands')
+    expect(commands.find(c => c.op === 'compact')).toMatchObject({ providerID: 'mock', modelID: 'mock-model' })
+    const before = messages.length
+    app.send(JSON.stringify({ t: 'prompt', sessionId: SESSION, payload: await sealedCommand('clear') }))
+    const note = await eventually(() => messages.slice(before).find(m => m.t === 'entries'), 'the note')
+    if (note.t !== 'entries') throw new Error('unexpected message')
+    expect(await open<Entry>(key, note.entries[0].blob)).toMatchObject({
+      kind: 'system',
+      text: '/clear was not run: OpenCode has no such command.',
+    })
+  })
+
+  test('its sessions end with OpenCode', async () => {
+    bridge.stdin.end()
+    await eventually(() => latest()?.status === 'ended', 'the session to end')
+  })
+})

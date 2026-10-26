@@ -3,11 +3,13 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { parseAccountToken } from '../../../shared/account-token'
 import { defaultMachineName, loadConfig, paths, saveConfig, VERSION } from '../config'
+import { PLUGIN_FILE } from '../opencode/plugin'
 import { proxyFor, shownProxy } from '../proxy'
 import { registerAutostart, restartService, runningServicePid, stopService } from '../service/control'
 import { installTrayFiles } from '../service/tray'
 import { useToken } from '../token'
 import { type ClaudeSettings, launcherSettings, withoutTontonHooks, withTontonHooks } from './claude-settings'
+import { hasOpenCode, installOpenCodePlugin, openCodeConfigDir, removeOpenCodePlugin } from './opencode'
 import { removeLauncher, withLauncher } from './shell-profile'
 import { IS_WINDOWS, installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
 
@@ -55,6 +57,12 @@ export async function install(args: string[]) {
   if (registerMcpServer(binary)) done('MCP server "tonton" registered for Claude Code')
   else warn(`could not run "claude mcp add". Run it by hand: claude mcp add --scope user tonton -- "${binary}" channel`)
   installLaunchers(binary)
+  if (hasOpenCode()) {
+    // OpenCode reads its plugins when it starts: sessions already open show up once it restarts.
+    done(
+      `OpenCode plugin added: ${installOpenCodePlugin(binary)}. Restart OpenCode to load it (\`opencode service restart\` with OpenCode 2).`,
+    )
+  }
   await installTrayFiles()
   if (registerAutostart()) done('background service starts at login')
   else warn('no user systemd here: the background service does not start at login. Sessions still work.')
@@ -64,7 +72,7 @@ export async function install(args: string[]) {
   }
 
   console.log(`
-All set. Open a new terminal and run \x1b[1mclaude\x1b[0m as usual: the session shows up in your Mac's notch.
+All set. Open a new terminal and run \x1b[1mclaude\x1b[0m (or \x1b[1mopencode\x1b[0m) as usual: the session shows up in your Mac's notch.
 On first launch, Claude Code asks you to confirm the development channel: pick "I am using this for local development".
 `)
 }
@@ -123,6 +131,8 @@ export async function uninstall() {
     if (existsSync(file)) writeFileSync(file, removeLauncher(readFileSync(file, 'utf8')))
   }
   done('claude launcher removed from shell profiles')
+  removeOpenCodePlugin()
+  done('OpenCode plugin removed')
   for (const name of ['config.json', 'claude-settings.json', 'run', 'inbox', 'status.json', 'service.pid', 'tray.ps1', 'tonton.ico'])
     rmSync(join(paths.home, name), { recursive: true, force: true })
   done(`files removed. The binary stays in ${paths.bin}: delete the folder by hand if you want.`)
@@ -145,6 +155,8 @@ export async function status() {
   const launchers = shellProfiles().filter(({ file }) => existsSync(file) && readFileSync(file, 'utf8').includes('# >>> tonton >>>'))
   if (launchers.length) done(`claude launcher in ${launchers.map(p => p.file).join(', ')}`)
   else warn('no claude launcher found in your shell profiles: run the install again')
+  if (existsSync(join(openCodeConfigDir(), 'plugins', PLUGIN_FILE))) done('OpenCode plugin installed')
+  else if (hasOpenCode()) warn('OpenCode found without the Tonton plugin: run the install again')
   const service = runningServicePid()
   if (service) done(`background service running (pid ${service})`)
   else warn('background service not running: run the install again')
