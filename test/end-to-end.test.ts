@@ -188,6 +188,26 @@ describe('end to end', () => {
     expect(await open<{ text: string }>(key, live.entries[0].blob)).toMatchObject({ text: 'done' })
   })
 
+  test('a message sent from the notch while Claude is working reaches the app from the queue', async () => {
+    const before = app.messages.length
+    const prompt = '<channel source="tonton" sender="notch">\nAlso run the linter\n</channel>'
+    const attachment = { type: 'queued_command', commandMode: 'prompt', origin: { kind: 'channel', server: 'tonton' }, prompt }
+    appendFileSync(transcript, line({ type: 'attachment', uuid: 'q1', attachment }))
+    const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'the queued message')
+    if (live.t !== 'entries') throw new Error('unexpected message')
+    expect(await open(key, live.entries[0].blob)).toMatchObject({ kind: 'user', text: 'Also run the linter', viaNotch: true })
+  })
+
+  test('the cost Claude Code saved for the session reaches the app', async () => {
+    appendFileSync(transcript, line({ type: 'cost-state', totalCostUSD: 1.25 }))
+    const withCost = async () => {
+      const meta = latestSession(app)?.meta
+      return meta ? (await open<{ costUSD?: number }>(key, meta)).costUSD === 1.25 : false
+    }
+    for (let i = 0; i < 100 && !(await withCost()); i++) await Bun.sleep(50)
+    expect(await withCost()).toBe(true)
+  })
+
   test('the app sees the version installed on the machine', async () => {
     const snapshot = app.messages.find(m => m.t === 'snapshot')
     if (snapshot?.t !== 'snapshot') throw new Error('no snapshot')
