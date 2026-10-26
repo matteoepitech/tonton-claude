@@ -3,6 +3,7 @@ import { SessionArchive } from './archive'
 import type { RelayConfig } from './config'
 import { Hub } from './hub'
 import { RATE_LIMITS } from './limits'
+import type { RelayCounts } from './metrics'
 import { RateLimiter } from './rate-limit'
 import { Registry } from './registry'
 import { SessionStore } from './sessions'
@@ -26,6 +27,7 @@ export class RelayContext {
   readonly claims = new RateLimiter(RATE_LIMITS.claims.limit, RATE_LIMITS.claims.windowMs)
   readonly failedAuth = new RateLimiter(RATE_LIMITS.failedAuth.limit, RATE_LIMITS.failedAuth.windowMs)
   private readonly pruneTimer: Timer
+  private readonly startedAt = Date.now()
 
   constructor(readonly config: RelayConfig) {
     this.registry = new Registry(config.dataDir)
@@ -59,6 +61,22 @@ export class RelayContext {
     this.agentVersions.delete(machineId)
     this.rules.delete(machineId)
     this.health.delete(machineId)
+  }
+
+  /** What the metrics page shows: totals over the whole relay. */
+  counts(): RelayCounts {
+    const { sockets, machinesOnline } = this.hub.counts()
+    const sessions = this.sessions.stats()
+    return {
+      ...this.registry.counts(),
+      machinesOnline,
+      sockets,
+      sessions: sessions.byStatus,
+      historyEntries: sessions.entries,
+      historyBytes: sessions.bytes,
+      traffic: this.hub.traffic,
+      startedAt: this.startedAt,
+    }
   }
 
   pushMachines(accountId: string) {

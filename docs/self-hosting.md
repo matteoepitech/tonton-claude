@@ -131,6 +131,7 @@ sandbox; data goes to `/var/lib/tonton`. Configuration lives in `/etc/tonton/ton
 | `TONTON_ADMIN_TOKEN` | With `closed`, the bearer token allowed to create accounts (24+ characters) |
 | `TONTON_TRUST_PROXY` | `1` to read the client IP from `X-Forwarded-For`. Only behind a reverse proxy that sets it. |
 | `TONTON_REGION` | Optional: where the relay runs (e.g. `Paris`), shown in the app next to the latency. On Fly.io, `FLY_REGION` is used. |
+| `TONTON_METRICS_TOKEN` | Optional: turns on `/metrics` for this bearer token (24+ characters). See [Monitoring](#monitoring). |
 
 **Docker**: the image `ghcr.io/matteoepitech/tonton-claude-relay` is published with each release, for amd64 and arm64.
 `docker compose up -d` with the `docker-compose.yml` of this repository; data is kept in the `tonton-data` volume. Add
@@ -138,6 +139,38 @@ sandbox; data goes to `/var/lib/tonton`. Configuration lives in `/etc/tonton/ton
 around `ufw`.
 
 Then in the app: Settings › Relay › Self-hosted, enter your URL and create an account.
+
+### Monitoring
+
+`/health` answers `ok` while the relay runs, for uptime checks and container health checks.
+
+`/metrics` gives counts in the Prometheus text format. It is off by default: set `TONTON_METRICS_TOKEN` and scrape it
+with that token.
+
+```yaml
+scrape_configs:
+  - job_name: tonton
+    scheme: https
+    static_configs:
+      - targets: ['relay.example.com']
+    authorization:
+      credentials: <TONTON_METRICS_TOKEN>
+```
+
+| Metric | What |
+|---|---|
+| `tonton_relay_info{version}` | The relay's version |
+| `tonton_relay_start_time_seconds` | When the relay started |
+| `tonton_accounts`, `tonton_machines` | Accounts, and machines that joined one |
+| `tonton_machines_online` | Machines with at least one connection |
+| `tonton_sockets{role}` | Open WebSockets: `app` for Macs, `agent` for machine services and sessions |
+| `tonton_sessions{status}` | Sessions the relay holds, by status (`working`, `idle`, `offline`…) |
+| `tonton_history_entries`, `tonton_history_bytes` | The sealed history the relay holds |
+| `tonton_ws_messages_received_total{role}`, `tonton_ws_messages_sent_total{role}` | WebSocket messages since the start |
+| `tonton_ws_received_bytes_total{role}`, `tonton_ws_sent_bytes_total{role}` | Their size |
+
+Every value is a total over the whole relay: nothing sealed, no id, nothing per account. Wrong tokens count as failed
+attempts, like wrong account tokens, and the same per-IP limit applies.
 
 ## Building from source
 
