@@ -44,6 +44,8 @@ final class AppSettings: ObservableObject {
     @Published var promptTemplates: [PromptTemplate]
     /// Machines whose sessions stay out of the notch.
     @Published var hiddenMachines: Set<String>
+    /// Icon and color per machine id.
+    @Published var machineStyles: [String: MachineStyle]
     @Published var editor: EditorChoice
     @Published var terminal: TerminalChoice
     /// Session ids, in the order they were pinned.
@@ -120,6 +122,8 @@ final class AppSettings: ObservableObject {
             defaults.data(forKey: "promptTemplates").flatMap { try? JSONDecoder().decode([PromptTemplate].self, from: $0) }
             ?? Self.defaultTemplates
         hiddenMachines = Set(value("hiddenMachines", [String]()))
+        machineStyles =
+            defaults.data(forKey: "machineStyles").flatMap { try? JSONDecoder().decode([String: MachineStyle].self, from: $0) } ?? [:]
         editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
         terminal = choice("terminal", .terminal)
         pinnedSessions = value("pinnedSessions", [String]())
@@ -159,6 +163,7 @@ final class AppSettings: ObservableObject {
         persist($quickReplies, "quickReplies")
         persist($promptTemplates.compactMap { try? JSONEncoder().encode($0) }, "promptTemplates")
         persist($hiddenMachines.map { Array($0).sorted() }, "hiddenMachines")
+        persist($machineStyles.map { try? JSONEncoder().encode($0.filter { !$0.value.isEmpty }) }, "machineStyles")
         persist($editor.map(\.rawValue), "editor")
         persist($terminal.map(\.rawValue), "terminal")
         persist($pinnedSessions, "pinnedSessions")
