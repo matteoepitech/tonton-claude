@@ -46,6 +46,9 @@ final class SessionStore: ObservableObject {
     let attention = PassthroughSubject<SessionSummary, Never>()
     /// A session went from working to done.
     let finished = PassthroughSubject<SessionSummary, Never>()
+    /// A session finished a task, with how long it worked on it.
+    let taskDone = PassthroughSubject<(session: SessionSummary, worked: TimeInterval), Never>()
+    private var workTimer = WorkTimer()
     /// Sessions a usage limit stopped, the moment it resets.
     let limitLifted = PassthroughSubject<[SessionSummary], Never>()
     /// Sessions that get `continue` when a usage limit that stopped them resets. Kept while the app runs.
@@ -253,6 +256,7 @@ final class SessionStore: ObservableObject {
         let changed = previous?.status != session.status || previous?.pendingPermissions != session.pendingPermissions
         if session.status.needsAttention && changed { attention.send(session) }
         if previous?.status == .working && session.status == .idle { finished.send(session) }
+        if let worked = workTimer.update(session, previous: previous?.status) { taskDone.send((session, worked)) }
     }
 
     private static func sorted(_ list: [SessionSummary]) -> [SessionSummary] {

@@ -63,6 +63,8 @@ final class AppSettings: ObservableObject {
     @Published var openOnPermission: Bool
     @Published var showAlerts: Bool
     @Published var alertOnFinish: Bool
+    /// Confetti when a session finishes after working at least this long, 0 for never.
+    @Published var confettiAfterMinutes: Int
     /// When a session stopped by a usage limit can go again.
     @Published var alertOnLimitReset: Bool
     @Published var soundOnAttention: Bool
@@ -130,6 +132,7 @@ final class AppSettings: ObservableObject {
         openOnPermission = value("openOnPermission", false)
         showAlerts = value("showAlerts", true)
         alertOnFinish = value("alertOnFinish", false)
+        confettiAfterMinutes = value("confettiAfterMinutes", 0)
         alertOnLimitReset = value("alertOnLimitReset", true)
         soundOnAttention = value("soundOnAttention", true)
         alertSound = value("alertSound", "Glass")
@@ -168,6 +171,7 @@ final class AppSettings: ObservableObject {
         persist($openOnPermission, "openOnPermission")
         persist($showAlerts, "showAlerts")
         persist($alertOnFinish, "alertOnFinish")
+        persist($confettiAfterMinutes, "confettiAfterMinutes")
         persist($alertOnLimitReset, "alertOnLimitReset")
         persist($soundOnAttention, "soundOnAttention")
         persist($alertSound, "alertSound")

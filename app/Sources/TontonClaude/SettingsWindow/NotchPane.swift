@@ -55,6 +55,15 @@ struct NotchPane: View {
                     title: "Tell me when Claude finishes", detail: "Also alert when a session goes from working to done.",
                     isOn: $settings.alertOnFinish)
                 Hairline()
+                Row(title: "Confetti after long tasks", detail: "Celebrate a session that finishes after working this long.") {
+                    ChoiceMenu(
+                        selection: String(settings.confettiAfterMinutes),
+                        options: [("0", "Never")] + [5, 10, 20, 30, 60].map { (String($0), "\($0) minutes") }
+                    ) {
+                        settings.confettiAfterMinutes = Int($0) ?? 0
+                    }
+                }
+                Hairline()
                 ToggleRow(
                     title: "Tell me when a limit resets",
                     detail: "Also alert when a session stopped by a usage limit can go again.", isOn: $settings.alertOnLimitReset)
