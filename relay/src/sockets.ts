@@ -2,7 +2,7 @@ import type { WebSocketHandler } from 'bun'
 import type { AgentMessage, AppMessage, RelayToAgent, RelayToApp } from '../../shared/protocol'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
-import { HEALTH_MIN_INTERVAL_MS, MAX_HEALTH_BYTES, MAX_WS_MESSAGE_BYTES } from './limits'
+import { HEALTH_MIN_INTERVAL_MS, MAX_HEALTH_BYTES, MAX_RULES_BYTES, MAX_WS_MESSAGE_BYTES } from './limits'
 import { isRequestId, isSealed, isSessionId, isText, isVersion } from './validate'
 
 export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<SocketData> {
@@ -20,6 +20,8 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
         const { machineId, agentVersion } = socket.data
         if (machineId && agentVersion) ctx.agentVersions.set(machineId, agentVersion)
         ctx.hub.addMachineSocket(socket)
+        const rules = machineId ? ctx.rules.get(machineId) : undefined
+        if (rules) socket.send(JSON.stringify({ t: 'rules', rules } satisfies RelayToAgent))
         onMachinePresence(ctx, socket)
       }
     },
@@ -126,6 +128,14 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     case 'update_agent':
       if (isText(message.machineId, 32) && isSealed(message.order, 4096)) requestUpdate(ctx, socket, message.machineId, message.order)
       break
+    case 'rules': {
+      const { machineId, rules } = message
+      if (!isText(machineId, 32) || !isSealed(rules, MAX_RULES_BYTES)) return
+      if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
+      ctx.rules.set(machineId, rules)
+      ctx.hub.sendToMachine(machineId, { t: 'rules', rules })
+      break
+    }
   }
 }
 

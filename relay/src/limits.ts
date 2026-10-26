@@ -9,6 +9,8 @@ export const MAX_HEALTH_BYTES = 4096
 /** Health reports closer than this to the previous one are dropped. */
 export const HEALTH_MIN_INTERVAL_MS = 10_000
 export const MAX_PENDING_PERMISSIONS = 10
+/** Sealed auto-approve rules of one machine. */
+export const MAX_RULES_BYTES = 64 * 1024
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
 export const FINISHED_SESSION_TTL_MS = 6 * 60 * 60_000

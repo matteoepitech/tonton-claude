@@ -14,6 +14,11 @@ export class RelayContext {
   readonly agentVersions = new Map<string, string>()
   /** Latest sealed health report per machine, and when it arrived. In memory only: the next report comes within a minute. */
   readonly health = new Map<string, { blob: string; at: number }>()
+  /**
+   * The last sealed auto-approve rules the app sent per machine, handed to each of its connections. In memory only: the
+   * app sends them again whenever it connects.
+   */
+  readonly rules = new Map<string, string>()
   readonly sessions: SessionStore
   readonly signups = new RateLimiter(RATE_LIMITS.signups.limit, RATE_LIMITS.signups.windowMs)
   readonly claims = new RateLimiter(RATE_LIMITS.claims.limit, RATE_LIMITS.claims.windowMs)
@@ -41,6 +46,13 @@ export class RelayContext {
       agentVersion: this.agentVersions.get(machine.id) ?? null,
       health: this.health.get(machine.id)?.blob ?? null,
     }))
+  }
+
+  /** Forgets what the relay keeps about a machine that is gone. */
+  forgetMachine(machineId: string) {
+    this.agentVersions.delete(machineId)
+    this.rules.delete(machineId)
+    this.health.delete(machineId)
   }
 
   pushMachines(accountId: string) {
