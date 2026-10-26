@@ -65,7 +65,7 @@ export async function runChannel() {
   new SessionLinkWatcher(follow).start()
 }
 
-/** Images from the notch are written to the inbox and handed to Claude as paths it can Read. */
+/** Images and files from the notch are written to the inbox and handed to Claude as paths it can Read. */
 function withAttachments(prompt: PromptPayload): string {
   if (!prompt.images.length) return prompt.text
   mkdirSync(paths.inbox, { recursive: true, mode: 0o700 })
@@ -76,7 +76,7 @@ function withAttachments(prompt: PromptPayload): string {
     writeFileSync(file, Buffer.from(image.data, 'base64'), { mode: 0o600 })
     return file
   })
-  return `${prompt.text}\n\n[Image(s) attached from the notch: ${files.join(', ')}]`
+  return `${prompt.text}\n\n[Attached from the notch: ${files.join(', ')}]`
 }
 
 /** stdin closing covers a normal exit of Claude Code; this covers crashes. */

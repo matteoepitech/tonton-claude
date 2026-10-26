@@ -9,6 +9,8 @@ struct Composer: View {
     @EnvironmentObject var state: NotchState
     @EnvironmentObject var settings: AppSettings
     @State private var attachments: [Attachment] = []
+    /// Why the last file could not be attached.
+    @State private var attachError: String?
     @State private var text = ""
     @FocusState private var focused: Bool
     /// The template whose placeholders are being filled in, above the field.
@@ -36,6 +38,8 @@ struct Composer: View {
                 Text(readOnlyReason)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
+            } else if let attachError {
+                Text(attachError).font(.system(size: 10)).foregroundStyle(Theme.danger)
             }
         }
         .padding(.horizontal, 10)
@@ -43,10 +47,11 @@ struct Composer: View {
         .padding(.bottom, 14)
         .onDrop(of: [.fileURL, .image], isTargeted: nil) { providers in
             guard session.canChat else { return false }
-            AttachmentReader.fromDrop(providers) { attachments.append($0) }
+            AttachmentReader.fromDrop(providers) { add($0) }
             return true
         }
         .onAppear {
+            state.dropFiles = { providers in AttachmentReader.fromDrop(providers) { add($0) } }
             text = state.drafts[session.id] ?? ""
             focused = session.canChat
         }
@@ -72,23 +77,74 @@ struct Composer: View {
         .scrollIndicators(.never)
     }
 
+    /// Images as thumbnails, other files as a chip with their icon, name and size, and what the message carries.
     private var attachmentStrip: some View {
-        HStack(spacing: 6) {
-            ForEach(attachments) { attachment in
-                Image(nsImage: attachment.thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 44, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(alignment: .topTrailing) {
-                        Button {
-                            attachments.removeAll { $0.id == attachment.id }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill").font(.system(size: 12))
+        let total = attachments.reduce(0) { $0 + $1.data.count }
+        return VStack(alignment: .leading, spacing: 4) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(attachments) { attachment in
+                        Group {
+                            if attachment.isImage {
+                                Image(nsImage: attachment.thumbnail)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 44, height: 44)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                            } else {
+                                fileChip(attachment)
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .offset(x: 4, y: -4)
+                        .overlay(alignment: .topTrailing) {
+                            Button {
+                                attachments.removeAll { $0.id == attachment.id }
+                                attachError = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill").font(.system(size: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .offset(x: 4, y: -4)
+                        }
                     }
+                }
+                .padding(.top, 5)
+                .padding(.trailing, 5)
+            }
+            .scrollIndicators(.never)
+            Text(
+                "\(attachments.count) attachment\(attachments.count == 1 ? "" : "s") · \(AttachmentBudget.describe(total)) of \(AttachmentBudget.describe(AttachmentBudget.maxTotalBytes))"
+            )
+            .font(.system(size: 9))
+            .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func fileChip(_ attachment: Attachment) -> some View {
+        HStack(spacing: 6) {
+            Image(nsImage: attachment.thumbnail).resizable().frame(width: 26, height: 26)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(attachment.name).font(.system(size: 11, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                Text(AttachmentBudget.describe(attachment.data.count)).font(.system(size: 9)).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(width: 150, height: 44, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+    }
+
+    /// Joins the message if it fits what one message can carry; otherwise says why.
+    private func add(_ loaded: AttachmentReader.Loaded) {
+        switch loaded {
+        case .refused(let reason):
+            attachError = reason
+        case .attachment(let attachment):
+            if let problem = AttachmentBudget.problem(
+                adding: attachment.name, bytes: attachment.data.count, to: attachments.map(\.data.count))
+            {
+                attachError = problem
+            } else {
+                attachments.append(attachment)
+                attachError = nil
             }
         }
     }
@@ -96,14 +152,14 @@ struct Composer: View {
     private var field: some View {
         HStack(alignment: .bottom, spacing: 8) {
             Button {
-                attachments += AttachmentReader.pickFiles()
+                AttachmentReader.pickFiles().forEach(add)
             } label: {
                 Image(systemName: "paperclip")
             }
             .buttonStyle(.plain)
-            .help("Attach an image")
+            .help("Attach files, up to \(AttachmentBudget.describe(AttachmentBudget.maxTotalBytes)) per message")
             Button {
-                attachments += AttachmentReader.fromClipboard()
+                AttachmentReader.fromClipboard().forEach(add)
             } label: {
                 Image(systemName: "doc.on.clipboard")
             }

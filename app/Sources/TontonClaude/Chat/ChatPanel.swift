@@ -7,6 +7,7 @@ struct ChatPanel: View {
     @EnvironmentObject var store: SessionStore
     @EnvironmentObject var state: NotchState
     @State private var pendingTexts: [String] = []
+    @State private var dropTargeted = false
     /// The item a search jumped to, highlighted for a moment.
     @State private var highlighted: String?
 
@@ -52,7 +53,23 @@ struct ChatPanel: View {
             }
             Composer(session: session) { text, images in
                 store.sendPrompt(text, images: images, to: session.id)
-                pendingTexts.append(text.isEmpty ? "(\(images.count) image\(images.count == 1 ? "" : "s"))" : text)
+                pendingTexts.append(text.isEmpty ? "(\(images.count) attachment\(images.count == 1 ? "" : "s"))" : text)
+            }
+        }
+        // Files dropped anywhere on the conversation join the message being written.
+        .onDrop(of: [.fileURL, .image], isTargeted: $dropTargeted) { providers in
+            guard session.canChat, let dropFiles = state.dropFiles else { return false }
+            dropFiles(providers)
+            return true
+        }
+        .overlay {
+            if dropTargeted && session.canChat {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.accent.opacity(0.08)))
+                    .overlay(Label("Drop to attach to this session", systemImage: "paperclip").font(.system(size: 13, weight: .semibold)))
+                    .padding(6)
+                    .allowsHitTesting(false)
             }
         }
     }
