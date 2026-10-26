@@ -127,6 +127,7 @@ struct ToolRow: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { if result != nil { open.toggle() } }
+            if let edits = call.edits, !edits.isEmpty { EditDiff(edits: edits, path: call.summary) }
             if open, let result {
                 if let imgs = result.images, !imgs.isEmpty { ImageStrip(images: imgs) }
                 ScrollView {
