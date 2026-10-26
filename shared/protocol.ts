@@ -133,6 +133,8 @@ export type RelayToApp =
 // app -> relay
 export type AppMessage =
   | { t: 'subscribe'; sessionId: string | null }
+  // A session's history without watching it, for searching every conversation.
+  | { t: 'history'; sessionId: string }
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny' }
   | { t: 'dismiss'; sessionId: string }

@@ -153,6 +153,22 @@ describe('end to end', () => {
     expect(await open<{ text: string }>(key, session.statusDetail as string)).toEqual({ text: 'Claude needs your permission to use Bash' })
   })
 
+  test('the app can read a session it does not watch, and nobody else can', async () => {
+    app.socket.send(JSON.stringify({ t: 'subscribe', sessionId: null }))
+    const before = app.messages.length
+    app.socket.send(JSON.stringify({ t: 'history', sessionId }))
+    const history = await eventually(
+      () => app.messages.slice(before).find(m => m.t === 'history' && m.sessionId === sessionId),
+      'the history',
+    )
+    if (history.t !== 'history') throw new Error('unexpected message')
+    expect(await open<{ text: string }>(key, history.entries[0].blob)).toMatchObject({ text: 'SECRET prompt' })
+    stranger.socket.send(JSON.stringify({ t: 'history', sessionId }))
+    const empty = await eventually(() => stranger.messages.find(m => m.t === 'history' && m.sessionId === sessionId), 'its answer')
+    expect(empty.t === 'history' && empty.entries).toEqual([])
+    app.socket.send(JSON.stringify({ t: 'subscribe', sessionId }))
+  })
+
   test('another account sees nothing and cannot drive the session', async () => {
     stranger.socket.send(JSON.stringify({ t: 'subscribe', sessionId }))
     stranger.socket.send(JSON.stringify({ t: 'prompt', sessionId, payload: await seal(key, { text: 'evil', images: [] }) }))

@@ -99,6 +99,11 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
       if (sessionId) send(socket, { t: 'history', sessionId, entries: ctx.sessions.history(accountId, sessionId) })
       break
     }
+    case 'history':
+      if (isSessionId(message.sessionId)) {
+        send(socket, { t: 'history', sessionId: message.sessionId, entries: ctx.sessions.history(accountId, message.sessionId) })
+      }
+      break
     case 'prompt':
       if (!isSessionId(message.sessionId) || !isSealed(message.payload)) return
       if (!ctx.hub.sendToAgent(accountId, { t: 'prompt', sessionId: message.sessionId, payload: message.payload })) {
