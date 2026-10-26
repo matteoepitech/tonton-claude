@@ -152,6 +152,8 @@ export const decodeMachineHealth = decoder(
           return { mac: text(t.mac), broadcast: text(t.broadcast) }
         }),
       ),
+      // Names this client does not know are kept: a newer agent may start other tools.
+      tools: optional(f.tools, value => list(value, text)) as MachineHealth['tools'],
       at: text(f.at),
     }),
 )

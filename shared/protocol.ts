@@ -113,6 +113,8 @@ export interface MachineHealth {
   /** Where a Wake-on-LAN packet can reach the machine: each network card and its subnet's broadcast address. Sealed, like
    * the rest: the relay never sees the MAC addresses. Missing from older agents. */
   wake?: { mac: string; broadcast: string }[]
+  /** The coding agents installed, which the notch can start there. Missing from older agents, which only start claude. */
+  tools?: ('claude' | 'opencode')[]
   at: string
 }
 /** A tool call the agent approves without asking: the tool, and a pattern for its command, path or URL. */
@@ -135,6 +137,8 @@ export interface StartOrder {
   machineId: string
   cwd: string
   issuedAt: string
+  /** What to start. Missing: claude. The app only sends `opencode` to agents whose health lists it. */
+  tool?: 'opencode'
 }
 /** Sealed by the app: the user's answer to one question of one start, which the relay cannot reuse for another. */
 export interface StartAnswer {

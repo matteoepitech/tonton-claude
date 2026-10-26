@@ -356,11 +356,12 @@ final class SessionStore: ObservableObject {
     }
 
     /// Asks the machine's agent to start claude in the folder. Its answers come back as `session_start` messages.
-    func startSession(on machine: MachineInfo, in folder: String) {
+    func startSession(on machine: MachineInfo, in folder: String, tool: CodingTool = .claudeCode) {
         let folder = RecentFolders.normalized(folder)
-        guard connection == .connected, RecentFolders.isStartable(folder) else { return }
-        let launch = SessionLaunch(machineId: machine.id, cwd: folder)
-        guard let order = try? vault?.sealStartOrder(launchId: launch.id, machineId: machine.id, cwd: folder) else { return }
+        // Only agents that list OpenCode know how to start it: an older one would start claude instead.
+        guard connection == .connected, RecentFolders.isStartable(folder), machine.startableTools.contains(tool) else { return }
+        let launch = SessionLaunch(machineId: machine.id, cwd: folder, tool: tool)
+        guard let order = try? vault?.sealStartOrder(launchId: launch.id, machineId: machine.id, cwd: folder, tool: tool) else { return }
         launches.append(launch)
         settings.startFolders[machine.id] = RecentFolders.adding(folder, to: settings.startFolders[machine.id] ?? [])
         socket.send(["t": "start_session", "machineId": machine.id, "launchId": launch.id, "order": order])

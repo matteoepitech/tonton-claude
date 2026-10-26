@@ -10,6 +10,11 @@ public struct UsageHistory: Codable, Equatable, Sendable {
         public let project: String
         public var costUSD: Double
         public var tokens: TokenCounts
+        /// `opencode`, or nil for Claude Code and for what was recorded before the app knew OpenCode.
+        public let tool: String?
+
+        /// "Claude Code" or "OpenCode", for the totals per tool.
+        public var toolName: String { CodingTool(tool).label }
     }
 
     /// The last totals of a session.
@@ -47,7 +52,7 @@ public struct UsageHistory: Codable, Equatable, Sendable {
                     cacheWrite: max(0, tokens.cacheWrite - (previous?.tokens.cacheWrite ?? 0))))
             guard added.costUSD > 0 || added.tokens != TokenCounts() else { continue }
             let day = Self.day(previous == nil ? min(session.startedAt, now) : now, calendar: calendar)
-            add(added, day: day, machine: session.machine, project: session.project)
+            add(added, day: day, machine: session.machine, project: session.project, tool: session.tool)
         }
         prune(at: now, calendar: calendar)
     }
@@ -79,12 +84,12 @@ public struct UsageHistory: Codable, Equatable, Sendable {
         return entries.filter { $0.day == day }.map(\.costUSD).reduce(0, +)
     }
 
-    private mutating func add(_ delta: UsageDelta, day: String, machine: String, project: String) {
-        if let index = entries.firstIndex(where: { $0.day == day && $0.machine == machine && $0.project == project }) {
+    private mutating func add(_ delta: UsageDelta, day: String, machine: String, project: String, tool: String?) {
+        if let index = entries.firstIndex(where: { $0.day == day && $0.machine == machine && $0.project == project && $0.tool == tool }) {
             entries[index].costUSD += delta.costUSD
             entries[index].tokens = entries[index].tokens + delta.tokens
         } else {
-            entries.append(Entry(day: day, machine: machine, project: project, costUSD: delta.costUSD, tokens: delta.tokens))
+            entries.append(Entry(day: day, machine: machine, project: project, costUSD: delta.costUSD, tokens: delta.tokens, tool: tool))
         }
     }
 

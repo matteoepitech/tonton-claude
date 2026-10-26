@@ -93,8 +93,12 @@ public struct SessionVault: Sendable {
     }
 
     /// Starts claude in a folder of one machine. Like update orders, agents refuse old ones, and run each launch once.
-    public func sealStartOrder(launchId: String, machineId: String, cwd: String, issuedAt: Date = Date()) throws -> String {
-        let order = StartOrder(launchId: launchId, machineId: machineId, cwd: cwd, issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+    public func sealStartOrder(
+        launchId: String, machineId: String, cwd: String, tool: CodingTool = .claudeCode, issuedAt: Date = Date()
+    ) throws -> String {
+        let order = StartOrder(
+            launchId: launchId, machineId: machineId, cwd: cwd, issuedAt: ISO8601DateFormatter().string(from: issuedAt),
+            tool: tool == .openCode ? "opencode" : nil)
         return try E2E.seal(order, with: key)
     }
 

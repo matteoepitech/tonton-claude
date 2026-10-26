@@ -33,6 +33,11 @@ struct UsagePane: View {
                 Card { rows(machines) }
                 GroupLabel(text: "By project")
                 Card { rows(Array(usage.history.totals(by: \.project, days: Self.days).prefix(Self.projects))) }
+                let tools = usage.history.totals(by: \.toolName, days: Self.days)
+                if tools.count > 1 {
+                    GroupLabel(text: "By tool")
+                    Card { rows(tools) }
+                }
             }
             let grid = usage.hours.grid()
             if BusyHours.busiest(grid) != nil {

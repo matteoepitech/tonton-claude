@@ -36,6 +36,7 @@ export const FORWARDED_EVENTS = [
   'session.tool.success',
   'session.tool.failed',
   'session.step.started',
+  'session.model.switched',
   'session.step.ended',
   'session.step.failed',
   'session.compaction.ended',
@@ -45,7 +46,17 @@ export const FORWARDED_EVENTS = [
 ]
 
 /** What the notch can ask an OpenCode session: there is no `/clear` for a session that runs, only a new session. */
-export const OPENCODE_COMMANDS: SessionCommand['name'][] = ['compact', 'interrupt']
+export const OPENCODE_COMMANDS: SessionCommand['name'][] = ['compact', 'interrupt', 'model']
+
+/** One model of OpenCode's catalog. */
+export interface CatalogModel {
+  providerID: string
+  modelID: string
+  /** Its context window, when OpenCode knows it. */
+  context?: number
+  /** When it came out, to pick the latest of a family. */
+  released?: number
+}
 
 const MAX_TOOL_RESULT_CHARS = 4000
 /** As for Claude Code: larger images stay out of the conversation. */
@@ -181,8 +192,8 @@ class TrackedSession {
 export class OpenCodeTracker {
   private readonly sessions = new Map<string, TrackedSession>()
   private readonly seen = new Set<string>()
-  /** The context window of each model, by `provider/model`. */
-  private readonly windows = new Map<string, number>()
+  /** OpenCode's models, for their context window and to switch a session to a family. */
+  private catalog: CatalogModel[] = []
   /** When the event being handled happened: OpenCode 2 dates the event, not its data. */
   private eventTime = Date.now()
 
@@ -217,13 +228,40 @@ export class OpenCodeTracker {
     return this.sessions.get(sessionId)?.model
   }
 
+  /**
+   * The latest model of a family (`opus`, `sonnet`, `haiku`, as the notch's model menu offers them) that the session can
+   * switch to: from its own provider first, then from Anthropic, then from any provider that has one.
+   */
+  familyModel(sessionId: string, family: string): CatalogModel | undefined {
+    const matching = this.catalog.filter(model => model.modelID.toLowerCase().includes(family))
+    const provider = this.sessions.get(sessionId)?.model?.providerID
+    const latest = (models: CatalogModel[]) =>
+      [...models].sort((a, b) => (b.released ?? 0) - (a.released ?? 0) || b.modelID.localeCompare(a.modelID))[0]
+    return (
+      latest(matching.filter(model => model.providerID === provider)) ??
+      latest(matching.filter(model => model.providerID === 'anthropic')) ??
+      latest(matching)
+    )
+  }
+
+  /** The session now answers with this model, as the notch asked. */
+  switched(sessionId: string, model: { providerID: string; modelID: string }): SessionUpdate[] {
+    const session = this.session(sessionId)
+    if (!session) return []
+    session.model = model
+    return this.update(session, [], undefined, true)
+  }
+
   meta(sessionId: string): SessionMeta {
     const session = this.sessions.get(sessionId)
     if (!session) return {}
     const usage = [...session.usage.values()]
     const costUSD = usage.reduce((sum, step) => sum + step.cost, 0)
     const tokens = usage.reduce(addTokens, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
-    const window = session.model ? this.windows.get(`${session.model.providerID}/${session.model.modelID}`) : undefined
+    const current = session.model
+    const window = current
+      ? this.catalog.find(model => model.providerID === current.providerID && model.modelID === current.modelID)?.context
+      : undefined
     return {
       title: session.title,
       ...(usage.length ? { costUSD, tokens } : {}),
@@ -231,6 +269,7 @@ export class OpenCodeTracker {
       lastMessage: session.lastMessage,
       terminal: false,
       commands: OPENCODE_COMMANDS,
+      ...(current ? { model: current.modelID } : {}),
     }
   }
 
@@ -278,6 +317,12 @@ export class OpenCodeTracker {
         const providerID = text(model?.providerID)
         if (session && modelID && providerID) session.model = { providerID, modelID }
         return []
+      }
+      case 'session.model.switched': {
+        const model = props.model as { id?: unknown; modelID?: unknown; providerID?: unknown } | undefined
+        const modelID = text(model?.id) ?? text(model?.modelID)
+        const providerID = text(model?.providerID)
+        return modelID && providerID ? this.switched(text(props.sessionID) ?? '', { providerID, modelID }) : []
       }
       case 'session.compaction.ended':
       case 'session.compaction.succeeded':
@@ -561,11 +606,19 @@ export class OpenCodeTracker {
 
   private models(list: unknown): SessionUpdate[] {
     if (!Array.isArray(list)) return []
-    for (const model of list as { providerID?: unknown; modelID?: unknown; context?: unknown }[]) {
+    this.catalog = (list as { providerID?: unknown; modelID?: unknown; context?: unknown; released?: unknown }[]).flatMap(model => {
       const providerID = text(model?.providerID)
       const modelID = text(model?.modelID)
-      if (providerID && modelID && number(model.context) > 0) this.windows.set(`${providerID}/${modelID}`, number(model.context))
-    }
+      if (!providerID || !modelID) return []
+      return [
+        {
+          providerID,
+          modelID,
+          ...(number(model.context) > 0 ? { context: number(model.context) } : {}),
+          ...(number(model.released) > 0 ? { released: number(model.released) } : {}),
+        },
+      ]
+    })
     return [...this.sessions.values()].flatMap(session => (session.model ? this.update(session, [], undefined, true) : []))
   }
 

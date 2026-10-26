@@ -180,12 +180,13 @@ struct ChatHeader: View {
                 StatusDot(status: session.status, limit: session.fiveHourLimit)
                 Text(session.project).font(.system(size: 13, weight: .bold))
                 Text("·").font(.system(size: 12)).foregroundStyle(.secondary)
+                ToolMark(tool: session.codingTool, size: 10)
                 if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11) }
                 Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
                     Text(String(format: "$%.2f", cost)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-                        .help("Estimated by Claude Code at list price")
+                        .help("Estimated by \(session.codingTool.label) at list price")
                 }
                 Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }

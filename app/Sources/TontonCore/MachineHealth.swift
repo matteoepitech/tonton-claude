@@ -14,6 +14,8 @@ public struct MachineHealth: Codable, Equatable, Sendable {
     public let battery: Battery?
     /// Missing from older agents.
     public let wake: [WakeOnLAN.Target]?
+    /// The coding agents installed (`claude`, `opencode`). Missing from older agents, which only start claude.
+    public var tools: [String]? = nil
     public let at: String
 
     /// A report older than this means the service stopped sending: it is shown dimmed.
