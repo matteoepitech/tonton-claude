@@ -227,7 +227,7 @@ final class NotchWindowController {
             .filter { [settings] _ in settings.alertOnFinish }
             .sink { [weak self] session in self?.alert(session, finished: true) }
             .store(in: &subscriptions)
-        store.$sessions.combineLatest(settings.$showActivityDots, settings.$hiddenMachines)
+        store.sessionsPublisher.combineLatest(settings.$showActivityDots, settings.$hiddenMachines)
             .map { sessions, dots, hidden in dots && sessions.contains { $0.status.isLive && !hidden.contains($0.machine) } }
             .removeDuplicates()
             .sink { [weak self] show in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.showWings = show } }

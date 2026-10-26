@@ -2,10 +2,26 @@ import Combine
 import Foundation
 import TontonCore
 
-/// Live state of the account's sessions and machines, fed by the relay socket and decrypted with the account key.
+/// Live state of the account's sessions and machines, fed by the relay socket and decrypted with the account key, plus
+/// the sessions of this Mac read from Claude Code's files, which need neither an account nor an agent.
 @MainActor
 final class SessionStore: ObservableObject {
-    @Published private(set) var sessions: [SessionSummary] = []
+    /// From the relay.
+    @Published private var relaySessions: [SessionSummary] = []
+    /// From this Mac's files. When an agent on this Mac reports the same session, its copy wins: it can chat.
+    @Published private var localSessions: [SessionSummary] = []
+    /// Local sessions removed from the list by hand.
+    @Published private var dismissedLocal: Set<String> = []
+    var sessions: [SessionSummary] { Self.merged(relaySessions, localSessions, dismissedLocal) }
+    /// `sessions` as it changes.
+    var sessionsPublisher: AnyPublisher<[SessionSummary], Never> {
+        $relaySessions.combineLatest($localSessions, $dismissedLocal).map(Self.merged).eraseToAnyPublisher()
+    }
+
+    private static func merged(_ relay: [SessionSummary], _ local: [SessionSummary], _ dismissed: Set<String>) -> [SessionSummary] {
+        let relayIds = Set(relay.map(\.id))
+        return sorted(relay + local.filter { !relayIds.contains($0.id) && !dismissed.contains($0.id) })
+    }
     @Published private(set) var machines: [MachineInfo] = []
     /// Machines are offered the agent released with this app. Development builds (0.0.0) offer nothing.
     let agentVersion: String? = {
@@ -15,7 +31,10 @@ final class SessionStore: ObservableObject {
     /// Machines asked to update that have not answered yet.
     @Published private(set) var updatingMachines: Set<String> = []
     @Published private(set) var updateErrors: [String: String] = [:]
-    @Published private(set) var entries: [String: [Entry]] = [:]
+    @Published private var relayEntries: [String: [Entry]] = [:]
+    @Published private var localEntries: [String: [Entry]] = [:]
+    /// The relay's history once it arrived, this Mac's transcript until then.
+    var entries: [String: [Entry]] { localEntries.merging(relayEntries) { _, relay in relay } }
     @Published private(set) var connection: ConnectionState = .notConfigured
     @Published var selectedId: String? {
         didSet { if selectedId != oldValue { subscribe() } }
@@ -31,6 +50,7 @@ final class SessionStore: ObservableObject {
     private let socket = RelaySocket()
     private let api = RelayAPI()
     private var vault: SessionVault?
+    private let localWatcher = LocalSessionWatcher()
     private var subscriptions = Set<AnyCancellable>()
 
     init(settings: AppSettings) {
@@ -44,6 +64,8 @@ final class SessionStore: ObservableObject {
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.connect() }
             .store(in: &subscriptions)
+        localWatcher.onChange = { [weak self] sessions, entries in self?.localChanged(sessions, entries) }
+        localWatcher.start()
     }
 
     // MARK: Derived state
@@ -64,12 +86,15 @@ final class SessionStore: ObservableObject {
     /// The machine id of the agent on this Mac, read again from its config whenever the machines change.
     @Published private(set) var thisMac: String?
 
-    func isOnThisMac(_ session: SessionSummary) -> Bool { thisMac != nil && session.machineId == thisMac }
+    func isOnThisMac(_ session: SessionSummary) -> Bool { thisMachines.contains(session.machineId) }
+
+    /// This Mac's sessions, whether they come from its agent or straight from its files.
+    var thisMachines: Set<String> { Set([LocalSessions.machineId] + [thisMac].compactMap { $0 }) }
 
     /// The list as the notch shows it, pinned sessions first, then this Mac's.
-    var sections: [SessionSection] { SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMac) }
+    var sections: [SessionSection] { SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines) }
     var orderedSessions: [SessionSummary] {
-        SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMac)
+        SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines)
     }
 
     func togglePin(_ sessionId: String) {
@@ -90,10 +115,10 @@ final class SessionStore: ObservableObject {
     // MARK: Connection
 
     func connect() {
-        sessions = []
+        relaySessions = []
         machines = []
         thisMac = nil
-        entries = [:]
+        relayEntries = [:]
         updatingMachines = []
         updateErrors = [:]
         guard settings.connectionEnabled else {
@@ -120,7 +145,7 @@ final class SessionStore: ObservableObject {
         case .snapshot(let wireSessions, let wireMachines):
             machines = vault.machines(wireMachines)
             thisMac = settings.account.flatMap { LocalAgent.machineId(for: $0.accountId) }
-            sessions = sorted(wireSessions.map { vault.session($0, machines: machines) })
+            relaySessions = Self.sorted(wireSessions.map { vault.session($0, machines: machines) })
             // The snapshot lists every session the relay still has: pins of the others can go.
             let pins = settings.pinnedSessions.filter { id in sessions.contains { $0.id == id } }
             if pins != settings.pinnedSessions { settings.pinnedSessions = pins }
@@ -131,14 +156,14 @@ final class SessionStore: ObservableObject {
             machines = vault.machines(wireMachines)
             thisMac = settings.account.flatMap { LocalAgent.machineId(for: $0.accountId) }
         case .removed(let sessionId):
-            sessions.removeAll { $0.id == sessionId }
-            entries[sessionId] = nil
+            relaySessions.removeAll { $0.id == sessionId }
+            relayEntries[sessionId] = nil
             settings.pinnedSessions.removeAll { $0 == sessionId }
             if selectedId == sessionId { selectedId = preferredSelection() }
         case .history(let sessionId, let wireEntries):
-            entries[sessionId] = vault.entries(wireEntries)
+            relayEntries[sessionId] = vault.entries(wireEntries)
         case .entries(let sessionId, let wireEntries):
-            entries[sessionId, default: []].append(contentsOf: vault.entries(wireEntries))
+            relayEntries[sessionId, default: []].append(contentsOf: vault.entries(wireEntries))
         case .error(let text):
             lastError = text
         case .agentUpdate(let machineId, let ok, let reason, let detail):
@@ -150,21 +175,35 @@ final class SessionStore: ObservableObject {
 
     private func update(_ session: SessionSummary) {
         let previous = sessions.first { $0.id == session.id }
-        if let index = sessions.firstIndex(where: { $0.id == session.id }) {
-            sessions[index] = session
+        if let index = relaySessions.firstIndex(where: { $0.id == session.id }) {
+            relaySessions[index] = session
         } else {
-            sessions.append(session)
+            relaySessions.append(session)
         }
-        sessions = sorted(sessions)
         if selectedId == nil { selectedId = session.id }
+        notify(session, previous: previous)
+    }
 
+    private func localChanged(_ sessions: [SessionSummary], _ entries: [String: [Entry]]) {
+        let relayIds = Set(relaySessions.map(\.id))
+        let previous = Dictionary(localSessions.map { ($0.id, $0) }) { first, _ in first }
+        localSessions = sessions
+        localEntries = entries
+        for session in sessions where !relayIds.contains(session.id) && !dismissedLocal.contains(session.id) {
+            notify(session, previous: previous[session.id])
+        }
+        if selectedId == nil || !self.sessions.contains(where: { $0.id == selectedId }) { selectedId = preferredSelection() }
+    }
+
+    /// Alerts and sounds for a session that started needing the user, or finished working.
+    private func notify(_ session: SessionSummary, previous: SessionSummary?) {
         guard !settings.hiddenMachines.contains(session.machine) else { return }
         let changed = previous?.status != session.status || previous?.pendingPermissions != session.pendingPermissions
         if session.status.needsAttention && changed { attention.send(session) }
         if previous?.status == .working && session.status == .idle { finished.send(session) }
     }
 
-    private func sorted(_ list: [SessionSummary]) -> [SessionSummary] {
+    private static func sorted(_ list: [SessionSummary]) -> [SessionSummary] {
         list.sorted { a, b in
             a.status.isLive != b.status.isLive ? a.status.isLive : a.lastActivity > b.lastActivity
         }
@@ -191,6 +230,12 @@ final class SessionStore: ObservableObject {
     }
 
     func dismiss(_ sessionId: String) {
+        guard relaySessions.contains(where: { $0.id == sessionId }) else {
+            dismissedLocal.insert(sessionId)
+            settings.pinnedSessions.removeAll { $0 == sessionId }
+            if selectedId == sessionId { selectedId = preferredSelection() }
+            return
+        }
         socket.send(["t": "dismiss", "sessionId": sessionId])
     }
 

@@ -30,8 +30,8 @@ final class SessionLayoutTests: XCTestCase {
 
     func testThisMacComesAfterPinnedAndBeforeOtherMachines() {
         let sessions = [session("a", on: "server"), session("b", on: "mac"), session("c", on: "mac")]
-        let sections = SessionLayout.sections(sessions, pinned: ["c"], thisMac: "mac")
+        let sections = SessionLayout.sections(sessions, pinned: ["c"], thisMac: ["mac"])
         XCTAssertEqual(sections.map(\.kind), [.pinned, .thisMac, .machine("server")])
-        XCTAssertEqual(SessionLayout.ordered(sessions, pinned: ["c"], thisMac: "mac").map(\.id), ["c", "b", "a"])
+        XCTAssertEqual(SessionLayout.ordered(sessions, pinned: ["c"], thisMac: ["mac"]).map(\.id), ["c", "b", "a"])
     }
 }

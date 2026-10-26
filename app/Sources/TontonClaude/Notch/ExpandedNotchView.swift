@@ -11,16 +11,17 @@ struct ExpandedView: View {
             // The top band sits under the camera housing: nothing readable goes there.
             Color.clear.frame(height: max(state.notchSize.height, 30))
             Group {
-                if !settings.isConfigured {
+                // Sessions of this Mac show up without an account, so the list comes first.
+                if !settings.isConfigured && store.visibleSessions.isEmpty {
                     CenteredMessage(
-                        icon: "antenna.radiowaves.left.and.right", title: "Set up your account",
-                        detail: "Create an account on a relay, or restore one with your recovery key.",
-                        action: "Open settings"
+                        icon: "sparkles", title: "No sessions running",
+                        detail: "Start claude in a terminal on this Mac and it shows up here. For your other machines, set up an account.",
+                        action: "Set up an account"
                     ) { AppDelegate.shared?.showSettings(pane: .server) }
                 } else if store.visibleSessions.isEmpty {
                     CenteredMessage(
                         icon: "sparkles", title: "No sessions running",
-                        detail: "Start claude on a machine with the Tonton Claude agent and it shows up here.",
+                        detail: "Start claude on this Mac or on a machine with the Tonton Claude agent and it shows up here.",
                         action: "Add a machine"
                     ) { AppDelegate.shared?.showSettings(pane: .machines) }
                 } else {
@@ -84,7 +85,7 @@ struct ExpandedView: View {
         case .connecting:
             Text("connecting…").font(.system(size: 10)).foregroundStyle(.secondary)
         case .notConfigured:
-            Text("not configured").font(.system(size: 10)).foregroundStyle(Theme.accent)
+            Text("this Mac only").font(.system(size: 10)).foregroundStyle(.secondary)
         case .paused:
             Text("disconnected").font(.system(size: 10)).foregroundStyle(.secondary)
         case .failed(let why):

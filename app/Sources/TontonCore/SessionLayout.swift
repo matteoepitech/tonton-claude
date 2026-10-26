@@ -16,11 +16,12 @@ public struct SessionSection: Equatable, Sendable {
 /// machine, machines with a live session first. ⌘1…⌘9 and ⌘↑↓ follow the same order, so pinned sessions keep their
 /// shortcut.
 public enum SessionLayout {
-    public static func sections(_ sessions: [SessionSummary], pinned: [String], thisMac: String? = nil) -> [SessionSection] {
+    /// `thisMac` holds the machine ids of this Mac: its agent's, and the one of sessions read from its files.
+    public static func sections(_ sessions: [SessionSummary], pinned: [String], thisMac: Set<String> = []) -> [SessionSection] {
         let pinnedSessions = pinned.compactMap { id in sessions.first { $0.id == id } }
         let unpinned = sessions.filter { !pinned.contains($0.id) }
-        let local = unpinned.filter { $0.machineId == thisMac }
-        let rest = unpinned.filter { $0.machineId != thisMac }
+        let local = unpinned.filter { thisMac.contains($0.machineId) }
+        let rest = unpinned.filter { !thisMac.contains($0.machineId) }
         let groups = Dictionary(grouping: rest, by: \.machine)
         let machines = groups.keys.sorted { a, b in
             let liveA = groups[a, default: []].contains { $0.status.isLive }
@@ -32,7 +33,7 @@ public enum SessionLayout {
             + (local.isEmpty ? [] : [SessionSection(kind: .thisMac, sessions: local)]) + machineSections
     }
 
-    public static func ordered(_ sessions: [SessionSummary], pinned: [String], thisMac: String? = nil) -> [SessionSummary] {
+    public static func ordered(_ sessions: [SessionSummary], pinned: [String], thisMac: Set<String> = []) -> [SessionSummary] {
         sections(sessions, pinned: pinned, thisMac: thisMac).flatMap(\.sessions)
     }
 }
