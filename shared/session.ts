@@ -56,9 +56,13 @@ export interface ContextWindow {
   windowTokens: number
 }
 
-/** Without the window, Claude Code's default: 200K, unless the context is already past it, which only a 1M window allows. */
+/**
+ * Without the window, Claude Code's default: 200K. A context already past the window shows the window is bigger: it was
+ * guessed from the model's name, which Claude Code writes without `[1m]` for the 1M window too. Like `ContextUsage`.
+ */
 export function contextWindow(usedTokens: number, windowTokens?: number): ContextWindow {
-  return { usedTokens, windowTokens: windowTokens ?? (usedTokens > 200_000 ? 1_000_000 : 200_000) }
+  const window = windowTokens ?? 200_000
+  return { usedTokens, windowTokens: usedTokens > window ? Math.max(1_000_000, usedTokens) : window }
 }
 
 /** A session, decrypted. Dates are milliseconds since the epoch, null when the relay sent something else. */

@@ -166,6 +166,9 @@ describe('sessions', () => {
     expect(usageLevel({ usedPercent: 100, resetsAt: now }, now)).toBeNull()
     expect(contextWindow(150_000)).toEqual({ usedTokens: 150_000, windowTokens: 200_000 })
     expect(contextWindow(250_000)).toEqual({ usedTokens: 250_000, windowTokens: 1_000_000 })
+    // A 1M session whose model name gave 200K: what it already uses says otherwise.
+    expect(contextWindow(814_732, 200_000)).toEqual({ usedTokens: 814_732, windowTokens: 1_000_000 })
+    expect(contextWindow(150_000, 200_000)).toEqual({ usedTokens: 150_000, windowTokens: 200_000 })
     expect(contextWindow(10, 500)).toEqual({ usedTokens: 10, windowTokens: 500 })
   })
 

@@ -183,10 +183,13 @@ public struct ContextUsage: Equatable, Sendable {
     public let usedTokens: Int
     public let windowTokens: Int
 
-    /// Without the window, Claude Code's default: 200K, unless the context is already past it, which only a 1M window allows.
+    /// Without the window, Claude Code's default: 200K. A context already past the window shows the window is bigger: it
+    /// was guessed from the model's name, and Claude Code writes `claude-opus-5-5` in its transcripts for the 1M window too.
+    /// Only a 1M window allows that.
     public init(usedTokens: Int, windowTokens: Int? = nil) {
         self.usedTokens = usedTokens
-        self.windowTokens = windowTokens ?? (usedTokens > 200_000 ? 1_000_000 : 200_000)
+        let window = windowTokens ?? 200_000
+        self.windowTokens = usedTokens > window ? max(1_000_000, usedTokens) : window
     }
 
     /// 0 to 1.
