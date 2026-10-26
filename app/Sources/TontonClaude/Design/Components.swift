@@ -59,7 +59,7 @@ struct IconTile: View {
     }
 }
 
-/// White primary button, or a quiet bordered secondary one.
+/// A primary button in the text color, or a quiet bordered secondary one.
 struct ThemeButtonStyle: ButtonStyle {
     var primary = false
 
@@ -69,7 +69,7 @@ struct ThemeButtonStyle: ButtonStyle {
             .font(.system(size: 12.5, weight: .medium))
             .padding(.horizontal, 14)
             .frame(minWidth: 30, minHeight: 30)
-            .foregroundStyle(primary ? Color.black : Theme.text)
+            .foregroundStyle(primary ? Theme.bg : Theme.text)
             .background(RoundedRectangle(cornerRadius: 7).fill(primary ? Theme.text : Theme.raised))
             .overlay(RoundedRectangle(cornerRadius: 7).stroke(primary ? Color.clear : Theme.borderStrong))
             .opacity(configuration.isPressed ? 0.8 : 1)
@@ -134,7 +134,7 @@ struct ThemeField: View {
         .focused($focused)
         .padding(.horizontal, 10)
         .frame(height: 32)
-        .background(RoundedRectangle(cornerRadius: 7).fill(Color.black.opacity(0.35)))
+        .background(RoundedRectangle(cornerRadius: 7).fill(Theme.code))
         .overlay(RoundedRectangle(cornerRadius: 7).stroke(focused ? Theme.accent.opacity(0.7) : Theme.borderStrong))
     }
 }
