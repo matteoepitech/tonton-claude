@@ -40,11 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.$systemNotifications.removeDuplicates().filter { $0 }.sink { _ in Notifier.requestAccess() }.store(in: &subscriptions)
 
         store.connect()
-        let ranBefore = UserDefaults.standard.bool(forKey: "welcomed")
+        let welcomed = UserDefaults.standard.bool(forKey: "welcomed")
         // Once, to introduce the app: this Mac's sessions work without an account, so it is not a requirement.
-        if !settings.isConfigured && !ranBefore { showSettings() }
+        if !settings.isConfigured && !welcomed { showSettings() }
         UserDefaults.standard.set(true, forKey: "welcomed")
-        showWhatsNewAfterUpdate(ranBefore: ranBefore)
+        // Versions before 0.6.0 kept no `welcomed`, but a configured app ran before.
+        showWhatsNewAfterUpdate(ranBefore: welcomed || settings.isConfigured)
         pendingLinks.forEach(open)
         pendingLinks = []
     }
@@ -67,17 +68,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         whatsNew.show(version: version)
     }
 
-    /// The notes of a new version, once. A fresh install records its version without showing them, and a launch that
-    /// can't load them tries again next time.
+    /// The notes of a new version, once. A launch that can't reach GitHub tries again next time.
     private func showWhatsNewAfterUpdate(ranBefore: Bool) {
         guard let version = Self.version else { return }
-        let due = WhatsNew.shouldShow(current: version, shown: settings.whatsNewVersion, ranBefore: ranBefore)
-        guard due, settings.showWhatsNew else {
-            if version.compare(settings.whatsNewVersion, options: .numeric) == .orderedDescending { settings.whatsNewVersion = version }
-            return
-        }
-        Task {
-            if await whatsNew.showAfterUpdate(version: version) { settings.whatsNewVersion = version }
+        switch WhatsNew.atLaunch(current: version, shown: settings.whatsNewVersion, ranBefore: ranBefore, enabled: settings.showWhatsNew) {
+        case .show:
+            Task { if await whatsNew.showAfterUpdate(version: version) != .unreachable { settings.whatsNewVersion = version } }
+        case .record: settings.whatsNewVersion = version
+        case .nothing: break
         }
     }
 

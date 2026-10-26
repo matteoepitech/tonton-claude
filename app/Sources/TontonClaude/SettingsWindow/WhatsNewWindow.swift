@@ -10,23 +10,28 @@ final class WhatsNewWindowController {
     private let model = WhatsNewModel()
     private var window: NSWindow?
 
-    /// Opens only once the notes are in: an update never greets the user with an error. Returns whether it opened.
-    func showAfterUpdate(version: String) async -> Bool {
-        guard let release = await Self.fetch(version) else { return false }
+    /// Opens only once the notes are in: an update never greets the user with an error. Returns what GitHub said.
+    func showAfterUpdate(version: String) async -> WhatsNew.Answer {
+        let answer = await Self.fetch(version)
+        guard case .notes(let release) = answer else { return answer }
         model.version = version
         model.state = .loaded(release)
         present()
-        return true
+        return answer
     }
 
     func show(version: String) {
         model.version = version
-        if case .loaded = model.state, window?.isVisible == true { return present() }
+        // The notes of this run's version, once in, stay.
+        if case .loaded = model.state { return present() }
         model.state = .loading
         present()
         Task {
-            let release = await Self.fetch(version)
-            model.state = release.map(WhatsNewModel.State.loaded) ?? .failed
+            guard case .notes(let release) = await Self.fetch(version) else {
+                if case .loading = model.state { model.state = .failed }
+                return
+            }
+            model.state = .loaded(release)
         }
     }
 
@@ -57,17 +62,19 @@ final class WhatsNewWindowController {
         return window
     }
 
-    private static func fetch(_ version: String) async -> WhatsNew.Release? {
-        guard let url = WhatsNew.releaseURL(for: version) else { return nil }
-        var request = URLRequest(url: url, timeoutInterval: 15)
+    private static func fetch(_ version: String) async -> WhatsNew.Answer {
+        guard let url = WhatsNew.releaseURL(for: version) else { return .none }
+        var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        guard let (data, response) = try? await URLSession(configuration: .ephemeral).data(for: request),
-            (response as? HTTPURLResponse)?.statusCode == 200
-        else {
-            Logger.app.info("what's new: no release notes for \(version, privacy: .public)")
-            return nil
-        }
-        return WhatsNew.Release.decode(data)
+        // At login the network may not be up yet: wait for it a little rather than fail at once.
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForResource = 60
+        let result = try? await URLSession(configuration: configuration).data(for: request)
+        let answer = WhatsNew.Answer(status: (result?.1 as? HTTPURLResponse)?.statusCode, data: result?.0 ?? Data())
+        if case .notes = answer { return answer }
+        Logger.app.info("what's new: no release notes for \(version, privacy: .public)")
+        return answer
     }
 }
 

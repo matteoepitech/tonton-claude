@@ -4,19 +4,30 @@ import XCTest
 
 final class WhatsNewTests: XCTestCase {
     func testTheNotesShowOnceAfterAnUpdateOnly() {
-        // A fresh install, then the first launch of an update.
-        XCTAssertFalse(WhatsNew.shouldShow(current: "0.7.0", shown: nil, ranBefore: false))
-        XCTAssertTrue(WhatsNew.shouldShow(current: "0.7.0", shown: nil, ranBefore: true))
-        XCTAssertTrue(WhatsNew.shouldShow(current: "0.7.0", shown: "", ranBefore: true))
-        XCTAssertTrue(WhatsNew.shouldShow(current: "0.10.0", shown: "0.9.2", ranBefore: true))
+        func launch(_ current: String?, shown: String = "", ranBefore: Bool = true, enabled: Bool = true) -> WhatsNew.Launch {
+            WhatsNew.atLaunch(current: current, shown: shown, ranBefore: ranBefore, enabled: enabled)
+        }
+        // A fresh install records its version, the first launch of an update shows the notes.
+        XCTAssertEqual(launch("0.7.0", ranBefore: false), .record)
+        XCTAssertEqual(launch("0.7.0"), .show)
+        XCTAssertEqual(launch("0.10.0", shown: "0.9.2"), .show)
+        // Turned off: the version is still recorded, so turning it on later doesn't bring old notes back.
+        XCTAssertEqual(launch("0.7.0", shown: "0.6.0", enabled: false), .record)
         // Once, and never for an older version put back.
-        XCTAssertFalse(WhatsNew.shouldShow(current: "0.7.0", shown: "0.7.0", ranBefore: true))
-        XCTAssertFalse(WhatsNew.shouldShow(current: "0.6.0", shown: "0.7.0", ranBefore: true))
-        // Builds that are not releases.
-        XCTAssertFalse(WhatsNew.shouldShow(current: nil, shown: "0.6.0", ranBefore: true))
-        XCTAssertFalse(WhatsNew.shouldShow(current: "dev", shown: "0.6.0", ranBefore: true))
-        XCTAssertFalse(WhatsNew.shouldShow(current: "0.7.0-beta", shown: "0.6.0", ranBefore: true))
-        XCTAssertFalse(WhatsNew.shouldShow(current: "0.0.0", shown: "", ranBefore: true))
+        XCTAssertEqual(launch("0.7.0", shown: "0.7.0"), .nothing)
+        XCTAssertEqual(launch("0.6.0", shown: "0.7.0"), .nothing)
+        // Builds that are not releases neither show nor record anything.
+        for version in [nil, "dev", "0.7.0-rc1", "0.0.0"] { XCTAssertEqual(launch(version, shown: "0.6.0"), .nothing) }
+    }
+
+    func testOnlyAnUnreachableGitHubIsWorthAnotherTry() throws {
+        let page = "https://github.com/matteoepitech/tonton-claude/releases/tag/v0.7.0"
+        let notes = Data(#"{"html_url":"\#(page)","body":"Hi"}"#.utf8)
+        let release = WhatsNew.Release(body: "Hi", page: try XCTUnwrap(URL(string: page)))
+        XCTAssertEqual(WhatsNew.Answer(status: 200, data: notes), .notes(release))
+        XCTAssertEqual(WhatsNew.Answer(status: 200, data: Data(#"{"html_url":"\#(page)","body":""}"#.utf8)), .none)
+        XCTAssertEqual(WhatsNew.Answer(status: 404, data: Data()), .none)
+        for status in [nil, 403, 500] { XCTAssertEqual(WhatsNew.Answer(status: status, data: Data()), .unreachable) }
     }
 
     func testTheReleaseOfAVersionIsItsTag() {
@@ -42,5 +53,6 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertEqual(WhatsNew.readable(notes), "**Chat**\n• Tables\n  • Nested\n-not a list\n\n**Full changelog**: x")
         // Only a first heading repeats the title.
         XCTAssertEqual(WhatsNew.readable("## What's new\n\nText\n## What's new"), "Text\n## What's new")
+        XCTAssertEqual(WhatsNew.readable("## What's Changed\n* feat: x by @me"), "• feat: x by @me")
     }
 }
