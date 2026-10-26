@@ -4,11 +4,12 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { open } from '../agent/src/crypto'
 import type { ServiceStatus } from '../agent/src/service/status'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
-import { encodeAccountToken } from '../shared/account-token'
-import type { MachineSummary, RelayToApp } from '../shared/protocol'
+import { encodeAccountToken, parseAccountToken } from '../shared/account-token'
+import type { MachineHealth, MachineSummary, RelayToApp } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-service-'))
@@ -101,6 +102,16 @@ test('the service keeps the machine online without any session', async () => {
   await eventually(() => first.machines[0]?.online, 'the machine online')
   expect(first.machines[0].agentVersion).toMatch(/^\d+\.\d+\.\d+$/)
   expect(await eventually(() => status()?.state === 'connected' && status(), 'the status')).toMatchObject({ relay: first.url })
+})
+
+test('the service reports the machine health, sealed with the account key', async () => {
+  const blob = await eventually(() => first.machines[0]?.health, 'the health report')
+  expect(blob).not.toContain('memoryTotal')
+  const key = parseAccountToken(firstToken)?.key ?? ''
+  const health = await open<MachineHealth>(key, blob)
+  expect(health.memoryTotal).toBeGreaterThan(0)
+  expect(health.cpu).toBeGreaterThanOrEqual(0)
+  expect(health.cpu).toBeLessThanOrEqual(1)
 })
 
 test('only one service runs per machine', async () => {

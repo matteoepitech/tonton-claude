@@ -62,7 +62,8 @@ public struct SessionVault: Sendable {
                 createdAt: ISO8601.parse($0.createdAt) ?? .distantPast,
                 lastSeen: $0.lastSeen.flatMap(ISO8601.parse),
                 online: $0.online,
-                agentVersion: $0.agentVersion
+                agentVersion: $0.agentVersion,
+                health: $0.health.flatMap { open($0, as: MachineHealth.self) }
             )
         }
     }

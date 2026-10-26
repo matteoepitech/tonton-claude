@@ -12,6 +12,8 @@ export class RelayContext {
   readonly hub = new Hub()
   /** Installed agent version per machine, as last reported. Rebuilt from reconnecting agents after a restart. */
   readonly agentVersions = new Map<string, string>()
+  /** Latest sealed health report per machine, and when it arrived. In memory only: the next report comes within a minute. */
+  readonly health = new Map<string, { blob: string; at: number }>()
   readonly sessions: SessionStore
   readonly signups = new RateLimiter(RATE_LIMITS.signups.limit, RATE_LIMITS.signups.windowMs)
   readonly claims = new RateLimiter(RATE_LIMITS.claims.limit, RATE_LIMITS.claims.windowMs)
@@ -37,6 +39,7 @@ export class RelayContext {
       lastSeen: machine.lastSeen,
       online: this.hub.isMachineOnline(machine.id),
       agentVersion: this.agentVersions.get(machine.id) ?? null,
+      health: this.health.get(machine.id)?.blob ?? null,
     }))
   }
 

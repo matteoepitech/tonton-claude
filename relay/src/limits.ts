@@ -4,6 +4,10 @@ export const MAX_ENTRIES_PER_SESSION = 800
 export const MAX_SESSION_BYTES = 16 * 1024 * 1024
 export const MAX_ACCOUNT_BYTES = 128 * 1024 * 1024
 export const MAX_BLOB_BYTES = 8 * 1024 * 1024
+/** A machine health report is a few numbers. */
+export const MAX_HEALTH_BYTES = 4096
+/** Health reports closer than this to the previous one are dropped. */
+export const HEALTH_MIN_INTERVAL_MS = 10_000
 export const MAX_PENDING_PERMISSIONS = 10
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 

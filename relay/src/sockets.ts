@@ -2,7 +2,7 @@ import type { WebSocketHandler } from 'bun'
 import type { AgentMessage, AppMessage, RelayToAgent, RelayToApp } from '../../shared/protocol'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
-import { MAX_WS_MESSAGE_BYTES } from './limits'
+import { HEALTH_MIN_INTERVAL_MS, MAX_HEALTH_BYTES, MAX_WS_MESSAGE_BYTES } from './limits'
 import { isRequestId, isSealed, isSessionId, isText, isVersion } from './validate'
 
 export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<SocketData> {
@@ -49,6 +49,13 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
   if (!machineId) return
   if (message?.t === 'update_result') {
     onUpdateResult(ctx, accountId, machineId, message)
+    return
+  }
+  if (message?.t === 'health') {
+    const previous = ctx.health.get(machineId)
+    if (!isSealed(message.health, MAX_HEALTH_BYTES) || (previous && Date.now() - previous.at < HEALTH_MIN_INTERVAL_MS)) return
+    ctx.health.set(machineId, { blob: message.health, at: Date.now() })
+    ctx.pushMachines(accountId)
     return
   }
   if (!isSessionId(message?.sessionId)) return

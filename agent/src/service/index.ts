@@ -1,13 +1,17 @@
 import { RelayConnection } from '../channel/relay-connection'
 import { loadConfig, VERSION } from '../config'
+import { seal } from '../crypto'
 import { log } from '../log'
 import { handleUpdateOrder } from '../update'
 import { acquireLock, releaseLock } from './control'
+import { cpuTimes, readHealth } from './health'
 import { writeStatus } from './status'
 import { runTray } from './tray'
 
 /** Picks up `tonton relay` changes. */
 const CONFIG_POLL_MS = 2000
+/** How often the machine's CPU, memory and battery go to the app. */
+const HEALTH_INTERVAL_MS = 60_000
 
 /**
  * Runs in the background from login: keeps the machine reachable so the app can update it even with no claude open,
@@ -42,7 +46,10 @@ export async function runService(args: string[]) {
     log('service: connecting', { relay: config.server })
     writeStatus('connecting', config.server)
     const relay: RelayConnection = new RelayConnection(config, 'service', {
-      connected: () => writeStatus('connected', config.server),
+      connected: () => {
+        writeStatus('connected', config.server)
+        reportHealth()
+      },
       disconnected: () => writeStatus('connecting', config.server),
       revoked: () => writeStatus('revoked', config.server),
       message: message => {
@@ -52,7 +59,19 @@ export async function runService(args: string[]) {
     connection = relay
     relay.connect()
   }
+  // Sealed with the account key: the relay only passes the numbers on.
+  let cpuSample = cpuTimes()
+  const reportHealth = () => {
+    const current = connection
+    const config = loadConfig()
+    if (!current || !config) return
+    const { health, sample } = readHealth(cpuSample)
+    cpuSample = sample
+    current.post(async () => ({ t: 'health', health: await seal(config.key, health) }))
+  }
+
   follow()
   setInterval(follow, CONFIG_POLL_MS)
+  setInterval(reportHealth, HEALTH_INTERVAL_MS)
   runTray(stop)
 }
