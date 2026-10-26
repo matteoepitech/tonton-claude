@@ -12,18 +12,23 @@ struct Composer: View {
     @State private var text = ""
     @FocusState private var focused: Bool
 
+    private var readOnlyReason: String {
+        if session.machineId == LocalSessions.machineId {
+            return "Read only: install the agent on this Mac (Settings › Machines) to reply from the notch."
+        }
+        return session.agentOnline
+            ? "Read only: start claude from a new terminal to message this session." : "Session offline: history only."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if session.canChat && !settings.quickReplies.isEmpty { quickReplies }
             if !attachments.isEmpty { attachmentStrip }
             field
             if !session.canChat {
-                Text(
-                    session.agentOnline
-                        ? "Read only: start claude from a new terminal to message this session." : "Session offline: history only."
-                )
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+                Text(readOnlyReason)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 10)

@@ -11,7 +11,7 @@ struct SessionListView: View {
             query.isEmpty || $0.project.localizedCaseInsensitiveContains(query) || $0.machine.localizedCaseInsensitiveContains(query)
                 || ($0.title?.localizedCaseInsensitiveContains(query) ?? false)
         }
-        let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions, thisMac: store.thisMac)
+        let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions, thisMac: store.thisMachines)
         VStack(spacing: 0) {
             if store.visibleSessions.count > 5 {
                 HStack(spacing: 6) {

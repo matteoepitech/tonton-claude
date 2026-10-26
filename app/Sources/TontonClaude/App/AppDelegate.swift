@@ -32,7 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.$systemNotifications.removeDuplicates().filter { $0 }.sink { _ in Notifier.requestAccess() }.store(in: &subscriptions)
 
         store.connect()
-        if !settings.isConfigured { showSettings() }
+        // Once, to introduce the app: this Mac's sessions work without an account, so it is not a requirement.
+        if !settings.isConfigured && !UserDefaults.standard.bool(forKey: "welcomed") { showSettings() }
+        UserDefaults.standard.set(true, forKey: "welcomed")
         pendingLinks.forEach(open)
         pendingLinks = []
     }
