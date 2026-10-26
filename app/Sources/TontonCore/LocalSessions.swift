@@ -86,6 +86,8 @@ public enum LocalSessions {
         public private(set) var contextTokens: Int?
         public private(set) var contextWindow: Int?
         public private(set) var model: String?
+        /// Shells, monitors and agents started in the background that have not reported back.
+        public private(set) var background = BackgroundTasks()
         /// API responses already in `tokens`.
         private var countedRequests: Set<String> = []
 
@@ -97,8 +99,10 @@ public enum LocalSessions {
                 tokens = nil
                 countedRequests = []
                 contextTokens = nil
+                background = BackgroundTasks()
             }
             for line in read.lines {
+                background.read(line)
                 let parsed = Transcript.parse(line)
                 entries += parsed.entries
                 if let title = parsed.title { self.title = title }
@@ -133,10 +137,13 @@ public enum LocalSessions {
         let cwd = record.cwd.hasSuffix("/") && record.cwd.count > 1 ? String(record.cwd.dropLast()) : record.cwd
         let started = record.startedAt.map { Date(timeIntervalSince1970: $0 / 1000) } ?? Date()
         let updated = record.updatedAt.map { Date(timeIntervalSince1970: $0 / 1000) } ?? started
+        // Done with its turn, but a task it started in the background has yet to report back: still at work.
+        let waiting = endedAt == nil && record.sessionStatus == .idle ? conversation.background.waiting() : nil
+        let status: SessionStatus = endedAt != nil ? .ended : waiting != nil ? .working : record.sessionStatus
         return SessionSummary(
             id: record.sessionId, machineId: machineId, machine: "This Mac", platform: "darwin", cwd: cwd,
             project: URL(fileURLWithPath: cwd).lastPathComponent, title: conversation.title,
-            status: endedAt == nil ? record.sessionStatus : .ended, statusText: nil, agentOnline: true, canChat: false,
+            status: status, statusText: waiting, agentOnline: true, canChat: false,
             pendingPermissions: [], costUSD: conversation.costUSD, startedAt: started, lastActivity: endedAt ?? updated,
             lastMessage: conversation.lastMessage, fiveHourLimit: conversation.fiveHourLimit,
             sevenDayLimit: conversation.sevenDayLimit, tokens: conversation.tokens,
