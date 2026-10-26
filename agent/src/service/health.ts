@@ -1,6 +1,6 @@
 // What the background service reports about its machine: CPU, memory and battery, read with what each OS ships.
 import { readdirSync, readFileSync } from 'node:fs'
-import { cpus, freemem, totalmem } from 'node:os'
+import { cpus, freemem, networkInterfaces, totalmem } from 'node:os'
 import type { MachineHealth } from '../../../shared/protocol'
 
 type Battery = MachineHealth['battery']
@@ -78,6 +78,29 @@ function battery(): Battery {
   }
 }
 
+/** The broadcast address of an IPv4 subnet, e.g. 192.168.1.255 for 192.168.1.20/255.255.255.0. */
+export function broadcastAddress(address: string, netmask: string): string | null {
+  const ip = address.split('.').map(Number)
+  const mask = netmask.split('.').map(Number)
+  if (ip.length !== 4 || mask.length !== 4 || [...ip, ...mask].some(part => !Number.isInteger(part) || part < 0 || part > 255)) return null
+  return ip.map((part, index) => (part | (~mask[index] & 255)) & 255).join('.')
+}
+
+type Interfaces = ReturnType<typeof networkInterfaces>
+
+/** The network cards a Wake-on-LAN packet can reach, once each: physical IPv4 interfaces with a real MAC address. */
+export function wakeTargets(interfaces: Interfaces = networkInterfaces()): NonNullable<MachineHealth['wake']> {
+  const targets = new Map<string, string>()
+  for (const entries of Object.values(interfaces)) {
+    for (const entry of entries ?? []) {
+      if (entry.family !== 'IPv4' || entry.internal || /^(00:){5}00$/.test(entry.mac)) continue
+      const broadcast = broadcastAddress(entry.address, entry.netmask)
+      if (broadcast && !targets.has(entry.mac)) targets.set(entry.mac, broadcast)
+    }
+  }
+  return [...targets].map(([mac, broadcast]) => ({ mac, broadcast }))
+}
+
 /** One report; `since` is the CPU sample taken at the previous one. */
 export function readHealth(since: CpuTimes): { health: MachineHealth; sample: CpuTimes } {
   const sample = cpuTimes()
@@ -88,6 +111,7 @@ export function readHealth(since: CpuTimes): { health: MachineHealth; sample: Cp
       memoryUsed: total - freemem(),
       memoryTotal: total,
       battery: battery(),
+      wake: wakeTargets(),
       at: new Date().toISOString(),
     },
     sample,

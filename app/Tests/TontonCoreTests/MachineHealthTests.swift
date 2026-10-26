@@ -26,7 +26,7 @@ final class MachineHealthTests: XCTestCase {
     }
 
     func testAReportFromMinutesAgoIsStale() {
-        let health = MachineHealth(cpu: 0, memoryUsed: 1, memoryTotal: 2, battery: nil, at: "2026-10-26T12:00:00.000Z")
+        let health = MachineHealth(cpu: 0, memoryUsed: 1, memoryTotal: 2, battery: nil, wake: nil, at: "2026-10-26T12:00:00.000Z")
         let at = Date(timeIntervalSince1970: 1_793_016_000)  // 2026-10-26T12:00:00Z
         XCTAssertFalse(health.isStale(now: at.addingTimeInterval(60)))
         XCTAssertTrue(health.isStale(now: at.addingTimeInterval(4 * 60)))

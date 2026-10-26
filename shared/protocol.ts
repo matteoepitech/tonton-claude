@@ -79,6 +79,9 @@ export interface MachineHealth {
   memoryTotal: number
   /** Null on machines without a battery. */
   battery: { percent: number; charging: boolean } | null
+  /** Where a Wake-on-LAN packet can reach the machine: each network card and its subnet's broadcast address. Sealed, like
+   * the rest: the relay never sees the MAC addresses. Missing from older agents. */
+  wake?: { mac: string; broadcast: string }[]
   at: string
 }
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
