@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { broadcastAddress, cpuLoad, parsePmset, parseSysBattery, parseWin32Battery, readHealth, wakeTargets } from '../src/service/health'
 
 describe('machine health', () => {
@@ -53,5 +53,19 @@ describe('machine health', () => {
     expect(health.cpu).toBeLessThanOrEqual(1)
     expect(sample.total).toBeGreaterThan(0)
     expect(Array.isArray(health.wake)).toBe(true)
+  })
+})
+
+describe('commands of the report', () => {
+  test('run hidden: on Windows the service has no console, and each would open a PowerShell window', () => {
+    const spawn = spyOn(Bun, 'spawnSync')
+    try {
+      readHealth({ busy: 0, total: 0 })
+      // Linux reads its battery from files: there may be nothing to run.
+      for (const [, options] of spawn.mock.calls) expect(options).toMatchObject({ windowsHide: true })
+      if (process.platform !== 'linux') expect(spawn).toHaveBeenCalled()
+    } finally {
+      spawn.mockRestore()
+    }
   })
 })

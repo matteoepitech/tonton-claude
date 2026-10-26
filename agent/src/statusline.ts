@@ -72,7 +72,8 @@ export function defaultLine(input: StatusLineInput): string {
 /** Runs the command through a shell like Claude Code does, with the same input. Its output only counts if it succeeds. */
 async function runUserCommand(command: string, input: string): Promise<string> {
   try {
-    const child = Bun.spawn([...shell(), command], { stdin: new Blob([input]), stdout: 'pipe', stderr: 'ignore' })
+    // Hidden on Windows, where Claude Code started without a console would get a window for each refresh.
+    const child = Bun.spawn([...shell(), command], { stdin: new Blob([input]), stdout: 'pipe', stderr: 'ignore', windowsHide: true })
     const timer = setTimeout(() => child.kill(), USER_COMMAND_TIMEOUT_MS)
     const [output, code] = await Promise.all([new Response(child.stdout).text(), child.exited])
     clearTimeout(timer)
