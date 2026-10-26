@@ -155,14 +155,21 @@ final class SessionStore: ObservableObject {
 
     /// Sessions shown in the notch: hidden machines and long-finished sessions are left out.
     var visibleSessions: [SessionSummary] {
-        let hours = settings.hideFinishedAfterHours
-        let cutoff = hours > 0 ? Date().addingTimeInterval(-Double(hours) * 3600) : nil
+        let now = Date()
         return sessions.filter { session in
-            if settings.hiddenMachines.contains(session.machine) { return false }
-            if let cutoff, !session.status.isLive, session.lastActivity < cutoff { return false }
-            return true
+            !settings.hiddenMachines.contains(session.machine)
+                && FinishedSessions.isShown(session, hideAfterHours: settings.hideFinishedAfterHours, now: now)
         }
     }
+
+    /// Finished sessions the setting keeps out of the list, for the eye button.
+    var hiddenFinishedCount: Int {
+        sessions.filter { !settings.hiddenMachines.contains($0.machine) && !$0.status.isLive }.count
+            - visibleSessions.filter { !$0.status.isLive }.count
+    }
+
+    /// Sessions of the shown machines, finished ones included: the list header stays while all are hidden.
+    var hasSessions: Bool { sessions.contains { !settings.hiddenMachines.contains($0.machine) } }
 
     /// The machine id of the agent on this Mac, read again from its config whenever the machines change.
     @Published private(set) var thisMac: String?
