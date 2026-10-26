@@ -3,8 +3,9 @@
 // moves it on.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
-import type { StartAnswer, StartOrder, StartState } from '../../shared/protocol'
+import type { StartAnswer, StartDetail, StartOrder, StartState } from '../../shared/protocol'
 import type { RelayConnection } from './channel/relay-connection'
 import { type AgentConfig, paths } from './config'
 import { open, seal } from './crypto'
@@ -24,12 +25,16 @@ export const QUESTIONS = [
   { marker: 'Quick safety check', text: 'Claude Code asks whether you trust the files in this folder.' },
 ]
 
-const answers = new Map<string, (confirm: boolean) => void>()
+/** The question each start waits on. */
+const answers = new Map<string, { step: number; resolve: (confirm: boolean) => void }>()
+/** Starts already run, so a replayed order does nothing. */
+const seen = new Map<string, number>()
 
-/** Where hooks link sessions, and the shell claude starts from. Tests point them elsewhere. */
+/** Where hooks link sessions, the shell claude starts from and the folder `~` stands for. Tests point them elsewhere. */
 export interface LaunchOptions {
   run?: string
   shell?: string
+  home?: string
 }
 
 /** A start order from the relay. */
@@ -46,40 +51,53 @@ export async function handleStartOrder(
   relay: Pick<RelayConnection, 'post'>,
   options: LaunchOptions = {},
 ) {
-  const report = (state: StartState, text?: string, sessionId?: string) =>
+  const report: Report = (state, detail, sessionId) =>
     relay.post(async () => ({
       t: 'session_start',
       launchId,
       state,
-      detail: text ? await seal(config.key, { text }) : null,
+      detail: detail ? await seal(config.key, detail) : null,
       ...(sessionId ? { sessionId } : {}),
     }))
+  const fail = (text: string) => report('failed', { text })
   const order = await readOrder<StartOrder>(config.key, sealed)
-  if (!order || typeof order.cwd !== 'string') return report('failed', 'The order is not sealed with the account key, or it expired.')
-  if (!isAbsolute(order.cwd) || !isDirectory(order.cwd)) return report('failed', `${order.cwd} is not a folder on this machine.`)
-  if (process.platform === 'win32') return report('failed', 'Starting sessions from the notch needs tmux, which Windows does not have.')
-  if (!tmux(['-V']).ok) return report('failed', 'Install tmux on this machine to start sessions from the notch.')
-  await runLaunch(launchId, order.cwd, report, options)
+  if (!order || order.launchId !== launchId || typeof order.cwd !== 'string')
+    return fail('The order is not sealed with the account key, or it expired.')
+  if (!firstRun(launchId)) return
+  const cwd = fromHome(order.cwd, options.home)
+  if (!isAbsolute(cwd) || !isDirectory(cwd)) return fail(`${order.cwd} is not a folder on this machine.`)
+  if (process.platform === 'win32') return fail('Starting sessions from the notch needs tmux, which Windows does not have.')
+  if (!tmux(['-V']).ok) return fail('Install tmux on this machine to start sessions from the notch.')
+  await runLaunch(launchId, cwd, report, options)
+}
+
+type Report = (state: StartState, detail?: StartDetail, sessionId?: string) => void
+
+function firstRun(launchId: string, now = Date.now()): boolean {
+  for (const [id, at] of seen) if (now - at > 2 * ORDER_TTL_MS) seen.delete(id)
+  if (seen.has(launchId)) return false
+  seen.set(launchId, now)
+  return true
 }
 
 /** The user's answer to the question a start is waiting on. */
 export async function handleStartAnswer(config: AgentConfig, launchId: string, sealed: string) {
   const answer = await readOrder<StartAnswer>(config.key, sealed)
-  const resolve = answers.get(launchId)
-  if (answer && resolve) resolve(answer.confirm === true)
+  const waiting = answers.get(launchId)
+  if (answer?.launchId === launchId && waiting && answer.step === waiting.step) waiting.resolve(answer.confirm === true)
 }
 
 async function runLaunch(
   launchId: string,
   cwd: string,
-  report: (state: StartState, text?: string, sessionId?: string) => void,
+  report: Report,
   { run = paths.run, shell = process.env.SHELL || '/bin/sh' }: LaunchOptions,
 ) {
   const name = `tonton-${launchId}`
   const startedAt = Date.now()
   // A login and interactive shell sets the user's PATH and the claude launcher, so the session gets the channel.
   const created = tmux(['new-session', '-d', '-s', name, '-c', cwd, '-x', '200', '-y', '50', shell, '-lic', 'claude'])
-  if (!created.ok) return report('failed', `tmux could not start: ${created.output}`)
+  if (!created.ok) return report('failed', { text: `tmux could not start: ${created.output}` })
   report('starting')
   const answered = new Set<string>()
   let screen = ''
@@ -87,31 +105,32 @@ async function runLaunch(
   while (Date.now() < deadline) {
     await Bun.sleep(POLL_MS)
     const capture = tmux(['capture-pane', '-p', '-t', name])
-    if (!capture.ok) return report('failed', `claude stopped before it was ready.\n\n${lastLines(screen)}`)
+    if (!capture.ok) return report('failed', { text: `claude stopped before it was ready.\n\n${lastLines(screen)}` })
     screen = capture.output
     // A question already answered can stay on screen a moment: only a new one waits for the user.
     const question = QUESTIONS.find(q => screen.includes(q.marker) && !answered.has(q.marker))
     if (!question) {
       const sessionId = newSession(cwd, startedAt, run)
-      if (sessionId) return report('started', `Running in tmux session ${name}.`, sessionId)
+      if (sessionId) return report('started', { text: `Running in tmux session ${name}.` }, sessionId)
       continue
     }
-    report('asking', `${question.text}\n\n${lastLines(screen)}`)
-    const confirm = await waitForAnswer(launchId)
+    const step = answered.size + 1
+    report('asking', { text: `${question.text}\n\n${lastLines(screen)}`, step })
+    const confirm = await waitForAnswer(launchId, step)
     if (!confirm) {
       tmux(['kill-session', '-t', name])
-      return report('failed', 'Cancelled.')
+      return report('failed', { text: 'Cancelled.' })
     }
     answered.add(question.marker)
     // Both questions have their yes selected first.
     tmux(['send-keys', '-t', name, 'Enter'])
     deadline = Date.now() + START_TIMEOUT_MS
   }
-  if (tmux(['has-session', '-t', name]).ok) return report('started', `Running in tmux session ${name}.`)
-  report('failed', `claude stopped before it was ready.\n\n${lastLines(screen)}`)
+  if (tmux(['has-session', '-t', name]).ok) return report('started', { text: `Running in tmux session ${name}.` })
+  report('failed', { text: `claude stopped before it was ready.\n\n${lastLines(screen)}` })
 }
 
-function waitForAnswer(launchId: string): Promise<boolean> {
+function waitForAnswer(launchId: string, step: number): Promise<boolean> {
   return new Promise(resolve => {
     const timer = setTimeout(() => finish(false), ANSWER_TIMEOUT_MS)
     const finish = (confirm: boolean) => {
@@ -119,7 +138,7 @@ function waitForAnswer(launchId: string): Promise<boolean> {
       answers.delete(launchId)
       resolve(confirm)
     }
-    answers.set(launchId, finish)
+    answers.set(launchId, { step, resolve: finish })
   })
 }
 
@@ -152,6 +171,11 @@ function tmux(args: string[]): { ok: boolean; output: string } {
   } catch (error) {
     return { ok: false, output: String(error) }
   }
+}
+
+/** `~/code/api` as typed in the notch, from the home folder of this machine. */
+export function fromHome(folder: string, home = homedir()): string {
+  return folder === '~' || folder.startsWith('~/') ? join(home, folder.slice(1)) : folder
 }
 
 function isDirectory(path: string): boolean {

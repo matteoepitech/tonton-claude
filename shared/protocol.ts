@@ -101,18 +101,27 @@ export interface RuleSet {
   rules: PermissionRule[]
   issuedAt: string
 }
-/** Sealed by the app: start claude in this folder of the machine. Recent, like update orders. */
+/** Sealed by the app: start claude in this folder of the machine. Recent, like update orders, and run once. */
 export interface StartOrder {
+  launchId: string
   cwd: string
   issuedAt: string
 }
-/** Sealed by the app: the user's answer to a question Claude Code asks while it starts. */
+/** Sealed by the app: the user's answer to one question of a start, so the relay cannot reuse it for another. */
 export interface StartAnswer {
+  launchId: string
+  /** The `step` of the question answered. */
+  step: number
   confirm: boolean
   issuedAt: string
 }
-/** Where a start stands. `asking` comes with the question, `failed` with why, both sealed `{ text }`. */
+/** Where a start stands. `asking` comes with the question, `failed` with why, both in a sealed `StartDetail`. */
 export type StartState = 'starting' | 'asking' | 'started' | 'failed'
+export interface StartDetail {
+  text: string
+  /** Numbers the questions of a start, from 1. */
+  step?: number
+}
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
   version: string
