@@ -247,6 +247,16 @@ final class SessionStore: ObservableObject {
         socket.send(["t": "subscribe", "sessionId": selectedId ?? NSNull()])
     }
 
+    /// Asks the relay for the histories the app doesn't hold yet, so search covers every session. A relay that predates
+    /// this request ignores it, and search covers the sessions already opened.
+    func loadHistories(max count: Int = 30) {
+        guard connection == .connected else { return }
+        for session in visibleSessions.prefix(count)
+        where relayEntries[session.id] == nil && relaySessions.contains(where: { $0.id == session.id }) {
+            socket.send(["t": "history", "sessionId": session.id])
+        }
+    }
+
     func sendPrompt(_ text: String, images: [OutgoingImage], to sessionId: String) {
         guard let payload = try? vault?.sealPrompt(text: text, images: images) else { return }
         socket.send(["t": "prompt", "sessionId": sessionId, "payload": payload])

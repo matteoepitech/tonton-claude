@@ -6,6 +6,9 @@ struct ChatPanel: View {
     let session: SessionSummary
     @EnvironmentObject var store: SessionStore
     @State private var pendingTexts: [String] = []
+    @EnvironmentObject var state: NotchState
+    /// The item a search led to, outlined for a moment.
+    @State private var found: String?
 
     var body: some View {
         let entries = store.entries[session.id] ?? []
@@ -18,6 +21,9 @@ struct ChatPanel: View {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(items) { item in
                             ChatItemView(item: item, sessionWorking: session.status == .working)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8).stroke(Theme.accent, lineWidth: 1.5).padding(-4)
+                                        .opacity(item.id == found ? 1 : 0))
                         }
                         ForEach(Array(pendingTexts.enumerated()), id: \.offset) { _, text in
                             UserBubble(text: text, images: [], pending: true)
@@ -27,7 +33,10 @@ struct ChatPanel: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 }
-                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+                .onAppear { if !scrollToTarget(proxy, items) { proxy.scrollTo("bottom", anchor: .bottom) } }
+                // A search result opens the session, then its history arrives.
+                .onChange(of: items.map(\.id)) { _, _ in _ = scrollToTarget(proxy, items) }
+                .onChange(of: state.scrollTarget) { _, _ in _ = scrollToTarget(proxy, items) }
                 .onChange(of: entries.count) { _, _ in
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
@@ -48,6 +57,21 @@ struct ChatPanel: View {
                 pendingTexts.append(text.isEmpty ? "(\(images.count) image\(images.count == 1 ? "" : "s"))" : text)
             }
         }
+    }
+}
+
+extension ChatPanel {
+    /// Scrolls to the item a search result points at, once it is in this conversation. Returns false without one.
+    fileprivate func scrollToTarget(_ proxy: ScrollViewProxy, _ items: [ChatItem]) -> Bool {
+        guard let target = state.scrollTarget, items.contains(where: { $0.id == target }) else { return false }
+        state.scrollTarget = nil
+        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(target, anchor: .center) }
+        found = target
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            if found == target { withAnimation { found = nil } }
+        }
+        return true
     }
 }
 

@@ -8,6 +8,10 @@ final class NotchState: ObservableObject {
 
     @Published var mode: Mode = .collapsed
     @Published var pinned = false
+    /// The ⌘F search across conversations is open over the notch.
+    @Published var showSearch = false
+    /// A chat item to scroll to once its session is open, from a search result.
+    @Published var scrollTarget: String?
     @Published var peekSession: SessionSummary?
     /// Shown in the banner instead of the session's status.
     @Published var peekText: String?
