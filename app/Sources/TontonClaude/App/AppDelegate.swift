@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import TontonCore
 import UserNotifications
 
 /// Composition root: builds the store, the notch, the settings window and the menu bar item, and routes app-level events.
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var webhooks: WebhookNotifier?
     private var achievements: AchievementTracker?
     private lazy var settingsWindow = SettingsWindowController(store: store, settings: settings)
+    private let whatsNew = WhatsNewWindowController()
     private lazy var statusItem = StatusItemController(
         onToggleNotch: { [weak self] in self?.notch?.toggle() },
         onReconnect: { [weak self] in self?.store.connect() },
@@ -38,9 +40,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.$systemNotifications.removeDuplicates().filter { $0 }.sink { _ in Notifier.requestAccess() }.store(in: &subscriptions)
 
         store.connect()
+        let ranBefore = UserDefaults.standard.bool(forKey: "welcomed")
         // Once, to introduce the app: this Mac's sessions work without an account, so it is not a requirement.
-        if !settings.isConfigured && !UserDefaults.standard.bool(forKey: "welcomed") { showSettings() }
+        if !settings.isConfigured && !ranBefore { showSettings() }
         UserDefaults.standard.set(true, forKey: "welcomed")
+        showWhatsNewAfterUpdate(ranBefore: ranBefore)
         pendingLinks.forEach(open)
         pendingLinks = []
     }
@@ -54,6 +58,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         let links = urls.compactMap(DeepLink.init)
         if notch == nil { pendingLinks += links } else { links.forEach(open) }
+    }
+
+    static var version: String? { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String }
+
+    func showWhatsNew() {
+        guard let version = Self.version else { return }
+        whatsNew.show(version: version)
+    }
+
+    /// The notes of a new version, once. A fresh install records its version without showing them, and a launch that
+    /// can't load them tries again next time.
+    private func showWhatsNewAfterUpdate(ranBefore: Bool) {
+        guard let version = Self.version else { return }
+        let due = WhatsNew.shouldShow(current: version, shown: settings.whatsNewVersion, ranBefore: ranBefore)
+        guard due, settings.showWhatsNew else {
+            if version.compare(settings.whatsNewVersion, options: .numeric) == .orderedDescending { settings.whatsNewVersion = version }
+            return
+        }
+        Task {
+            if await whatsNew.showAfterUpdate(version: version) { settings.whatsNewVersion = version }
+        }
     }
 
     func showSettings(pane: SettingsPane? = nil) {
