@@ -6,6 +6,7 @@ import { terminalOf } from './channel/terminal'
 import { type AgentConfig, loadConfig, paths } from './config'
 import { log } from './log'
 import { matchingRule, readRules } from './rules'
+import { runningTasksIn } from './transcript/background'
 
 interface HookInput {
   hook_event_name: string
@@ -36,6 +37,9 @@ export async function runHook() {
     const config = loadConfig()
     if (!config) return
     const { hook_event_name, session_id, notification_type, source } = event
+    const background = waitsForBackground(event)
+    // Still at work, in the background: neither done nor waiting for the user.
+    if (background) return await postHook(config, { hook_event_name: 'UserPromptSubmit', session_id, source }, background)
     await postHook(config, { hook_event_name, session_id, notification_type, source }, event.message ?? event.error ?? event.reason)
   } catch (error) {
     log('hook failed', String(error))
@@ -51,6 +55,18 @@ export async function postHook(config: AgentConfig, event: HookPost['event'], te
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(event.hook_event_name === 'SessionEnd' ? 1000 : 2000),
   })
+}
+
+/**
+ * Claude Code ends its turn, then says it waits for the user, while a shell, a monitor or an agent it started in the
+ * background has yet to report back: what to say instead, or null.
+ */
+export function waitsForBackground(event: Pick<HookInput, 'hook_event_name' | 'notification_type' | 'transcript_path'>): string | null {
+  const ends =
+    event.hook_event_name === 'Stop' || (event.hook_event_name === 'Notification' && event.notification_type !== 'permission_prompt')
+  if (!ends || !event.transcript_path) return null
+  const running = runningTasksIn(event.transcript_path).length
+  return running ? `Waiting for ${running} background task${running === 1 ? '' : 's'}` : null
 }
 
 /**
