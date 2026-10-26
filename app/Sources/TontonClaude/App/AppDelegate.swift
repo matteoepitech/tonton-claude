@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = AppSettings.shared
     private lazy var store = SessionStore(settings: settings)
     private var notch: NotchWindowController?
+    private var webhooks: WebhookNotifier?
     private lazy var settingsWindow = SettingsWindowController(store: store, settings: settings)
     private lazy var statusItem = StatusItemController(
         onToggleNotch: { [weak self] in self?.notch?.toggle() },
@@ -25,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppDelegate.shared = self
         MainMenu.install()
         notch = NotchWindowController(store: store, settings: settings)
+        webhooks = WebhookNotifier(store: store, settings: settings)
         UNUserNotificationCenter.current().delegate = self
 
         settings.$showMenuBarIcon.sink { [weak self] visible in self?.statusItem.setVisible(visible) }.store(in: &subscriptions)

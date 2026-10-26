@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TontonCore
 
 struct NotchPane: View {
     @EnvironmentObject var settings: AppSettings
@@ -75,6 +76,62 @@ struct NotchPane: View {
                     Row(title: "To") { TimeField(minutes: $settings.quietEnd) }
                 }
             }
+            GroupLabel(text: "Webhooks")
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Post to Discord, Slack or any service that takes a JSON webhook, over https only.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textDim)
+                    WebhookField(title: "When a session finishes", address: $settings.webhookFinished)
+                    WebhookField(title: "When a session needs you", address: $settings.webhookNeedsYou)
+                }
+                .padding(16)
+                Hairline()
+                ToggleRow(
+                    title: "Include project and machine names", detail: "Otherwise the message only says what happened.",
+                    isOn: $settings.webhookIncludeNames)
+                Hairline()
+                ToggleRow(
+                    title: "Include Claude's last message", detail: "Off by default: it can quote your code.",
+                    isOn: $settings.webhookIncludeLastMessage)
+            }
+        }
+    }
+}
+
+/// One webhook address, with a button that posts a test message to it.
+private struct WebhookField: View {
+    let title: String
+    @Binding var address: String
+    @State private var result: Bool?
+    @State private var sending = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 13, weight: .medium))
+            HStack(spacing: 6) {
+                ThemeField(placeholder: "https://discord.com/api/webhooks/…", text: $address)
+                Button(sending ? "Sending…" : "Test") { test() }
+                    .buttonStyle(ThemeButtonStyle())
+                    .disabled(sending || Webhook.url(address) == nil)
+            }
+            if !address.isEmpty && Webhook.url(address) == nil {
+                Text("Use an https address.").font(.system(size: 11)).foregroundStyle(Theme.danger)
+            } else if let result {
+                Text(result ? "Sent." : "The service refused it. Check the address.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(result ? Theme.success : Theme.danger)
+            }
+        }
+        .onChange(of: address) { _, _ in result = nil }
+    }
+
+    private func test() {
+        guard let url = Webhook.url(address) else { return }
+        sending = true
+        Task {
+            result = await WebhookNotifier.send("Tonton Claude will post here.", to: url)
+            sending = false
         }
     }
 }
