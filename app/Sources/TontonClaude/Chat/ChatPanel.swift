@@ -77,7 +77,7 @@ struct ChatHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                StatusDot(status: session.status)
+                StatusDot(status: session.status, limit: session.fiveHourLimit)
                 Text(session.project).font(.system(size: 13, weight: .bold))
                 Text("· \(store.isOnThisMac(session) ? "This Mac" : session.machine)").font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer()

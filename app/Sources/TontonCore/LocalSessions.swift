@@ -80,6 +80,7 @@ public enum LocalSessions {
         public private(set) var entries: [Entry] = []
         public private(set) var title: String?
         public private(set) var costUSD: Double?
+        public private(set) var fiveHourLimit: UsageLimit?
 
         public init() {}
 
@@ -90,6 +91,7 @@ public enum LocalSessions {
                 entries += parsed.entries
                 if let title = parsed.title { self.title = title }
                 if let cost = parsed.costUSD { costUSD = cost }
+                if let limit = parsed.fiveHourLimit { fiveHourLimit = limit }
             }
             if entries.count > LocalSessions.maxEntries { entries.removeFirst(entries.count - LocalSessions.maxEntries) }
         }
@@ -109,6 +111,6 @@ public enum LocalSessions {
             project: URL(fileURLWithPath: cwd).lastPathComponent, title: conversation.title,
             status: endedAt == nil ? record.sessionStatus : .ended, statusText: nil, agentOnline: true, canChat: false,
             pendingPermissions: [], costUSD: conversation.costUSD, startedAt: started, lastActivity: endedAt ?? updated,
-            lastMessage: conversation.lastMessage)
+            lastMessage: conversation.lastMessage, fiveHourLimit: conversation.fiveHourLimit)
     }
 }

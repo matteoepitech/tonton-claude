@@ -10,9 +10,11 @@ struct ActivityDots: View {
         let live = store.visibleSessions.filter { $0.status.isLive }
         let order: [SessionStatus] = [.permission, .error, .waiting, .working, .starting, .idle]
         let urgent = order.first { s in live.contains { $0.status == s } }
+        // Sessions of one account share the window; across accounts, the one closest to its limit matters most.
+        let limit = UsageLimit.fullest(live.map(\.fiveHourLimit))
         HStack(spacing: 0) {
             if state.showWings {
-                Group { if let urgent { StatusDot(status: urgent, size: 7) } }.frame(width: NotchState.wingWidth)
+                Group { if let urgent { StatusDot(status: urgent, size: 7, limit: limit) } }.frame(width: NotchState.wingWidth)
                 Spacer(minLength: 0)
                 Text("\(live.count)")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -32,7 +34,7 @@ struct PeekView: View {
             Color.clear.frame(height: state.notchSize.height)
             if let s = state.peekSession {
                 HStack(spacing: 8) {
-                    StatusDot(status: s.status)
+                    StatusDot(status: s.status, limit: s.fiveHourLimit)
                     Text("\(s.machine) · \(s.project)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
                     Text(s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }

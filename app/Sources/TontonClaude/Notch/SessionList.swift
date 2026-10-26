@@ -130,7 +130,7 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            StatusDot(status: session.status).padding(.top, 5)
+            StatusDot(status: session.status, limit: session.fiveHourLimit).padding(.top, 5)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(session.project).font(.system(size: 12, weight: .semibold)).lineLimit(1).layoutPriority(1)

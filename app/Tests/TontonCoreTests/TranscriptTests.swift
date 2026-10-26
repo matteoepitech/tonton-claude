@@ -101,4 +101,19 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(Transcript.toolSummary("mcp__x__y", ["url": "https://x.dev"]), "https://x.dev")
         XCTAssertEqual(Transcript.toolSummary("Bash", ["command": String(repeating: "a", count: 400)]).count, 301)
     }
+
+    func testASessionStoppedByTheFiveHourLimitIsAt100PercentUntilTheReset() {
+        func refused(_ quota: [String: Any]) -> UsageLimit? {
+            let fields: [String: Any] = [
+                "type": "assistant", "isApiErrorMessage": true, "error": "rate_limit", "quotaLimits": quota, "message": ["content": []],
+            ]
+            return Transcript.parse(line(fields)).fiveHourLimit
+        }
+        XCTAssertEqual(
+            refused(["status": "rejected", "rateLimitType": "five_hour", "resetsAt": 1_792_497_600]),
+            UsageLimit(usedPercent: 100, resetsAt: Date(timeIntervalSince1970: 1_792_497_600)))
+        XCTAssertNil(refused(["status": "rejected", "rateLimitType": "seven_day", "resetsAt": 1_792_497_600]))
+        XCTAssertNil(refused(["status": "allowed_warning", "rateLimitType": "five_hour", "resetsAt": 1_792_497_600]))
+        XCTAssertNil(refused(["status": "rejected", "rateLimitType": "five_hour"]))
+    }
 }
