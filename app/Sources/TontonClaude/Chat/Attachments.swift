@@ -7,67 +7,90 @@ struct Attachment: Identifiable {
     let name: String
     let mediaType: String
     let data: Data
+    /// The image itself, or the file's icon.
     let thumbnail: NSImage
+    let isImage: Bool
 
     var outgoing: OutgoingImage {
         OutgoingImage(name: name, mediaType: mediaType, data: data.base64EncodedString())
     }
 }
 
-/// Turns files, the clipboard and drops into attachments small enough to send through the relay.
+/// Turns files, the clipboard and drops into attachments small enough to send through the relay. Images keep their
+/// preview and are recompressed when large; any other file goes as it is, within `AttachmentBudget`.
 enum AttachmentReader {
-    private static let maxBytes = 3_000_000
+    /// An attachment, or why a file could not be one.
+    enum Loaded {
+        case attachment(Attachment)
+        case refused(String)
+    }
+
+    private static let maxImageBytes = 3_000_000
 
     static func attachment(from data: Data, name: String) -> Attachment? {
         guard let image = NSImage(data: data) else { return nil }
-        if data.count > maxBytes, let jpeg = jpegData(image) {
+        if data.count > maxImageBytes, let jpeg = jpegData(image) {
             let jpegName = (name as NSString).deletingPathExtension + ".jpg"
-            return Attachment(name: jpegName, mediaType: "image/jpeg", data: jpeg, thumbnail: image)
+            return Attachment(name: jpegName, mediaType: "image/jpeg", data: jpeg, thumbnail: image, isImage: true)
         }
         let mediaType = UTType(filenameExtension: (name as NSString).pathExtension)?.preferredMIMEType ?? "image/png"
-        return Attachment(name: name, mediaType: mediaType, data: data, thumbnail: image)
+        return Attachment(name: name, mediaType: mediaType, data: data, thumbnail: image, isImage: true)
     }
 
     @MainActor
-    static func pickFiles() -> [Attachment] {
+    static func pickFiles() -> [Loaded] {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
+        panel.allowedContentTypes = [.item]
         panel.allowsMultipleSelection = true
         guard panel.runAboveNotch() == .OK else { return [] }
-        return panel.urls.compactMap(fromFile)
+        return panel.urls.map(fromFile)
     }
 
-    static func fromClipboard() -> [Attachment] {
+    static func fromClipboard() -> [Loaded] {
         let pasteboard = NSPasteboard.general
-        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingContentsConformToTypes: [UTType.image.identifier]]
-        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL], !urls.isEmpty {
-            return urls.compactMap(fromFile)
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
+            return urls.map(fromFile)
         }
-        guard let image = NSImage(pasteboard: pasteboard), let png = pngData(image) else { return [] }
-        return attachment(from: png, name: "capture.png").map { [$0] } ?? []
+        guard let image = NSImage(pasteboard: pasteboard), let png = pngData(image),
+            let attachment = attachment(from: png, name: "capture.png")
+        else { return [] }
+        return [.attachment(attachment)]
     }
 
     /// Loads dropped files and images, then hands them over on the main thread.
-    static func fromDrop(_ providers: [NSItemProvider], deliver: @escaping @MainActor (Attachment) -> Void) {
+    static func fromDrop(_ providers: [NSItemProvider], deliver: @escaping @MainActor (Loaded) -> Void) {
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url, let attachment = fromFile(url) else { return }
-                    Task { @MainActor in deliver(attachment) }
+                    guard let url else { return }
+                    let loaded = fromFile(url)
+                    Task { @MainActor in deliver(loaded) }
                 }
             } else if provider.canLoadObject(ofClass: NSImage.self) {
                 _ = provider.loadObject(ofClass: NSImage.self) { object, _ in
                     guard let image = object as? NSImage, let png = pngData(image),
                         let attachment = attachment(from: png, name: "image.png")
                     else { return }
-                    Task { @MainActor in deliver(attachment) }
+                    Task { @MainActor in deliver(.attachment(attachment)) }
                 }
             }
         }
     }
 
-    private static func fromFile(_ url: URL) -> Attachment? {
-        (try? Data(contentsOf: url)).flatMap { attachment(from: $0, name: url.lastPathComponent) }
+    /// The size is checked before reading, so a large video is never loaded into memory.
+    private static func fromFile(_ url: URL) -> Loaded {
+        let name = url.lastPathComponent
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+        if values?.isDirectory == true { return .refused("\(name) is a folder: drop the files inside it.") }
+        let size = values?.fileSize ?? 0
+        if let problem = AttachmentBudget.problem(adding: name, bytes: size, to: []) { return .refused(problem) }
+        guard let data = try? Data(contentsOf: url) else { return .refused("\(name) could not be read.") }
+        if let image = attachment(from: data, name: name) { return .attachment(image) }
+        let type = UTType(filenameExtension: url.pathExtension)
+        return .attachment(
+            Attachment(
+                name: name, mediaType: type?.preferredMIMEType ?? "application/octet-stream", data: data,
+                thumbnail: NSWorkspace.shared.icon(for: type ?? .data), isImage: false))
     }
 
     private static func pngData(_ image: NSImage) -> Data? {

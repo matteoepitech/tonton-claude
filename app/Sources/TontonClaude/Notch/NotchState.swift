@@ -18,6 +18,8 @@ final class NotchState: ObservableObject {
     var drafts: [String: String] = [:]
     /// Optional activity dots beside the camera (Settings › Notch); off means the notch is fully hidden at rest.
     @Published var showWings = false
+    /// Set by the open session's composer: files dropped anywhere on the conversation go to it.
+    var dropFiles: (([NSItemProvider]) -> Void)?
     /// Shown under the notch for a few seconds once unlocked.
     @Published var achievement: Achievement?
     /// A chat item to scroll to and highlight, picked in the search results.
