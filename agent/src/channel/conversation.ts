@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import type { AgentMessage, Entry, PermissionDetail, SealedEntry } from '../../../shared/protocol'
+import type { AgentMessage, Entry, PermissionDetail, SealedEntry, TokenCounts } from '../../../shared/protocol'
 import { seal } from '../crypto'
 import { parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
@@ -23,6 +23,9 @@ export class Conversation {
   private entries: Entry[] = []
   private title: string | undefined
   private costUSD: number | undefined
+  private tokens: TokenCounts | undefined
+  /** API responses already in `tokens`. */
+  private readonly countedRequests = new Set<string>()
   private usage: SessionUsage = {}
   private lastUsage: string | null = null
   private usageTimer: Timer | null = null
@@ -41,6 +44,8 @@ export class Conversation {
           lines: (lines, initial) => this.onLines(lines, initial),
           reset: () => {
             this.entries = []
+            this.tokens = undefined
+            this.countedRequests.clear()
           },
         })
       : null
@@ -94,6 +99,11 @@ export class Conversation {
         metaChanged = true
       }
       if (this.updateUsage(parsed)) metaChanged = true
+      if (parsed.usage && !this.countedRequests.has(parsed.usage.requestId)) {
+        this.countedRequests.add(parsed.usage.requestId)
+        this.tokens = addTokens(this.tokens, parsed.usage)
+        metaChanged = true
+      }
     }
     this.entries = [...this.entries, ...fresh].slice(-BACKLOG_SIZE)
     if (initial) return this.announce()
@@ -115,7 +125,10 @@ export class Conversation {
     if (raw === null || raw === this.lastUsage) return
     this.lastUsage = raw
     try {
-      if (this.updateUsage(JSON.parse(raw) as SessionUsage)) this.postMeta()
+      const reading = JSON.parse(raw) as SessionUsage
+      const costChanged = reading.costUSD !== undefined && reading.costUSD !== this.costUSD
+      if (costChanged) this.costUSD = reading.costUSD
+      if (this.updateUsage(reading) || costChanged) this.postMeta()
     } catch {
       // The status line replaces the file in one step: something else wrote this one.
     }
@@ -137,6 +150,7 @@ export class Conversation {
     const meta = {
       title: this.title,
       costUSD: this.costUSD,
+      tokens: this.tokens,
       lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
       ...this.usage,
     }
@@ -156,6 +170,15 @@ export class Conversation {
 
   private sealEntries(entries: Entry[]): Promise<SealedEntry[]> {
     return Promise.all(entries.map(async entry => ({ id: entry.id, ts: entry.ts, blob: await seal(this.key, entry) })))
+  }
+}
+
+function addTokens(total: TokenCounts | undefined, response: TokenCounts): TokenCounts {
+  return {
+    input: (total?.input ?? 0) + response.input,
+    output: (total?.output ?? 0) + response.output,
+    cacheRead: (total?.cacheRead ?? 0) + response.cacheRead,
+    cacheWrite: (total?.cacheWrite ?? 0) + response.cacheWrite,
   }
 }
 

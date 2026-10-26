@@ -1,4 +1,4 @@
-import type { Entry, ImageData, UsageLimit } from '../../../shared/protocol'
+import type { Entry, ImageData, TokenCounts, UsageLimit } from '../../../shared/protocol'
 import { limit } from '../usage'
 
 // Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
@@ -34,6 +34,9 @@ export interface ParsedLine {
   fiveHourLimit?: UsageLimit
   /** Set when a weekly limit stopped the session. */
   sevenDayLimit?: UsageLimit
+  /** Tokens of the API response this line belongs to. Claude Code writes one line per content block, each with the whole
+   * response's usage, so they only count once per request. */
+  usage?: TokenCounts & { requestId: string }
 }
 
 interface Block {
@@ -51,9 +54,10 @@ interface TranscriptLine {
   origin?: { kind?: string }
   aiTitle?: string
   totalCostUSD?: number
+  requestId?: string
   /** On the error message Claude Code writes when the plan's limit refuses a request. */
   quotaLimits?: { status?: string; rateLimitType?: string; resetsAt?: unknown }
-  message?: { content?: string | Block[] }
+  message?: { id?: string; model?: string; content?: string | Block[]; usage?: Record<string, unknown> }
   attachment?: { type?: string; commandMode?: string; origin?: { kind?: string }; prompt?: string | Block[] }
 }
 
@@ -73,6 +77,7 @@ export function parseLine(raw: string): ParsedLine {
   if (quota?.status === 'rejected' && quota.rateLimitType === 'five_hour') result.fiveHourLimit = limit(100, quota.resetsAt)
   // The weekly limit, or its Opus or Sonnet share: either way the session waits for that reset.
   if (quota?.status === 'rejected' && quota.rateLimitType?.startsWith('seven_day')) result.sevenDayLimit = limit(100, quota.resetsAt)
+  if (line.type === 'assistant') result.usage = responseUsage(line)
 
   const id = line.uuid ?? `${line.type}-${line.timestamp}`
   const ts = line.timestamp ?? new Date().toISOString()
@@ -98,6 +103,21 @@ export function parseLine(raw: string): ParsedLine {
   if (line.type === 'user') result.entries.push(...userEntries(id, ts, content))
   else if (Array.isArray(content)) result.entries.push(...assistantEntries(id, ts, content))
   return result
+}
+
+/** Messages Claude Code makes up itself, such as API errors, are `<synthetic>` and cost nothing. */
+function responseUsage(line: TranscriptLine): ParsedLine['usage'] {
+  const usage = line.message?.usage
+  const requestId = line.requestId ?? line.message?.id
+  if (!usage || typeof requestId !== 'string' || line.message?.model === '<synthetic>') return undefined
+  const count = (field: string) => (typeof usage[field] === 'number' && Number.isFinite(usage[field]) ? (usage[field] as number) : 0)
+  return {
+    requestId,
+    input: count('input_tokens'),
+    output: count('output_tokens'),
+    cacheRead: count('cache_read_input_tokens'),
+    cacheWrite: count('cache_creation_input_tokens'),
+  }
 }
 
 function userEntries(id: string, ts: string, content: string | Block[] | undefined): Entry[] {

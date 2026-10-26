@@ -9,6 +9,8 @@ import { paths } from './config'
 export interface SessionUsage {
   fiveHourLimit?: UsageLimit
   sevenDayLimit?: UsageLimit
+  /** Claude Code's own estimate for the session, live, unlike the cost it writes to the transcript when it exits. */
+  costUSD?: number
 }
 
 interface Window {
@@ -22,11 +24,17 @@ export function statusLineLimit(input: unknown, name: 'five_hour' | 'seven_day' 
   return limit(window?.used_percentage, window?.resets_at)
 }
 
-/** Both windows of the status line input, leaving out the ones it does not report. */
+/** Both windows and the cost of the status line input, leaving out what it does not report. */
 export function statusLineUsage(input: unknown): SessionUsage {
   const fiveHourLimit = statusLineLimit(input, 'five_hour')
   const sevenDayLimit = statusLineLimit(input, 'seven_day')
-  return { ...(fiveHourLimit ? { fiveHourLimit } : {}), ...(sevenDayLimit ? { sevenDayLimit } : {}) }
+  const cost = (input as { cost?: { total_cost_usd?: unknown } } | null)?.cost?.total_cost_usd
+  const costUSD = typeof cost === 'number' && Number.isFinite(cost) && cost >= 0 ? cost : undefined
+  return {
+    ...(fiveHourLimit ? { fiveHourLimit } : {}),
+    ...(sevenDayLimit ? { sevenDayLimit } : {}),
+    ...(costUSD !== undefined ? { costUSD } : {}),
+  }
 }
 
 /** Builds a limit from Claude Code's numbers, or nothing when they are missing or out of range. */
