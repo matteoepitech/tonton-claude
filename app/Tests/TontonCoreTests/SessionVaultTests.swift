@@ -92,6 +92,26 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertNil(UsageLimit.soonest([nil], at: now))
     }
 
+    func testStoppedSessionsAreFreedAtTheirReset() {
+        let now = Date(timeIntervalSince1970: 1_792_497_600)
+        let reset = now.addingTimeInterval(1800)
+        func session(_ id: String, _ status: SessionStatus = .error, used: Double = 100, resetsAt: Date) -> SessionSummary {
+            SessionSummary(
+                id: id, machineId: "m1", machine: "PC", platform: nil, cwd: "/x", project: id, title: nil, status: status,
+                statusText: nil, agentOnline: true, canChat: true, pendingPermissions: [], costUSD: nil, startedAt: now,
+                lastActivity: now, lastMessage: nil, fiveHourLimit: UsageLimit(usedPercent: used, resetsAt: resetsAt))
+        }
+        let sessions = [
+            session("api", resetsAt: reset), session("web", resetsAt: reset), session("close", used: 90, resetsAt: reset),
+            session("ended", .ended, resetsAt: reset), session("later", resetsAt: reset.addingTimeInterval(600)),
+        ]
+        XCTAssertEqual(sessions[0].stoppedUntil(at: now), reset)
+        XCTAssertNil(sessions[2].stoppedUntil(at: now))
+        XCTAssertEqual(LimitResets.upcoming(sessions, at: now), [reset, reset.addingTimeInterval(600)])
+        XCTAssertEqual(LimitResets.lifted(sessions, at: reset).map(\.id), ["api", "web"])
+        XCTAssertEqual(LimitResets.upcoming(sessions, at: reset.addingTimeInterval(601)), [])
+    }
+
     func testTimeLeftReadsLikeTheNotch() {
         let now = Date(timeIntervalSince1970: 1_792_497_600)
         func left(_ seconds: TimeInterval) -> String { UsageLimit(usedPercent: 90, resetsAt: now + seconds).timeLeft(at: now) }

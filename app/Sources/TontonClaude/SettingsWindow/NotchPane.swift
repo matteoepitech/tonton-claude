@@ -29,6 +29,10 @@ struct NotchPane: View {
                     title: "Tell me when Claude finishes", detail: "Also alert when a session goes from working to done.",
                     isOn: $settings.alertOnFinish)
                 Hairline()
+                ToggleRow(
+                    title: "Tell me when a limit resets",
+                    detail: "Also alert when a session stopped by a usage limit can go again.", isOn: $settings.alertOnLimitReset)
+                Hairline()
                 ToggleRow(title: "Sound", detail: "Plays with the banner.", isOn: $settings.soundOnAttention)
                 if settings.soundOnAttention {
                     Hairline()
