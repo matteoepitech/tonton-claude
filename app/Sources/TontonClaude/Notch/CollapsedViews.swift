@@ -52,6 +52,10 @@ struct PeekView: View {
                 }
                 .frame(height: NotchState.peekHeight)
                 .padding(.horizontal, 14)
+            } else if let text = state.peekText {
+                Text(text).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    .frame(height: NotchState.peekHeight)
+                    .padding(.horizontal, 14)
             }
         }
     }

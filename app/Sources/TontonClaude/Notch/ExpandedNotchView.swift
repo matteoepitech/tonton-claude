@@ -49,13 +49,7 @@ struct ExpandedView: View {
             Text("Tonton Claude").font(.system(size: 12, weight: .semibold))
             connectionBadge.padding(.leading, 4)
             Spacer(minLength: 12)
-            if settings.showCosts && store.todayCost > 0 {
-                Text(String(format: "Today $%.2f", store.todayCost))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.trailing, 6)
-                    .help("Cost of the sessions started today")
-            }
+            if settings.showCosts { TodayCost(usage: store.usage) }
             Button {
                 state.pinned.toggle()
             } label: {
@@ -130,5 +124,23 @@ struct CenteredMessage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// What was spent today, as recorded for Settings › Usage, against the daily budget when there is one.
+struct TodayCost: View {
+    @ObservedObject var usage: UsageRecorder
+    @EnvironmentObject var settings: AppSettings
+
+    var body: some View {
+        let spent = usage.history.spent()
+        if spent > 0 {
+            let budget = settings.dailyBudget
+            Text(budget > 0 ? String(format: "Today $%.2f of $%d", spent, budget) : String(format: "Today $%.2f", spent))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(budget > 0 && spent >= Double(budget) ? Theme.warning : .white.opacity(0.5))
+                .padding(.trailing, 6)
+                .help("Spent today, as recorded on this Mac")
+        }
     }
 }

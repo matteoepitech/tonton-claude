@@ -11,12 +11,21 @@ enum Notifier {
 
     @MainActor
     static func post(_ session: SessionSummary, body: String) {
+        post(title: "\(session.machine) · \(session.project)", body: body, sessionId: session.id)
+    }
+
+    /// Without a session, clicking the notification just opens the notch.
+    @MainActor
+    static func post(title: String, body: String, sessionId: String? = nil) {
         let content = UNMutableNotificationContent()
-        content.title = "\(session.machine) · \(session.project)"
+        content.title = title
         content.body = body
-        content.userInfo = ["sessionId": session.id]
-        content.threadIdentifier = session.id
-        let request = UNNotificationRequest(identifier: "\(session.id)-\(Date().timeIntervalSince1970)", content: content, trigger: nil)
+        if let sessionId {
+            content.userInfo = ["sessionId": sessionId]
+            content.threadIdentifier = sessionId
+        }
+        let request = UNNotificationRequest(
+            identifier: "\(sessionId ?? "tonton")-\(Date().timeIntervalSince1970)", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
 }

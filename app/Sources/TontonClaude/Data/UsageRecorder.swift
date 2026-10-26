@@ -7,9 +7,13 @@ import TontonCore
 @MainActor
 final class UsageRecorder: ObservableObject {
     @Published private(set) var history: UsageHistory
+    /// Today's spending went past the daily budget, with what was spent so far. Once a day.
+    let budgetExceeded = PassthroughSubject<Double, Never>()
+    private let settings: AppSettings
     private var subscriptions = Set<AnyCancellable>()
 
-    init(sessions: AnyPublisher<[SessionSummary], Never>) {
+    init(sessions: AnyPublisher<[SessionSummary], Never>, settings: AppSettings) {
+        self.settings = settings
         history = Self.load()
         // Working sessions report every few seconds: one reading every few seconds is plenty.
         sessions
@@ -24,7 +28,16 @@ final class UsageRecorder: ObservableObject {
         let spent = next.entries != history.entries
         history = next
         // A reading that adds nothing only moves the baselines in memory: no need to write the file.
-        if spent { save() }
+        guard spent else { return }
+        save()
+        let today = UsageHistory.day(Date())
+        let spentToday = history.spent(on: Date())
+        if DailyBudget.shouldAlert(
+            spent: spentToday, budget: Double(settings.dailyBudget), lastAlertDay: settings.budgetAlertDay, today: today)
+        {
+            settings.budgetAlertDay = today
+            budgetExceeded.send(spentToday)
+        }
     }
 
     private static var url: URL {

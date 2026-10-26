@@ -73,6 +73,12 @@ public struct UsageHistory: Codable, Equatable, Sendable {
         .sorted { $0.costUSD != $1.costUSD ? $0.costUSD > $1.costUSD : $0.name < $1.name }
     }
 
+    /// What was spent on the day of `date`.
+    public func spent(on date: Date = Date(), calendar: Calendar = .current) -> Double {
+        let day = Self.day(date, calendar: calendar)
+        return entries.filter { $0.day == day }.map(\.costUSD).reduce(0, +)
+    }
+
     private mutating func add(_ delta: UsageDelta, day: String, machine: String, project: String) {
         if let index = entries.firstIndex(where: { $0.day == day && $0.machine == machine && $0.project == project }) {
             entries[index].costUSD += delta.costUSD
@@ -89,9 +95,17 @@ public struct UsageHistory: Codable, Equatable, Sendable {
         entries.removeAll { $0.day < cutoff }
     }
 
-    static func day(_ date: Date, calendar: Calendar) -> String {
+    /// The key of `date`'s day in the history.
+    public static func day(_ date: Date, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+}
+
+/// The daily budget of Settings › General: one alert, the first time a day's spending goes past it.
+public enum DailyBudget {
+    public static func shouldAlert(spent: Double, budget: Double, lastAlertDay: String, today: String) -> Bool {
+        budget > 0 && spent >= budget && lastAlertDay != today
     }
 }
 

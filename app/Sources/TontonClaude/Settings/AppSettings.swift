@@ -33,6 +33,10 @@ final class AppSettings: ObservableObject {
     @Published var display: DisplayChoice
     @Published var notchSize: NotchSizeChoice
     @Published var showCosts: Bool
+    /// In dollars, 0 for none.
+    @Published var dailyBudget: Int
+    /// The last day the budget alert went off, so it only does once a day.
+    @Published var budgetAlertDay: String
     /// 0 keeps finished sessions until removed by hand.
     @Published var hideFinishedAfterHours: Int
     @Published var quickReplies: [String]
@@ -100,6 +104,8 @@ final class AppSettings: ObservableObject {
         display = choice("display", .builtIn)
         notchSize = choice("notchSize", .standard)
         showCosts = value("showCosts", true)
+        dailyBudget = value("dailyBudget", 0)
+        budgetAlertDay = value("budgetAlertDay", "")
         hideFinishedAfterHours = value("hideFinishedAfterHours", 0)
         quickReplies = value("quickReplies", Self.defaultQuickReplies)
         promptTemplates =
@@ -135,6 +141,8 @@ final class AppSettings: ObservableObject {
         persist($display.map(\.rawValue), "display")
         persist($notchSize.map(\.rawValue), "notchSize")
         persist($showCosts, "showCosts")
+        persist($dailyBudget, "dailyBudget")
+        persist($budgetAlertDay, "budgetAlertDay")
         persist($hideFinishedAfterHours, "hideFinishedAfterHours")
         persist($quickReplies, "quickReplies")
         persist($promptTemplates.compactMap { try? JSONEncoder().encode($0) }, "promptTemplates")
