@@ -33,7 +33,7 @@ step, even when a change looks local to one side.
 
 - Socket messages go through `agent/src/channel/relay-connection.ts` and are built in `agent/src/channel/` (the session
   conversation is in `conversation.ts`); hook posts are in `agent/src/hook.ts`.
-- Seal with `seal()` from `agent/src/crypto.ts`, open with `open()`.
+- Seal with `seal()` from `shared/crypto.ts`, open with `open()`.
 
 ## 5. App
 
@@ -43,7 +43,16 @@ step, even when a change looks local to one side.
   dictionaries there.
 - Open sealed fields with `E2E` in `TontonCore`.
 
-## 6. Check every mix of versions
+## 6. Client core
+
+The web app and the other clients read the relay through `shared/`, which mirrors the app:
+
+- `shared/wire.ts` checks each relay → app message, like `Wire.swift`: a new message type or field goes there too.
+- `shared/payloads.ts` checks a sealed payload once opened, like the Codable types; `shared/vault.ts` opens them into the
+  models of `shared/session.ts`, like `SessionVault.swift`.
+- Keep `shared/` free of Node and Bun APIs: `tsc -p shared` fails otherwise.
+
+## 7. Check every mix of versions
 
 Write down, in the PR, what happens for each:
 
@@ -56,11 +65,13 @@ Write down, in the PR, what happens for each:
 If one of them breaks, either make it degrade gracefully (a missing field shows nothing, an action is greyed out) or
 add a **Rollout** section saying which part must be updated first.
 
-## 7. Test both languages
+## 8. Test both languages
 
 - `test/end-to-end.test.ts` runs a real relay and agent with a socket standing in for the app: add a case that goes
   through the new message.
 - `relay/test/` for validation and limits, `agent/test/` for agent logic.
 - `app/Tests/TontonCoreTests/`: decode a JSON sample written exactly as the relay sends it. For a new sealed payload,
-  open a blob sealed by `agent/src/crypto.ts`, like `agentBlob` in `E2ETests.swift`.
+  open a blob sealed by `shared/crypto.ts`, like `agentBlob` in `E2ETests.swift`. If the app seals or reads it, add it to
+  `VectorTests.swift` and write `shared/test/swift-vectors.json` again (`TONTON_WRITE_VECTORS=1 swift test --filter
+  VectorTests`): `shared/test/swift-vectors.test.ts` checks the client core reads it the same way.
 - Then `bun run check && bun test`, and in `app/`: `swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos && swift test`.

@@ -11,7 +11,8 @@
       "*.json",
       "!**/node_modules",
       "!**/dist",
-      "!**/data"
+      "!**/data",
+      "!shared/test/swift-vectors.json"
     ]
   },
   "formatter": {

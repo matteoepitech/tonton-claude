@@ -4,7 +4,8 @@ import XCTest
 @testable import TontonCore
 
 final class E2ETests: XCTestCase {
-    /// Sealed by agent/src/crypto.ts with a key of 32 bytes set to 42: proves both sides speak the same format.
+    /// Sealed by shared/crypto.ts with a key of 32 bytes set to 42: proves both sides speak the same format. The other way
+    /// round, shared/test/swift-vectors.test.ts opens what VectorTests seals.
     private let agentKey = "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio"
     private let agentBlob =
         "ZehR9PS/l2kdtPyZqmFYXG8drslHTtBrq9ZYem1N1OqPa+lf/p0FlHAmPWU0wPYLbBFtR9DTEHz2B6snMF5le09mGULumL2Rwk0MQKkZUMmHUXrZV1Pq+sw5jd/z8v7UnO2MRLYA5S7usdO/Vw=="

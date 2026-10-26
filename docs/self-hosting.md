@@ -18,6 +18,7 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 | `agent/` | One binary per machine. A background service keeps the machine reachable and shows a tray icon to change relay; Claude Code hooks report status; an MCP *channel* streams the transcript, injects messages from the notch and relays permission prompts. |
 | `relay/` | The relay. Accounts, machines and the sealed history of sessions in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
 | `app/` | The macOS app living in the notch (SwiftUI), plus its settings window. |
+| `shared/` | The client core shared by the agent, the relay and the clients: wire protocol, AES-256-GCM sealing with WebCrypto, account token, session models. It runs in browsers. |
 | `scripts/` | Builds, and the install scripts published with each release. |
 
 ## Security model

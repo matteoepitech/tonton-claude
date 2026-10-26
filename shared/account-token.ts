@@ -1,6 +1,8 @@
 // The account token, like a RustDesk server key: what an agent needs to join an account. The app shows it in
 // Machines; it goes into the install command or the agent's tray. `tonton_` followed by base64url JSON.
 
+import { base64UrlToUtf8, utf8ToBase64Url } from './base64'
+
 export interface AccountToken {
   /** Address of the relay. */
   relay: string
@@ -16,14 +18,14 @@ const ID = /^[A-Za-z0-9_-]{12}$/
 const SECRET = /^[A-Za-z0-9_-]{43}$/
 
 export function encodeAccountToken(token: AccountToken): string {
-  return PREFIX + Buffer.from(JSON.stringify(token)).toString('base64url')
+  return PREFIX + utf8ToBase64Url(JSON.stringify(token))
 }
 
 export function parseAccountToken(text: string): AccountToken | null {
   const trimmed = text.trim()
   if (!trimmed.startsWith(PREFIX)) return null
   try {
-    const token = JSON.parse(Buffer.from(trimmed.slice(PREFIX.length), 'base64url').toString('utf8')) as Partial<AccountToken>
+    const token = JSON.parse(base64UrlToUtf8(trimmed.slice(PREFIX.length))) as Partial<AccountToken>
     const relay = normalizeRelay(String(token.relay ?? ''))
     if (!relay || !ID.test(String(token.account)) || !SECRET.test(String(token.secret)) || !SECRET.test(String(token.key))) return null
     return { relay, account: String(token.account), secret: String(token.secret), key: String(token.key) }

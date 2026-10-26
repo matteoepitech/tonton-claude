@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { open, seal } from '../agent/src/crypto'
 import { agentBinaryName, TRAY_HELPER_NAME } from '../agent/src/update'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
+import { open, seal } from '../shared/crypto'
 import type { RelayToApp, SessionSummary } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')

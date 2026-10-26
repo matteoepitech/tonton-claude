@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { open, seal } from '../src/crypto'
+import { importAccountKey, newAccountKey, open, seal } from '../crypto'
 
-const newKey = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
+const newKey = newAccountKey
 
 describe('seal / open', () => {
   test('round-trips any JSON value', async () => {
@@ -26,5 +26,19 @@ describe('seal / open', () => {
 
   test('refuses keys that are not 256 bits', () => {
     expect(seal('c2hvcnQ', 'x')).rejects.toThrow('32 bytes')
+  })
+
+  test('an imported key works like its text, and cannot be read back', async () => {
+    const text = newKey()
+    const key = await importAccountKey(text)
+    expect(key.extractable).toBe(false)
+    expect(crypto.subtle.exportKey('raw', key)).rejects.toThrow()
+    expect(await open(text, await seal(key, { text: 'hi' }))).toEqual({ text: 'hi' })
+    expect(await open(key, await seal(text, [1, 2]))).toEqual([1, 2])
+  })
+
+  test('keys are 32 bytes of base64url', async () => {
+    expect(Buffer.from(newKey(), 'base64url')).toHaveLength(32)
+    expect(importAccountKey('not a key')).rejects.toThrow('32 bytes')
   })
 })

@@ -5,10 +5,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
+import { open, seal } from '../../shared/crypto'
 import type { StartAnswer, StartDetail, StartOrder, StartState } from '../../shared/protocol'
 import type { RelayConnection } from './channel/relay-connection'
 import { type AgentConfig, paths } from './config'
-import { open, seal } from './crypto'
 import { log } from './log'
 import { claimOnce } from './once'
 
