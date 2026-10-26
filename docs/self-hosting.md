@@ -16,7 +16,7 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 | Part | Role |
 |---|---|
 | `agent/` | One binary per machine. A background service keeps the machine reachable and shows a tray icon to change relay; Claude Code hooks report status; an MCP *channel* streams the transcript, injects messages from the notch and relays permission prompts. |
-| `relay/` | The relay. Accounts and machines in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
+| `relay/` | The relay. Accounts, machines and the sealed history of sessions in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
 | `app/` | The macOS app living in the notch (SwiftUI), plus its settings window. |
 | `scripts/` | Builds, and the install scripts published with each release. |
 
@@ -42,8 +42,9 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 
 **While your Mac is away.** The relay keeps each session's sealed history, so the notch catches up when the Mac wakes
 or reconnects: up to 800 entries and 16 MB per session, 128 MB per account, the oldest going first. Finished sessions
-are dropped after 6 hours. The history lives in the relay's memory, so a relay restart loses it; agents send theirs
-again when they reconnect.
+are dropped after 6 hours. The history is in memory and in the relay's database, so it survives a restart of the relay:
+sessions come back offline until their agent reconnects. The database holds the same as the memory: ids, states, times
+and sealed blobs.
 
 What a relay can still see: that an account exists, how many machines and sessions it has, session states (working, waiting…)
 and timing.

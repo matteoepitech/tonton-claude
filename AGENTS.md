@@ -16,7 +16,7 @@ claude ─ hooks + MCP channel ─▶ agent ──sealed blobs──▶ relay �
 | Path | What | Language |
 |---|---|---|
 | `agent/` | One binary per machine: a background service, Claude Code hooks, an MCP channel that streams the transcript and relays prompts and permissions. Tray icons in `agent/tray/` (Swift on macOS, PowerShell on Windows). | TypeScript (Bun) |
-| `relay/` | Accounts and machines in SQLite, live sessions in memory, WebSocket routing. Never sees plaintext. | TypeScript (Bun) |
+| `relay/` | Accounts, machines and sealed session history in SQLite, live sessions in memory, WebSocket routing. Never sees plaintext. | TypeScript (Bun) |
 | `shared/` | The wire protocol, the account token format and versions, used by the agent and the relay. | TypeScript |
 | `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
 | `raycast/` | A Raycast extension that lists the sessions and messages them through the app's AppleScript dictionary (`app/Resources/TontonClaude.sdef`). | TypeScript (React) |
