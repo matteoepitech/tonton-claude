@@ -134,7 +134,14 @@ struct PromptPayload: Codable {
     var command: SessionCommand?
 }
 struct UpdateOrder: Codable { let version: String; let issuedAt: String }
-struct StartOrder: Codable { let launchId: String; let machineId: String; let cwd: String; let issuedAt: String }
+struct StartOrder: Codable {
+    let launchId: String
+    let machineId: String
+    let cwd: String
+    let issuedAt: String
+    /// Missing for claude: older agents only know it.
+    var tool: String? = nil
+}
 struct StartAnswer: Codable {
     let launchId: String
     let machineId: String

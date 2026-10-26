@@ -9,6 +9,7 @@ struct NewSessionPanel: View {
     @EnvironmentObject var settings: AppSettings
     @State private var machineId: String?
     @State private var folder = ""
+    @State private var tool = CodingTool.claudeCode
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -37,6 +38,7 @@ struct NewSessionPanel: View {
                     .foregroundStyle(.secondary)
             } else {
                 machinePicker(machines)
+                if let machine, machine.startableTools.count > 1 { toolPicker(machine) }
                 folderField(machine)
                 if let machine { recentFolders(machine) }
             }
@@ -77,12 +79,43 @@ struct NewSessionPanel: View {
                     .buttonStyle(.plain)
                     .disabled(!canStart(machine))
                     .opacity(canStart(machine) ? 1 : 0.4)
-                    .help(why(machine) ?? "Start claude on \(machine.name)")
+                    .help(why(machine) ?? "Start a session on \(machine.name)")
                 }
             }
         }
         .scrollIndicators(.never)
         .padding(.bottom, 8)
+    }
+
+    /// Claude Code or OpenCode, when the machine has both.
+    private func toolPicker(_ machine: MachineInfo) -> some View {
+        HStack(spacing: 6) {
+            ForEach(machine.startableTools, id: \.self) { choice in
+                let selected = choice == chosenTool(machine)
+                Button {
+                    tool = choice
+                    focused = true
+                } label: {
+                    HStack(spacing: 5) {
+                        ToolMark(tool: choice, size: 10)
+                        Text(choice.label).font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 24)
+                    .background(Capsule().fill(selected ? Theme.accent.opacity(0.28) : Theme.ink.opacity(0.07)))
+                    .overlay(Capsule().stroke(selected ? Theme.accent.opacity(0.6) : .clear))
+                }
+                .buttonStyle(.plain)
+                .help("Start \(choice.command) on \(machine.name)")
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    /// The tool picked, or the first one the machine has when it lacks it.
+    private func chosenTool(_ machine: MachineInfo?) -> CodingTool {
+        guard let machine else { return tool }
+        return machine.startableTools.contains(tool) ? tool : machine.startableTools.first ?? .claudeCode
     }
 
     private func folderField(_ machine: MachineInfo?) -> some View {
@@ -103,7 +136,7 @@ struct NewSessionPanel: View {
             }
             .buttonStyle(.plain)
             .disabled(!startable)
-            .help(startable ? "Start claude in this folder" : "A full path, or one that starts with ~/")
+            .help(startable ? "Start \(chosenTool(machine).command) in this folder" : "A full path, or one that starts with ~/")
         }
         .padding(.horizontal, 10)
         .frame(height: 32)
@@ -135,13 +168,13 @@ struct NewSessionPanel: View {
     }
 
     private func start(_ machine: MachineInfo) {
-        store.startSession(on: machine, in: folder)
+        store.startSession(on: machine, in: folder, tool: chosenTool(machine))
         folder = ""
     }
 
     private func canStart(_ machine: MachineInfo) -> Bool { why(machine) == nil }
 
-    /// Why claude cannot start on the machine from here, if it cannot.
+    /// Why no session can start on the machine from here, if it cannot.
     private func why(_ machine: MachineInfo) -> String? {
         let platform = machine.platform ?? store.sessions.first { $0.machineId == machine.id }?.platform
         if platform == "win32" { return "Starting sessions needs tmux, which Windows does not have" }
@@ -181,7 +214,7 @@ private struct LaunchCard: View {
             }
             switch launch.state {
             case .sending: caption("Sending the order…")
-            case .starting, .started: caption("Starting claude…")
+            case .starting, .started: caption("Starting \(launch.tool.command)…")
             case .asking, .failed:
                 if let headline = launch.headline {
                     Text(headline).font(.system(size: 12)).foregroundStyle(launch.state == .failed ? Theme.danger : .primary)

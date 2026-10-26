@@ -1,4 +1,5 @@
-import { basename } from 'node:path'
+import { readdirSync, readFileSync, rmSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { open, seal } from '../../../shared/crypto'
 import type { Entry, PromptPayload, RelayToAgent, SealedEntry, SessionCommand, SessionInfo } from '../../../shared/protocol'
 import { withAttachments } from '../channel'
@@ -6,17 +7,21 @@ import { RelayConnection } from '../channel/relay-connection'
 import { claimCommand, whyInvalid } from '../channel/terminal'
 import { type AgentConfig, loadConfig, paths } from '../config'
 import { postHook } from '../hook'
+import { openCodeStarts } from '../launch'
 import { log } from '../log'
 import { matchingRule, readRules, receiveRules } from '../rules'
 import { OPENCODE_COMMANDS, type OpenCodePermission, OpenCodeTracker, type SessionUpdate } from './events'
 
 const BACKLOG_SIZE = 400
+/** How often the bridge looks for sessions started from the notch. */
+const STARTS_POLL_MS = 1000
 /** The relay takes request ids of 32 characters at most. */
 const MAX_REQUEST_ID = 32
 
 /** What the bridge asks the plugin to do in OpenCode, one JSON line on its stdout each. */
 export type PluginCommand =
-  | { op: 'prompt'; sessionID: string; directory?: string; text: string }
+  | { op: 'prompt'; sessionID: string; directory?: string; text: string; providerID?: string; modelID?: string }
+  | { op: 'model'; sessionID: string; directory?: string; providerID: string; modelID: string }
   | { op: 'reply'; sessionID: string; directory?: string; requestID: string; decision: 'once' | 'reject' }
   | { op: 'compact'; sessionID: string; directory?: string; providerID?: string; modelID?: string }
   | { op: 'interrupt'; sessionID: string; directory?: string }
@@ -32,6 +37,8 @@ class Link {
   private readonly pending = new Map<string, OpenCodePermission & { ts: string }>()
   /** Messages sent from the notch, waiting to show up in the conversation. */
   private readonly fromNotch: string[] = []
+  /** OpenCode 1 takes the model with each message: the one the notch switched to, if it did. */
+  private chosenModel: { providerID: string; modelID: string } | undefined
 
   constructor(
     readonly sessionId: string,
@@ -132,7 +139,7 @@ class Link {
     if (prompt.command) return this.command(prompt.command)
     const text = withAttachments(prompt)
     this.fromNotch.push(text)
-    this.send({ op: 'prompt', sessionID: this.sessionId, directory: this.cwd(), text })
+    this.send({ op: 'prompt', sessionID: this.sessionId, directory: this.cwd(), text, ...this.chosenModel })
   }
 
   private command(command: SessionCommand) {
@@ -145,7 +152,23 @@ class Link {
     if (claimed !== true) return claimed.why ? refuse(claimed.why) : undefined
     log('command from the notch', { name: command.name, tool: 'opencode' })
     if (command.name === 'interrupt') this.send({ op: 'interrupt', sessionID: this.sessionId, directory: this.cwd() })
+    else if (command.name === 'model') this.switchModel(command.model ?? '')
     else this.send({ op: 'compact', sessionID: this.sessionId, directory: this.cwd(), ...this.tracker.model(this.sessionId) })
+  }
+
+  /** `/model opus` in Claude Code: the latest Opus OpenCode has, for this session and the next messages. */
+  private switchModel(family: string) {
+    const model = this.tracker.familyModel(this.sessionId, family)
+    if (!model) {
+      const why = `/model ${family} was not run: OpenCode has no ${family} model.`
+      this.add([{ id: `notice-${crypto.randomUUID()}`, ts: new Date().toISOString(), kind: 'system', text: why }])
+      return
+    }
+    const { providerID, modelID } = model
+    this.chosenModel = { providerID, modelID }
+    this.send({ op: 'model', sessionID: this.sessionId, directory: this.cwd(), providerID, modelID })
+    // OpenCode 1 has nothing to switch: the next message carries the model. Either way the notch shows it now.
+    for (const update of this.tracker.switched(this.sessionId, { providerID, modelID })) if (update.metaChanged) this.postMeta()
   }
 
   /** The conversation says when a message came from the notch, as for Claude Code: the app takes its "sending…" off. */
@@ -215,6 +238,16 @@ export async function runOpenCode() {
     }
   }
 
+  // Sessions started from the notch: made in OpenCode's service, which says nothing about them until they are written to.
+  const starts = setInterval(() => {
+    for (const start of takeStarts(paths.run)) {
+      const event = { type: 'session.created', data: { sessionID: start.sessionId, location: { directory: start.cwd } } }
+      for (const update of tracker.handle(event)) apply(update)
+      // The tracker says nothing new about a session it knows: it gets a link all the same.
+      if (!links.has(start.sessionId)) apply({ sessionId: start.sessionId, entries: [], metaChanged: true })
+    }
+  }, STARTS_POLL_MS)
+
   for await (const line of lines(Bun.stdin.stream())) {
     let event: unknown
     try {
@@ -226,6 +259,7 @@ export async function runOpenCode() {
   }
 
   // OpenCode exited: its sessions end with it.
+  clearInterval(starts)
   log('opencode bridge: OpenCode exited')
   await statuses
   await Promise.all(
@@ -236,6 +270,27 @@ export async function runOpenCode() {
     }),
   )
   process.exit(0)
+}
+
+/** The sessions the launcher left for a bridge, each taken once. */
+export function takeStarts(run: string): { sessionId: string; cwd: string }[] {
+  const folder = openCodeStarts(run)
+  let files: string[]
+  try {
+    files = readdirSync(folder).filter(file => /^ses_[A-Za-z0-9]+\.json$/.test(file))
+  } catch {
+    return []
+  }
+  return files.flatMap(file => {
+    const path = join(folder, file)
+    try {
+      const start = JSON.parse(readFileSync(path, 'utf8')) as { sessionId?: unknown; cwd?: unknown }
+      rmSync(path, { force: true })
+      return typeof start.sessionId === 'string' && typeof start.cwd === 'string' ? [{ sessionId: start.sessionId, cwd: start.cwd }] : []
+    } catch {
+      return []
+    }
+  })
 }
 
 async function* lines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {

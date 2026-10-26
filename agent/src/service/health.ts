@@ -1,7 +1,9 @@
 // What the background service reports about its machine: CPU, memory and battery, read with what each OS ships.
-import { readdirSync, readFileSync } from 'node:fs'
-import { cpus, freemem, networkInterfaces, totalmem } from 'node:os'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { cpus, freemem, homedir, networkInterfaces, totalmem } from 'node:os'
+import { join } from 'node:path'
 import type { MachineHealth } from '../../../shared/protocol'
+import { hasOpenCode } from '../install/opencode'
 
 type Battery = MachineHealth['battery']
 
@@ -101,6 +103,19 @@ export function wakeTargets(interfaces: Interfaces = networkInterfaces()): NonNu
   return [...targets].map(([mac, broadcast]) => ({ mac, broadcast }))
 }
 
+/**
+ * The coding agents the notch can start here. The service may run with a short PATH (a LaunchAgent, a systemd unit), so
+ * their configuration folders count too.
+ */
+export function installedTools(
+  has: { claude: () => boolean; opencode: () => boolean } = {
+    claude: () => existsSync(join(homedir(), '.claude')) || Bun.which('claude') !== null,
+    opencode: () => hasOpenCode(),
+  },
+): NonNullable<MachineHealth['tools']> {
+  return (['claude', 'opencode'] as const).filter(tool => has[tool]())
+}
+
 /** One report; `since` is the CPU sample taken at the previous one. */
 export function readHealth(since: CpuTimes): { health: MachineHealth; sample: CpuTimes } {
   const sample = cpuTimes()
@@ -112,6 +127,7 @@ export function readHealth(since: CpuTimes): { health: MachineHealth; sample: Cp
       memoryTotal: total,
       battery: battery(),
       wake: wakeTargets(),
+      tools: installedTools(),
       at: new Date().toISOString(),
     },
     sample,

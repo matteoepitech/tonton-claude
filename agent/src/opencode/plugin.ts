@@ -80,6 +80,7 @@ async function runIn2(input, { op, sessionID, ...command }) {
   if (op === 'reply') return input.permission.reply({ sessionID, requestID: command.requestID, decision: command.decision })
   if (op === 'compact') return input.session.compact({ sessionID })
   if (op === 'interrupt') return input.session.interrupt({ sessionID })
+  if (op === 'model') return input.session.switchModel({ sessionID, model: { id: command.modelID, providerID: command.providerID } })
   if (op === 'history') {
     const [info, messages] = await Promise.all([input.session.get({ sessionID }), input.session.context({ sessionID })])
     return send({ type: 'tonton.history', data: { sessionID, info, messages } })
@@ -90,6 +91,7 @@ async function runIn2(input, { op, sessionID, ...command }) {
       providerID: model.providerID,
       modelID: model.modelID ?? model.id,
       context: model.limit?.context,
+      released: model.time?.released,
     }))
     return send({ type: 'tonton.models', data: { models } })
   }
@@ -97,7 +99,12 @@ async function runIn2(input, { op, sessionID, ...command }) {
 
 async function runIn1(client, { op, sessionID, ...command }) {
   const path = { id: sessionID }
-  if (op === 'prompt') return data(await client.session.prompt({ path, body: { parts: [{ type: 'text', text: command.text }] } }))
+  if (op === 'prompt') {
+    const model = command.providerID && command.modelID ? { model: { providerID: command.providerID, modelID: command.modelID } } : {}
+    return data(await client.session.prompt({ path, body: { ...model, parts: [{ type: 'text', text: command.text }] } }))
+  }
+  // OpenCode 1 takes the model with the next message, which the bridge adds.
+  if (op === 'model') return
   if (op === 'reply') {
     const response = command.decision === 'once' ? 'once' : 'reject'
     return data(await client.postSessionIdPermissionsPermissionId({ path: { id: sessionID, permissionID: command.requestID }, body: { response } }))
@@ -114,7 +121,12 @@ async function runIn1(client, { op, sessionID, ...command }) {
   if (op === 'models') {
     const providers = data(await client.config.providers())?.providers ?? []
     const models = providers.flatMap(provider =>
-      Object.entries(provider.models ?? {}).map(([id, model]) => ({ providerID: provider.id, modelID: id, context: model?.limit?.context })),
+      Object.entries(provider.models ?? {}).map(([id, model]) => ({
+        providerID: provider.id,
+        modelID: id,
+        context: model?.limit?.context,
+        released: model?.release_date ? Date.parse(model.release_date) : undefined,
+      })),
     )
     return send({ type: 'tonton.models', data: { models } })
   }

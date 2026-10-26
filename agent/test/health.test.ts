@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { broadcastAddress, cpuLoad, parsePmset, parseSysBattery, parseWin32Battery, readHealth, wakeTargets } from '../src/service/health'
+import {
+  broadcastAddress,
+  cpuLoad,
+  installedTools,
+  parsePmset,
+  parseSysBattery,
+  parseWin32Battery,
+  readHealth,
+  wakeTargets,
+} from '../src/service/health'
 
 describe('machine health', () => {
   test('CPU load is the busy share between two samples', () => {
@@ -53,5 +62,13 @@ describe('machine health', () => {
     expect(health.cpu).toBeLessThanOrEqual(1)
     expect(sample.total).toBeGreaterThan(0)
     expect(Array.isArray(health.wake)).toBe(true)
+  })
+})
+
+describe('installedTools', () => {
+  test('the coding agents the notch can start here, Claude Code first', () => {
+    expect(installedTools({ claude: () => true, opencode: () => true })).toEqual(['claude', 'opencode'])
+    expect(installedTools({ claude: () => false, opencode: () => true })).toEqual(['opencode'])
+    expect(installedTools({ claude: () => true, opencode: () => false })).toEqual(['claude'])
   })
 })

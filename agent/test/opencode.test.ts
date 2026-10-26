@@ -63,7 +63,8 @@ describe('OpenCode 2', () => {
       context: { usedTokens: 120, windowTokens: undefined },
       lastMessage: 'Done: the command printed hi-from-probe.',
       terminal: false,
-      commands: ['compact', 'interrupt'],
+      commands: ['compact', 'interrupt', 'model'],
+      model: 'mock-model',
     })
     expect(tracker.model(sessionId)).toEqual({ providerID: 'mock', modelID: 'mock-model' })
     const models = tracker.handle({
@@ -72,6 +73,34 @@ describe('OpenCode 2', () => {
     })
     expect(models.map(update => update.sessionId)).toEqual([sessionId])
     expect(tracker.meta(sessionId).context).toEqual({ usedTokens: 120, windowTokens: 200_000 })
+  })
+
+  test('the model menu picks the latest of a family, from the session provider first, then Anthropic', () => {
+    const { tracker } = replay(events)
+    tracker.handle({
+      type: 'tonton.models',
+      data: {
+        models: [
+          { providerID: 'anthropic', modelID: 'claude-sonnet-4-5', released: 1_750_000_000_000 },
+          { providerID: 'anthropic', modelID: 'claude-sonnet-5-5', released: 1_790_000_000_000 },
+          { providerID: 'openrouter', modelID: 'anthropic/claude-sonnet-5-5', released: 1_790_000_000_000 },
+          { providerID: 'openrouter', modelID: 'anthropic/claude-haiku-4-5', released: 1_760_000_000_000 },
+          { providerID: 'mock', modelID: 'mock-model' },
+        ],
+      },
+    })
+    expect(tracker.familyModel(sessionId, 'sonnet')).toMatchObject({ providerID: 'anthropic', modelID: 'claude-sonnet-5-5' })
+    expect(tracker.familyModel(sessionId, 'haiku')).toMatchObject({ providerID: 'openrouter', modelID: 'anthropic/claude-haiku-4-5' })
+    expect(tracker.familyModel(sessionId, 'opus')).toBeUndefined()
+    // Once on OpenRouter, the session stays with it.
+    tracker.handle({
+      id: 'sw',
+      created: 9,
+      type: 'session.model.switched',
+      data: { sessionID: sessionId, model: { id: 'anthropic/claude-haiku-4-5', providerID: 'openrouter' } },
+    })
+    expect(tracker.meta(sessionId).model).toBe('anthropic/claude-haiku-4-5')
+    expect(tracker.familyModel(sessionId, 'sonnet')).toMatchObject({ providerID: 'openrouter' })
   })
 
   test('the permission it asked for becomes a request card, closed once answered', () => {

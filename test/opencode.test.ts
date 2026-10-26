@@ -19,6 +19,7 @@ const base = `http://127.0.0.1:${relay.server.port}`
 
 let key: string
 let machineId: string
+let home: string
 let bridge: ReturnType<typeof Bun.spawn>
 const messages: RelayToApp[] = []
 const raw: string[] = []
@@ -72,7 +73,7 @@ beforeAll(async () => {
   const machine = await (await api('/api/machines/join', { method: 'POST', body: JSON.stringify(joinRequest) })).json()
   machineId = machine.machineId
 
-  const home = join(dir, 'agent')
+  home = join(dir, 'agent')
   mkdirSync(home, { recursive: true })
   writeFileSync(join(home, 'config.json'), JSON.stringify({ server: base, ...machine, key, machine: 'Linux-Box', version: '0.6.0' }))
 
@@ -116,7 +117,7 @@ describe('OpenCode through the relay', () => {
     const info = await open<SessionInfo>(key, session.info as string)
     expect(info).toMatchObject({ machine: 'Linux-Box', cwd: '/Users/me/code/shop', project: 'shop', tool: 'opencode' })
     const meta = await eventually(() => latest()?.meta, 'the meta')
-    expect(await open<SessionMeta>(key, meta)).toMatchObject({ title: 'Probe title', commands: ['compact', 'interrupt'] })
+    expect(await open<SessionMeta>(key, meta)).toMatchObject({ title: 'Probe title', commands: ['compact', 'interrupt', 'model'] })
     // The bridge asks OpenCode for the window of its models, and for the history of a session it meets halfway.
     expect(commands).toContainEqual({ op: 'models' })
     expect(commands).toContainEqual({ op: 'history', sessionID: SESSION, directory: '/Users/me/code/shop' })
@@ -181,6 +182,57 @@ describe('OpenCode through the relay', () => {
       kind: 'system',
       text: '/clear was not run: OpenCode has no such command.',
     })
+  })
+
+  test('the model menu switches OpenCode to the latest model of the family, or says it has none', async () => {
+    emit('tonton.models', {
+      models: [
+        { providerID: 'anthropic', modelID: 'claude-sonnet-4-5', released: 1_750_000_000_000 },
+        { providerID: 'anthropic', modelID: 'claude-sonnet-5-5', released: 1_790_000_000_000 },
+      ],
+    })
+    const switchTo = async (model: string) =>
+      seal(key, {
+        text: '',
+        images: [],
+        command: { name: 'model', model, sessionId: SESSION, id: `command-${crypto.randomUUID()}`, issuedAt: new Date().toISOString() },
+      })
+    app.send(JSON.stringify({ t: 'prompt', sessionId: SESSION, payload: await switchTo('sonnet') }))
+    await eventually(() => commands.find(c => c.op === 'model'), 'the switch')
+    expect(commands.find(c => c.op === 'model')).toMatchObject({ providerID: 'anthropic', modelID: 'claude-sonnet-5-5' })
+    let shown: string | undefined
+    for (let i = 0; i < 60 && shown !== 'claude-sonnet-5-5'; i++) {
+      const meta = latest()?.meta
+      shown = meta ? (await open<SessionMeta>(key, meta)).model : undefined
+      await Bun.sleep(50)
+    }
+    expect(shown).toBe('claude-sonnet-5-5')
+    const before = messages.length
+    app.send(JSON.stringify({ t: 'prompt', sessionId: SESSION, payload: await switchTo('opus') }))
+    const note = await eventually(() => messages.slice(before).find(m => m.t === 'entries'), 'the note')
+    if (note.t !== 'entries') throw new Error('unexpected message')
+    expect(await open<Entry>(key, note.entries[0].blob)).toMatchObject({
+      kind: 'system',
+      text: '/model opus was not run: OpenCode has no opus model.',
+    })
+  })
+
+  test('a session started from the notch shows up before anyone writes to it', async () => {
+    const started = 'ses_startedfromnotch01'
+    mkdirSync(join(home, 'run', 'opencode'), { recursive: true })
+    writeFileSync(join(home, 'run', 'opencode', `${started}.json`), JSON.stringify({ sessionId: started, cwd: '/Users/me/code/new' }))
+    const session = await eventually(() => {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const message = messages[i]
+        if (message.t === 'session' && message.session.id === started && message.session.agentOnline) return message.session
+      }
+    }, 'the started session')
+    expect(await open<SessionInfo>(key, session.info as string)).toMatchObject({
+      cwd: '/Users/me/code/new',
+      project: 'new',
+      tool: 'opencode',
+    })
+    expect(commands).toContainEqual({ op: 'history', sessionID: started, directory: '/Users/me/code/new' })
   })
 
   test('its sessions end with OpenCode', async () => {

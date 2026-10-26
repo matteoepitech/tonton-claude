@@ -1,7 +1,7 @@
 import Foundation
 
-/// A session the user starts from the notch: the agent runs claude in that folder of the machine and passes on the
-/// questions Claude Code asks while it starts, until the session runs.
+/// A session the user starts from the notch: the agent runs claude or opencode in that folder of the machine and passes on
+/// the questions Claude Code asks while it starts, until the session runs.
 public struct SessionLaunch: Identifiable, Equatable, Sendable {
     public enum State: String, Equatable, Sendable {
         /// The order is on its way to the machine.
@@ -20,13 +20,14 @@ public struct SessionLaunch: Identifiable, Equatable, Sendable {
     public let sessionId: String?
     /// Questions already answered, which a replay cannot ask again.
     public let answered: Set<String>
+    public let tool: CodingTool
 
     public init(
         id: String = SessionLaunch.newId(), machineId: String, cwd: String, state: State = .sending, text: String? = nil,
-        questionId: String? = nil, sessionId: String? = nil, answered: Set<String> = []
+        questionId: String? = nil, sessionId: String? = nil, answered: Set<String> = [], tool: CodingTool = .claudeCode
     ) {
         (self.id, self.machineId, self.cwd, self.state) = (id, machineId, cwd, state)
-        (self.text, self.questionId, self.sessionId, self.answered) = (text, questionId, sessionId, answered)
+        (self.text, self.questionId, self.sessionId, self.answered, self.tool) = (text, questionId, sessionId, answered, tool)
     }
 
     /// 32 lowercase letters and digits, as the relay expects.
@@ -47,16 +48,19 @@ public struct SessionLaunch: Identifiable, Equatable, Sendable {
         }
         return SessionLaunch(
             id: id, machineId: machineId, cwd: cwd, state: next, text: detail.text,
-            questionId: next == .asking ? detail.question : nil, sessionId: detail.sessionId ?? sessionId, answered: answered)
+            questionId: next == .asking ? detail.question : nil, sessionId: detail.sessionId ?? sessionId, answered: answered, tool: tool)
     }
 
     /// Shown as starting once the user answered, until the machine reports the next step.
     public func answered(_ question: String) -> SessionLaunch {
-        SessionLaunch(id: id, machineId: machineId, cwd: cwd, state: .starting, sessionId: sessionId, answered: answered.union([question]))
+        SessionLaunch(
+            id: id, machineId: machineId, cwd: cwd, state: .starting, sessionId: sessionId, answered: answered.union([question]), tool: tool
+        )
     }
 
     public func failed(_ text: String) -> SessionLaunch {
-        SessionLaunch(id: id, machineId: machineId, cwd: cwd, state: .failed, text: text, sessionId: sessionId, answered: answered)
+        SessionLaunch(
+            id: id, machineId: machineId, cwd: cwd, state: .failed, text: text, sessionId: sessionId, answered: answered, tool: tool)
     }
 
     /// The question asked, without the screen it was read from.

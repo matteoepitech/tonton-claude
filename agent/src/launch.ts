@@ -1,8 +1,8 @@
-// Starts claude from the notch. An interactive Claude Code needs a terminal, so it runs in a detached tmux session; the
-// questions it asks on the way (loading the channel, trusting the folder) go to the notch, and only the user's answer
-// moves it on.
+// Starts claude or opencode from the notch. An interactive Claude Code needs a terminal, so it runs in a detached tmux
+// session; the questions it asks on the way (loading the channel, trusting the folder) go to the notch, and only the
+// user's answer moves it on. OpenCode asks nothing: its session is made in its background service when it has one.
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { open, seal } from '../../shared/crypto'
@@ -41,7 +41,27 @@ export interface LaunchOptions {
   run?: string
   shell?: string
   home?: string
+  /** How the installed OpenCode is found and reached. */
+  openCode?: OpenCodeAccess
 }
+
+/** OpenCode 2's background service, which its terminals and Tonton's plugin connect to. */
+export interface OpenCodeService {
+  url: string
+  password: string
+}
+
+export interface OpenCodeAccess {
+  /** The major version of `opencode` on the PATH of a login shell, or null without one. */
+  version(shell: string): number | null
+  /** The running service, started first when needed. Null with OpenCode 1, or when it cannot start. */
+  service(shell: string): OpenCodeService | null
+}
+
+/** How long `opencode` must stay up before its start counts. */
+const OPENCODE_SETTLE_MS = 1500
+/** As OpenCode names them: the id goes into the command tmux runs. */
+const OPENCODE_SESSION = /^ses_[A-Za-z0-9]{8,64}$/
 
 /** A start order from the relay. */
 export function receiveStartOrder(config: AgentConfig, launchId: string, sealed: string, relay: RelayConnection) {
@@ -82,7 +102,8 @@ export async function handleStartOrder(
   if (running >= MAX_RUNNING) return fail('Too many sessions are starting on this machine. Try again in a minute.')
   running++
   try {
-    await runLaunch(launchId, cwd, report, { ...options, run })
+    if (order.tool === 'opencode') await runOpenCodeLaunch(launchId, cwd, report, options)
+    else await runLaunch(launchId, cwd, report, { ...options, run })
   } finally {
     running--
   }
@@ -150,6 +171,90 @@ async function runLaunch(launchId: string, cwd: string, report: Report, options:
   report('failed', { text: `${left}\n\n${lastLines(screen)}` })
 }
 
+/**
+ * OpenCode 2 keeps its sessions in a background service: the session is made there in the folder, so the notch has it at
+ * once, then a terminal opens on it. OpenCode 1 makes its session with the first message, which is when the notch gets it.
+ */
+async function runOpenCodeLaunch(launchId: string, cwd: string, report: Report, options: LaunchOptions) {
+  const access = options.openCode ?? installedOpenCode
+  const shell = options.shell ?? (process.env.SHELL || '/bin/sh')
+  const version = access.version(shell)
+  if (version === null) return report('failed', { text: 'opencode was not found on this machine. Install it, then try again.' })
+  report('starting')
+  const service = version >= 2 ? access.service(shell) : null
+  const sessionId = service ? await createOpenCodeSession(service, cwd) : null
+  if (version >= 2 && !sessionId) return report('failed', { text: "OpenCode's background service did not make the session." })
+  const name = `tonton-${launchId}`
+  const command = sessionId ? `opencode --session ${sessionId}` : 'opencode'
+  const created = tmux(['new-session', '-d', '-s', name, '-c', cwd.replaceAll('#', '##'), '-x', '200', '-y', '50', shell, '-lic', command])
+  if (!created.ok) return report('failed', { text: `tmux could not start: ${created.output}` })
+  await Bun.sleep(OPENCODE_SETTLE_MS)
+  if (!tmux(['has-session', '-t', `=${name}`]).ok) return report('failed', { text: 'opencode stopped before it was ready.' })
+  if (sessionId) {
+    // OpenCode says nothing about a session until it is written to: the bridge learns it from this file.
+    announceOpenCodeSession(options.run ?? paths.run, sessionId, cwd)
+    return report('started', { text: `Running in tmux session ${name}.`, sessionId })
+  }
+  report('started', { text: `Running in tmux session ${name}. The session shows up in the notch with its first message.` })
+}
+
+/** Where the launcher leaves the OpenCode sessions it made, for the bridge of the OpenCode service to follow. */
+export const openCodeStarts = (run: string) => join(run, 'opencode')
+
+function announceOpenCodeSession(run: string, sessionId: string, cwd: string) {
+  try {
+    mkdirSync(openCodeStarts(run), { recursive: true, mode: 0o700 })
+    writeFileSync(join(openCodeStarts(run), `${sessionId}.json`), JSON.stringify({ sessionId, cwd }), { mode: 0o600 })
+  } catch (error) {
+    log('opencode: could not hand the session to the bridge', String(error))
+  }
+}
+
+async function createOpenCodeSession(service: OpenCodeService, cwd: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${service.url.replace(/\/+$/, '')}/api/session`, {
+      method: 'POST',
+      headers: { authorization: `Basic ${btoa(`opencode:${service.password}`)}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ location: { directory: cwd } }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    const id = ((await response.json()) as { data?: { id?: unknown } })?.data?.id
+    return typeof id === 'string' && OPENCODE_SESSION.test(id) ? id : null
+  } catch (error) {
+    log('opencode: no session from the service', String(error))
+    return null
+  }
+}
+
+/** Where OpenCode 2 writes where its service listens, and its password: `$XDG_STATE_HOME/opencode`, else `~/.local/state`. */
+export function readOpenCodeService(env: Record<string, string | undefined> = process.env, home = homedir()): OpenCodeService | null {
+  try {
+    const file = join(env.XDG_STATE_HOME || join(home, '.local', 'state'), 'opencode', 'service.json')
+    const service = JSON.parse(readFileSync(file, 'utf8')) as { url?: unknown; password?: unknown }
+    return typeof service.url === 'string' && typeof service.password === 'string' ? { url: service.url, password: service.password } : null
+  } catch {
+    return null
+  }
+}
+
+/** `opencode v2.0.32`, or `2.0.32`. */
+export const openCodeMajor = (output: string): number | null => {
+  const match = /(\d+)\.\d+\.\d+/.exec(output)
+  return match ? Number(match[1]) : null
+}
+
+const installedOpenCode: OpenCodeAccess = {
+  version: shell => {
+    const result = exec([shell, '-lic', 'opencode --version'])
+    return result.ok ? openCodeMajor(result.output) : null
+  },
+  service: shell => {
+    // `opencode service start` does nothing when the service runs, and leaves it running for the terminals.
+    exec([shell, '-lic', 'opencode service start'], 20_000)
+    return readOpenCodeService()
+  },
+}
+
 function waitForAnswer(launchId: string, question: string): Promise<boolean> {
   return new Promise(resolve => {
     const timer = setTimeout(() => finish(false), ANSWER_TIMEOUT_MS)
@@ -215,9 +320,11 @@ async function readOrder<T extends { issuedAt: string }>(key: string, sealed: st
 
 const tmux = (args: string[]) => exec(['tmux', ...args])
 
-function exec(command: string[]): { ok: boolean; output: string } {
+function exec(command: string[], timeout = COMMAND_TIMEOUT_MS): { ok: boolean; output: string } {
   try {
-    const result = Bun.spawnSync(command, { stdout: 'pipe', stderr: 'pipe', timeout: COMMAND_TIMEOUT_MS })
+    // Bun hands a child the environment the process started with: changes made since, like the tests' private tmux,
+    // only count when passed.
+    const result = Bun.spawnSync(command, { stdout: 'pipe', stderr: 'pipe', timeout, env: { ...process.env } })
     return { ok: result.exitCode === 0, output: `${result.stdout.toString()}${result.stderr.toString()}`.trim() }
   } catch (error) {
     return { ok: false, output: String(error) }

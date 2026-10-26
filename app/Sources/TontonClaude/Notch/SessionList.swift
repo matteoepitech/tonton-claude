@@ -8,10 +8,9 @@ struct SessionListView: View {
     @State private var query = ""
 
     var body: some View {
-        let sessions = store.visibleSessions.filter {
-            query.isEmpty || $0.project.localizedCaseInsensitiveContains(query) || $0.machine.localizedCaseInsensitiveContains(query)
-                || ($0.title?.localizedCaseInsensitiveContains(query) ?? false)
-        }
+        let sessions = store.visibleSessions.filter { $0.matches(query) }
+        // The tool of each session only says something when both are listed.
+        let mixed = store.visibleSessions.mixesTools
         let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions, thisMac: store.thisMachines)
         VStack(spacing: 0) {
             if !store.visibleSessions.isEmpty {
@@ -39,7 +38,8 @@ struct SessionListView: View {
                                 machine: pinned ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
                                 machineStyle: settings.machineStyles[s.machineId],
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
-                                shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil
+                                shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil,
+                                tool: mixed ? s.codingTool : nil
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { store.selectedId = s.id }
@@ -175,12 +175,15 @@ struct SessionRow: View {
     var machine: String?
     var machineStyle: MachineStyle?
     var shortcut: Int?
+    /// Shown when the list has sessions of both tools.
+    var tool: CodingTool?
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             StatusDot(status: session.status, limit: session.fiveHourLimit).padding(.top, 5)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
+                    if let tool { ToolMark(tool: tool, size: 9) }
                     Text(session.project).font(.system(size: 12, weight: .semibold)).lineLimit(1).layoutPriority(1)
                     if let machine {
                         if let machineStyle { MachineBadge(style: machineStyle, size: 9) }
@@ -241,5 +244,19 @@ struct SessionRow: View {
                 .font(.system(size: 10, weight: .medium))
                 .lineLimit(1)
         }
+    }
+}
+
+/// Which coding agent runs a session: Claude Code or OpenCode.
+struct ToolMark: View {
+    let tool: CodingTool
+    var size: CGFloat = 10
+
+    var body: some View {
+        Image(systemName: tool.symbol)
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .help(tool.label)
+            .accessibilityLabel(tool.label)
     }
 }
