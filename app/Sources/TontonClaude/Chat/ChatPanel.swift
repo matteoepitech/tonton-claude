@@ -74,12 +74,13 @@ struct ChatHeader: View {
             HStack(spacing: 6) {
                 StatusDot(status: session.status)
                 Text(session.project).font(.system(size: 13, weight: .bold))
-                Text("· \(session.machine)").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("· \(store.isOnThisMac(session) ? "This Mac" : session.machine)").font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
                     Text(String(format: "$%.2f", cost)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
                 }
                 Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
+                if store.isOnThisMac(session) { LocalFolderActions(session: session) }
                 Button {
                     export()
                 } label: {

@@ -11,7 +11,7 @@ struct SessionListView: View {
             query.isEmpty || $0.project.localizedCaseInsensitiveContains(query) || $0.machine.localizedCaseInsensitiveContains(query)
                 || ($0.title?.localizedCaseInsensitiveContains(query) ?? false)
         }
-        let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions)
+        let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions, thisMac: store.thisMac)
         VStack(spacing: 0) {
             if store.visibleSessions.count > 5 {
                 HStack(spacing: 6) {
@@ -34,7 +34,7 @@ struct SessionListView: View {
                             let pinned = section.kind == .pinned
                             SessionRow(
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
-                                machine: pinned ? s.machine : nil,
+                                machine: pinned ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
                                 shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil
                             )
@@ -42,6 +42,8 @@ struct SessionListView: View {
                             .onTapGesture { store.selectedId = s.id }
                             .contextMenu {
                                 Button(pinned ? "Unpin" : "Pin to top") { store.togglePin(s.id) }
+                                if store.isOnThisMac(s) { LocalFolderActions(session: s, style: .menu) }
+                                Divider()
                                 Button("Remove from list") { store.dismiss(s.id) }
                             }
                         }
@@ -60,6 +62,11 @@ struct SessionListView: View {
                 Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(.secondary)
                 Text("PINNED").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
+            case .thisMac:
+                Image(systemName: "laptopcomputer").font(.system(size: 9)).foregroundStyle(.secondary)
+                Text("THIS MAC").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                if let info = store.machines.first(where: { $0.id == store.thisMac }) { NotchAgentUpdate(machine: info) }
             case .machine(let machine):
                 Text(machine.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 4)

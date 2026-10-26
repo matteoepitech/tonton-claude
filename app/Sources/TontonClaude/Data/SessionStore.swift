@@ -61,9 +61,16 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    /// The list as the notch shows it, pinned sessions first.
-    var sections: [SessionSection] { SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions) }
-    var orderedSessions: [SessionSummary] { SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions) }
+    /// The machine id of the agent on this Mac, read again from its config whenever the machines change.
+    @Published private(set) var thisMac: String?
+
+    func isOnThisMac(_ session: SessionSummary) -> Bool { thisMac != nil && session.machineId == thisMac }
+
+    /// The list as the notch shows it, pinned sessions first, then this Mac's.
+    var sections: [SessionSection] { SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMac) }
+    var orderedSessions: [SessionSummary] {
+        SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMac)
+    }
 
     func togglePin(_ sessionId: String) {
         if settings.pinnedSessions.contains(sessionId) {
@@ -85,6 +92,7 @@ final class SessionStore: ObservableObject {
     func connect() {
         sessions = []
         machines = []
+        thisMac = nil
         entries = [:]
         updatingMachines = []
         updateErrors = [:]
@@ -111,6 +119,7 @@ final class SessionStore: ObservableObject {
         switch message {
         case .snapshot(let wireSessions, let wireMachines):
             machines = vault.machines(wireMachines)
+            thisMac = settings.account.flatMap { LocalAgent.machineId(for: $0.accountId) }
             sessions = sorted(wireSessions.map { vault.session($0, machines: machines) })
             // The snapshot lists every session the relay still has: pins of the others can go.
             let pins = settings.pinnedSessions.filter { id in sessions.contains { $0.id == id } }
@@ -120,6 +129,7 @@ final class SessionStore: ObservableObject {
             update(vault.session(wire, machines: machines))
         case .machines(let wireMachines):
             machines = vault.machines(wireMachines)
+            thisMac = settings.account.flatMap { LocalAgent.machineId(for: $0.accountId) }
         case .removed(let sessionId):
             sessions.removeAll { $0.id == sessionId }
             entries[sessionId] = nil
