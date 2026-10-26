@@ -60,6 +60,10 @@ struct SessionListView: View {
             }
             .scrollIndicators(.never)
         }
+        // The relay only sends the conversations the app opens: a search fetches the others first.
+        .onChange(of: query.count >= ConversationSearch.minimumQueryLength) { _, searching in
+            if searching { store.catchUpHistories() }
+        }
     }
 
     /// Messages that match the search, in every conversation the app has open: a click shows the message in its session.
