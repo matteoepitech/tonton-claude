@@ -93,6 +93,8 @@ describe.skipIf(process.platform === 'win32' || !hasTmux)('starting a session fr
     await handleStartAnswer(config, 'launch0001', await answer('launch0001', channel.opened.question, true))
     await handleStartAnswer(config, 'launch0001', await answer('launch9999', trust.opened.question, true))
     await handleStartAnswer(config, 'launch0001', await answer('launch0001', trust.opened.question, true, 'other'))
+    // Nor does a junk order with the id of this start fail it.
+    await handleStartOrder(config, 'launch0001', 'junk', link, { run })
     await Bun.sleep(1200)
     expect(link.messages.some(m => m.state !== 'asking' && m.state !== 'starting')).toBe(false)
     await handleStartAnswer(config, 'launch0001', await answer('launch0001', trust.opened.question, true))
@@ -132,17 +134,18 @@ describe.skipIf(process.platform === 'win32' || !hasTmux)('starting a session fr
       'launch0003',
       await seal(foreignKey, { launchId: 'launch0003', machineId: 'm', cwd: project, issuedAt: now() }),
       link,
+      { run },
     )
-    await handleStartOrder(config, 'launch0004', await order('launch0004', project, { issuedAt: '2020-01-01T00:00:00Z' }), link)
+    await handleStartOrder(config, 'launch0004', await order('launch0004', project, { issuedAt: '2020-01-01T00:00:00Z' }), link, { run })
     await handleStartOrder(config, 'launch0005', await order('launch0005', join(dir, 'missing')), link, { run })
     await handleStartOrder(config, 'launch0006', await order('launch0006', 'relative/path'), link, { run })
     // The relay can't reuse an order under a new id, nor send it to another machine of the account.
-    await handleStartOrder(config, 'launch0007', await order('launch0001', project), link)
-    await handleStartOrder(config, 'launch0011', await order('launch0011', project, { machineId: 'other' }), link)
+    await handleStartOrder(config, 'launch0007', await order('launch0012', project), link, { run })
+    await handleStartOrder(config, 'launch0011', await order('launch0011', project, { machineId: 'other' }), link, { run })
     await until(() => (link.messages.length === 6 ? true : undefined), 'six refusals')
     expect(link.messages.every(m => m.state === 'failed')).toBe(true)
     // An id tmux could misread gets no answer at all.
-    await handleStartOrder(config, 'Launch#S1', await order('Launch#S1', project), link)
+    await handleStartOrder(config, 'Launch#S1', await order('Launch#S1', project), link, { run })
     await Bun.sleep(200)
     expect(link.messages).toHaveLength(6)
   })
@@ -153,7 +156,7 @@ describe.skipIf(process.platform === 'win32' || !hasTmux)('starting a session fr
     await handleStartOrder(config, 'launch0008', sealed, link, { run })
     await handleStartOrder(config, 'launch0008', sealed, link, { run })
     // Another process of the machine already took this one.
-    expect(claim('launch0009', run)).toBe(true)
+    expect(claim('launch0009', run)).toBe('claimed')
     await handleStartOrder(config, 'launch0009', await order('launch0009', join(dir, 'missing')), link, { run })
     await Bun.sleep(200)
     expect(link.messages).toHaveLength(1)
@@ -163,10 +166,13 @@ describe.skipIf(process.platform === 'win32' || !hasTmux)('starting a session fr
 describe('claim', () => {
   test('old claims are cleared', () => {
     const folder = join(dir, 'claims')
-    expect(claim('claim0001', folder)).toBe(true)
-    expect(claim('claim0001', folder)).toBe(false)
-    expect(claim('claim0002', folder, Date.now() + 30 * 60_000)).toBe(true)
-    expect(claim('claim0001', folder)).toBe(true)
+    expect(claim('claim0001', folder)).toBe('claimed')
+    expect(claim('claim0001', folder)).toBe('taken')
+    expect(claim('claim0002', folder, Date.now() + 30 * 60_000)).toBe('claimed')
+    expect(claim('claim0001', folder)).toBe('claimed')
+    // A folder that can't hold claims is an error to report, not a start someone else took.
+    writeFileSync(join(dir, 'not-a-folder'), '')
+    expect(claim('claim0003', join(dir, 'not-a-folder'))).toBeInstanceOf(Error)
   })
 })
 

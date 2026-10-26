@@ -43,7 +43,7 @@ public struct SessionLaunch: Identifiable, Equatable, Sendable {
             let next = State(rawValue: state), next != .sending
         else { return self }
         if next == .asking {
-            guard let question = detail.question, !answered.contains(question) else { return self }
+            guard let question = detail.question, !answered.contains(question), detail.text?.isEmpty == false else { return self }
         }
         return SessionLaunch(
             id: id, machineId: machineId, cwd: cwd, state: next, text: detail.text,

@@ -154,6 +154,8 @@ private struct LaunchCard: View {
     let launch: SessionLaunch
     let machine: String
     @EnvironmentObject var store: SessionStore
+    /// A question opens the notch by itself: a click meant for something else must not answer it.
+    @State private var armed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -200,17 +202,24 @@ private struct LaunchCard: View {
                 HStack(spacing: 8) {
                     Spacer()
                     Button("Cancel") { store.answerStart(launch, confirm: false) }
+                        .disabled(!armed)
                         .buttonStyle(.plain)
                         .font(.system(size: 11, weight: .medium))
                         .padding(.horizontal, 12)
                         .frame(height: 24)
                         .background(Capsule().fill(.white.opacity(0.1)))
                     Button("Confirm") { store.answerStart(launch, confirm: true) }
+                        .disabled(!armed)
                         .buttonStyle(.plain)
                         .font(.system(size: 11, weight: .semibold))
                         .padding(.horizontal, 12)
                         .frame(height: 24)
-                        .background(Capsule().fill(Theme.accent))
+                        .background(Capsule().fill(Theme.accent.opacity(armed ? 1 : 0.4)))
+                }
+                .task(id: launch.questionId) {
+                    armed = false
+                    try? await Task.sleep(for: .milliseconds(600))
+                    armed = true
                 }
             }
         }

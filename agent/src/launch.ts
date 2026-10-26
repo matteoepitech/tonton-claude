@@ -66,11 +66,14 @@ export async function handleStartOrder(
       return { t: 'session_start', launchId, state, detail: await seal(config.key, detail) }
     })
   const fail = (text: string) => report('failed', { text })
+  // Claimed before anything is reported, so a replayed or junk order for a start already running says nothing about it.
+  const run = options.run ?? paths.run
+  const claimed = claim(launchId, run)
+  if (claimed === 'taken') return
+  if (claimed instanceof Error) return fail(`Could not record the start on this machine: ${claimed.message}`)
   const order = await readOrder<StartOrder>(config.key, sealed)
   if (!order || order.launchId !== launchId || order.machineId !== config.machineId || typeof order.cwd !== 'string')
     return fail('The order is not sealed with the account key for this machine, or it expired.')
-  const run = options.run ?? paths.run
-  if (!claim(launchId, run)) return
   const cwd = fromHome(order.cwd, options.home)
   if (!isAbsolute(cwd) || !isDirectory(cwd)) return fail(`${order.cwd} is not a folder on this machine.`)
   if (process.platform === 'win32') return fail('Starting sessions from the notch needs tmux, which Windows does not have.')
@@ -86,17 +89,26 @@ export async function handleStartOrder(
 
 type Report = (state: StartState, fields?: Pick<StartDetail, 'text' | 'question' | 'sessionId'>) => void
 
-/** Marks the start as run, in a file every process of the machine sees. False if one already did. */
-export function claim(launchId: string, run: string, now = Date.now()): boolean {
+/** Marks the start as run, in a file every process of the machine sees: `taken` if one already did. */
+export function claim(launchId: string, run: string, now = Date.now()): 'claimed' | 'taken' | Error {
   const folder = join(run, 'launches')
   try {
     mkdirSync(folder, { recursive: true, mode: 0o700 })
-    for (const file of readdirSync(folder))
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
+  for (const file of readdirSync(folder)) {
+    // Another process may clear the same old claims at the same time.
+    try {
       if (now - statSync(join(folder, file)).mtimeMs > 2 * ORDER_TTL_MS) rmSync(join(folder, file), { force: true })
+    } catch {}
+  }
+  try {
     writeFileSync(join(folder, launchId), '', { flag: 'wx', mode: 0o600 })
-    return true
-  } catch {
-    return false
+    return 'claimed'
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return 'taken'
+    return error instanceof Error ? error : new Error(String(error))
   }
 }
 
@@ -119,7 +131,7 @@ async function runLaunch(launchId: string, cwd: string, report: Report, options:
   // reads `#` in the folder as a format.
   const created = tmux(['new-session', '-d', '-s', name, '-c', cwd.replaceAll('#', '##'), '-x', '200', '-y', '50', shell, '-lic', 'claude'])
   if (!created.ok) return report('failed', { text: `tmux could not start: ${created.output}` })
-  const panePid = Number(tmux(['display-message', '-p', '-t', pane, '#{pane_pid}']).output)
+  const belongs = paneProcess(tmux(['display-message', '-p', '-t', pane, '#{pane_pid}']).output)
   report('starting')
   const answered = new Set<string>()
   let screen = ''
@@ -132,19 +144,20 @@ async function runLaunch(launchId: string, cwd: string, report: Report, options:
     // A question already answered can stay on screen a moment: only a new one waits for the user.
     const question = QUESTIONS.find(q => screen.includes(q.marker) && !answered.has(q.marker))
     if (!question) {
-      const sessionId = newSession(cwd, startedAt, options.run, pid => descendsFrom(pid, panePid))
+      const sessionId = newSession(cwd, startedAt, options.run, belongs)
       if (sessionId) return report('started', { text: `Running in tmux session ${name}.`, sessionId })
       continue
     }
     const id = crypto.randomUUID()
-    report('asking', { text: `${question.text}\n\n${lastLines(screen)}`, question: id })
+    const shown = lastLines(screen)
+    report('asking', { text: `${question.text}\n\n${shown}`, question: id })
     const confirm = await waitForAnswer(launchId, id)
     if (!confirm) {
       tmux(['kill-session', '-t', session])
       return report('failed', { text: 'Cancelled.' })
     }
-    // The answer can come minutes later: Enter only goes to the question the user saw.
-    if (!tmux(['capture-pane', '-p', '-t', pane]).output.includes(question.marker)) continue
+    // The answer can come minutes later: Enter only goes to the screen the user saw. If it changed, they are asked again.
+    if (lastLines(tmux(['capture-pane', '-p', '-t', pane]).output) !== shown) continue
     answered.add(question.marker)
     // Both questions have their yes selected first.
     tmux(['send-keys', '-t', pane, 'Enter'])
@@ -185,6 +198,21 @@ export function newSession(cwd: string, since: number, run = paths.run, belongs:
     // No run folder yet: no session either.
   }
   return null
+}
+
+/**
+ * Which session links come from a claude in the pane, the shell's own process or one under it. Without `ps`, or without
+ * the pane's process, any link in the folder does: what is at stake is only which session the notch selects.
+ */
+function paneProcess(output: string): (pid: number) => boolean {
+  const panePid = Number(output)
+  if (!Number.isInteger(panePid) || panePid <= 1 || !exec(['ps', '-o', 'ppid=', '-p', String(process.pid)]).ok) return () => true
+  const known = new Map<number, boolean>()
+  return pid => {
+    const cached = known.get(pid) ?? descendsFrom(pid, panePid)
+    known.set(pid, cached)
+    return cached
+  }
 }
 
 /** Whether `pid` is `ancestor` or runs under it: claude under the shell of the tmux pane. */

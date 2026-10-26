@@ -69,6 +69,7 @@ final class LaunchTests: XCTestCase {
         XCTAssertEqual(launch.reported("started", reason: nil, detail: nil, machine: "PC"), launch)
         // A question without an id can't be answered, and one already answered can't be asked again.
         XCTAssertEqual(launch.reported("asking", reason: nil, detail: detail("asking", text: "?"), machine: "PC"), launch)
+        XCTAssertEqual(launch.reported("asking", reason: nil, detail: detail("asking", question: "q1"), machine: "PC"), launch)
         let answered = launch.reported("asking", reason: nil, detail: asking, machine: "PC").answered("q1")
         XCTAssertEqual(answered.reported("asking", reason: nil, detail: asking, machine: "PC"), answered)
         // Unknown states, from a newer agent, change nothing; the app's own state never comes from the machine.
