@@ -107,7 +107,8 @@ struct ChatHeader: View {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.init(filenameExtension: format.fileExtension)].compactMap { $0 }
         panel.nameFieldStringValue = "\(session.project)-\(session.id.prefix(8)).\(format.fileExtension)"
-        if panel.runAboveNotch() == .OK, let url = panel.url { try? text.write(to: url, atomically: true, encoding: .utf8) }
+        guard panel.runAboveNotch() == .OK, let url = panel.url else { return }
+        if let failure = SaveFailure.write(Data(text.utf8), to: url) { store.lastError = failure }
     }
 
     /// Offered while a usage limit stops the session: send `continue` once it resets.

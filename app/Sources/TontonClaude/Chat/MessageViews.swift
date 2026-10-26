@@ -53,6 +53,7 @@ struct UserBubble: View {
 
 struct ImageStrip: View {
     let images: [ImageData]
+    @EnvironmentObject var store: SessionStore
 
     var body: some View {
         HStack(spacing: 6) {
@@ -74,7 +75,10 @@ struct ImageStrip: View {
         guard let data = Data(base64Encoded: img.data) else { return }
         let ext = img.mediaType.split(separator: "/").last.map(String.init) ?? "png"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("tonton-\(UUID().uuidString).\(ext)")
-        try? data.write(to: url)
+        if let failure = SaveFailure.write(data, to: url) {
+            store.lastError = failure
+            return
+        }
         NSWorkspace.shared.open(url)
     }
 }

@@ -75,6 +75,8 @@ struct WrappedSection: View {
     @EnvironmentObject var settings: AppSettings
     @State private var month: String?
     @State private var copied = false
+    /// Why the image could not be made or saved.
+    @State private var failure: String?
 
     var body: some View {
         let months = usage.wrapped.recorded
@@ -100,6 +102,9 @@ struct WrappedSection: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textFaint)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let failure {
+                        Text(failure).font(.system(size: 11)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .frame(maxWidth: 180, alignment: .leading)
             }
@@ -107,7 +112,11 @@ struct WrappedSection: View {
     }
 
     private func copy(_ card: WrappedCard) {
-        guard let png = card.png() else { return }
+        guard let png = card.png() else {
+            failure = "Could not make the image."
+            return
+        }
+        failure = nil
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setData(png, forType: .png)
         copied = true
@@ -115,10 +124,14 @@ struct WrappedSection: View {
     }
 
     private func save(_ card: WrappedCard, month: String) {
-        guard let png = card.png() else { return }
+        guard let png = card.png() else {
+            failure = "Could not make the image."
+            return
+        }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
         panel.nameFieldStringValue = "tonton-wrapped-\(month).png"
-        if panel.runAboveNotch() == .OK, let url = panel.url { try? png.write(to: url) }
+        guard panel.runAboveNotch() == .OK, let url = panel.url else { return }
+        failure = SaveFailure.write(png, to: url)
     }
 }
