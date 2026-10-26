@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { type ClientState, initialState, RelayClient, reduce, type SocketLike } from '../client'
+import { type ClientEvent, type ClientState, initialState, RelayClient, reduce, type SocketLike } from '../client'
 import { newAccountKey, open, seal } from '../crypto'
-import type { Entry, PromptPayload, RelayToApp, SessionSummary } from '../protocol'
+import type { AgentLog, Entry, LogRequest, PromptPayload, RelayToApp, SessionSummary } from '../protocol'
 import { Vault } from '../vault'
 
 const key = newAccountKey()
@@ -58,6 +58,7 @@ const text = (id: string, body: string): Entry => ({ id, ts: '2026-10-25T10:00:0
 function client(options: { retryMs?: number } = {}) {
   const sockets: FakeSocket[] = []
   const states: ClientState[] = []
+  const events: ClientEvent[] = []
   let signedOut = 0
   const relay = new RelayClient({
     vault: new Vault(key),
@@ -67,10 +68,11 @@ function client(options: { retryMs?: number } = {}) {
       return socket
     },
     onChange: state => states.push(state),
+    onEvent: event => events.push(event),
     onSignedOut: () => signedOut++,
     ...options,
   })
-  return { relay, sockets, states, signedOut: () => signedOut }
+  return { relay, sockets, states, events, signedOut: () => signedOut }
 }
 
 describe('client state', () => {
@@ -140,6 +142,32 @@ describe('relay client', () => {
     expect(prompt.payload).not.toContain('Run the tests')
     expect(await open<PromptPayload>(key, prompt.payload)).toEqual({ text: 'Run the tests', images: [] })
     expect(verdict).toEqual({ t: 'verdict', sessionId: 'api', requestId: 'req12', behavior: 'deny' })
+  })
+
+  test('asks a machine for its agent log, and only takes the one sealed for that request and machine', async () => {
+    const { relay, sockets, events } = client()
+    relay.start()
+    const socket = sockets[0]
+    expect(await relay.requestLog('m1')).toBeNull()
+    socket.receive({ t: 'snapshot', sessions: [], machines: [] })
+    await eventually(() => relay.state.connection === 'connected', 'the snapshot')
+
+    const requestId = await relay.requestLog('m1')
+    if (!requestId) throw new Error('not sent')
+    expect(requestId).toMatch(/^[a-z0-9]{32}$/)
+    const sent = socket.sent[0] as { t: string; machineId: string; requestId: string; request: string }
+    expect(sent).toMatchObject({ t: 'agent_logs', machineId: 'm1', requestId })
+    expect(await open<LogRequest>(key, sent.request)).toMatchObject({ requestId, machineId: 'm1' })
+
+    const log = (fields: Partial<AgentLog>): Promise<string> =>
+      seal(key, { requestId, machineId: 'm1', lines: ['service started'], truncated: false, size: 16, at: 'now', ...fields })
+    socket.receive({ t: 'agent_logs', machineId: 'm1', requestId, logs: await log({ machineId: 'm2' }) })
+    socket.receive({ t: 'agent_logs', machineId: 'm1', requestId, logs: await log({}) })
+    socket.receive({ t: 'agent_logs', machineId: 'm1', requestId, reason: 'offline' })
+    await eventually(() => events.filter(event => event.t === 'agent_logs').length === 3, 'the answers')
+    const answers = events.filter(event => event.t === 'agent_logs')
+    expect(answers.map(event => event.log?.lines ?? null)).toEqual([null, ['service started'], null])
+    expect(answers[2]).toEqual({ t: 'agent_logs', machineId: 'm1', requestId, reason: 'offline', log: null })
   })
 
   test('reconnects with backoff, subscribes again, and stops for good when signed out', async () => {

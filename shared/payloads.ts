@@ -3,6 +3,7 @@
 // agents can add some.
 
 import type {
+  AgentLog,
   Entry,
   FileEdit,
   ImageData,
@@ -168,6 +169,19 @@ export const decodeStartDetail = decoder(
       text: optional(f.text, text),
       question: optional(f.question, text),
       sessionId: optional(f.sessionId, text),
+    }),
+)
+
+export const decodeAgentLog = decoder(
+  (f): AgentLog =>
+    compact({
+      requestId: text(f.requestId),
+      machineId: text(f.machineId),
+      lines: list(f.lines, text),
+      truncated: flag(f.truncated),
+      size: integer(f.size),
+      at: text(f.at),
+      error: optional(f.error, text),
     }),
 )
 

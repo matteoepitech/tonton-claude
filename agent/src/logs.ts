@@ -3,10 +3,10 @@
 // before it leaves, since a log is made to be pasted into a bug report.
 
 import { closeSync, openSync, readSync, statSync } from 'node:fs'
+import { open, seal } from '../../shared/crypto'
 import type { AgentLog, LogRequest } from '../../shared/protocol'
 import type { RelayConnection } from './channel/relay-connection'
 import { type AgentConfig, paths } from './config'
-import { open, seal } from '../../shared/crypto'
 
 /** Older requests get no lines, so the relay cannot replay one later. */
 const REQUEST_TTL_MS = 10 * 60_000

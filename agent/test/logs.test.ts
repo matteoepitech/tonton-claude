@@ -2,9 +2,9 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { open, seal } from '../../shared/crypto'
 import type { AgentLog, AgentMessage } from '../../shared/protocol'
 import type { AgentConfig } from '../src/config'
-import { open, seal } from '../../shared/crypto'
 import { handleLogRequest, readLogTail, redact } from '../src/logs'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-logs-'))
