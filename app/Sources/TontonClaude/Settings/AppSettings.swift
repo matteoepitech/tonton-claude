@@ -11,6 +11,13 @@ final class AppSettings: ObservableObject {
 
     static let defaultRelay = "https://tonton.d3l.tech"
     static let defaultQuickReplies = ["Continue", "Run the tests", "Explain what you just did", "Commit and push"]
+    static let defaultTemplates = [
+        PromptTemplate(
+            name: "Review a PR",
+            text: "Review PR #{number}: read the diff with gh pr diff {number} and list what should change before merging."),
+        PromptTemplate(
+            name: "Fix an issue", text: "Fix issue #{number}: read it with gh issue view {number}, make the change and run the tests."),
+    ]
     static let alertSounds = ["Glass", "Tink", "Ping", "Pop", "Purr", "Hero", "Submarine", "Funk", "Bottle", "Frog"]
 
     /// Relay
@@ -29,6 +36,8 @@ final class AppSettings: ObservableObject {
     /// 0 keeps finished sessions until removed by hand.
     @Published var hideFinishedAfterHours: Int
     @Published var quickReplies: [String]
+    /// Saved prompts with `{placeholders}`, inserted from the message field.
+    @Published var promptTemplates: [PromptTemplate]
     /// Machines whose sessions stay out of the notch.
     @Published var hiddenMachines: Set<String>
     @Published var editor: EditorChoice
@@ -83,6 +92,9 @@ final class AppSettings: ObservableObject {
         showCosts = value("showCosts", true)
         hideFinishedAfterHours = value("hideFinishedAfterHours", 0)
         quickReplies = value("quickReplies", Self.defaultQuickReplies)
+        promptTemplates =
+            defaults.data(forKey: "promptTemplates").flatMap { try? JSONDecoder().decode([PromptTemplate].self, from: $0) }
+            ?? Self.defaultTemplates
         hiddenMachines = Set(value("hiddenMachines", [String]()))
         editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
         terminal = choice("terminal", .terminal)
@@ -109,6 +121,7 @@ final class AppSettings: ObservableObject {
         persist($showCosts, "showCosts")
         persist($hideFinishedAfterHours, "hideFinishedAfterHours")
         persist($quickReplies, "quickReplies")
+        persist($promptTemplates.compactMap { try? JSONEncoder().encode($0) }, "promptTemplates")
         persist($hiddenMachines.map { Array($0).sorted() }, "hiddenMachines")
         persist($editor.map(\.rawValue), "editor")
         persist($terminal.map(\.rawValue), "terminal")

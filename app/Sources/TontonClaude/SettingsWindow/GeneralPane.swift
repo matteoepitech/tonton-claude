@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TontonCore
 
 struct GeneralPane: View {
     @EnvironmentObject var settings: AppSettings
@@ -89,6 +90,33 @@ struct GeneralPane: View {
                 }
                 .padding(16)
             }
+            GroupLabel(text: "Prompt templates")
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Insert them from the message field. A {name} becomes a field to fill in, e.g. Review PR #{number}.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textDim)
+                    ForEach(settings.promptTemplates) { template in
+                        HStack(spacing: 6) {
+                            ThemeField(placeholder: "Name", text: templateBinding(template.id, \.name)).frame(width: 150)
+                            ThemeField(placeholder: "Prompt, with {placeholders}", text: templateBinding(template.id, \.text))
+                            Button {
+                                settings.promptTemplates.removeAll { $0.id == template.id }
+                            } label: {
+                                Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).frame(height: 18)
+                            }
+                            .buttonStyle(ThemeButtonStyle())
+                            .help("Delete this template")
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        Button("Add") { settings.promptTemplates.append(PromptTemplate(name: "", text: "")) }.buttonStyle(
+                            ThemeButtonStyle())
+                        Button("Reset") { settings.promptTemplates = AppSettings.defaultTemplates }.buttonStyle(ThemeButtonStyle())
+                    }
+                }
+                .padding(16)
+            }
             GroupLabel(text: "Keyboard shortcuts")
             Card {
                 ForEach(Array(shortcuts.enumerated()), id: \.offset) { index, item in
@@ -111,6 +139,17 @@ struct GeneralPane: View {
             }
             .padding(.top, 28)
         }
+    }
+
+    /// By id, so deleting a template while a field is being edited never reads a stale index.
+    private func templateBinding(_ id: UUID, _ field: WritableKeyPath<PromptTemplate, String>) -> Binding<String> {
+        Binding(
+            get: { settings.promptTemplates.first { $0.id == id }?[keyPath: field] ?? "" },
+            set: { value in
+                if let index = settings.promptTemplates.firstIndex(where: { $0.id == id }) {
+                    settings.promptTemplates[index][keyPath: field] = value
+                }
+            })
     }
 
     private func add() {
