@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import TontonCore
+import TontonMac
 
 /// Message field of the open notch: quick replies, image attachments, and a per-session draft that survives closing.
 struct Composer: View {

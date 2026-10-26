@@ -1,6 +1,7 @@
 import XCTest
 
 @testable import TontonCore
+@testable import TontonMac
 
 final class LocalSessionsTests: XCTestCase {
     private var home: URL!
