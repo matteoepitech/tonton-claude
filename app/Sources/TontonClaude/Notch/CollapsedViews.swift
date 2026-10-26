@@ -48,7 +48,7 @@ struct PeekView: View {
                 HStack(spacing: 8) {
                     StatusDot(status: s.status, limit: s.fiveHourLimit)
                     Text("\(s.machine) · \(s.project)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                    Text(s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(state.peekText ?? s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .frame(height: NotchState.peekHeight)
                 .padding(.horizontal, 14)

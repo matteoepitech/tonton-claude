@@ -97,6 +97,12 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         return limits.filter { $0.level(at: now) == .high }.max { $0.usedPercent < $1.usedPercent }
     }
 
+    /// When a session stopped by a usage limit can go again. Nil when no limit stops it.
+    public func stoppedUntil(at now: Date = Date()) -> Date? {
+        guard let limit = limitToWatch(at: now), limit.level(at: now) == .reached else { return nil }
+        return limit.resetsAt
+    }
+
     /// Claude Code's notification texts, shortened for the notch.
     public var displayStatusText: String {
         guard let text = statusText, !text.isEmpty else { return status.label }
@@ -152,6 +158,19 @@ public struct UsageLimit: Equatable, Sendable {
         if minutes < 24 * 60 { return "\(minutes / 60) h \(String(format: "%02d", minutes % 60))" }
         let hours = minutes / 60
         return hours % 24 == 0 ? "\(hours / 24) d" : "\(hours / 24) d \(hours % 24) h"
+    }
+}
+
+/// When the sessions a usage limit stopped can go again.
+public enum LimitResets {
+    /// The reset times still to come among the live sessions a limit stopped.
+    public static func upcoming(_ sessions: [SessionSummary], at now: Date = Date()) -> Set<Date> {
+        Set(sessions.filter(\.status.isLive).compactMap { $0.stoppedUntil(at: now) })
+    }
+
+    /// The live sessions that `reset` frees: the ones stopped until then, read just before it.
+    public static func lifted(_ sessions: [SessionSummary], at reset: Date) -> [SessionSummary] {
+        sessions.filter { $0.status.isLive && $0.stoppedUntil(at: reset.addingTimeInterval(-1)) == reset }
     }
 }
 

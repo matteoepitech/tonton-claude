@@ -178,9 +178,8 @@ final class NotchWindowController {
     /// A session needs the user or just finished: sound, haptics, notification, then the banner or the open notch.
     private func alert(_ session: SessionSummary, finished: Bool) {
         guard !settings.isQuietNow else { return }
-        if settings.soundOnAttention { NSSound(named: settings.alertSound)?.play() }
-        if settings.haptics { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
-        if settings.systemNotifications { Notifier.post(session, finished: finished) }
+        signal()
+        if settings.systemNotifications { Notifier.post(session, body: finished ? "Claude is done." : session.displayStatusText) }
         if settings.openOnPermission && session.status == .permission {
             store.selectedId = session.id
             expand()
@@ -189,9 +188,27 @@ final class NotchWindowController {
         }
     }
 
-    private func peek(_ session: SessionSummary) {
+    /// Sessions a usage limit stopped can go again: the same sound and banner, once for all of them.
+    private func limitLifted(_ sessions: [SessionSummary]) {
+        guard let session = sessions.first, !settings.isQuietNow else { return }
+        signal()
+        if settings.systemNotifications {
+            let more = sessions.count > 1 ? " \(sessions.count) sessions can go again." : " Claude can go again."
+            Notifier.post(session, body: "The usage limit reset." + more)
+        }
+        peek(session, text: "Usage limit reset")
+    }
+
+    private func signal() {
+        if settings.soundOnAttention { NSSound(named: settings.alertSound)?.play() }
+        if settings.haptics { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
+    }
+
+    /// `text` replaces the session's status in the banner.
+    private func peek(_ session: SessionSummary, text: String? = nil) {
         guard settings.showAlerts, state.mode != .expanded else { return }
         state.peekSession = session
+        state.peekText = text
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { state.mode = .peek }
         peekTask?.cancel()
         peekTask = Task { [weak self] in
@@ -226,6 +243,10 @@ final class NotchWindowController {
         store.finished
             .filter { [settings] _ in settings.alertOnFinish }
             .sink { [weak self] session in self?.alert(session, finished: true) }
+            .store(in: &subscriptions)
+        store.limitLifted
+            .filter { [settings] _ in settings.alertOnLimitReset }
+            .sink { [weak self] sessions in self?.limitLifted(sessions) }
             .store(in: &subscriptions)
         store.sessionsPublisher.combineLatest(settings.$showActivityDots, settings.$hiddenMachines)
             .map { sessions, dots, hidden in dots && sessions.contains { $0.status.isLive && !hidden.contains($0.machine) } }
