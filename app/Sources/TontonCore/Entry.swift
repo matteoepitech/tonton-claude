@@ -43,6 +43,16 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
         self.summary = summary
         self.isError = isError
     }
+
+    /// The file a Read, Write or Edit call works on, when its summary holds the whole absolute path. The agent cuts long
+    /// summaries with "…", and paths from Windows machines never exist on the Mac.
+    public var filePath: String? {
+        guard kind == .tool, let name, Self.fileTools.contains(name), let summary, summary.hasPrefix("/"), !summary.hasSuffix("…")
+        else { return nil }
+        return summary
+    }
+
+    private static let fileTools: Set = ["Read", "Write", "Edit", "MultiEdit", "NotebookEdit"]
 }
 
 /// What the chat view renders: tool calls are merged with their result.

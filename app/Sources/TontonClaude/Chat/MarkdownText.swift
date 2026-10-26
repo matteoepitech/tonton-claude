@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import TontonCore
 
@@ -13,10 +14,7 @@ struct MarkdownText: View {
                 case .prose(let s):
                     Text(Self.inline(s)).font(.system(size: 12)).textSelection(.enabled)
                 case .code(let s):
-                    ScrollView(.horizontal) {
-                        Text(s).font(.system(size: 11, design: .monospaced)).textSelection(.enabled).padding(8)
-                    }
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.07)))
+                    CodeBlock(code: s)
                 case .table(let table):
                     MarkdownTableView(table: table)
                 }
@@ -27,6 +25,43 @@ struct MarkdownText: View {
     static func inline(_ s: String) -> AttributedString {
         let opts = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         return (try? AttributedString(markdown: s, options: opts)) ?? AttributedString(s)
+    }
+}
+
+/// A fenced code block that scrolls sideways, with a copy button on hover.
+struct CodeBlock: View {
+    let code: String
+    @State private var hovering = false
+    @State private var copied = false
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            Text(code).font(.system(size: 11, design: .monospaced)).textSelection(.enabled).padding(8)
+        }
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.07)))
+        .overlay(alignment: .topTrailing) {
+            if hovering || copied {
+                Button(action: copy) {
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 10, weight: .medium))
+                        .frame(width: 22, height: 22)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Theme.surface))
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderStrong))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(copied ? Theme.success : Theme.textDim)
+                .help("Copy")
+                .padding(4)
+            }
+        }
+        .onHover { hovering = $0 }
+    }
+
+    private func copy() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(code, forType: .string)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
     }
 }
 

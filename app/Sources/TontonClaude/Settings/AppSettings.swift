@@ -31,6 +31,7 @@ final class AppSettings: ObservableObject {
     @Published var quickReplies: [String]
     /// Machines whose sessions stay out of the notch.
     @Published var hiddenMachines: Set<String>
+    @Published var editor: EditorChoice
 
     /// Notch and alerts
     @Published var openOnHover: Bool
@@ -80,6 +81,7 @@ final class AppSettings: ObservableObject {
         hideFinishedAfterHours = value("hideFinishedAfterHours", 0)
         quickReplies = value("quickReplies", Self.defaultQuickReplies)
         hiddenMachines = Set(value("hiddenMachines", [String]()))
+        editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
         openOnHover = value("openOnHover", true)
         showActivityDots = value("showActivityDots", false)
         openOnPermission = value("openOnPermission", false)
@@ -103,6 +105,7 @@ final class AppSettings: ObservableObject {
         persist($hideFinishedAfterHours, "hideFinishedAfterHours")
         persist($quickReplies, "quickReplies")
         persist($hiddenMachines.map { Array($0).sorted() }, "hiddenMachines")
+        persist($editor.map(\.rawValue), "editor")
         persist($openOnHover, "openOnHover")
         persist($showActivityDots, "showActivityDots")
         persist($openOnPermission, "openOnPermission")

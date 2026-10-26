@@ -82,6 +82,7 @@ struct ToolRow: View {
     let call: Entry
     let result: Entry?
     let running: Bool
+    @EnvironmentObject var settings: AppSettings
     @State private var open = false
 
     private var icon: String {
@@ -105,6 +106,17 @@ struct ToolRow: View {
                 Text(call.summary ?? "").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
+                if let path = call.filePath, FileManager.default.fileExists(atPath: path) {
+                    let editor = settings.editor.available
+                    Button {
+                        editor.open(path)
+                    } label: {
+                        Image(systemName: "arrow.up.forward.square").font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(editor == .defaultApp ? "Open" : "Open in \(editor.label)")
+                }
                 if running {
                     ProgressView().controlSize(.mini)
                 } else if result?.isError == true {

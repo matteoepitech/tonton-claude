@@ -54,6 +54,14 @@ struct GeneralPane: View {
                         settings.hideFinishedAfterHours = Int($0) ?? 0
                     }
                 }
+                Hairline()
+                Row(title: "Open files in", detail: "Files Claude reads or edits on this Mac open from the conversation.") {
+                    ChoiceMenu(
+                        selection: settings.editor.available.rawValue, options: EditorChoice.installed.map { ($0.rawValue, $0.label) }
+                    ) {
+                        settings.editor = EditorChoice(rawValue: $0) ?? .defaultApp
+                    }
+                }
             }
             GroupLabel(text: "Quick replies")
             Card {
