@@ -51,9 +51,12 @@ struct ChatPanel: View {
                 .onChange(of: pendingTexts.count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
             }
             ForEach(session.pendingPermissions) { req in
-                PermissionCard(request: req) { allow in store.answer(req, allow: allow, in: session.id) }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 6)
+                PermissionCard(
+                    request: req, sessionRule: store.sessionRule(for: req, in: session),
+                    allowForSession: { rule in store.allowForSession(req, rule: rule, in: session.id) }
+                ) { allow in store.answer(req, allow: allow, in: session.id) }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
             }
             Composer(session: session) { text, images in
                 store.sendPrompt(text, images: images, to: session.id)

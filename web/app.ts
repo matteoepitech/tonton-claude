@@ -11,6 +11,7 @@ import {
   displayStatusText,
   importAccountKey,
   isLive,
+  keepsSessionRules,
   menuCommands,
   modelName,
   needsAttention,
@@ -23,6 +24,7 @@ import {
   ShareViewer,
   type SocketLike,
   STATUS_LABELS,
+  sessionRuleFor,
   shareSocket,
   Vault,
 } from '../shared'
@@ -262,12 +264,18 @@ function permission(session: Session, request: Session['pendingPermissions'][num
   const deny = element('button', 'Deny')
   allow.onclick = () => client?.answer(session.id, request.requestId, true)
   deny.onclick = () => client?.answer(session.id, request.requestId, false)
-  const card = element(
-    'div',
-    element('strong', `${request.toolName} wants to run`),
-    element('pre', request.description),
-    element('div', deny, allow),
-  )
+  const buttons = element('div', deny)
+  const machine = state?.machines.find(m => m.id === session.machineId)
+  const rule = keepsSessionRules(machine) ? sessionRuleFor(request.toolName, request.inputPreview) : null
+  if (rule) {
+    const label = rule.label.length > 40 ? `${rule.label.slice(0, 40)}…` : rule.label
+    const always = element('button', `Allow for this session: ${label}`)
+    always.title = `${rule.label}: calls like this one are allowed until the session ends.`
+    always.onclick = () => void client?.allowForSession(session.id, request.requestId, rule.rules)
+    buttons.append(always)
+  }
+  buttons.append(allow)
+  const card = element('div', element('strong', `${request.toolName} wants to run`), element('pre', request.description), buttons)
   card.className = 'permission'
   return card
 }

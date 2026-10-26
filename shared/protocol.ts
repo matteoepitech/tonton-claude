@@ -123,6 +123,15 @@ export interface PermissionRule {
   /** `npm test` matches that command only, `npm run *` any command starting with `npm run `. Empty: any call of the tool. */
   pattern?: string
 }
+/**
+ * Sealed by the app with an allowed request: approve calls like it until the session ends. Bound to the session and the
+ * request, so the relay cannot hand it to another session.
+ */
+export interface SessionRules {
+  sessionId: string
+  requestId: string
+  rules: PermissionRule[]
+}
 /** Sealed by the app with its date, so the relay can neither forge rules nor bring back older ones. */
 export interface RuleSet {
   rules: PermissionRule[]
@@ -255,7 +264,8 @@ export type AgentMessage =
 // relay -> agent
 export type RelayToAgent =
   | { t: 'prompt'; sessionId: string; payload: Sealed }
-  | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny' }
+  // `rule`: a `SessionRules` sealed by the app, when the user allowed this kind of call for the rest of the session.
+  | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny'; rule?: Sealed }
   | { t: 'update'; order: Sealed }
   // The machine's auto-approve rules, sealed `RuleSet`: on each connection, and when the app changes them.
   | { t: 'rules'; rules: Sealed }
@@ -297,7 +307,7 @@ export type RelayToApp =
 export type AppMessage =
   | { t: 'subscribe'; sessionId: string | null }
   | { t: 'prompt'; sessionId: string; payload: Sealed }
-  | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny' }
+  | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny'; rule?: Sealed }
   | { t: 'dismiss'; sessionId: string }
   | { t: 'update_agent'; machineId: string; order: Sealed }
   | { t: 'rules'; machineId: string; rules: Sealed }

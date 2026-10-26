@@ -126,6 +126,11 @@ public struct SessionVault: Sendable {
         open(blob, as: StatusDetail.self)?.text
     }
 
+    /// "Allow for this session": the rules go with the verdict, bound to its session and request.
+    public func sealSessionRules(_ rules: [PermissionRule], for sessionId: String, requestId: String) throws -> String {
+        try E2E.seal(SessionRules(sessionId: sessionId, requestId: requestId, rules: rules), with: key)
+    }
+
     /// Asks the session's agent to seal a copy of the conversation with the share's key, until the share expires.
     public func sealShareOrder(shareId: String, sessionId: String, shareKey: String, expiresAt: String) throws -> String {
         try E2E.seal(ShareOrder(shareId: shareId, sessionId: sessionId, key: shareKey, expiresAt: expiresAt), with: key)

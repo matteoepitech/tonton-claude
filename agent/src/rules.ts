@@ -1,10 +1,10 @@
 // Auto-approve rules: the app seals them per machine, the agent keeps them in rules.json, and the PermissionRequest hook
 // approves a matching tool call before the user is asked.
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { open } from '../../shared/crypto'
-import type { PermissionRule, RuleSet } from '../../shared/protocol'
+import type { PermissionRule, RuleSet, SessionRules } from '../../shared/protocol'
 import { paths } from './config'
 import { log } from './log'
 
@@ -81,6 +81,45 @@ export function matches(pattern: string, value: string, isCommand: boolean): boo
     .map(part => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
     .join('[\\s\\S]*')
   return new RegExp(`^${expression}$`).test(value)
+}
+
+// MARK: For the rest of a session
+
+/** Rules from "Allow for this session", if they open with the account key and are for this session and request. */
+export async function openSessionRules(key: string, sealed: string, sessionId: string, requestId: string): Promise<PermissionRule[]> {
+  const set = await open<SessionRules>(key, sealed).catch(() => null)
+  if (!set || set.sessionId !== sessionId || set.requestId !== requestId || !Array.isArray(set.rules)) {
+    log('dropped session rules for another session or request')
+    return []
+  }
+  return set.rules.filter(isRule).slice(0, MAX_RULES)
+}
+
+/** A Claude Code session's rules live in a file: the PermissionRequest hook that applies them runs in its own process. */
+const sessionRulesFile = (sessionId: string, folder: string) => join(folder, `${sessionId.replace(/[^\w-]/g, '_')}.json`)
+
+export function sessionRules(sessionId: string, folder = paths.sessionRules): PermissionRule[] {
+  try {
+    const rules = JSON.parse(readFileSync(sessionRulesFile(sessionId, folder), 'utf8'))
+    return Array.isArray(rules) ? rules.filter(isRule) : []
+  } catch {
+    return []
+  }
+}
+
+export function addSessionRules(sessionId: string, rules: PermissionRule[], folder = paths.sessionRules) {
+  if (!rules.length) return
+  const file = sessionRulesFile(sessionId, folder)
+  const all = [...sessionRules(sessionId, folder), ...rules].slice(-MAX_RULES)
+  mkdirSync(folder, { recursive: true, mode: 0o700 })
+  const partial = `${file}.${process.pid}.tmp`
+  writeFileSync(partial, JSON.stringify(all), { mode: 0o600 })
+  renameSync(partial, file)
+}
+
+/** Once the session ends, nothing it allowed carries over. */
+export function clearSessionRules(sessionId: string, folder = paths.sessionRules) {
+  rmSync(sessionRulesFile(sessionId, folder), { force: true })
 }
 
 function isRule(rule: unknown): rule is PermissionRule {

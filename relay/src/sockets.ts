@@ -160,7 +160,8 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     case 'verdict': {
       const { sessionId, requestId, behavior } = message
       if (!isSessionId(sessionId) || !isRequestId(requestId) || (behavior !== 'allow' && behavior !== 'deny')) return
-      if (ctx.hub.sendToAgent(accountId, { t: 'verdict', sessionId, requestId, behavior })) {
+      const rule = behavior === 'allow' && isSealed(message.rule, MAX_RULES_BYTES) ? { rule: message.rule } : {}
+      if (ctx.hub.sendToAgent(accountId, { t: 'verdict', sessionId, requestId, behavior, ...rule })) {
         ctx.sessions.closePermission(accountId, sessionId, requestId)
       }
       break

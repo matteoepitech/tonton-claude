@@ -1,0 +1,54 @@
+{
+  "about": "What \"Allow for this session\" offers for a request. Checked by shared/test/session-rule.test.ts and app/Tests/TontonCoreTests/SessionRuleTests.swift.",
+  "cases": [
+    {
+      "tool": "Bash",
+      "preview": "{\"command\":\"npm test -- --watch\"}",
+      "label": "npm test",
+      "rules": [{ "tool": "Bash", "pattern": "npm test" }, { "tool": "Bash", "pattern": "npm test *" }]
+    },
+    {
+      "tool": "Bash",
+      "preview": "{\"command\":\"ls -la src\"}",
+      "label": "ls",
+      "rules": [{ "tool": "Bash", "pattern": "ls" }, { "tool": "Bash", "pattern": "ls *" }]
+    },
+    {
+      "tool": "Bash",
+      "preview": "{\"command\":\"  git   status \"}",
+      "label": "git status",
+      "rules": [{ "tool": "Bash", "pattern": "git status" }, { "tool": "Bash", "pattern": "git status *" }]
+    },
+    {
+      "tool": "Bash",
+      "preview": "{\"command\":\"npm test && rm -rf build\"}",
+      "label": "npm test && rm -rf build",
+      "rules": [{ "tool": "Bash", "pattern": "npm test && rm -rf build" }]
+    },
+    {
+      "tool": "PowerShell",
+      "preview": "{\"command\":\"Get-ChildItem C:\\\\code\"}",
+      "label": "Get-ChildItem",
+      "rules": [{ "tool": "PowerShell", "pattern": "Get-ChildItem" }, { "tool": "PowerShell", "pattern": "Get-ChildItem *" }]
+    },
+    { "tool": "Bash", "preview": "{\"command\":\"npm te", "label": null, "rules": null },
+    { "tool": "Bash", "preview": "{}", "label": null, "rules": null },
+    {
+      "tool": "WebFetch",
+      "preview": "{\"url\":\"https://docs.github.com/en/rest?x=1\",\"prompt\":\"read\"}",
+      "label": "docs.github.com",
+      "rules": [
+        { "tool": "WebFetch", "pattern": "https://docs.github.com" },
+        { "tool": "WebFetch", "pattern": "https://docs.github.com/*" }
+      ]
+    },
+    { "tool": "WebFetch", "preview": "{\"url\":\"not a url\"}", "label": null, "rules": null },
+    { "tool": "Edit", "preview": "{\"file_path\":\"/srv/app.ts\"}", "label": "Edit", "rules": [{ "tool": "Edit" }] },
+    {
+      "tool": "mcp__github__create_issue",
+      "preview": "{\"title\":\"x",
+      "label": "mcp__github__create_issue",
+      "rules": [{ "tool": "mcp__github__create_issue" }]
+    }
+  ]
+}
