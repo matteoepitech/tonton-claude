@@ -127,18 +127,18 @@ test('the token of another relay moves the machine there, the service follows', 
   expect(result.output).toStartWith(`Connected to ${new URL(second.url).host} as `)
   await eventually(() => second.machines[0]?.online, 'the machine on the second relay')
   await eventually(() => first.machines[0] && !first.machines[0].online, 'the machine gone from the first relay')
-  expect(status()).toMatchObject({ state: 'connected', relay: second.url })
+  expect(await eventually(() => status()?.state === 'connected' && status(), 'the status')).toMatchObject({ relay: second.url })
 })
 
 test('regenerating the token signs the machine out; only the new token brings it back', async () => {
   const next = await machineToken(second, true)
   await eventually(() => status()?.state === 'revoked', 'the service signed out')
-  expect(second.machines).toHaveLength(0)
+  await eventually(() => second.machines.length === 0, 'the machine gone from the app')
 
   const refused = await tonton('token', secondToken)
   expect(refused).toEqual({ exitCode: 1, output: 'This token is no longer valid. Copy the current one from Tonton Claude › Machines.' })
 
   expect((await tonton('token', next)).exitCode).toBe(0)
   await eventually(() => status()?.state === 'connected', 'the service back with the new token')
-  expect(second.machines.filter(machine => machine.online)).toHaveLength(1)
+  await eventually(() => second.machines.filter(machine => machine.online).length === 1, 'the machine back in the app')
 })
