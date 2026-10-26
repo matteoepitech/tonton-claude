@@ -1,7 +1,7 @@
 // Tonton Claude in a browser: the account's sessions, their conversations, messages and permission requests, from any
 // computer or phone. Built on the client core (shared/), which decrypts in the page: the account key never reaches the
 // relay. Signing in takes the recovery key of the Mac app (Settings › Relay); remembering it keeps the key as a CryptoKey
-// that no script can read back.
+// that no script can read back. A read-only share key, pasted or after the # of the address, shows one session instead.
 
 import {
   accepts,
@@ -15,13 +15,18 @@ import {
   modelName,
   needsAttention,
   parseRecoveryKey,
+  parseShareLink,
   RelayClient,
   type Session,
+  type SharedView,
+  type ShareLink,
+  ShareViewer,
   type SocketLike,
   STATUS_LABELS,
+  shareSocket,
   Vault,
 } from '../shared'
-import type { SessionCommand } from '../shared/protocol'
+import type { SessionCommand, SessionStatus } from '../shared/protocol'
 import { element, inline, renderMarkdown } from './markdown'
 
 interface Saved {
@@ -33,10 +38,13 @@ interface Saved {
 const app = document.getElementById('app') as HTMLElement
 let client: RelayClient | null = null
 let state: ClientState | null = null
+let viewer: ShareViewer | null = null
 /** On phones, the list or one conversation. */
 let showingChat = false
 
 async function start() {
+  const shared = parseShareLink(location.hash)
+  if (shared) return watch(shared)
   const saved = await load().catch(() => null)
   if (saved) connect(saved)
   else signInScreen()
@@ -46,7 +54,7 @@ async function start() {
 
 function signInScreen(problem?: string) {
   const field = element('textarea')
-  field.placeholder = 'tonton1.…'
+  field.placeholder = 'tonton1.… or tontonshare1.…'
   field.spellcheck = false
   field.autocomplete = 'off'
   const remember = element('input')
@@ -59,7 +67,10 @@ function signInScreen(problem?: string) {
   const form = element(
     'form',
     element('h1', 'Tonton Claude'),
-    element('p', 'Paste the recovery key of your account, from the Mac app: Settings › Relay › Recovery key.'),
+    element(
+      'p',
+      'Paste the recovery key of your account, from the Mac app: Settings › Relay › Recovery key. Or the read-only share key a teammate sent you.',
+    ),
     field,
     element('label', remember, ' Remember on this device'),
     error,
@@ -69,9 +80,11 @@ function signInScreen(problem?: string) {
   form.className = 'sign-in'
   form.onsubmit = async event => {
     event.preventDefault()
+    const shared = parseShareLink(field.value)
+    if (shared) return watch(shared)
     const account = parseRecoveryKey(field.value)
     if (!account) {
-      error.textContent = 'This is not a Tonton Claude recovery key.'
+      error.textContent = 'This is not a Tonton Claude recovery key nor a share key.'
       return
     }
     const key = await importAccountKey(account.key)
@@ -147,7 +160,7 @@ function renderList(list: HTMLElement, current: ClientState) {
     for (const session of sessions) {
       const row = element(
         'button',
-        dot(session),
+        dot(session.status),
         element(
           'span',
           element('strong', session.project),
@@ -168,10 +181,10 @@ function renderList(list: HTMLElement, current: ClientState) {
   list.replaceChildren(...children)
 }
 
-function dot(session: Session): HTMLElement {
+function dot(status: SessionStatus): HTMLElement {
   const node = element('i')
-  node.className = `dot ${session.status}`
-  node.title = STATUS_LABELS[session.status]
+  node.className = `dot ${status}`
+  node.title = STATUS_LABELS[status]
   return node
 }
 
@@ -199,7 +212,7 @@ function renderChat(chat: HTMLElement, current: ClientState) {
   const header = element(
     'div',
     back,
-    dot(session),
+    dot(session.status),
     element('span', element('strong', session.project), element('small', details.filter(Boolean).join(' · '))),
     element('em', needsAttention(session.status) ? displayStatusText(session) : STATUS_LABELS[session.status]),
     ...commandButtons(session),
@@ -306,6 +319,75 @@ function commandButtons(session: Session): HTMLElement[] {
     }
     return button
   })
+}
+
+// MARK: Read-only share
+
+/** One session a teammate shared: its conversation, live, and nothing that could act on it. Nothing is stored. */
+async function watch(link: ShareLink) {
+  client?.stop()
+  client = null
+  viewer?.stop()
+  let key: CryptoKey
+  try {
+    key = await importAccountKey(link.key)
+  } catch {
+    return signInScreen('This share key is damaged.')
+  }
+  const close = element('button', 'Close')
+  close.onclick = () => {
+    viewer?.stop()
+    viewer = null
+    history.replaceState(null, '', location.pathname + location.search)
+    signInScreen()
+  }
+  const status = element('span')
+  status.className = 'connection'
+  const header = element(
+    'header',
+    element('strong', 'Tonton Claude'),
+    status,
+    element('span', `Read only · ${new URL(link.relay).host}`),
+    close,
+  )
+  const chat = element('main')
+  const shell = element('div', chat)
+  shell.className = 'shell'
+  shell.dataset.view = 'shared'
+  app.replaceChildren(header, shell)
+  viewer = new ShareViewer({
+    key,
+    connect: () => shareSocket(link, (url, protocols) => new WebSocket(url, protocols) as unknown as SocketLike),
+    onChange: view => renderShared(view, status, chat),
+  })
+  viewer.start()
+}
+
+function renderShared(view: SharedView, status: HTMLElement, chat: HTMLElement) {
+  status.textContent = view.connection === 'connected' ? '● connected' : view.connection === 'ended' ? '○ ended' : '○ connecting'
+  status.dataset.state = view.connection === 'connected' ? 'connected' : 'offline'
+  const previous = chat.querySelector('.messages')
+  if (previous) stickToBottom = previous.scrollHeight - previous.scrollTop - previous.clientHeight < 40
+  const details = [view.title, view.tool === 'opencode' ? 'OpenCode' : null].filter(Boolean).join(' · ')
+  const header = element(
+    'div',
+    ...(view.status ? [dot(view.status)] : []),
+    element('span', element('strong', view.project ?? 'Shared session'), element('small', details)),
+    element('em', view.status ? STATUS_LABELS[view.status] : ''),
+  )
+  header.className = 'chat-header'
+  const messages = element('div')
+  messages.className = 'messages'
+  if (!view.entries) messages.append(element('p', 'Loading the conversation…'))
+  for (const item of chatItems(view.entries ?? [])) messages.append(message(item))
+  const children: HTMLElement[] = [header, messages]
+  if (view.connection === 'ended') {
+    const ended = element('p', 'This share ended: it was revoked or it expired.')
+    ended.className = 'ended'
+    children.push(ended)
+  }
+  chat.replaceChildren(...children)
+  if (stickToBottom) messages.scrollTop = messages.scrollHeight
 }
 
 // MARK: Storage

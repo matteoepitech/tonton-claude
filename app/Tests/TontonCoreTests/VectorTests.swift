@@ -27,6 +27,8 @@ final class VectorTests: XCTestCase {
         let payload = { (text: String) in Data(base64URLEncoded: String(text.dropFirst("tonton_".count))) ?? Data() }
         XCTAssertEqual(try Self.object(payload(try XCTUnwrap(account.machineToken))), try Self.object(payload(token.token)))
         XCTAssertEqual(try Self.read(snapshot: vectors.snapshot, history: vectors.history, key: key), vectors.expected)
+        let share = vectors.shareLink
+        XCTAssertEqual(ShareLink(string: share.text), ShareLink(relay: share.relay, token: share.token, key: share.key))
     }
 
     // MARK: Writing
@@ -108,7 +110,16 @@ final class VectorTests: XCTestCase {
             ),
             ("rules", try vault.sealRules([PermissionRule(tool: "Bash", pattern: "npm test")], issuedAt: issuedAt)),
             ("machine name", try vault.sealMachineName("Studio ✨")),
+            (
+                "share order",
+                try vault.sealShareOrder(
+                    shareId: "abcdefghijkl", sessionId: "s1", shareKey: String(repeating: "k", count: 43),
+                    expiresAt: "2026-10-26T10:00:00.000Z")
+            ),
         ]
+        let share = ShareLink(
+            relay: "https://relay.example.com/tonton", token: "ts_abcdefghijkl_" + String(repeating: "t", count: 43),
+            key: String(repeating: "k", count: 43))
         let account = Account(
             relay: "https://relay.example.com/tonton", accountId: "abcdefghijkl", token: "ta_unused", key: keyText,
             joinSecret: String(repeating: "s", count: 43))
@@ -120,7 +131,8 @@ final class VectorTests: XCTestCase {
             accountToken: Vectors.Token(
                 token: try XCTUnwrap(account.machineToken), relay: account.relay, account: account.accountId,
                 secret: try XCTUnwrap(account.joinSecret), key: keyText),
-            snapshot: snapshot, history: historyText, expected: try read(snapshot: snapshot, history: historyText, key: key))
+            snapshot: snapshot, history: historyText, expected: try read(snapshot: snapshot, history: historyText, key: key),
+            shareLink: Vectors.Share(text: share.string, relay: share.relay, token: share.token, key: share.key))
     }
 
     private static func text(_ object: [String: Any]) throws -> String {
@@ -191,6 +203,7 @@ final class VectorTests: XCTestCase {
 
 private struct Vectors: Codable {
     struct Blob: Codable { let name: String; let blob: String; let plaintext: String }
+    struct Share: Codable { let text: String; let relay: String; let token: String; let key: String }
     struct Token: Codable {
         let token: String
         let relay: String
@@ -261,4 +274,5 @@ private struct Vectors: Codable {
     let snapshot: String
     let history: String
     let expected: Expected
+    let shareLink: Share
 }

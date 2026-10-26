@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { MAX_MACHINES_PER_ACCOUNT } from './limits'
+import { MAX_MACHINES_PER_ACCOUNT, MAX_SHARES_PER_ACCOUNT } from './limits'
 import { issueToken, newJoinSecret, parseToken, safeEqual, sha256 } from './tokens'
 
 export interface Machine {
@@ -11,6 +11,17 @@ export interface Machine {
   nameBlob: string
   createdAt: string
   lastSeen: string | null
+}
+
+export interface Share {
+  id: string
+  accountId: string
+  sessionId: string
+  /** Sealed `ShareOrder`, null until the app sent it. */
+  order: string | null
+  createdAt: string
+  /** Unix milliseconds. */
+  expiresAt: number
 }
 
 export type JoinResult = { ok: true; machine: Machine; token: string } | { ok: false; reason: 'invalid-token' | 'machine-limit' }
@@ -62,6 +73,17 @@ const MIGRATIONS = [
      blob TEXT NOT NULL
    );
    CREATE INDEX session_entries_session ON session_entries(account_id, session_id, id);`,
+  // Read-only shares of one session (relay/src/shares.ts). The order is sealed by the app for the session's agent.
+  `CREATE TABLE shares (
+     id TEXT PRIMARY KEY,
+     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+     session_id TEXT NOT NULL,
+     secret_hash BLOB NOT NULL,
+     order_blob TEXT,
+     created_at TEXT NOT NULL,
+     expires_at INTEGER NOT NULL
+   );
+   CREATE INDEX shares_session ON shares(account_id, session_id);`,
 ]
 
 interface MachineRow {
@@ -71,6 +93,26 @@ interface MachineRow {
   created_at: string
   last_seen: string | null
 }
+
+interface ShareRow {
+  id: string
+  account_id: string
+  session_id: string
+  order_blob: string | null
+  created_at: string
+  expires_at: number
+}
+
+const SHARE_COLUMNS = 'id, account_id, session_id, order_blob, created_at, expires_at'
+
+const toShare = (row: ShareRow): Share => ({
+  id: row.id,
+  accountId: row.account_id,
+  sessionId: row.session_id,
+  order: row.order_blob,
+  createdAt: row.created_at,
+  expiresAt: row.expires_at,
+})
 
 const toMachine = (row: MachineRow): Machine => ({
   id: row.id,
@@ -182,6 +224,72 @@ export class Registry {
 
   revokeMachine(accountId: string, machineId: string): boolean {
     return this.db.query('DELETE FROM machines WHERE id = ? AND account_id = ?').run(machineId, accountId).changes > 0
+  }
+
+  /** A read-only share of one session until `expiresAt`, null when the account holds too many. */
+  createShare(accountId: string, sessionId: string, expiresAt: number): { share: Share; token: string } | null {
+    return this.db.transaction(() => {
+      this.db.query('DELETE FROM shares WHERE account_id = ? AND expires_at <= ?').run(accountId, Date.now())
+      const { count } = this.db.query('SELECT COUNT(*) AS count FROM shares WHERE account_id = ?').get(accountId) as { count: number }
+      if (count >= MAX_SHARES_PER_ACCOUNT) return null
+      const { id, token, secretHash } = issueToken('ts')
+      const createdAt = now()
+      this.db
+        .query('INSERT INTO shares (id, account_id, session_id, secret_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(id, accountId, sessionId, secretHash, createdAt, expiresAt)
+      return { token, share: { id, accountId, sessionId, order: null, createdAt, expiresAt } }
+    })()
+  }
+
+  /** Keeps the app's sealed order for the share's agent. False when the share is not this account's, for this session. */
+  setShareOrder(accountId: string, shareId: string, sessionId: string, order: string): boolean {
+    return (
+      this.db
+        .query('UPDATE shares SET order_blob = ? WHERE id = ? AND account_id = ? AND session_id = ? AND expires_at > ?')
+        .run(order, shareId, accountId, sessionId, Date.now()).changes > 0
+    )
+  }
+
+  /** The account's shares still running, or those of one session. */
+  shares(accountId: string, sessionId?: string): Share[] {
+    const rows = sessionId
+      ? this.db
+          .query(`SELECT ${SHARE_COLUMNS} FROM shares WHERE account_id = ? AND session_id = ? AND expires_at > ? ORDER BY created_at`)
+          .all(accountId, sessionId, Date.now())
+      : this.db
+          .query(`SELECT ${SHARE_COLUMNS} FROM shares WHERE account_id = ? AND expires_at > ? ORDER BY created_at`)
+          .all(accountId, Date.now())
+    return (rows as ShareRow[]).map(toShare)
+  }
+
+  share(accountId: string, shareId: string): Share | null {
+    const row = this.db
+      .query(`SELECT ${SHARE_COLUMNS} FROM shares WHERE id = ? AND account_id = ? AND expires_at > ?`)
+      .get(shareId, accountId, Date.now()) as ShareRow | null
+    return row ? toShare(row) : null
+  }
+
+  revokeShare(accountId: string, shareId: string): Share | null {
+    const row = this.db
+      .query(`DELETE FROM shares WHERE id = ? AND account_id = ? RETURNING ${SHARE_COLUMNS}`)
+      .get(shareId, accountId) as ShareRow | null
+    return row ? toShare(row) : null
+  }
+
+  /** The share a teammate's token opens, while it runs. */
+  authenticateShare(token: string): Share | null {
+    const parsed = parseToken(token, 'ts')
+    if (!parsed) return null
+    const row = this.db
+      .query(`SELECT ${SHARE_COLUMNS}, secret_hash FROM shares WHERE id = ? AND expires_at > ?`)
+      .get(parsed.id, Date.now()) as (ShareRow & { secret_hash: Uint8Array }) | null
+    return row && safeEqual(row.secret_hash, parsed.secretHash) ? toShare(row) : null
+  }
+
+  /** Deletes the shares past their time and returns them. */
+  expireShares(): Share[] {
+    const rows = this.db.query(`DELETE FROM shares WHERE expires_at <= ? RETURNING ${SHARE_COLUMNS}`).all(Date.now()) as ShareRow[]
+    return rows.map(toShare)
   }
 
   close() {

@@ -4,6 +4,7 @@ import { RELEASES_URL } from '../../shared/version'
 import type { RelayContext } from './context'
 import { BROWSER_PROTOCOL, bearerToken, browserToken, clientIp, fail, json, readJson } from './http'
 import type { SocketData } from './hub'
+import { MAX_SHARE_HOURS } from './limits'
 import { renderMetrics } from './metrics'
 import { safeEqual, sha256 } from './tokens'
 import { isSealed, isSessionId, isText, isVersion } from './validate'
@@ -11,6 +12,7 @@ import { isSealed, isSessionId, isText, isVersion } from './validate'
 type RelayServer = Server<SocketData>
 
 const MACHINE_PATH = /^\/api\/machines\/([A-Za-z0-9_-]{12})$/
+const SHARE_PATH = /^\/api\/shares\/([A-Za-z0-9_-]{12})$/
 
 export function createFetchHandler(ctx: RelayContext) {
   return async (req: Request, server: RelayServer): Promise<Response | undefined> => {
@@ -31,6 +33,7 @@ export function createFetchHandler(ctx: RelayContext) {
     if (path === '/api/accounts' && req.method === 'POST') return createAccount(ctx, req, ip)
     if (path === '/api/machines/join' && req.method === 'POST') return joinMachine(ctx, req, ip)
     if (path === '/api/hook' || path === '/api/agent/ping' || path === '/ws/agent') return agentRoute(ctx, req, server, path, ip)
+    if (path === '/ws/share') return viewerRoute(ctx, req, server, ip)
     return appRoute(ctx, req, server, path, ip)
   }
 }
@@ -112,6 +115,40 @@ async function agentRoute(ctx: RelayContext, req: Request, server: RelayServer, 
   return new Response('ok')
 }
 
+/** A teammate opening a read-only share: its token opens that share and nothing else. */
+function viewerRoute(ctx: RelayContext, req: Request, server: RelayServer, ip: string): Response | undefined {
+  const share = ctx.registry.authenticateShare(bearerToken(req))
+  if (!share) {
+    ctx.failedAuth.hit(ip)
+    return fail(401, 'This share was revoked or has expired.')
+  }
+  const data: SocketData = {
+    role: 'viewer',
+    accountId: share.accountId,
+    machineId: null,
+    sessionId: share.sessionId,
+    agentVersion: null,
+    service: false,
+    shareId: share.id,
+  }
+  const headers: Record<string, string> = browserToken(req) ? { 'sec-websocket-protocol': BROWSER_PROTOCOL } : {}
+  return server.upgrade(req, { data, headers }) ? undefined : fail(400, 'WebSocket expected.')
+}
+
+/** A share of one of the account's sessions, for `hours`. The app then sends its order, sealed, for the agent. */
+async function createShare(ctx: RelayContext, req: Request, accountId: string): Promise<Response> {
+  const body = await readJson<{ sessionId?: unknown; hours?: unknown }>(req, 1024)
+  const hours = body?.hours
+  if (!isSessionId(body?.sessionId) || typeof hours !== 'number' || !Number.isInteger(hours) || hours < 1 || hours > MAX_SHARE_HOURS) {
+    return fail(400, 'Bad request.')
+  }
+  const sessionId = body.sessionId
+  if (!ctx.sessions.list(accountId).some(session => session.id === sessionId)) return fail(404, 'No such session.')
+  const created = ctx.registry.createShare(accountId, sessionId, Date.now() + hours * 3_600_000)
+  if (!created) return fail(403, 'This account reached its share limit. Revoke one in Settings › Relay.')
+  return json({ id: created.share.id, token: created.token, expiresAt: new Date(created.share.expiresAt).toISOString() })
+}
+
 async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, path: string, ip: string): Promise<Response | undefined> {
   const accountId = ctx.registry.authenticateAccount(bearerToken(req))
   if (!accountId) {
@@ -130,6 +167,16 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
   if (path === '/api/ping') return json({ ok: true, accountId })
   if (path === '/api/account/token' && req.method === 'POST') return accountToken(ctx, req, accountId)
   if (path === '/api/machines' && req.method === 'GET') return json(ctx.machineList(accountId))
+  if (path === '/api/shares' && req.method === 'POST') return createShare(ctx, req, accountId)
+  if (path === '/api/shares' && req.method === 'GET') return json(ctx.shareList(accountId))
+
+  const sharePath = SHARE_PATH.exec(path)
+  if (sharePath && req.method === 'DELETE') {
+    const share = ctx.registry.revokeShare(accountId, sharePath[1])
+    if (!share) return fail(404, 'No such share.')
+    ctx.endShare(share, 'revoked')
+    return json({ ok: true })
+  }
 
   const machinePath = MACHINE_PATH.exec(path)
   if (machinePath && req.method === 'DELETE') {
@@ -147,6 +194,7 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
       ctx.hub.disconnectMachine(machine.id, 'account deleted')
       ctx.forgetMachine(machine.id)
     }
+    for (const share of ctx.registry.shares(accountId)) ctx.endShare(share, 'account deleted')
     ctx.hub.disconnectApps(accountId, 'account deleted')
     ctx.registry.deleteAccount(accountId)
     ctx.sessions.removeAccount(accountId)

@@ -126,6 +126,11 @@ public struct SessionVault: Sendable {
         open(blob, as: StatusDetail.self)?.text
     }
 
+    /// Asks the session's agent to seal a copy of the conversation with the share's key, until the share expires.
+    public func sealShareOrder(shareId: String, sessionId: String, shareKey: String, expiresAt: String) throws -> String {
+        try E2E.seal(ShareOrder(shareId: shareId, sessionId: sessionId, key: shareKey, expiresAt: expiresAt), with: key)
+    }
+
     public func sealMachineName(_ name: String) throws -> String {
         try E2E.seal(MachineName(name: name, platform: nil), with: key)
     }

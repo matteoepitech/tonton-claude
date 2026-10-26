@@ -43,6 +43,28 @@ public struct RelayAPI: Sendable {
         _ = try await request("DELETE", account.relay, "/api/machines/\(machineId)", token: account.token, as: Done.self)
     }
 
+    /// A read-only share of one session, for `hours`: its id, its token for the teammate, and when it ends.
+    public func createShare(
+        of sessionId: String, hours: Int, for account: Account
+    ) async throws -> (
+        id: String, token: String, expiresAt: String
+    ) {
+        struct Created: Decodable { let id: String; let token: String; let expiresAt: String }
+        struct Body: Encodable { let sessionId: String; let hours: Int }
+        let body = try JSONEncoder().encode(Body(sessionId: sessionId, hours: hours))
+        let created = try await request("POST", account.relay, "/api/shares", token: account.token, body: body, as: Created.self)
+        return (created.id, created.token, created.expiresAt)
+    }
+
+    public func shares(of account: Account) async throws -> [ShareSummary] {
+        try await request("GET", account.relay, "/api/shares", token: account.token, as: [ShareSummary].self)
+    }
+
+    public func revokeShare(_ shareId: String, of account: Account) async throws {
+        struct Done: Decodable { let ok: Bool }
+        _ = try await request("DELETE", account.relay, "/api/shares/\(shareId)", token: account.token, as: Done.self)
+    }
+
     public func deleteAccount(_ account: Account) async throws {
         struct Done: Decodable { let ok: Bool }
         _ = try await request("DELETE", account.relay, "/api/account", token: account.token, as: Done.self)
