@@ -71,6 +71,9 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Which machines?** Anything that runs Claude Code: Windows, macOS and Linux.
 - **First launch.** Claude Code asks you to confirm "I am using this for local development" once per launch, because the
   feature Tonton Claude uses is still in preview.
+- **Status line.** Claude Code only shares your plan's usage with status lines, so sessions started from a terminal get one
+  from Tonton Claude: it passes the usage to the notch, then shows your own status line if you have one, or the model, the
+  context and the 5-hour usage if you don't.
 - **Updating agents.** When a machine runs an older agent than your app, **Update agent** shows up next to it in the notch
   and in **Settings › Machines**: one click and it installs the matching release. Agents installed before 0.4.0 need the
   install command once more, which the app copies for you.

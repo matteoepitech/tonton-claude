@@ -7,6 +7,8 @@ public enum Transcript {
         public var entries: [Entry] = []
         public var title: String?
         public var costUSD: Double?
+        /// Set when the 5-hour limit stopped the session.
+        public var fiveHourLimit: UsageLimit?
     }
 
     static let maxToolResultChars = 4000
@@ -31,6 +33,12 @@ public enum Transcript {
         let type = line["type"] as? String
         if type == "ai-title", let title = line["aiTitle"] as? String { result.title = title }
         if type == "cost-state", let cost = line["totalCostUSD"] as? Double { result.costUSD = cost }
+        // On the error message Claude Code writes when the plan's limit refuses a request.
+        if let quota = line["quotaLimits"] as? [String: Any], quota["status"] as? String == "rejected",
+            quota["rateLimitType"] as? String == "five_hour", let resetsAt = quota["resetsAt"] as? Double, resetsAt > 0
+        {
+            result.fiveHourLimit = UsageLimit(usedPercent: 100, resetsAt: Date(timeIntervalSince1970: resetsAt))
+        }
 
         let ts = line["timestamp"] as? String ?? ISO8601DateFormatter().string(from: Date())
         let id = line["uuid"] as? String ?? "\(type ?? "line")-\(ts)"

@@ -1,13 +1,16 @@
 import { basename } from 'node:path'
-import type { AgentMessage, Entry, PermissionDetail, SealedEntry } from '../../../shared/protocol'
+import type { AgentMessage, Entry, PermissionDetail, SealedEntry, UsageLimit } from '../../../shared/protocol'
 import { seal } from '../crypto'
 import { parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
+import { newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import type { SessionLink } from './session-link'
 
 const BACKLOG_SIZE = 400
 /** On reconnect only the latest entries keep their images, the rest is sent as text. */
 const BACKLOG_IMAGES = 40
+/** How often the usage left by the status line is checked. */
+const USAGE_POLL_MS = 1000
 
 type Post = (build: () => Promise<AgentMessage | null>) => void
 
@@ -20,6 +23,9 @@ export class Conversation {
   private entries: Entry[] = []
   private title: string | undefined
   private costUSD: number | undefined
+  private fiveHourLimit: UsageLimit | undefined
+  private lastUsage: string | null = null
+  private usageTimer: Timer | null = null
   private readonly pending = new Map<string, PendingPermission>()
   private readonly tailer: Tailer | null
 
@@ -43,10 +49,12 @@ export class Conversation {
   start() {
     if (this.tailer) this.tailer.start()
     else this.announce()
+    this.usageTimer = setInterval(() => this.readUsage(), USAGE_POLL_MS)
   }
 
   stop() {
     this.tailer?.stop()
+    if (this.usageTimer) clearInterval(this.usageTimer)
   }
 
   /** Everything the relay needs after a (re)connection. */
@@ -85,6 +93,7 @@ export class Conversation {
         this.costUSD = parsed.costUSD
         metaChanged = true
       }
+      if (this.updateLimit(parsed.fiveHourLimit)) metaChanged = true
     }
     this.entries = [...this.entries, ...fresh].slice(-BACKLOG_SIZE)
     if (initial) return this.announce()
@@ -100,9 +109,34 @@ export class Conversation {
     }
   }
 
+  /** Picks up what the status line of this session last wrote. */
+  private readUsage() {
+    const raw = readUsageFile(this.link.sessionId)
+    if (raw === null || raw === this.lastUsage) return
+    this.lastUsage = raw
+    try {
+      if (this.updateLimit((JSON.parse(raw) as SessionUsage).fiveHourLimit)) this.postMeta()
+    } catch {
+      // The status line replaces the file in one step: something else wrote this one.
+    }
+  }
+
+  /** Returns true when the reading is newer than the one already known. */
+  private updateLimit(reading: UsageLimit | undefined): boolean {
+    const next = newerLimit(this.fiveHourLimit, reading)
+    if (next === this.fiveHourLimit) return false
+    this.fiveHourLimit = next
+    return true
+  }
+
   private postMeta() {
     const last = this.entries.findLast(e => e.kind === 'assistant' || e.kind === 'user')
-    const meta = { title: this.title, costUSD: this.costUSD, lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined }
+    const meta = {
+      title: this.title,
+      costUSD: this.costUSD,
+      lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
+      fiveHourLimit: this.fiveHourLimit,
+    }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
   }
 

@@ -56,12 +56,14 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let startedAt: Date
     public let lastActivity: Date
     public let lastMessage: String?
+    /// The 5-hour window of the Claude plan the session runs on. Nil with an API key, and with older agents.
+    public let fiveHourLimit: UsageLimit?
 
     public init(
         id: String, machineId: String, machine: String, platform: String?, cwd: String, project: String, title: String?,
         status: SessionStatus,
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
-        startedAt: Date, lastActivity: Date, lastMessage: String?
+        startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -79,6 +81,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.startedAt = startedAt
         self.lastActivity = lastActivity
         self.lastMessage = lastMessage
+        self.fiveHourLimit = fiveHourLimit
     }
 
     /// Claude Code's notification texts, shortened for the notch.
@@ -87,6 +90,36 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         if let range = text.range(of: "needs your permission to use ") { return "Wants to use \(text[range.upperBound...])" }
         if text.contains("waiting for your input") { return "Waiting for you" }
         return text
+    }
+}
+
+/// How much of a Claude plan's usage window is spent.
+public struct UsageLimit: Equatable, Sendable {
+    /// 0 to 100.
+    public let usedPercent: Double
+    public let resetsAt: Date
+
+    public init(usedPercent: Double, resetsAt: Date) {
+        self.usedPercent = usedPercent
+        self.resetsAt = resetsAt
+    }
+
+    public enum Level: Equatable, Sendable {
+        case normal
+        /// From 80 %.
+        case high
+        case reached
+    }
+
+    /// Nil once the window has reset: the reading says nothing about the new one.
+    public func level(at now: Date = Date()) -> Level? {
+        guard resetsAt > now else { return nil }
+        return usedPercent >= 100 ? .reached : usedPercent >= 80 ? .high : .normal
+    }
+
+    /// The fullest window still running, for a gauge that stands for several sessions.
+    public static func fullest(_ limits: [UsageLimit?], at now: Date = Date()) -> UsageLimit? {
+        limits.compactMap { $0 }.filter { $0.level(at: now) != nil }.max { $0.usedPercent < $1.usedPercent }
     }
 }
 

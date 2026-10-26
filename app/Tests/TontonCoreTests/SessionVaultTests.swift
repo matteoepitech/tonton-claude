@@ -36,6 +36,37 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertGreaterThan(session.lastActivity, session.startedAt)
     }
 
+    func testTheFiveHourLimitComesWithTheMeta() throws {
+        let limit = WireUsageLimit(usedPercent: 83.5, resetsAt: "2026-10-20T12:00:00.000Z")
+        let meta = SessionMeta(title: nil, costUSD: nil, lastMessage: nil, fiveHourLimit: limit)
+        let older = SessionMeta(title: "From an older agent", costUSD: nil, lastMessage: nil)
+        func session(_ meta: SessionMeta) throws -> SessionSummary {
+            let wire = WireSession(
+                id: "s1", machineId: "m1", status: .working, agentOnline: true, canChat: true, info: nil, meta: try sealed(meta),
+                statusDetail: nil, pendingPermissions: [], startedAt: "x", lastActivity: "x")
+            return vault.session(wire, machines: [])
+        }
+        XCTAssertEqual(
+            try session(meta).fiveHourLimit, UsageLimit(usedPercent: 83.5, resetsAt: Date(timeIntervalSince1970: 1_792_497_600)))
+        XCTAssertNil(try session(older).fiveHourLimit)
+    }
+
+    func testTheGaugeFollowsTheWindow() {
+        let resetsAt = Date(timeIntervalSince1970: 1_792_497_600)
+        let now = resetsAt.addingTimeInterval(-3600)
+        XCTAssertEqual(UsageLimit(usedPercent: 79.9, resetsAt: resetsAt).level(at: now), .normal)
+        XCTAssertEqual(UsageLimit(usedPercent: 80, resetsAt: resetsAt).level(at: now), .high)
+        XCTAssertEqual(UsageLimit(usedPercent: 100, resetsAt: resetsAt).level(at: now), .reached)
+        // Once the window resets, the reading says nothing about the new one.
+        XCTAssertNil(UsageLimit(usedPercent: 100, resetsAt: resetsAt).level(at: resetsAt))
+
+        let expired = UsageLimit(usedPercent: 100, resetsAt: now.addingTimeInterval(-60))
+        let low = UsageLimit(usedPercent: 12, resetsAt: resetsAt)
+        let high = UsageLimit(usedPercent: 91, resetsAt: resetsAt)
+        XCTAssertEqual(UsageLimit.fullest([low, nil, expired, high], at: now), high)
+        XCTAssertNil(UsageLimit.fullest([nil, expired], at: now))
+    }
+
     func testUnreadableFieldsDegradeToPlaceholders() throws {
         let foreign = try E2E.seal(SessionInfo(machine: "x", platform: nil, cwd: "x", project: "x"), with: SymmetricKey(size: .bits256))
         let json = """

@@ -1,4 +1,5 @@
-import type { Entry, ImageData } from '../../../shared/protocol'
+import type { Entry, ImageData, UsageLimit } from '../../../shared/protocol'
+import { limit } from '../usage'
 
 // Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
 
@@ -29,6 +30,8 @@ export interface ParsedLine {
   entries: Entry[]
   title?: string
   costUSD?: number
+  /** Set when the 5-hour limit stopped the session. */
+  fiveHourLimit?: UsageLimit
 }
 
 interface Block {
@@ -46,6 +49,8 @@ interface TranscriptLine {
   origin?: { kind?: string }
   aiTitle?: string
   totalCostUSD?: number
+  /** On the error message Claude Code writes when the plan's limit refuses a request. */
+  quotaLimits?: { status?: string; rateLimitType?: string; resetsAt?: unknown }
   message?: { content?: string | Block[] }
   attachment?: { type?: string; commandMode?: string; origin?: { kind?: string }; prompt?: string | Block[] }
 }
@@ -62,6 +67,8 @@ export function parseLine(raw: string): ParsedLine {
 
   if (line.type === 'ai-title' && typeof line.aiTitle === 'string') result.title = line.aiTitle
   if (line.type === 'cost-state' && typeof line.totalCostUSD === 'number') result.costUSD = line.totalCostUSD
+  const quota = line.quotaLimits
+  if (quota?.status === 'rejected' && quota.rateLimitType === 'five_hour') result.fiveHourLimit = limit(100, quota.resetsAt)
 
   const id = line.uuid ?? `${line.type}-${line.timestamp}`
   const ts = line.timestamp ?? new Date().toISOString()

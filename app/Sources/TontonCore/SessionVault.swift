@@ -36,7 +36,10 @@ public struct SessionVault: Sendable {
             costUSD: meta?.costUSD,
             startedAt: ISO8601.parse(wire.startedAt) ?? .distantPast,
             lastActivity: ISO8601.parse(wire.lastActivity) ?? .distantPast,
-            lastMessage: meta?.lastMessage
+            lastMessage: meta?.lastMessage,
+            fiveHourLimit: meta?.fiveHourLimit.flatMap { limit in
+                ISO8601.parse(limit.resetsAt).map { UsageLimit(usedPercent: limit.usedPercent, resetsAt: $0) }
+            }
         )
     }
 
