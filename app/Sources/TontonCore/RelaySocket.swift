@@ -10,6 +10,8 @@ public enum ConnectionState: Equatable, Sendable {
 public final class RelaySocket {
     public var onState: (ConnectionState) -> Void = { _ in }
     public var onMessage: (RelayMessage) -> Void = { _ in }
+    /// A new round-trip measure, or nil when disconnected.
+    public var onLatency: (RelayLatency?) -> Void = { _ in }
 
     private let session = URLSession(configuration: .ephemeral)
     private var task: URLSessionWebSocketTask?
@@ -37,6 +39,7 @@ public final class RelaySocket {
         pingTimer = nil
         backoff = 1
         self.state = state
+        onLatency(nil)
     }
 
     public func send(_ object: [String: Any]) {
@@ -68,7 +71,23 @@ public final class RelaySocket {
         task.resume()
         receive(task, generation: current)
         pingTimer?.invalidate()
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak task] _ in task?.sendPing { _ in } }
+        // The pings keep the connection open and time the round trip.
+        pingTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self, weak task] _ in
+            Task { @MainActor in if let task { self?.ping(task, generation: current) } }
+        }
+    }
+
+    private func ping(_ task: URLSessionWebSocketTask, generation current: Int) {
+        let start = ContinuousClock.now
+        task.sendPing { [weak self] error in
+            let elapsed = start.duration(to: .now)
+            Task { @MainActor in
+                guard let self, error == nil, current == self.generation else { return }
+                let region = (task.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "x-tonton-region")
+                let milliseconds = Int((Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18) * 1000)
+                self.onLatency(RelayLatency(milliseconds: milliseconds, region: region))
+            }
+        }
     }
 
     private func receive(_ task: URLSessionWebSocketTask, generation current: Int) {
@@ -78,6 +97,8 @@ public final class RelaySocket {
                 switch result {
                 case .success(let message):
                     self.backoff = 1
+                    // The first message tells the connection is up: time it right away rather than in 20 seconds.
+                    if self.state != .connected { self.ping(task, generation: current) }
                     self.state = .connected
                     if let message = Self.decode(message) { self.onMessage(message) }
                     self.receive(task, generation: current)

@@ -90,6 +90,7 @@ sandbox; data goes to `/var/lib/tonton`. Configuration lives in `/etc/tonton/ton
 | `TONTON_REGISTRATION` | `open` (anyone can create an account) or `closed` |
 | `TONTON_ADMIN_TOKEN` | With `closed`, the bearer token allowed to create accounts (24+ characters) |
 | `TONTON_TRUST_PROXY` | `1` to read the client IP from `X-Forwarded-For`. Only behind a reverse proxy that sets it. |
+| `TONTON_REGION` | Optional: where the relay runs (e.g. `Paris`), shown in the app next to the latency. On Fly.io, `FLY_REGION` is used. |
 
 **Docker**: the image `ghcr.io/matteoepitech/tonton-claude-relay` is published with each release, for amd64 and arm64.
 `docker compose up -d` with the `docker-compose.yml` of this repository; data is kept in the `tonton-data` volume. Add

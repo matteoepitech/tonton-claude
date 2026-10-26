@@ -105,7 +105,9 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
 
   if (path === '/ws/app') {
     const data: SocketData = { role: 'app', accountId, machineId: null, sessionId: null, agentVersion: null, service: false }
-    return server.upgrade(req, { data }) ? undefined : fail(400, 'WebSocket expected.')
+    // The app shows the region next to the latency it measures with WebSocket pings.
+    const headers = ctx.config.region ? { 'x-tonton-region': ctx.config.region } : undefined
+    return server.upgrade(req, { data, headers }) ? undefined : fail(400, 'WebSocket expected.')
   }
   if (path === '/api/ping') return json({ ok: true, accountId })
   if (path === '/api/account/token' && req.method === 'POST') return accountToken(ctx, req, accountId)
