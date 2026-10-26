@@ -138,6 +138,15 @@ describe('parseLine', () => {
     expect(parseLine(line({ type: 'user', requestId: 'req_4', message: { usage, content: 'x' } })).usage).toBeUndefined()
   })
 
+  test('the context window comes from the model the request asked for, and compaction starts it over', () => {
+    const asked = (requestedModel?: string) =>
+      parseLine(line({ type: 'assistant', requestedModel, message: { content: [] } })).contextWindow
+    expect(asked('claude-opus-5-5[1m]')).toBe(1_000_000)
+    expect(asked('claude-sonnet-5-5')).toBe(200_000)
+    expect(asked(undefined)).toBeUndefined()
+    expect(parseLine(line({ type: 'system', subtype: 'compact_boundary' })).compacted).toBe(true)
+  })
+
   test('garbage and subagent lines are ignored', () => {
     expect(parseLine('{not json').entries).toEqual([])
     expect(parseLine(line({ type: 'user', isSidechain: true, message: { content: 'x' } })).entries).toEqual([])

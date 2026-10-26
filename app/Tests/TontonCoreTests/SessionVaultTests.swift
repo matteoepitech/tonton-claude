@@ -134,6 +134,25 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertEqual(TokenCounts.short(1_203_410), "1.2M")
     }
 
+    func testTheContextGaugeKnowsWhenClaudeCodeCompacts() throws {
+        let meta = SessionMeta(
+            title: nil, costUSD: nil, lastMessage: nil, context: WireContext(usedTokens: 124_005, windowTokens: 1_000_000))
+        let wire = WireSession(
+            id: "s1", machineId: "m1", status: .working, agentOnline: true, canChat: true, info: nil, meta: try sealed(meta),
+            statusDetail: nil, pendingPermissions: [], startedAt: "x", lastActivity: "x")
+        XCTAssertEqual(vault.session(wire, machines: []).context, ContextUsage(usedTokens: 124_005, windowTokens: 1_000_000))
+
+        let small = ContextUsage(usedTokens: 100_000)
+        XCTAssertEqual(small.windowTokens, 200_000)
+        XCTAssertEqual(small.fraction, 0.5)
+        XCTAssertEqual(small.autoCompactAt, 167_000)
+        XCTAssertFalse(small.isNearCompaction)
+        XCTAssertTrue(ContextUsage(usedTokens: 147_000).isNearCompaction)
+        // Past 200K without a known window: only a 1M window holds that much.
+        XCTAssertEqual(ContextUsage(usedTokens: 300_000).windowTokens, 1_000_000)
+        XCTAssertEqual(ContextUsage(usedTokens: 300_000, windowTokens: 1_000_000).autoCompactAt, 967_000)
+    }
+
     func testTimeLeftReadsLikeTheNotch() {
         let now = Date(timeIntervalSince1970: 1_792_497_600)
         func left(_ seconds: TimeInterval) -> String { UsageLimit(usedPercent: 90, resetsAt: now + seconds).timeLeft(at: now) }

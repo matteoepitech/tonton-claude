@@ -90,4 +90,16 @@ final class LocalSessionsTests: XCTestCase {
         conversation.apply(TranscriptTail.Read(lines: [block("a1", "req_1")], reset: true))
         XCTAssertEqual(conversation.tokens, TokenCounts(input: 10, output: 200, cacheRead: 3000, cacheWrite: 400))
     }
+
+    func testTheContextFollowsTheLastResponseAndStartsOverAtACompaction() {
+        var conversation = LocalSessions.Conversation()
+        let answer =
+            #"{"type":"assistant","uuid":"a1","requestId":"r1","requestedModel":"claude-opus-5-5[1m]","message":{"usage":"#
+            + #"{"input_tokens":5,"output_tokens":900,"cache_read_input_tokens":120000,"cache_creation_input_tokens":4000},"content":[]}}"#
+        conversation.apply(TranscriptTail.Read(lines: [answer]))
+        XCTAssertEqual(conversation.contextTokens, 124_005)
+        XCTAssertEqual(conversation.contextWindow, 1_000_000)
+        conversation.apply(TranscriptTail.Read(lines: [#"{"type":"system","subtype":"compact_boundary","uuid":"c1"}"#]))
+        XCTAssertEqual(conversation.contextTokens, 0)
+    }
 }

@@ -216,6 +216,25 @@ describe('end to end', () => {
     expect(await tokens()).toEqual({ input: 10, output: 200, cacheRead: 3000, cacheWrite: 400 })
   })
 
+  test('the context is the input of the last response, against its window, and starts over at a compaction', async () => {
+    const usage = { input_tokens: 5, output_tokens: 900, cache_read_input_tokens: 120000, cache_creation_input_tokens: 4000 }
+    const message = { model: 'claude-opus-5-5', usage, content: [{ type: 'text', text: 'Long answer' }] }
+    appendFileSync(
+      transcript,
+      line({ type: 'assistant', uuid: 'c1', requestId: 'req_context', requestedModel: 'claude-opus-5-5[1m]', message }),
+    )
+    const context = async () => {
+      const blob = latestSession(app)?.meta
+      return blob ? (await open<{ context?: { usedTokens: number } }>(key, blob)).context : undefined
+    }
+    for (let i = 0; i < 80 && (await context())?.usedTokens !== 124005; i++) await Bun.sleep(50)
+    expect(await context()).toEqual({ usedTokens: 124005, windowTokens: 1_000_000 })
+
+    appendFileSync(transcript, line({ type: 'system', subtype: 'compact_boundary', uuid: 'c2' }))
+    for (let i = 0; i < 80 && (await context())?.usedTokens !== 0; i++) await Bun.sleep(50)
+    expect(await context()).toEqual({ usedTokens: 0, windowTokens: 1_000_000 })
+  })
+
   test('a message sent from the notch while Claude is working reaches the app from the queue', async () => {
     const before = app.messages.length
     const prompt = '<channel source="tonton" sender="notch">\nAlso run the linter\n</channel>'

@@ -83,6 +83,8 @@ public enum LocalSessions {
         public private(set) var fiveHourLimit: UsageLimit?
         public private(set) var sevenDayLimit: UsageLimit?
         public private(set) var tokens: TokenCounts?
+        public private(set) var contextTokens: Int?
+        public private(set) var contextWindow: Int?
         /// API responses already in `tokens`.
         private var countedRequests: Set<String> = []
 
@@ -93,6 +95,7 @@ public enum LocalSessions {
                 entries = []
                 tokens = nil
                 countedRequests = []
+                contextTokens = nil
             }
             for line in read.lines {
                 let parsed = Transcript.parse(line)
@@ -101,6 +104,9 @@ public enum LocalSessions {
                 if let cost = parsed.costUSD { costUSD = cost }
                 if let limit = parsed.fiveHourLimit { fiveHourLimit = limit }
                 if let limit = parsed.sevenDayLimit { sevenDayLimit = limit }
+                if let window = parsed.contextWindow { contextWindow = window }
+                if parsed.compacted { contextTokens = 0 }
+                if let usage = parsed.usage { contextTokens = usage.tokens.allInput }
                 if let usage = parsed.usage, countedRequests.insert(usage.requestId).inserted {
                     tokens = (tokens ?? TokenCounts()) + usage.tokens
                 }
@@ -124,6 +130,7 @@ public enum LocalSessions {
             status: endedAt == nil ? record.sessionStatus : .ended, statusText: nil, agentOnline: true, canChat: false,
             pendingPermissions: [], costUSD: conversation.costUSD, startedAt: started, lastActivity: endedAt ?? updated,
             lastMessage: conversation.lastMessage, fiveHourLimit: conversation.fiveHourLimit,
-            sevenDayLimit: conversation.sevenDayLimit, tokens: conversation.tokens)
+            sevenDayLimit: conversation.sevenDayLimit, tokens: conversation.tokens,
+            context: conversation.contextTokens.map { ContextUsage(usedTokens: $0, windowTokens: conversation.contextWindow) })
     }
 }

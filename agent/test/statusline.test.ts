@@ -42,6 +42,7 @@ describe('usage readings', () => {
     expect(statusLineUsage({})).toEqual({})
     expect(statusLineUsage({ cost: { total_cost_usd: 1.25 } })).toEqual({ costUSD: 1.25 })
     expect(statusLineUsage({ cost: { total_cost_usd: '1.25' } })).toEqual({})
+    expect(statusLineUsage({ context_window: { context_window_size: 1000000 } })).toEqual({ contextWindow: 1000000 })
   })
 
   test('the newest reading wins: a later reset, or more usage in the same window', () => {

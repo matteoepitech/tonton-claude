@@ -37,6 +37,10 @@ export interface ParsedLine {
   /** Tokens of the API response this line belongs to. Claude Code writes one line per content block, each with the whole
    * response's usage, so they only count once per request. */
   usage?: TokenCounts & { requestId: string }
+  /** The model's context window, read from the model the request asked for (`[1m]` for a million tokens). */
+  contextWindow?: number
+  /** Claude Code compacted the conversation: the context starts over. */
+  compacted?: boolean
 }
 
 interface Block {
@@ -55,6 +59,7 @@ interface TranscriptLine {
   aiTitle?: string
   totalCostUSD?: number
   requestId?: string
+  requestedModel?: string
   /** On the error message Claude Code writes when the plan's limit refuses a request. */
   quotaLimits?: { status?: string; rateLimitType?: string; resetsAt?: unknown }
   message?: { id?: string; model?: string; content?: string | Block[]; usage?: Record<string, unknown> }
@@ -78,10 +83,14 @@ export function parseLine(raw: string): ParsedLine {
   // The weekly limit, or its Opus or Sonnet share: either way the session waits for that reset.
   if (quota?.status === 'rejected' && quota.rateLimitType?.startsWith('seven_day')) result.sevenDayLimit = limit(100, quota.resetsAt)
   if (line.type === 'assistant') result.usage = responseUsage(line)
+  if (line.type === 'assistant' && typeof line.requestedModel === 'string') {
+    result.contextWindow = /\[1m\]$/i.test(line.requestedModel) ? 1_000_000 : 200_000
+  }
 
   const id = line.uuid ?? `${line.type}-${line.timestamp}`
   const ts = line.timestamp ?? new Date().toISOString()
   if (line.type === 'system' && line.subtype === 'compact_boundary') {
+    result.compacted = true
     result.entries.push({ id, ts, kind: 'system', text: 'Conversation compacted' })
   }
 

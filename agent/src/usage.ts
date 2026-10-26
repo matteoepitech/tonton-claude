@@ -11,6 +11,8 @@ export interface SessionUsage {
   sevenDayLimit?: UsageLimit
   /** Claude Code's own estimate for the session, live, unlike the cost it writes to the transcript when it exits. */
   costUSD?: number
+  /** The size of the model's context window. */
+  contextWindow?: number
 }
 
 interface Window {
@@ -30,10 +32,13 @@ export function statusLineUsage(input: unknown): SessionUsage {
   const sevenDayLimit = statusLineLimit(input, 'seven_day')
   const cost = (input as { cost?: { total_cost_usd?: unknown } } | null)?.cost?.total_cost_usd
   const costUSD = typeof cost === 'number' && Number.isFinite(cost) && cost >= 0 ? cost : undefined
+  const window = (input as { context_window?: { context_window_size?: unknown } } | null)?.context_window?.context_window_size
+  const contextWindow = typeof window === 'number' && Number.isInteger(window) && window > 0 ? window : undefined
   return {
     ...(fiveHourLimit ? { fiveHourLimit } : {}),
     ...(sevenDayLimit ? { sevenDayLimit } : {}),
     ...(costUSD !== undefined ? { costUSD } : {}),
+    ...(contextWindow ? { contextWindow } : {}),
   }
 }
 
