@@ -60,10 +60,17 @@ struct GeneralPane: View {
                     }
                 }
                 Hairline()
-                Row(title: "Hide finished sessions", detail: "Closed and offline sessions leave the list after a while.") {
+                Row(
+                    title: "Hide finished sessions",
+                    detail: "Closed and offline sessions leave the list. The eye above the list switches it in one click."
+                ) {
                     ChoiceMenu(
                         selection: String(settings.hideFinishedAfterHours),
-                        options: [("0", "Never"), ("1", "After 1 hour"), ("6", "After 6 hours"), ("24", "After 1 day")]
+                        options: [
+                            ("0", "Never"), (String(FinishedSessions.rightAway), "Right away"), ("1", "After 1 hour"),
+                            ("6", "After 6 hours"),
+                            ("24", "After 1 day"),
+                        ]
                     ) {
                         settings.hideFinishedAfterHours = Int($0) ?? 0
                     }

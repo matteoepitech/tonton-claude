@@ -13,16 +13,19 @@ struct SessionListView: View {
         let mixed = store.visibleSessions.mixesTools
         let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions, thisMac: store.thisMachines)
         VStack(spacing: 0) {
-            if !store.visibleSessions.isEmpty {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(.secondary)
-                    TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(Theme.ink.opacity(0.35)))
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 11))
+            if store.hasSessions {
+                HStack(spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(.secondary)
+                        TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(Theme.ink.opacity(0.35)))
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 11))
+                    }
+                    .padding(.horizontal, 8)
+                    .frame(height: 26)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(Theme.ink.opacity(0.07)))
+                    finishedToggle
                 }
-                .padding(.horizontal, 8)
-                .frame(height: 26)
-                .background(RoundedRectangle(cornerRadius: 7).fill(Theme.ink.opacity(0.07)))
                 .padding(.trailing, 6)
                 .padding(.bottom, 4)
             }
@@ -60,6 +63,28 @@ struct SessionListView: View {
             }
             .scrollIndicators(.never)
         }
+    }
+
+    /// Hides the closed and offline sessions at once, or brings back the delay chosen in Settings › General.
+    private var finishedToggle: some View {
+        let hidden = settings.hideFinishedAfterHours == FinishedSessions.rightAway
+        let count = store.hiddenFinishedCount
+        return Button {
+            let previous = UserDefaults.standard.object(forKey: "hideFinishedBeforeToggle") as? Int ?? 0
+            if !hidden { UserDefaults.standard.set(settings.hideFinishedAfterHours, forKey: "hideFinishedBeforeToggle") }
+            settings.hideFinishedAfterHours = FinishedSessions.toggled(settings.hideFinishedAfterHours, previous: previous)
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: hidden ? "eye.slash" : "eye").font(.system(size: 10))
+                if hidden && count > 0 { Text("\(count)").font(.system(size: 9, weight: .semibold)).monospacedDigit() }
+            }
+            .frame(minWidth: 26, minHeight: 26)
+            .background(RoundedRectangle(cornerRadius: 7).fill(hidden ? Theme.accent.opacity(0.16) : Theme.ink.opacity(0.07)))
+            .foregroundStyle(hidden ? Theme.accent : .secondary)
+        }
+        .buttonStyle(.plain)
+        .help(hidden ? "Show the finished sessions (\(count) hidden)" : "Hide the closed and offline sessions")
+        .accessibilityLabel(hidden ? "Show finished sessions" : "Hide finished sessions")
     }
 
     /// Messages that match the search, in every conversation the app has open: a click shows the message in its session.
