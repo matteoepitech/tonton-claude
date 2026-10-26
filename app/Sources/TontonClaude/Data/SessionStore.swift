@@ -86,6 +86,8 @@ final class SessionStore: ObservableObject {
     /// One per reset time of the sessions a usage limit stopped.
     private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()
+    /// Histories fetched for the search, one session after the other.
+    private var catchUp = HistoryCatchUp()
     /// Machines that got the current auto-approve rules since the app connected.
     private var rulesSentTo: Set<String> = []
 
@@ -233,6 +235,7 @@ final class SessionStore: ObservableObject {
 
     private func socketStateChanged(_ state: ConnectionState) {
         connection = state
+        if state != .connected { catchUp.cancel() }
         if state == .connected { subscribe() }
     }
 
@@ -262,6 +265,7 @@ final class SessionStore: ObservableObject {
             if selectedId == sessionId { selectedId = preferredSelection() }
         case .history(let sessionId, let wireEntries):
             relayEntries[sessionId] = vault.entries(wireEntries)
+            if catchUp.isRunning { subscribe(to: catchUp.received(sessionId)) }
         case .entries(let sessionId, let wireEntries):
             relayEntries[sessionId, default: []].append(contentsOf: vault.entries(wireEntries))
         case .error(let text):
@@ -326,6 +330,20 @@ final class SessionStore: ObservableObject {
     private func subscribe() {
         guard connection == .connected else { return }
         socket.send(["t": "subscribe", "sessionId": selectedId ?? NSNull()])
+    }
+
+    /// The next session of a catch-up, or back to the selected one when it is done.
+    private func subscribe(to sessionId: String?) {
+        guard let sessionId else { return subscribe() }
+        guard connection == .connected else { return catchUp.cancel() }
+        socket.send(["t": "subscribe", "sessionId": sessionId])
+    }
+
+    /// Fetches the conversations of the relay sessions never opened, so the search finds their messages.
+    func catchUpHistories() {
+        guard connection == .connected else { return }
+        let missing = relaySessions.map(\.id).filter { relayEntries[$0] == nil }
+        if let first = catchUp.start(sessions: missing, selected: selectedId) { subscribe(to: first) }
     }
 
     /// An OpenCode session of this Mac that no agent reports: the notch talks to OpenCode's service itself.

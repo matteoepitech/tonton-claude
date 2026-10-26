@@ -63,6 +63,10 @@ struct SessionListView: View {
             }
             .scrollIndicators(.never)
         }
+        // The relay only sends the conversations the app opens: a search fetches the others first.
+        .onChange(of: query.count >= ConversationSearch.minimumQueryLength) { _, searching in
+            if searching { store.catchUpHistories() }
+        }
     }
 
     /// Hides the closed and offline sessions at once, or brings back the delay chosen in Settings › General.
