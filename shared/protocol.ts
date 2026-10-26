@@ -66,6 +66,11 @@ export interface SessionMeta {
   sevenDayLimit?: UsageLimit
   /** The session runs in tmux, so the notch can type slash commands in it. Missing from older agents. */
   terminal?: boolean
+  /** The commands this agent can type. Agents that send `terminal` without it only know `compact` and `clear`. */
+  commands?: SessionCommand['name'][]
+  /** The model that last answered or that the session switched to, as Claude Code names it (`claude-opus-4-5-20251101`).
+   * Missing from older agents, and until Claude Code reports it. */
+  model?: string
 }
 export interface StatusDetail {
   text: string
@@ -83,12 +88,15 @@ export interface PromptPayload {
 }
 /** Bound to its session and run once, so the relay can neither move a `/clear` to another session nor replay it. */
 export interface SessionCommand {
-  name: 'compact' | 'clear'
+  name: 'compact' | 'clear' | 'model'
   sessionId: string
   /** Random, safe as a file name. */
   id: string
   issuedAt: string
+  /** For `model`: the alias `/model` takes, each standing for the latest model of its family. */
+  model?: ModelAlias
 }
+export type ModelAlias = 'opus' | 'sonnet' | 'haiku'
 /** What the background service reports about its machine every minute. */
 export interface MachineHealth {
   /** Share of all cores in use since the previous report, from 0 to 1. */

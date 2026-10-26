@@ -35,6 +35,7 @@ describe('usage readings', () => {
     expect(statusLineUsage(input)).toEqual({
       fiveHourLimit: { usedPercent: 41.2, resetsAt: '2026-10-20T12:00:00.000Z' },
       sevenDayLimit: { usedPercent: 10, resetsAt: '2026-10-26T07:33:20.000Z' },
+      model: 'claude-opus-5-5',
     })
     expect(statusLineUsage({ rate_limits: { seven_day: { used_percentage: 99, resets_at: 1793000000 } } })).toEqual({
       sevenDayLimit: { usedPercent: 99, resetsAt: '2026-10-26T07:33:20.000Z' },
@@ -43,6 +44,17 @@ describe('usage readings', () => {
     expect(statusLineUsage({ cost: { total_cost_usd: 1.25 } })).toEqual({ costUSD: 1.25 })
     expect(statusLineUsage({ cost: { total_cost_usd: '1.25' } })).toEqual({})
     expect(statusLineUsage({ context_window: { context_window_size: 1000000 } })).toEqual({ contextWindow: 1000000 })
+  })
+
+  test('the model it names, which changes as soon as the user switches', () => {
+    expect(statusLineUsage({ model: { id: 'claude-sonnet-5-5[1m]', display_name: 'Sonnet 5.5' } })).toEqual({
+      model: 'claude-sonnet-5-5[1m]',
+    })
+    expect(statusLineUsage({ model: { id: 'us.anthropic.claude-haiku-4-5-20251001-v1:0' } }).model).toBe(
+      'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+    )
+    for (const id of [42, '', '<synthetic>', 'claude opus', 'x'.repeat(101), 'opus\n'])
+      expect(statusLineUsage({ model: { id } })).toEqual({})
   })
 
   test('the newest reading wins: a later reset, or more usage in the same window', () => {

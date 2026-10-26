@@ -3,8 +3,9 @@ import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, 
 import { seal } from '../crypto'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
-import { newerLimit, readUsageFile, type SessionUsage } from '../usage'
+import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import type { SessionLink } from './session-link'
+import { COMMANDS } from './terminal'
 
 const BACKLOG_SIZE = 400
 /** On reconnect only the latest entries keep their images, the rest is sent as text. */
@@ -30,6 +31,9 @@ export class Conversation {
   /** The status line knows the window for sure; the transcript only gives the model's name. */
   private windowFromStatusLine = false
   private usage: SessionUsage = {}
+  private model: string | undefined
+  /** Only a change of the status line's model counts, so a reading it left earlier never hides a newer response. */
+  private statusLineModel: string | undefined
   private lastUsage: string | null = null
   private usageTimer: Timer | null = null
   private readonly pending = new Map<string, PendingPermission>()
@@ -111,6 +115,10 @@ export class Conversation {
       }
       if (this.updateUsage(parsed)) metaChanged = true
       if (this.updateContext(parsed)) metaChanged = true
+      if (parsed.model && parsed.model !== this.model) {
+        this.model = parsed.model
+        metaChanged = true
+      }
       if (parsed.usage && !this.countedRequests.has(parsed.usage.requestId)) {
         this.countedRequests.add(parsed.usage.requestId)
         this.tokens = addTokens(this.tokens, parsed.usage)
@@ -141,7 +149,12 @@ export class Conversation {
       const costChanged = reading.costUSD !== undefined && reading.costUSD !== this.costUSD
       if (costChanged) this.costUSD = reading.costUSD
       const windowChanged = reading.contextWindow !== undefined && this.setWindow(reading.contextWindow, true)
-      if (this.updateUsage(reading) || costChanged || windowChanged) this.postMeta()
+      // Right after a switch, before the next response says it.
+      const model = modelName(reading.model)
+      const modelChanged = model !== undefined && model !== this.statusLineModel && model !== this.model
+      if (model !== undefined) this.statusLineModel = model
+      if (modelChanged) this.model = model
+      if (this.updateUsage(reading) || costChanged || windowChanged || modelChanged) this.postMeta()
     } catch {
       // The status line replaces the file in one step: something else wrote this one.
     }
@@ -188,6 +201,8 @@ export class Conversation {
       lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
       ...this.usage,
       terminal: Boolean(this.link.tmux),
+      commands: COMMANDS,
+      model: this.model,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
   }

@@ -13,6 +13,8 @@ export interface SessionUsage {
   costUSD?: number
   /** The size of the model's context window. */
   contextWindow?: number
+  /** The model the session uses now, which changes as soon as the user switches. */
+  model?: string
 }
 
 interface Window {
@@ -34,12 +36,19 @@ export function statusLineUsage(input: unknown): SessionUsage {
   const costUSD = typeof cost === 'number' && Number.isFinite(cost) && cost >= 0 ? cost : undefined
   const window = (input as { context_window?: { context_window_size?: unknown } } | null)?.context_window?.context_window_size
   const contextWindow = typeof window === 'number' && Number.isInteger(window) && window > 0 ? window : undefined
+  const model = modelName((input as { model?: { id?: unknown } } | null)?.model?.id)
   return {
     ...(fiveHourLimit ? { fiveHourLimit } : {}),
     ...(sevenDayLimit ? { sevenDayLimit } : {}),
     ...(costUSD !== undefined ? { costUSD } : {}),
     ...(contextWindow ? { contextWindow } : {}),
+    ...(model ? { model } : {}),
   }
+}
+
+/** A model's name as Claude Code writes it, or nothing for odd values and for the messages it makes up itself. */
+export function modelName(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '<synthetic>' && /^[\w.:@[\]/-]{1,100}$/.test(value) ? value : undefined
 }
 
 /** Builds a limit from Claude Code's numbers, or nothing when they are missing or out of range. */

@@ -132,9 +132,21 @@ struct ChatHeader: View {
     /// Slash commands typed in the session's terminal: only for sessions in tmux, while Claude waits at its prompt.
     private var commands: some View {
         Menu {
-            ForEach(SessionCommandName.allCases, id: \.self) { name in
+            ForEach([SessionCommandName.compact, .clear], id: \.self) { name in
                 Button(name.label) {
                     if name.needsConfirmation { confirming = name } else { store.sendCommand(name, to: session.id) }
+                }
+            }
+            if session.commands.contains(.model) {
+                Divider()
+                Menu(SessionCommandName.model.label) {
+                    ForEach(ModelFamily.allCases, id: \.self) { family in
+                        Toggle(
+                            family.label,
+                            isOn: Binding(
+                                get: { session.modelFamily == family },
+                                set: { if $0 { store.sendCommand(.model, model: family, to: session.id) } }))
+                    }
                 }
             }
         } label: {
@@ -181,6 +193,10 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
+                if let model = session.modelName {
+                    Text(model).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                        .help("The model Claude Code uses in this session")
+                }
                 if let context = session.context { ContextGauge(context: context) }
                 if settings.showCosts, let tokens = session.tokens {
                     Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")

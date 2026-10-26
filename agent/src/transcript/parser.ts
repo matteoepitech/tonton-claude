@@ -1,5 +1,5 @@
 import type { Entry, FileEdit, ImageData, TokenCounts, UsageLimit } from '../../../shared/protocol'
-import { limit } from '../usage'
+import { limit, modelName } from '../usage'
 
 // Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
 
@@ -44,6 +44,8 @@ export interface ParsedLine {
   contextWindow?: number
   /** Claude Code compacted the conversation: the context starts over. */
   compacted?: boolean
+  /** The model that wrote this response, such as `claude-opus-4-5-20251101`. */
+  model?: string
 }
 
 interface Block {
@@ -86,6 +88,8 @@ export function parseLine(raw: string): ParsedLine {
   // The weekly limit, or its Opus or Sonnet share: either way the session waits for that reset.
   if (quota?.status === 'rejected' && quota.rateLimitType?.startsWith('seven_day')) result.sevenDayLimit = limit(100, quota.resetsAt)
   if (line.type === 'assistant') result.usage = responseUsage(line)
+  const model = line.type === 'assistant' ? modelName(line.message?.model) : undefined
+  if (model) result.model = model
   if (line.type === 'assistant' && typeof line.requestedModel === 'string') {
     result.contextWindow = /\[1m\]$/i.test(line.requestedModel) ? 1_000_000 : 200_000
   }
