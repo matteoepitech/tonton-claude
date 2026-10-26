@@ -85,6 +85,14 @@ struct GeneralPane: View {
                     }
                 }
             }
+            GroupLabel(text: "Automation")
+            Card {
+                ToggleRow(
+                    title: "Scripts can send messages",
+                    detail: "AppleScript and Shortcuts (Run AppleScript) can always read the sessions. With this on, they can also "
+                        + "message Claude, e.g. send message \"run the tests\" to \"api\".",
+                    isOn: $settings.scriptsCanSend)
+            }
             GroupLabel(text: "Quick replies")
             Card {
                 VStack(alignment: .leading, spacing: 10) {

@@ -79,6 +79,9 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
   install command once more, which the app copies for you.
 - **Changing relay or account.** Click the Tonton Claude icon next to the clock on that machine › **Set token…** and paste
   the token from the app. **Regenerate** in Settings › Machines makes a new one: every machine is signed out until it gets it.
+- **AppleScript and Shortcuts.** Scripts can read the sessions (`session list`, `session status "api"`) and, once
+  **Settings › General › Scripts can send messages** is on, message Claude: `send message "run the tests" to "api"`. In
+  Shortcuts, use the Run AppleScript action.
 - **Shortcuts.** <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>N</kbd> opens the notch, <kbd>⌘</kbd> <kbd>1</kbd>…<kbd>9</kbd> jumps between sessions,
   <kbd>esc</kbd> closes it.
 
