@@ -64,6 +64,12 @@ final class AppSettings: ObservableObject {
     @Published var quietStart: Int
     @Published var quietEnd: Int
 
+    /// Webhooks (https only, see Webhook); empty is off.
+    @Published var webhookFinished: String
+    @Published var webhookNeedsYou: String
+    @Published var webhookIncludeNames: Bool
+    @Published var webhookIncludeLastMessage: Bool
+
     var isConfigured: Bool { account != nil }
     var relayURL: String { account?.relay ?? serverURL }
 
@@ -117,6 +123,10 @@ final class AppSettings: ObservableObject {
         quietHours = value("quietHours", false)
         quietStart = value("quietStart", 22 * 60)
         quietEnd = value("quietEnd", 8 * 60)
+        webhookFinished = value("webhookFinished", "")
+        webhookNeedsYou = value("webhookNeedsYou", "")
+        webhookIncludeNames = value("webhookIncludeNames", false)
+        webhookIncludeLastMessage = value("webhookIncludeLastMessage", false)
 
         persist($serverURL, "serverURL")
         persist($connectionEnabled, "connectionEnabled")
@@ -146,6 +156,10 @@ final class AppSettings: ObservableObject {
         persist($quietHours, "quietHours")
         persist($quietStart, "quietStart")
         persist($quietEnd, "quietEnd")
+        persist($webhookFinished, "webhookFinished")
+        persist($webhookNeedsYou, "webhookNeedsYou")
+        persist($webhookIncludeNames, "webhookIncludeNames")
+        persist($webhookIncludeLastMessage, "webhookIncludeLastMessage")
 
         $account.dropFirst().sink { AccountStore.save($0) }.store(in: &subscriptions)
         $launchAtLogin.dropFirst().removeDuplicates().sink { Self.setLaunchAtLogin($0) }.store(in: &subscriptions)
