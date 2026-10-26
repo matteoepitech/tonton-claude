@@ -58,6 +58,8 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
       }
       if (socket.data.role === 'app') {
         ctx.hub.removeApp(socket)
+        // The phone went to the background: the relay takes over its Live Activity.
+        if (socket.data.device) ctx.push?.sessionsChanged(socket.data.accountId)
         return
       }
       const { accountId, sessionId } = socket.data

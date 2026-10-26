@@ -1,13 +1,20 @@
 import type { MachineSummary, SessionSummary, ShareSummary } from '../../shared/protocol'
+import { ApnsClient, type Pusher } from './apns'
 import { SessionArchive } from './archive'
 import type { RelayConfig } from './config'
 import { Hub } from './hub'
 import { RATE_LIMITS } from './limits'
 import type { RelayCounts } from './metrics'
+import { PushService } from './push'
 import { RateLimiter } from './rate-limit'
 import { Registry, type Share } from './registry'
 import { SessionStore } from './sessions'
 import { ShareStreams } from './shares'
+
+export interface RelayOptions {
+  /** Stands in for Apple in tests. Without it, pushes go to APNs when the config has a key. */
+  pusher?: Pusher
+}
 
 /** Everything request and socket handlers need, built once per relay. */
 export class RelayContext {
@@ -26,13 +33,18 @@ export class RelayContext {
   /** The sealed copies of shared sessions. */
   readonly shares = new ShareStreams()
   private readonly archive: SessionArchive
+  /** Null unless the relay has an APNs key. */
+  readonly push: PushService | null
   readonly signups = new RateLimiter(RATE_LIMITS.signups.limit, RATE_LIMITS.signups.windowMs)
   readonly claims = new RateLimiter(RATE_LIMITS.claims.limit, RATE_LIMITS.claims.windowMs)
   readonly failedAuth = new RateLimiter(RATE_LIMITS.failedAuth.limit, RATE_LIMITS.failedAuth.windowMs)
   private readonly pruneTimer: Timer
   private readonly startedAt = Date.now()
 
-  constructor(readonly config: RelayConfig) {
+  constructor(
+    readonly config: RelayConfig,
+    options: RelayOptions = {},
+  ) {
     this.registry = new Registry(config.dataDir)
     this.archive = new SessionArchive(this.registry.db)
     this.sessions = new SessionStore(
@@ -40,11 +52,25 @@ export class RelayContext {
         updated: (accountId, session) => {
           this.hub.sendToApps(accountId, { t: 'session', session })
           this.pushSharedStatus(accountId, session)
+          this.push?.sessionsChanged(accountId)
         },
-        removed: (accountId, sessionId) => this.hub.sendToApps(accountId, { t: 'removed', sessionId }),
+        removed: (accountId, sessionId) => {
+          this.hub.sendToApps(accountId, { t: 'removed', sessionId })
+          this.push?.sessionsChanged(accountId)
+        },
+        permissionRequested: (accountId, session, request) => this.push?.permissionRequested(accountId, session, request),
       },
       this.archive,
     )
+    const pusher = options.pusher ?? (config.apns ? new ApnsClient(config.apns) : null)
+    this.push = pusher
+      ? new PushService({
+          registry: this.registry,
+          sessions: accountId => this.sessions.list(accountId),
+          isOnline: (accountId, device) => this.hub.isDeviceOnline(accountId, device),
+          pusher,
+        })
+      : null
     this.pruneTimer = setInterval(() => {
       for (const limiter of [this.signups, this.claims, this.failedAuth]) limiter.prune()
       for (const share of this.registry.expireShares()) this.endShare(share, 'expired')
@@ -118,6 +144,7 @@ export class RelayContext {
 
   dispose() {
     clearInterval(this.pruneTimer)
+    this.push?.dispose()
     this.sessions.dispose()
     this.archive.close()
     this.registry.close()

@@ -54,6 +54,21 @@ public struct Account: Codable, Equatable, Sendable {
         return Self.recoveryPrefix + json.base64URLEncodedString()
     }
 
+    /// The recovery key as a link the iPhone's camera opens in the app, from a QR code on the Mac. The key is in the
+    /// fragment, which no app or server passes on with the rest of a link.
+    public var signInLink: String { "tonton://signin#" + recoveryKey }
+
+    /// From a sign-in link, or from a recovery key pasted as it is.
+    public init?(signInLink: String) {
+        let trimmed = signInLink.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), url.scheme == "tonton" else {
+            self.init(recoveryKey: trimmed)
+            return
+        }
+        guard url.host == "signin", let fragment = url.fragment else { return nil }
+        self.init(recoveryKey: fragment)
+    }
+
     public func symmetricKey() throws -> SymmetricKey {
         try E2E.key(fromBase64URL: key)
     }

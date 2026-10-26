@@ -1,6 +1,5 @@
 import XCTest
 
-import TontonCore
 @testable import TontonMac
 
 final class LocalAgentTests: XCTestCase {

@@ -162,7 +162,7 @@ public struct SessionVault: Sendable {
         try E2E.seal(MachineName(name: name, platform: nil), with: key)
     }
 
-    private func open<T: Decodable>(_ blob: String?, as type: T.Type) -> T? {
+    func open<T: Decodable>(_ blob: String?, as type: T.Type) -> T? {
         guard let blob else { return nil }
         return try? E2E.open(blob, as: type, with: key)
     }

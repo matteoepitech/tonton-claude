@@ -21,3 +21,9 @@ export const isStartState = (value: unknown): value is 'starting' | 'asking' | '
   value === 'starting' || value === 'asking' || value === 'started' || value === 'failed'
 
 export const isVersion = (value: unknown): value is string => typeof value === 'string' && VERSION_PATTERN.test(value)
+
+/** The random id an install of the iPhone app registers its tokens under. */
+export const isDeviceId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(value)
+
+/** An APNs device or Live Activity token, hex. */
+export const isPushToken = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-fA-F]{64,512}$/.test(value)

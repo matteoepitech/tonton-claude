@@ -401,3 +401,53 @@ export type RelayToViewer =
   | { t: 'shared_status'; status: SessionStatus }
   // Revoked or expired: the socket closes after it.
   | { t: 'share_ended' }
+
+// Push notifications to the iPhone app, from a relay that holds an APNs key (TONTON_APNS_*, off by default). Apple only
+// ever carries ids, states and blobs sealed by the agents: the phone opens them with the account key.
+
+/** POST /api/push/devices (app -> relay): what one install of the iPhone app wants pushed, sent again on each change. */
+export interface PushDevice {
+  /** Random, made by the app once per install. */
+  device: string
+  environment: 'sandbox' | 'production'
+  /** APNs device token, hex: permission requests are pushed to it. Null: no alerts. */
+  alert: string | null
+  /** Push token of the Live Activity running on the phone, hex. Null: none runs. */
+  activity: string | null
+  /** Token that lets the relay start a Live Activity (iOS 17.2 and later), hex. Null: none. */
+  activityStart: string | null
+}
+
+/** The answer to GET /api/push and POST /api/push/devices. Older relays answer 404. */
+export interface PushStatus {
+  /** False when the relay has no APNs key: the phone only sees the sessions while it is open. */
+  enabled: boolean
+}
+
+/** Sent next to the content-free text of a permission alert, under `tonton`. */
+export interface PermissionPush {
+  sessionId: string
+  requestId: string
+  /** The sealed `PermissionDetail`, left out when the alert would not fit. */
+  request?: Sealed
+  /** The session's sealed `SessionInfo`, likewise. */
+  info?: Sealed
+}
+
+/** The content state of the Live Activity: set by the phone while it runs, pushed by the relay otherwise. */
+export interface IslandState {
+  /** Those that need the user first, then the latest at work, then the latest done. At most 3. */
+  sessions: IslandSession[]
+  /** Sessions working or starting. */
+  working: number
+  /** Sessions asking for a permission, waiting for the user or stopped by an error. */
+  attention: number
+}
+export interface IslandSession {
+  id: string
+  status: SessionStatus
+  /** The sealed `SessionInfo`, null when unknown or too long to push. */
+  info: Sealed | null
+  /** The sealed `StatusDetail`, likewise. */
+  detail: Sealed | null
+}
