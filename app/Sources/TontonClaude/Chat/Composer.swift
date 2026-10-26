@@ -15,6 +15,7 @@ struct Composer: View {
     @State private var filling: PromptTemplate?
     @State private var values: [String: String] = [:]
     @FocusState private var focusedVariable: String?
+    @ObservedObject private var queues = MessageQueues.shared
 
     private var readOnlyReason: String {
         if session.machineId == LocalSessions.machineId {
@@ -30,6 +31,7 @@ struct Composer: View {
             if !attachments.isEmpty { attachmentStrip }
             if let filling { fillBar(filling) }
             field
+            if !queues.items(for: session.id).isEmpty { queueList }
             if !session.canChat {
                 Text(readOnlyReason)
                     .font(.system(size: 10))
@@ -115,6 +117,12 @@ struct Composer: View {
                 .lineLimit(1...6)
                 .focused($focused)
                 .onSubmit(send)
+            Button(action: enqueue) { Image(systemName: "text.line.last.and.arrowtriangle.forward").font(.system(size: 13)) }
+                .buttonStyle(.plain)
+                .foregroundStyle(canSend ? .primary : .secondary)
+                .disabled(!canSend)
+                .keyboardShortcut(.return, modifiers: [.command, .shift])
+                .help("Send after Claude's current turn (⌘⇧↩)")
             Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.system(size: 18)) }
                 .buttonStyle(.plain)
                 .foregroundStyle(canSend ? Theme.accent : .secondary)
@@ -206,6 +214,48 @@ struct Composer: View {
 
     private var canSend: Bool {
         session.canChat && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
+    }
+
+    /// Waits for Claude to finish the turn in progress, and for the messages queued before it.
+    private func enqueue() {
+        guard canSend else { return }
+        queues.add(
+            QueuedMessage(text: text.trimmingCharacters(in: .whitespacesAndNewlines), images: attachments.map(\.outgoing)), to: session.id)
+        text = ""
+        attachments = []
+    }
+
+    /// The queued messages, in the order they will go, each one movable and cancellable.
+    private var queueList: some View {
+        let items = queues.items(for: session.id)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("QUEUED · sent one per turn").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, message in
+                HStack(spacing: 6) {
+                    Text("\(index + 1)").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.secondary).frame(
+                        width: 12)
+                    Text(message.text.isEmpty ? "\(message.images.count) image(s)" : message.text)
+                        .font(.system(size: 11)).lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    queueButton("chevron.up", "Earlier", disabled: index == 0) { queues.move(message.id, by: -1, in: session.id) }
+                    queueButton("chevron.down", "Later", disabled: index == items.count - 1) {
+                        queues.move(message.id, by: 1, in: session.id)
+                    }
+                    queueButton("xmark", "Cancel", disabled: false) { queues.remove(message.id, from: session.id) }
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.05)))
+            }
+        }
+    }
+
+    private func queueButton(_ symbol: String, _ help: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 9, weight: .bold)) }
+            .buttonStyle(.plain)
+            .foregroundStyle(disabled ? .tertiary : .secondary)
+            .disabled(disabled)
+            .help(help)
     }
 
     private func send() {

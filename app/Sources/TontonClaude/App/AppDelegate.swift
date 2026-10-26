@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppDelegate.shared = self
         MainMenu.install()
         notch = NotchWindowController(store: store, settings: settings)
+        MessageQueues.shared.attach(store)
         webhooks = WebhookNotifier(store: store, settings: settings)
         if let notch { achievements = AchievementTracker(store: store, notch: notch.state, settings: settings) }
         UNUserNotificationCenter.current().delegate = self
