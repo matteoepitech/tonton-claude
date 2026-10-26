@@ -163,6 +163,11 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertTrue(ContextUsage(usedTokens: 147_000).isNearCompaction)
         // Past 200K without a known window: only a 1M window holds that much.
         XCTAssertEqual(ContextUsage(usedTokens: 300_000).windowTokens, 1_000_000)
+        // A session of this Mac on Opus 5.5 with the 1M window: its transcript says `claude-opus-5-5`, read as 200K.
+        let guessed = ContextUsage(usedTokens: 814_732, windowTokens: 200_000)
+        XCTAssertEqual(guessed.windowTokens, 1_000_000)
+        XCTAssertEqual(guessed.fraction, 0.814732, accuracy: 0.000001)
+        XCTAssertFalse(guessed.isNearCompaction)
         XCTAssertEqual(ContextUsage(usedTokens: 300_000, windowTokens: 1_000_000).autoCompactAt, 967_000)
     }
 
