@@ -101,26 +101,40 @@ export interface RuleSet {
   rules: PermissionRule[]
   issuedAt: string
 }
-/** Sealed by the app: start claude in this folder of the machine. Recent, like update orders, and run once. */
+/**
+ * Sealed by the app: start claude in this folder of this machine. Every machine of the account has the key, so the order
+ * names the one it is for. Recent, like update orders, and run once.
+ */
 export interface StartOrder {
   launchId: string
+  machineId: string
   cwd: string
   issuedAt: string
 }
-/** Sealed by the app: the user's answer to one question of a start, so the relay cannot reuse it for another. */
+/** Sealed by the app: the user's answer to one question of one start, which the relay cannot reuse for another. */
 export interface StartAnswer {
   launchId: string
-  /** The `step` of the question answered. */
-  step: number
+  machineId: string
+  /** The `question` of the `StartDetail` the user answered. */
+  question: string
   confirm: boolean
   issuedAt: string
 }
-/** Where a start stands. `asking` comes with the question, `failed` with why, both in a sealed `StartDetail`. */
 export type StartState = 'starting' | 'asking' | 'started' | 'failed'
+/**
+ * Sealed by the agent with each `session_start`. The app goes by it, not by the plain fields the relay could change, and
+ * drops one that names another start, machine or state.
+ */
 export interface StartDetail {
-  text: string
-  /** Numbers the questions of a start, from 1. */
-  step?: number
+  launchId: string
+  machineId: string
+  state: StartState
+  /** The question while `asking`, why while `failed`, each followed by the last lines of Claude Code's screen. */
+  text?: string
+  /** A new random id for each question asked, that the answer repeats. */
+  question?: string
+  /** Once `started`. */
+  sessionId?: string
 }
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
@@ -177,7 +191,7 @@ export type AgentMessage =
   // Sent by the background service every minute: a sealed `MachineHealth`.
   | { t: 'health'; health: Sealed }
   // A start from the app: `sessionId` once claude runs.
-  | { t: 'session_start'; launchId: string; state: StartState; detail: Sealed | null; sessionId?: string }
+  | { t: 'session_start'; launchId: string; state: StartState; detail: Sealed }
 
 // relay -> agent
 export type RelayToAgent =
@@ -214,7 +228,6 @@ export type RelayToApp =
       state: StartState
       reason?: 'offline'
       detail?: Sealed | null
-      sessionId?: string
     }
 
 // app -> relay

@@ -249,9 +249,8 @@ final class SessionStore: ObservableObject {
             lastError = text
         case .agentUpdate(let machineId, let ok, let reason, let detail):
             updateFinished(machineId, ok: ok, reason: reason, detail: vault.detailText(detail))
-        case .sessionStart(let machineId, let launchId, let state, let reason, let detail, let sessionId):
-            launchReported(
-                launchId, machineId: machineId, state: state, reason: reason, detail: vault.startDetail(detail), sessionId: sessionId)
+        case .sessionStart(let machineId, let launchId, let state, let reason, let detail):
+            launchReported(launchId, machineId: machineId, state: state, reason: reason, detail: vault.startDetail(detail))
         case .unknown:
             break
         }
@@ -355,7 +354,7 @@ final class SessionStore: ObservableObject {
         let folder = RecentFolders.normalized(folder)
         guard connection == .connected, RecentFolders.isStartable(folder) else { return }
         let launch = SessionLaunch(machineId: machine.id, cwd: folder)
-        guard let order = try? vault?.sealStartOrder(launchId: launch.id, cwd: folder) else { return }
+        guard let order = try? vault?.sealStartOrder(launchId: launch.id, machineId: machine.id, cwd: folder) else { return }
         launches.append(launch)
         settings.startFolders[machine.id] = RecentFolders.adding(folder, to: settings.startFolders[machine.id] ?? [])
         socket.send(["t": "start_session", "machineId": machine.id, "launchId": launch.id, "order": order])
@@ -369,22 +368,21 @@ final class SessionStore: ObservableObject {
 
     /// The user's answer to the question a start is waiting on.
     func answerStart(_ launch: SessionLaunch, confirm: Bool) {
-        guard launch.state == .asking, let step = launch.step,
-            let answer = try? vault?.sealStartAnswer(launchId: launch.id, step: step, confirm: confirm)
+        guard launch.state == .asking, let question = launch.questionId,
+            let answer = try? vault?.sealStartAnswer(launchId: launch.id, machineId: launch.machineId, question: question, confirm: confirm)
         else { return }
         socket.send(["t": "start_answer", "machineId": launch.machineId, "launchId": launch.id, "answer": answer])
-        // Shown as starting until the machine reports the next step.
-        replace(SessionLaunch(id: launch.id, machineId: launch.machineId, cwd: launch.cwd, state: .starting))
+        replace(launch.answered(question))
     }
 
     func dismissLaunch(_ id: String) {
         launches.removeAll { $0.id == id }
     }
 
-    private func launchReported(_ id: String, machineId: String, state: String, reason: String?, detail: StartDetail?, sessionId: String?) {
+    private func launchReported(_ id: String, machineId: String, state: String, reason: String?, detail: StartDetail?) {
         guard let launch = launches.first(where: { $0.id == id && $0.machineId == machineId }) else { return }
         let name = machines.first { $0.id == machineId }?.name ?? "The machine"
-        let next = launch.reported(state, detail: detail, reason: reason, sessionId: sessionId, machine: name)
+        let next = launch.reported(state, reason: reason, detail: detail, machine: name)
         guard next != launch else { return }
         if next.state == .started {
             launches.removeAll { $0.id == id }

@@ -52,7 +52,7 @@ public enum RelayMessage: Decodable, Sendable {
     case agentUpdate(machineId: String, ok: Bool, reason: String?, detail: String?)
     /// Where a start from the notch stands. `detail` is a sealed `StartDetail`, `reason` set when the relay could not
     /// reach the machine.
-    case sessionStart(machineId: String, launchId: String, state: String, reason: String?, detail: String?, sessionId: String?)
+    case sessionStart(machineId: String, launchId: String, state: String, reason: String?, detail: String?)
     case unknown
 
     private enum Keys: String, CodingKey {
@@ -76,10 +76,10 @@ public enum RelayMessage: Decodable, Sendable {
             let (reason, detail) = (try optional(.reason), try optional(.detail))
             self = .agentUpdate(machineId: try value(.machineId), ok: try value(.ok), reason: reason, detail: detail)
         case "session_start":
-            let (reason, detail, sessionId) = (try optional(.reason), try optional(.detail), try optional(.sessionId))
+            let (reason, detail) = (try optional(.reason), try optional(.detail))
             self = .sessionStart(
                 machineId: try value(.machineId), launchId: try value(.launchId), state: try value(.state), reason: reason,
-                detail: detail, sessionId: sessionId)
+                detail: detail)
         default: self = .unknown
         }
     }
@@ -117,16 +117,29 @@ public struct OutgoingImage: Codable, Sendable {
 
 struct PromptPayload: Codable { let text: String; let images: [OutgoingImage] }
 struct UpdateOrder: Codable { let version: String; let issuedAt: String }
-struct StartOrder: Codable { let launchId: String; let cwd: String; let issuedAt: String }
-struct StartAnswer: Codable { let launchId: String; let step: Int; let confirm: Bool; let issuedAt: String }
+struct StartOrder: Codable { let launchId: String; let machineId: String; let cwd: String; let issuedAt: String }
+struct StartAnswer: Codable {
+    let launchId: String
+    let machineId: String
+    let question: String
+    let confirm: Bool
+    let issuedAt: String
+}
 
+/// Sealed by the agent with each report of a start: the app goes by it, not by the fields the relay can see.
 public struct StartDetail: Codable, Equatable, Sendable {
-    public let text: String
-    public let step: Int?
+    public let launchId: String
+    public let machineId: String
+    public let state: String
+    public let text: String?
+    public let question: String?
+    public let sessionId: String?
 
-    public init(text: String, step: Int? = nil) {
-        self.text = text
-        self.step = step
+    public init(
+        launchId: String, machineId: String, state: String, text: String? = nil, question: String? = nil, sessionId: String? = nil
+    ) {
+        (self.launchId, self.machineId, self.state) = (launchId, machineId, state)
+        (self.text, self.question, self.sessionId) = (text, question, sessionId)
     }
 }
 

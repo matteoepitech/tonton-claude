@@ -15,34 +15,48 @@ public struct SessionLaunch: Identifiable, Equatable, Sendable {
     public let state: State
     /// The question while `asking`, why while `failed`.
     public let text: String?
-    /// Which question is asked: the answer names it, so it cannot be reused for another.
-    public let step: Int?
+    /// The id of the question asked: the answer repeats it, so the relay cannot reuse it for another question.
+    public let questionId: String?
     public let sessionId: String?
+    /// Questions already answered, which a replay cannot ask again.
+    public let answered: Set<String>
 
     public init(
         id: String = SessionLaunch.newId(), machineId: String, cwd: String, state: State = .sending, text: String? = nil,
-        step: Int? = nil, sessionId: String? = nil
+        questionId: String? = nil, sessionId: String? = nil, answered: Set<String> = []
     ) {
         (self.id, self.machineId, self.cwd, self.state) = (id, machineId, cwd, state)
-        (self.text, self.step, self.sessionId) = (text, step, sessionId)
+        (self.text, self.questionId, self.sessionId, self.answered) = (text, questionId, sessionId, answered)
     }
 
     /// 32 lowercase letters and digits, as the relay expects.
     public static func newId() -> String { UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased() }
 
-    /// The launch once the machine reported where it stands. Unknown states leave it as it was.
-    public func reported(_ state: String, detail: StartDetail?, reason: String?, sessionId: String?, machine: String) -> SessionLaunch {
-        guard let next = State(rawValue: state), next != .sending else { return self }
-        let text =
-            reason == "offline"
-            ? "\(machine) is offline. Check that it is on and that the Tonton Claude agent runs there." : detail?.text
+    /// The launch once the machine reported where it stands. The relay can change the plain fields of the report, so only
+    /// the sealed detail counts, and one written for another start, machine or state leaves the launch as it was.
+    public func reported(_ state: String, reason: String?, detail: StartDetail?, machine: String) -> SessionLaunch {
+        // The relay's own word: it could not reach the machine.
+        if reason == "offline" && state == State.failed.rawValue {
+            return failed("\(machine) is offline. Check that it is on and that the Tonton Claude agent runs there.")
+        }
+        guard let detail, detail.launchId == id, detail.machineId == machineId, detail.state == state,
+            let next = State(rawValue: state), next != .sending
+        else { return self }
+        if next == .asking {
+            guard let question = detail.question, !answered.contains(question) else { return self }
+        }
         return SessionLaunch(
-            id: id, machineId: machineId, cwd: cwd, state: next, text: text, step: next == .asking ? detail?.step : nil,
-            sessionId: sessionId ?? self.sessionId)
+            id: id, machineId: machineId, cwd: cwd, state: next, text: detail.text,
+            questionId: next == .asking ? detail.question : nil, sessionId: detail.sessionId ?? sessionId, answered: answered)
+    }
+
+    /// Shown as starting once the user answered, until the machine reports the next step.
+    public func answered(_ question: String) -> SessionLaunch {
+        SessionLaunch(id: id, machineId: machineId, cwd: cwd, state: .starting, sessionId: sessionId, answered: answered.union([question]))
     }
 
     public func failed(_ text: String) -> SessionLaunch {
-        SessionLaunch(id: id, machineId: machineId, cwd: cwd, state: .failed, text: text, sessionId: sessionId)
+        SessionLaunch(id: id, machineId: machineId, cwd: cwd, state: .failed, text: text, sessionId: sessionId, answered: answered)
     }
 
     /// The question asked, without the screen it was read from.

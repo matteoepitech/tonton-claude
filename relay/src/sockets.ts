@@ -68,16 +68,9 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
     return
   }
   if (message?.t === 'session_start') {
-    const { launchId, state, detail, sessionId } = message
-    if (!isLaunchId(launchId) || !isStartState(state)) return
-    ctx.hub.sendToApps(accountId, {
-      t: 'session_start',
-      machineId,
-      launchId,
-      state,
-      detail: isSealed(detail, MAX_START_DETAIL_BYTES) ? detail : null,
-      ...(isSessionId(sessionId) ? { sessionId } : {}),
-    })
+    const { launchId, state, detail } = message
+    if (!isLaunchId(launchId) || !isStartState(state) || !isSealed(detail, MAX_START_DETAIL_BYTES)) return
+    ctx.hub.sendToApps(accountId, { t: 'session_start', machineId, launchId, state, detail })
     return
   }
   if (!isSessionId(message?.sessionId)) return

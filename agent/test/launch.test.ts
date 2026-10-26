@@ -3,10 +3,10 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentMessage } from '../../shared/protocol'
+import type { AgentMessage, StartDetail } from '../../shared/protocol'
 import type { AgentConfig } from '../src/config'
 import { open, seal } from '../src/crypto'
-import { fromHome, handleStartAnswer, handleStartOrder, newSession } from '../src/launch'
+import { claim, descendsFrom, fromHome, handleStartAnswer, handleStartOrder, newSession } from '../src/launch'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-launch-'))
 const run = join(dir, 'run')
@@ -15,10 +15,12 @@ mkdirSync(run)
 mkdirSync(project)
 const tmuxDir = join(dir, 'tmux')
 mkdirSync(tmuxDir)
-const previousTmux = process.env.TMUX_TMPDIR
+// Inside a tmux session, tmux would talk to the developer's server whatever TMUX_TMPDIR says.
+const previous = { TMUX_TMPDIR: process.env.TMUX_TMPDIR, TMUX: process.env.TMUX }
 process.env.TMUX_TMPDIR = tmuxDir
+delete process.env.TMUX
 
-// Asks the two questions Claude Code asks, then links its session the way the hooks do.
+// Asks the two questions Claude Code asks, then links its session the way the hooks do, named after its process.
 const shell = join(dir, 'shell')
 writeFileSync(
   shell,
@@ -39,17 +41,23 @@ const hasTmux = Bun.spawnSync(['tmux', '-V']).exitCode === 0
 
 afterAll(() => {
   Bun.spawnSync(['tmux', 'kill-server'])
-  if (previousTmux === undefined) delete process.env.TMUX_TMPDIR
-  else process.env.TMUX_TMPDIR = previousTmux
+  for (const [name, value] of Object.entries(previous)) {
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+  }
   rmSync(dir, { recursive: true, force: true })
 })
 
+type Report = Extract<AgentMessage, { t: 'session_start' }> & { opened: StartDetail }
+
 function relay() {
-  const messages: Extract<AgentMessage, { t: 'session_start' }>[] = []
+  const messages: Report[] = []
   return {
     messages,
     post: (build: () => Promise<AgentMessage | null>) => {
-      void build().then(message => message?.t === 'session_start' && messages.push(message))
+      void build().then(async message => {
+        if (message?.t === 'session_start') messages.push({ ...message, opened: await open<StartDetail>(key, message.detail) })
+      })
     },
   }
 }
@@ -63,64 +71,102 @@ async function until<T>(read: () => T | undefined, label: string): Promise<T> {
   throw new Error(`timed out waiting for ${label}`)
 }
 
-const order = (launchId: string, cwd: string, issuedAt = new Date().toISOString()) => seal(key, { launchId, cwd, issuedAt })
-const answer = (launchId: string, step: number, confirm: boolean) =>
-  seal(key, { launchId, step, confirm, issuedAt: new Date().toISOString() })
-const text = async (detail: string | null) => (detail ? (await open<{ text: string }>(key, detail)).text : '')
+const now = () => new Date().toISOString()
+const order = (launchId: string, cwd: string, { issuedAt = now(), machineId = 'm' } = {}) =>
+  seal(key, { launchId, machineId, cwd, issuedAt })
+const answer = (launchId: string, question: string | undefined, confirm: boolean, machineId = 'm') =>
+  seal(key, { launchId, machineId, question, confirm, issuedAt: now() })
+const questions = (link: ReturnType<typeof relay>) => link.messages.filter(m => m.state === 'asking')
 
 describe.skipIf(process.platform === 'win32' || !hasTmux)('starting a session from the notch', () => {
-  test('each question waits for the user, then the session it started is reported', async () => {
+  test('each question waits for its own answer, then the session it started is reported', async () => {
     const link = relay()
     void handleStartOrder(config, 'launch0001', await order('launch0001', '~/project'), link, { run, shell, home: dir })
-    const channel = await until(() => link.messages.find(m => m.state === 'asking'), 'the first question')
-    expect(await text(channel.detail)).toContain('load the Tonton Claude channel')
-    await handleStartAnswer(config, 'launch0001', await answer('launch0001', 1, true))
-    await until(() => (link.messages.filter(m => m.state === 'asking').length === 2 ? true : undefined), 'the second question')
-    const trust = link.messages.filter(m => m.state === 'asking')[1]
-    expect(await text(trust.detail)).toContain('trust the files in this folder')
-    expect((await open<{ step: number }>(key, trust.detail ?? '')).step).toBe(2)
-    // The relay replays the yes to the first question: the second still waits for its own.
-    await handleStartAnswer(config, 'launch0001', await answer('launch0001', 1, true))
-    await handleStartAnswer(config, 'launch0001', await answer('launch9999', 2, true))
+    const channel = await until(() => questions(link)[0], 'the first question')
+    expect(channel.opened).toMatchObject({ launchId: 'launch0001', machineId: 'm', state: 'asking' })
+    expect(channel.opened.text).toContain('load the Tonton Claude channel')
+    await handleStartAnswer(config, 'launch0001', await answer('launch0001', channel.opened.question, true))
+    const trust = await until(() => questions(link)[1], 'the second question')
+    expect(trust.opened.text).toContain('trust the files in this folder')
+    expect(trust.opened.question).not.toBe(channel.opened.question)
+    // The relay replays the yes to the first question, or one sealed for another start or machine: none answers this one.
+    await handleStartAnswer(config, 'launch0001', await answer('launch0001', channel.opened.question, true))
+    await handleStartAnswer(config, 'launch0001', await answer('launch9999', trust.opened.question, true))
+    await handleStartAnswer(config, 'launch0001', await answer('launch0001', trust.opened.question, true, 'other'))
     await Bun.sleep(1200)
-    expect(link.messages.some(m => m.state === 'started')).toBe(false)
-    await handleStartAnswer(config, 'launch0001', await answer('launch0001', 2, true))
+    expect(link.messages.some(m => m.state !== 'asking' && m.state !== 'starting')).toBe(false)
+    await handleStartAnswer(config, 'launch0001', await answer('launch0001', trust.opened.question, true))
     const started = await until(() => link.messages.find(m => m.state === 'started'), 'the session')
-    expect(started.sessionId).toBe('launched-1')
+    expect(started.opened).toMatchObject({ launchId: 'launch0001', state: 'started', sessionId: 'launched-1' })
     expect(link.messages[0].state).toBe('starting')
+  }, 20_000)
+
+  test('a folder with # in its name is the one claude starts in', async () => {
+    const odd = join(dir, 'odd#S##x')
+    mkdirSync(odd)
+    const link = relay()
+    void handleStartOrder(config, 'launch0010', await order('launch0010', odd), link, { run, shell })
+    for (const index of [0, 1]) {
+      const asked = await until(() => questions(link)[index], `question ${index + 1}`)
+      await handleStartAnswer(config, 'launch0010', await answer('launch0010', asked.opened.question, true))
+    }
+    const started = await until(() => link.messages.find(m => m.state === 'started'), 'the session')
+    expect(started.opened.sessionId).toBe('launched-1')
   }, 20_000)
 
   test('cancelling stops claude', async () => {
     const link = relay()
     void handleStartOrder(config, 'launch0002', await order('launch0002', project), link, { run, shell })
-    await until(() => link.messages.find(m => m.state === 'asking'), 'the question')
-    await handleStartAnswer(config, 'launch0002', await answer('launch0002', 1, false))
+    const asked = await until(() => questions(link)[0], 'the question')
+    await handleStartAnswer(config, 'launch0002', await answer('launch0002', asked.opened.question, false))
     const failed = await until(() => link.messages.find(m => m.state === 'failed'), 'the end')
-    expect(await text(failed.detail)).toBe('Cancelled.')
-    expect(Bun.spawnSync(['tmux', 'has-session', '-t', 'tonton-launch0002']).exitCode).not.toBe(0)
+    expect(failed.opened.text).toBe('Cancelled.')
+    expect(Bun.spawnSync(['tmux', 'has-session', '-t', '=tonton-launch0002']).exitCode).not.toBe(0)
   }, 20_000)
 
-  test('orders that are forged, expired or point nowhere are refused', async () => {
+  test('orders that are forged, expired, for another start or machine, or point nowhere are refused', async () => {
     const link = relay()
     const foreignKey = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
-    const issuedAt = new Date().toISOString()
-    await handleStartOrder(config, 'launch0003', await seal(foreignKey, { launchId: 'launch0003', cwd: project, issuedAt }), link)
-    await handleStartOrder(config, 'launch0004', await order('launch0004', project, '2020-01-01T00:00:00Z'), link)
-    await handleStartOrder(config, 'launch0005', await order('launch0005', join(dir, 'missing')), link)
-    await handleStartOrder(config, 'launch0006', await order('launch0006', 'relative/path'), link)
-    // Sealed for another start: the relay cannot reuse an order under a new id.
+    await handleStartOrder(
+      config,
+      'launch0003',
+      await seal(foreignKey, { launchId: 'launch0003', machineId: 'm', cwd: project, issuedAt: now() }),
+      link,
+    )
+    await handleStartOrder(config, 'launch0004', await order('launch0004', project, { issuedAt: '2020-01-01T00:00:00Z' }), link)
+    await handleStartOrder(config, 'launch0005', await order('launch0005', join(dir, 'missing')), link, { run })
+    await handleStartOrder(config, 'launch0006', await order('launch0006', 'relative/path'), link, { run })
+    // The relay can't reuse an order under a new id, nor send it to another machine of the account.
     await handleStartOrder(config, 'launch0007', await order('launch0001', project), link)
-    await until(() => (link.messages.length === 5 ? true : undefined), 'five refusals')
+    await handleStartOrder(config, 'launch0011', await order('launch0011', project, { machineId: 'other' }), link)
+    await until(() => (link.messages.length === 6 ? true : undefined), 'six refusals')
     expect(link.messages.every(m => m.state === 'failed')).toBe(true)
+    // An id tmux could misread gets no answer at all.
+    await handleStartOrder(config, 'Launch#S1', await order('Launch#S1', project), link)
+    await Bun.sleep(200)
+    expect(link.messages).toHaveLength(6)
   })
 
-  test('a replayed order starts nothing', async () => {
+  test('a start runs once on the machine, whichever process gets it', async () => {
     const link = relay()
     const sealed = await order('launch0008', join(dir, 'missing'))
-    await handleStartOrder(config, 'launch0008', sealed, link)
-    await handleStartOrder(config, 'launch0008', sealed, link)
+    await handleStartOrder(config, 'launch0008', sealed, link, { run })
+    await handleStartOrder(config, 'launch0008', sealed, link, { run })
+    // Another process of the machine already took this one.
+    expect(claim('launch0009', run)).toBe(true)
+    await handleStartOrder(config, 'launch0009', await order('launch0009', join(dir, 'missing')), link, { run })
     await Bun.sleep(200)
     expect(link.messages).toHaveLength(1)
+  })
+})
+
+describe('claim', () => {
+  test('old claims are cleared', () => {
+    const folder = join(dir, 'claims')
+    expect(claim('claim0001', folder)).toBe(true)
+    expect(claim('claim0001', folder)).toBe(false)
+    expect(claim('claim0002', folder, Date.now() + 30 * 60_000)).toBe(true)
+    expect(claim('claim0001', folder)).toBe(true)
   })
 })
 
@@ -134,7 +180,7 @@ describe('fromHome', () => {
 })
 
 describe('newSession', () => {
-  test('a link written in that folder since the start', () => {
+  test('a link written in that folder since the start, by a claude of the start', () => {
     const links = join(dir, 'links')
     mkdirSync(links)
     const since = Date.now() - 1000
@@ -144,5 +190,13 @@ describe('newSession', () => {
     writeFileSync(join(links, '43.json'), JSON.stringify({ sessionId: 's2', cwd: '/code/api/' }))
     expect(newSession('/code/api', since, links)).toBe('s2')
     expect(newSession('/code/api', Date.now() + 60_000, links)).toBeNull()
+    // Another claude already running in the folder.
+    expect(newSession('/code/api', since, links, pid => pid !== 43)).toBeNull()
+  })
+
+  test.skipIf(process.platform === 'win32')('a process runs under its ancestors only', () => {
+    expect(descendsFrom(process.pid, process.pid)).toBe(true)
+    expect(descendsFrom(process.pid, process.ppid)).toBe(true)
+    expect(descendsFrom(process.ppid, process.pid)).toBe(false)
   })
 })

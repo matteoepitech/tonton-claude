@@ -77,14 +77,19 @@ public struct SessionVault: Sendable {
         try E2E.seal(UpdateOrder(version: version, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
     }
 
-    /// Starts claude in a folder of a machine. Like update orders, agents refuse old ones, and run each launch once.
-    public func sealStartOrder(launchId: String, cwd: String, issuedAt: Date = Date()) throws -> String {
-        try E2E.seal(StartOrder(launchId: launchId, cwd: cwd, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
+    /// Starts claude in a folder of one machine. Like update orders, agents refuse old ones, and run each launch once.
+    public func sealStartOrder(launchId: String, machineId: String, cwd: String, issuedAt: Date = Date()) throws -> String {
+        let order = StartOrder(launchId: launchId, machineId: machineId, cwd: cwd, issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+        return try E2E.seal(order, with: key)
     }
 
     /// The user's answer to one question of a start.
-    public func sealStartAnswer(launchId: String, step: Int, confirm: Bool, issuedAt: Date = Date()) throws -> String {
-        let answer = StartAnswer(launchId: launchId, step: step, confirm: confirm, issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+    public func sealStartAnswer(
+        launchId: String, machineId: String, question: String, confirm: Bool, issuedAt: Date = Date()
+    ) throws -> String {
+        let answer = StartAnswer(
+            launchId: launchId, machineId: machineId, question: question, confirm: confirm,
+            issuedAt: ISO8601DateFormatter().string(from: issuedAt))
         return try E2E.seal(answer, with: key)
     }
 

@@ -371,13 +371,18 @@ esac
     // A folder that does not exist: the agent answers without starting anything on the developer's machine.
     const missing = join(dir, 'missing')
     const launchId = 'e2elaunch01'
-    const order = await seal(key, { launchId, cwd: missing, issuedAt: new Date().toISOString() })
+    const order = await seal(key, { launchId, machineId: machine.machineId, cwd: missing, issuedAt: new Date().toISOString() })
     stranger.socket.send(JSON.stringify({ t: 'start_session', machineId: machine.machineId, launchId, order }))
     app.socket.send(JSON.stringify({ t: 'start_session', machineId: machine.machineId, launchId, order }))
     const result = await eventually(() => app.messages.find(m => m.t === 'session_start' && m.launchId === launchId), 'the answer')
     if (result.t !== 'session_start') throw new Error('unexpected message')
     expect(result).toMatchObject({ machineId: machine.machineId, state: 'failed' })
-    expect(await open<{ text: string }>(key, result.detail as string)).toEqual({ text: `${missing} is not a folder on this machine.` })
+    expect(await open(key, result.detail as string)).toEqual({
+      launchId,
+      machineId: machine.machineId,
+      state: 'failed',
+      text: `${missing} is not a folder on this machine.`,
+    })
     expect(stranger.messages.some(m => m.t === 'session_start')).toBe(false)
     expect(app.raw.filter(raw => raw.includes('session_start')).join()).not.toContain('missing')
   })
