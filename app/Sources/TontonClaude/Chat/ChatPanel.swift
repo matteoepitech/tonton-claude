@@ -10,6 +10,7 @@ struct ChatPanel: View {
     var body: some View {
         let entries = store.entries[session.id] ?? []
         let items = ChatItem.build(from: entries)
+        let delivered = entries.filter { $0.viaNotch == true }.count
         VStack(spacing: 0) {
             ChatHeader(session: session)
             ScrollViewReader { proxy in
@@ -28,8 +29,12 @@ struct ChatPanel: View {
                 }
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
                 .onChange(of: entries.count) { _, _ in
-                    if entries.last?.viaNotch == true { pendingTexts.removeAll() }
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+                // Each message from the notch that shows up in the transcript replaces the oldest "sending…" bubble, even
+                // when other entries arrive with it.
+                .onChange(of: delivered) { old, new in
+                    pendingTexts.removeFirst(min(max(new - old, 0), pendingTexts.count))
                 }
                 .onChange(of: pendingTexts.count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
             }

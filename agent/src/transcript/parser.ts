@@ -47,6 +47,7 @@ interface TranscriptLine {
   aiTitle?: string
   totalCostUSD?: number
   message?: { content?: string | Block[] }
+  attachment?: { type?: string; commandMode?: string; origin?: { kind?: string }; prompt?: string | Block[] }
 }
 
 export function parseLine(raw: string): ParsedLine {
@@ -66,6 +67,16 @@ export function parseLine(raw: string): ParsedLine {
   const ts = line.timestamp ?? new Date().toISOString()
   if (line.type === 'system' && line.subtype === 'compact_boundary') {
     result.entries.push({ id, ts, kind: 'system', text: 'Conversation compacted' })
+  }
+
+  // A message sent while Claude is working waits in a queue and is only ever stored as this attachment, never as a user
+  // line: from the notch as from the terminal.
+  const queued = line.type === 'attachment' ? line.attachment : undefined
+  if (queued?.type === 'queued_command' && (queued.commandMode ?? 'prompt') === 'prompt') {
+    const entries = userEntries(id, ts, queued.prompt)
+    const viaNotch = queued.origin?.kind === 'channel'
+    result.entries.push(...entries.map(entry => (viaNotch && entry.kind === 'user' ? { ...entry, viaNotch: true } : entry)))
+    return result
   }
 
   // Messages sent from the notch arrive through the channel and are stored as meta user messages.

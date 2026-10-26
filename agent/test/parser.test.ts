@@ -53,6 +53,27 @@ describe('parseLine', () => {
     expect(entries[0]).toMatchObject({ kind: 'user', text: 'Ship it', viaNotch: true })
   })
 
+  test('messages sent while Claude is working are read from the queue, from the notch or the terminal', () => {
+    const queued = (attachment: object) => parseLine(line({ type: 'attachment', attachment: { type: 'queued_command', ...attachment } }))
+    expect(
+      queued({
+        commandMode: 'prompt',
+        origin: { kind: 'channel', server: 'tonton' },
+        prompt: '<channel source="tonton" sender="notch">\nAlso run the linter\n</channel>',
+      }).entries,
+    ).toEqual([{ id: 'u1', ts: '2026-10-25T10:00:00Z', kind: 'user', text: 'Also run the linter', viaNotch: true }])
+    // Without the wrapper, the origin is enough to tell it came from the notch.
+    expect(queued({ commandMode: 'prompt', origin: { kind: 'channel' }, prompt: 'Also run the linter' }).entries[0]).toMatchObject({
+      text: 'Also run the linter',
+      viaNotch: true,
+    })
+    const typed = queued({ commandMode: 'prompt', origin: { kind: 'human' }, prompt: [{ type: 'text', text: 'and the docs' }] })
+    expect(typed.entries).toEqual([{ id: 'u1', ts: '2026-10-25T10:00:00Z', kind: 'user', text: 'and the docs' }])
+    // Task notifications go through the queue too; they are not messages.
+    expect(queued({ commandMode: 'task-notification', prompt: '<task-notification>x</task-notification>' }).entries).toEqual([])
+    expect(parseLine(line({ type: 'attachment', attachment: { type: 'date', date: '2026-10-25' } })).entries).toEqual([])
+  })
+
   test('internal and meta messages are skipped, commands become system entries', () => {
     expect(parseLine(line({ type: 'user', isMeta: true, message: { content: 'skill text' } })).entries).toEqual([])
     expect(parseLine(line({ type: 'user', message: { content: '<system-reminder>x</system-reminder>' } })).entries).toEqual([])
