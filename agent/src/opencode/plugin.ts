@@ -4,48 +4,144 @@ import { FORWARDED_EVENTS } from './events'
 export const PLUGIN_FILE = 'tonton-claude.js'
 
 /**
- * The plugin OpenCode loads: it starts `tonton opencode` once per OpenCode process and writes it the events it needs, one
- * JSON line each. It must never get in the way of OpenCode, so every failure is swallowed.
+ * The plugin OpenCode loads: it starts `tonton opencode` once per OpenCode process, writes it the events it needs, one
+ * JSON line each, and runs in OpenCode what the bridge writes back (see `PluginCommand` in bridge.ts). It must never get
+ * in the way of OpenCode, so every failure is swallowed, or told to the bridge.
  *
- * OpenCode 2 loads `export default { id, setup }` and its events come from `input.event.subscribe()`; OpenCode 1 loads
- * `server` and calls its `event` hook. Each plugin instance of the process shares one bridge.
+ * OpenCode 2 loads `export default { id, setup }`: its events come from `input.event.subscribe()` and it acts through
+ * `input.session` and `input.permission`, one input per folder it serves. OpenCode 1 loads `server`, calls its `event`
+ * hook and acts through `input.client`, its SDK client. Each plugin instance of the process shares one bridge.
  */
 export function pluginSource(command: string[]): string {
-  return `// Tonton Claude: shows this machine's OpenCode sessions in the notch. Written by \`tonton install\`, removed by
-// \`tonton uninstall\`. Everything it sees is encrypted by the Tonton agent before it leaves the machine.
+  return `// Tonton Claude: shows this machine's OpenCode sessions in the notch, and answers them from it. Written by
+// \`tonton install\`, removed by \`tonton uninstall\`. Everything it sees is encrypted by the Tonton agent before it
+// leaves the machine.
 import { spawn } from 'node:child_process'
 
 const COMMAND = ${JSON.stringify(command)}
 const FORWARDED = new Set(${JSON.stringify(FORWARDED_EVENTS)})
-const state = (globalThis.__tontonClaude ??= { bridge: null })
+const state = (globalThis.__tontonClaude ??= { bridge: null, inputs: new Map(), client: null })
 
 function bridge() {
   if (state.bridge && state.bridge.exitCode === null && !state.bridge.killed) return state.bridge
-  const child = spawn(COMMAND[0], COMMAND.slice(1), { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true })
+  const child = spawn(COMMAND[0], COMMAND.slice(1), { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true })
   child.on('error', () => {})
   child.stdin.on('error', () => {})
+  let buffer = ''
+  child.stdout.setEncoding('utf8')
+  child.stdout.on('data', chunk => {
+    buffer += chunk
+    let newline = buffer.indexOf('\\n')
+    while (newline >= 0) {
+      const line = buffer.slice(0, newline)
+      buffer = buffer.slice(newline + 1)
+      if (line.trim()) run(line)
+      newline = buffer.indexOf('\\n')
+    }
+  })
   state.bridge = child
   return child
 }
 
-function forward(event) {
-  if (!event || !FORWARDED.has(event.type)) return
+function send(event) {
   try {
     bridge().stdin.write(JSON.stringify(event) + '\\n')
   } catch {}
 }
 
+function forward(event) {
+  if (event && FORWARDED.has(event.type)) send(event)
+}
+
+/** OpenCode 1's client answers with \`{ data, error }\` instead of throwing. */
+function data(result) {
+  if (result && result.error) throw new Error(result.error.data?.message ?? result.error.message ?? JSON.stringify(result.error))
+  return result && 'data' in result ? result.data : result
+}
+
+async function run(line) {
+  let command
+  try {
+    command = JSON.parse(line)
+  } catch {
+    return
+  }
+  try {
+    const input = state.inputs.get(command.directory) ?? [...state.inputs.values()].at(-1)
+    if (input) await runIn2(input, command)
+    else if (state.client) await runIn1(state.client, command)
+  } catch (error) {
+    send({ type: 'tonton.failed', data: { sessionID: command.sessionID, op: command.op, message: String(error?.message ?? error) } })
+  }
+}
+
+async function runIn2(input, { op, sessionID, ...command }) {
+  if (op === 'prompt') return input.session.prompt({ sessionID, text: command.text })
+  if (op === 'reply') return input.permission.reply({ sessionID, requestID: command.requestID, decision: command.decision })
+  if (op === 'compact') return input.session.compact({ sessionID })
+  if (op === 'interrupt') return input.session.interrupt({ sessionID })
+  if (op === 'history') {
+    const [info, messages] = await Promise.all([input.session.get({ sessionID }), input.session.context({ sessionID })])
+    return send({ type: 'tonton.history', data: { sessionID, info, messages } })
+  }
+  if (op === 'models') {
+    const list = await input.model.list({})
+    const models = (list?.data ?? list ?? []).map(model => ({
+      providerID: model.providerID,
+      modelID: model.modelID ?? model.id,
+      context: model.limit?.context,
+    }))
+    return send({ type: 'tonton.models', data: { models } })
+  }
+}
+
+async function runIn1(client, { op, sessionID, ...command }) {
+  const path = { id: sessionID }
+  if (op === 'prompt') return data(await client.session.prompt({ path, body: { parts: [{ type: 'text', text: command.text }] } }))
+  if (op === 'reply') {
+    const response = command.decision === 'once' ? 'once' : 'reject'
+    return data(await client.postSessionIdPermissionsPermissionId({ path: { id: sessionID, permissionID: command.requestID }, body: { response } }))
+  }
+  if (op === 'compact') {
+    if (!command.providerID || !command.modelID) throw new Error('the session has not answered yet')
+    return data(await client.session.summarize({ path, body: { providerID: command.providerID, modelID: command.modelID } }))
+  }
+  if (op === 'interrupt') return data(await client.session.abort({ path }))
+  if (op === 'history') {
+    const [info, messages] = await Promise.all([client.session.get({ path }).then(data), client.session.messages({ path }).then(data)])
+    return send({ type: 'tonton.history', data: { sessionID, info, messages } })
+  }
+  if (op === 'models') {
+    const providers = data(await client.config.providers())?.providers ?? []
+    const models = providers.flatMap(provider =>
+      Object.entries(provider.models ?? {}).map(([id, model]) => ({ providerID: provider.id, modelID: id, context: model?.limit?.context })),
+    )
+    return send({ type: 'tonton.models', data: { models } })
+  }
+}
+
 export default {
   id: 'tonton-claude',
   setup: async input => {
+    const directory = input.location?.directory
+    if (directory) state.inputs.set(directory, input)
+    const controller = new AbortController()
     ;(async () => {
       try {
-        for await (const event of input.event.subscribe({})) forward(event)
+        for await (const event of input.event.subscribe({ signal: controller.signal })) forward(event)
       } catch {}
     })()
-    return {}
+    bridge()
+    return () => {
+      controller.abort()
+      if (state.inputs.get(directory) === input) state.inputs.delete(directory)
+    }
   },
-  server: async () => ({ event: async ({ event }) => forward(event) }),
+  server: async input => {
+    if (input?.client) state.client = input.client
+    bridge()
+    return { event: async ({ event }) => forward(event) }
+  },
 }
 `
 }

@@ -105,6 +105,8 @@ struct SessionMeta: Codable {
     var context: WireContext?
     /// Missing from older agents.
     var terminal: Bool?
+    /// The commands the agent runs for this session. Missing from older agents: `compact` and `clear` with `terminal`.
+    var commands: [String]?
 }
 struct WireContext: Codable { let usedTokens: Int; let windowTokens: Int? }
 struct WireUsageLimit: Codable { let usedPercent: Double; let resetsAt: String }

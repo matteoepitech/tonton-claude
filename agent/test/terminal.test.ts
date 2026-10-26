@@ -81,6 +81,17 @@ describe('runCommand', () => {
   })
 })
 
+describe('interrupt', () => {
+  test('presses Escape while Claude works, once', () => {
+    const fake = fakeTmux('· Thinking… (12s · esc to interrupt)')
+    const sent = command({ name: 'interrupt' })
+    expect(runCommand(sent, 's1', pane, { run: dir, tmux: fake.tmux })).toEqual({ typed: true })
+    expect(fake.typed).toEqual([['Escape']])
+    expect(runCommand(sent, 's1', pane, { run: dir, tmux: fake.tmux })).toEqual({ typed: false, why: null })
+    expect(fake.typed).toHaveLength(1)
+  })
+})
+
 describe('whyBusy', () => {
   test('a prompt waiting for input is free, a running turn or a choice is not', () => {
     expect(whyBusy('╭───╮\n│ > │\n╰───╯\n  ? for shortcuts')).toBeNull()

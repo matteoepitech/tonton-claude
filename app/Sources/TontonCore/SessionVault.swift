@@ -42,7 +42,9 @@ public struct SessionVault: Sendable {
             tokens: meta?.tokens,
             context: meta?.context.map { ContextUsage(usedTokens: $0.usedTokens, windowTokens: $0.windowTokens) },
             terminal: meta?.terminal ?? false,
-            tool: info?.tool
+            tool: info?.tool,
+            // Commands a newer agent knows and this app does not are left out.
+            commands: meta?.commands.map { $0.compactMap(SessionCommandName.init(rawValue:)) }
         )
     }
 

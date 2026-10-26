@@ -11,7 +11,7 @@ export interface TerminalPane {
   pane: string
 }
 
-export const COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear']
+export const COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear', 'interrupt']
 /** Older commands are refused so the relay cannot replay one later, as with update orders. */
 const COMMAND_TTL_MS = 10 * 60_000
 const COMMAND_ID = /^[a-z0-9-]{8,64}$/
@@ -36,14 +36,16 @@ export function runCommand(
   { run, now = Date.now(), tmux = runTmux }: { run: string; now?: number; tmux?: Tmux },
 ): CommandResult {
   const refuse = (why: string): CommandResult => ({ typed: false, why })
-  if (!COMMANDS.includes(command.name) || command.sessionId !== sessionId || !COMMAND_ID.test(command.id))
-    return refuse('The command is not for this session.')
-  if (!(Math.abs(now - Date.parse(command.issuedAt)) <= COMMAND_TTL_MS))
-    return refuse('The command expired. Check the clock of this machine.')
+  const invalid = whyInvalid(command, sessionId, now)
+  if (invalid) return refuse(invalid)
   if (!terminal) return refuse('This session does not run in tmux, so commands from the notch cannot be typed in it.')
-  const claimed = claimOnce(join(run, 'commands'), command.id, 2 * COMMAND_TTL_MS, now)
-  if (claimed === 'taken') return { typed: false, why: null }
-  if (claimed instanceof Error) return refuse(`Could not record the command on this machine: ${claimed.message}`)
+  const claimed = claimCommand(command, run, now)
+  if (claimed !== true) return claimed
+  // Escape stops Claude where it is, like in the terminal: it is meant for when Claude works.
+  if (command.name === 'interrupt') {
+    const pressed = tmux(terminal, ['send-keys', '-t', terminal.pane, 'Escape'])
+    return pressed.ok ? { typed: true } : refuse(`tmux could not press Escape in the terminal: ${pressed.output}`)
+  }
   const screen = tmux(terminal, ['capture-pane', '-p', '-t', terminal.pane])
   if (!screen.ok) return refuse(`tmux could not read the terminal: ${screen.output}`)
   const busy = whyBusy(screen.output)
@@ -53,6 +55,22 @@ export function runCommand(
   if (!typed.ok) return refuse(`tmux could not type in the terminal: ${typed.output}`)
   tmux(terminal, ['send-keys', '-t', terminal.pane, 'Enter'])
   return { typed: true }
+}
+
+/** Why a command from the app must not run in this session, or null. Also used for OpenCode sessions. */
+export function whyInvalid(command: SessionCommand, sessionId: string, now = Date.now()): string | null {
+  if (!COMMANDS.includes(command.name) || command.sessionId !== sessionId || !COMMAND_ID.test(command.id))
+    return 'The command is not for this session.'
+  if (!(Math.abs(now - Date.parse(command.issuedAt)) <= COMMAND_TTL_MS)) return 'The command expired. Check the clock of this machine.'
+  return null
+}
+
+/** Each command runs once, whichever of the machine's connections gets it first. A replay gets no answer. */
+export function claimCommand(command: SessionCommand, run: string, now = Date.now()): true | { typed: false; why: string | null } {
+  const claimed = claimOnce(join(run, 'commands'), command.id, 2 * COMMAND_TTL_MS, now)
+  if (claimed === 'taken') return { typed: false, why: null }
+  if (claimed instanceof Error) return { typed: false, why: `Could not record the command on this machine: ${claimed.message}` }
+  return true
 }
 
 /** Enter must only submit the command: not while Claude works, nor on a question with its own choices. */

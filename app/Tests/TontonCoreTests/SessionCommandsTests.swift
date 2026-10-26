@@ -43,6 +43,20 @@ final class SessionCommandsTests: XCTestCase {
         XCTAssertFalse(SessionCommandName.compact.needsConfirmation)
     }
 
+    func testInterruptingIsForAWorkingSessionWhoseAgentSaysItCan() {
+        let older = session(status: .working)
+        XCTAssertEqual(older.commands, [.compact, .clear])
+        XCTAssertFalse(older.accepts(.interrupt))
+        let working = SessionSummary(
+            id: "s1", machineId: "m1", machine: "PC", platform: nil, cwd: "/x", project: "x", title: nil, status: .working, statusText: nil,
+            agentOnline: true, canChat: true, pendingPermissions: [], costUSD: nil, startedAt: now, lastActivity: now, lastMessage: nil,
+            terminal: false, tool: "opencode", commands: [.compact, .interrupt])
+        XCTAssertTrue(working.accepts(.interrupt))
+        XCTAssertFalse(working.accepts(.compact))
+        XCTAssertFalse(working.accepts(.clear))
+        XCTAssertEqual(working.menuCommands, [.compact])
+    }
+
     func testTheAgentSaysWhetherTheSessionRunsInTmux() throws {
         func wire(_ meta: SessionMeta) throws -> WireSession {
             let json = """
@@ -55,5 +69,9 @@ final class SessionCommandsTests: XCTestCase {
         XCTAssertFalse(vault.session(try wire(meta), machines: []).terminal)
         meta.terminal = true
         XCTAssertTrue(vault.session(try wire(meta), machines: []).terminal)
+        XCTAssertEqual(vault.session(try wire(meta), machines: []).commands, [.compact, .clear])
+        // A newer agent says what it runs; names this app does not know are left out.
+        meta.commands = ["compact", "interrupt", "rewind"]
+        XCTAssertEqual(vault.session(try wire(meta), machines: []).commands, [.compact, .interrupt])
     }
 }
