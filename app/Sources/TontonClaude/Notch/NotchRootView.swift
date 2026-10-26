@@ -4,11 +4,13 @@ import TontonCore
 struct NotchRootView: View {
     @EnvironmentObject var state: NotchState
     @EnvironmentObject var store: SessionStore
+    @EnvironmentObject var settings: AppSettings
     let onSettings: () -> Void
 
     var body: some View {
         let size = state.currentSize
         let expanded = state.mode == .expanded
+        let glow = settings.workingGlow ? SessionStatus.glow(store.visibleSessions.filter(\.status.isLive).map(\.status)) : nil
         /// Collapsed: plain rounded bottom like the hardware notch. Open: concave flares at the top.
         let shape =
             switch state.mode {
@@ -40,6 +42,9 @@ struct NotchRootView: View {
             .frame(width: size.width, height: size.height)
             .clipShape(shape)
             .overlay(shape.stroke(Color.white.opacity(expanded ? 0.09 : 0), lineWidth: 1))
+            .overlay {
+                if let glow { NotchGlow(shape: shape, color: Color(nsColor: glow.color)).frame(width: size.width, height: size.height) }
+            }
             Spacer(minLength: 0)
         }
         .frame(width: NotchState.expandedSize.width, height: NotchState.expandedSize.height, alignment: .top)
@@ -78,6 +83,50 @@ struct GlassBackground: View {
                 RadialGradient(
                     colors: [Theme.accent.opacity(0.05), .clear], center: .bottomLeading, startRadius: 0, endRadius: geo.size.width * 0.7)
             }
+        }
+    }
+}
+
+/// A light running around the notch's outline while a session works. It stays still with Reduce Motion.
+struct NotchGlow: View {
+    let shape: NotchShape
+    let color: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var angle = 0.0
+
+    var body: some View {
+        GeometryReader { geo in
+            // A cone of light turning around the center, seen only through the outline.
+            let side = hypot(geo.size.width, geo.size.height)
+            let light = AngularGradient(colors: [color.opacity(0), color, color.opacity(0), color.opacity(0)], center: .center)
+            ZStack {
+                if reduceMotion {
+                    color.opacity(0.7)
+                } else {
+                    light.frame(width: side, height: side).rotationEffect(.degrees(angle))
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .mask(shape.stroke(lineWidth: 1.5))
+            .background {
+                // The halo: the same light, wider and blurred.
+                ZStack {
+                    if reduceMotion {
+                        color.opacity(0.35)
+                    } else {
+                        light.frame(width: side, height: side).rotationEffect(.degrees(angle))
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .mask(shape.stroke(lineWidth: 5))
+                .blur(radius: 4)
+                .opacity(0.7)
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) { angle = 360 }
         }
     }
 }

@@ -10,8 +10,7 @@ struct ActivityDots: View {
 
     var body: some View {
         let live = store.visibleSessions.filter { $0.status.isLive }
-        let order: [SessionStatus] = [.permission, .error, .waiting, .working, .starting, .idle]
-        let urgent = order.first { s in live.contains { $0.status == s } }
+        let urgent = SessionStatus.mostUrgent(live.map(\.status))
         // Sessions of one account share the window; across accounts, the one closest to its limit matters most.
         let limit = UsageLimit.fullest(live.map(\.fiveHourLimit))
         HStack(spacing: 0) {

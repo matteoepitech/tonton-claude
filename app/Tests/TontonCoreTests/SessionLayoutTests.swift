@@ -34,4 +34,12 @@ final class SessionLayoutTests: XCTestCase {
         XCTAssertEqual(sections.map(\.kind), [.pinned, .thisMac, .machine("server")])
         XCTAssertEqual(SessionLayout.ordered(sessions, pinned: ["c"], thisMac: ["mac"]).map(\.id), ["c", "b", "a"])
     }
+
+    func testTheNotchGlowsWhileASessionWorksInTheMostUrgentColor() {
+        XCTAssertEqual(SessionStatus.mostUrgent([.idle, .working, .waiting]), .waiting)
+        XCTAssertNil(SessionStatus.mostUrgent([]))
+        XCTAssertEqual(SessionStatus.glow([.working, .idle]), .working)
+        XCTAssertEqual(SessionStatus.glow([.working, .permission]), .permission)
+        XCTAssertNil(SessionStatus.glow([.permission, .idle]))
+    }
 }

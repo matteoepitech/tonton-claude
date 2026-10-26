@@ -18,6 +18,16 @@ public enum SessionStatus: String, Codable, Sendable {
 
     public var needsAttention: Bool { self == .waiting || self == .permission || self == .error }
     public var isLive: Bool { self != .ended && self != .offline }
+
+    /// The status the notch shows for several live sessions: the one that needs the user most.
+    public static func mostUrgent(_ statuses: [SessionStatus]) -> SessionStatus? {
+        [.permission, .error, .waiting, .working, .starting, .idle].first { statuses.contains($0) }
+    }
+
+    /// While a live session works, the notch glows in the color of the most urgent status.
+    public static func glow(_ statuses: [SessionStatus]) -> SessionStatus? {
+        statuses.contains(.working) ? mostUrgent(statuses) : nil
+    }
 }
 
 public struct PermissionRequest: Identifiable, Equatable, Sendable {
