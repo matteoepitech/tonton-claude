@@ -18,6 +18,10 @@ struct NotchPane: View {
                     isOn: $settings.showActivityDots)
                 Hairline()
                 ToggleRow(
+                    title: "Tonton", detail: "A small character beside the camera: types while Claude works, sleeps when it's done.",
+                    isOn: $settings.showMascot)
+                Hairline()
+                ToggleRow(
                     title: "Open on approval requests", detail: "Expand the notch straight on the session asking for permission.",
                     isOn: $settings.openOnPermission)
             }

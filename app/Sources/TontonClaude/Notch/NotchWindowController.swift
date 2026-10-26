@@ -260,11 +260,13 @@ final class NotchWindowController {
             .filter { [settings] _ in settings.alertOnLimitReset }
             .sink { [weak self] sessions in self?.limitLifted(sessions) }
             .store(in: &subscriptions)
-        store.sessionsPublisher.combineLatest(settings.$showActivityDots, settings.$hiddenMachines)
-            .map { sessions, dots, hidden in dots && sessions.contains { $0.status.isLive && !hidden.contains($0.machine) } }
-            .removeDuplicates()
-            .sink { [weak self] show in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.showWings = show } }
-            .store(in: &subscriptions)
+        store.sessionsPublisher.combineLatest(
+            settings.$showActivityDots.combineLatest(settings.$showMascot).map { $0 || $1 }, settings.$hiddenMachines
+        )
+        .map { sessions, wings, hidden in wings && sessions.contains { $0.status.isLive && !hidden.contains($0.machine) } }
+        .removeDuplicates()
+        .sink { [weak self] show in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.showWings = show } }
+        .store(in: &subscriptions)
         // Limits reset with time alone, so check again every minute.
         let minutes = Timer.publish(every: 60, on: .main, in: .common).autoconnect().prepend(Date())
         store.sessionsPublisher.combineLatest(settings.$hiddenMachines, minutes)
