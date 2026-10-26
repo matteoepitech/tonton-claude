@@ -21,6 +21,7 @@ opencode ─ Tonton plugin ──────▶ agent
 | `shared/` | The client core: wire protocol, end-to-end crypto, account token, session models and a relay client. Used by the agent, the relay and the client apps, and runs in browsers. Versions, for the agent and the relay. | TypeScript |
 | `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
 | `raycast/` | A Raycast extension that lists the sessions and messages them through the app's AppleScript dictionary (`app/Resources/TontonClaude.sdef`). | TypeScript (React) |
+| `web/` | The web app: one HTML file (`bun run web`, released as `tonton-web.html`) built on the client core in `shared/`, which decrypts in the browser. | TypeScript |
 | `scripts/` | Release builds and the install scripts published with each release (`install.sh`, `install.ps1`, `install-relay.sh`). | TS, sh, PowerShell |
 | `test/` | Tests that run a real relay with a real agent. Unit tests live next to each part (`agent/test`, `relay/test`, `app/Tests`). | TypeScript |
 

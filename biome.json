@@ -5,6 +5,7 @@
       "agent/**",
       "relay/**",
       "shared/**",
+      "web/**",
       "scripts/**",
       "test/**",
       "raycast/src/**",

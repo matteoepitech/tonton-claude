@@ -6,9 +6,22 @@ export const json = (body: unknown, status = 200) =>
 
 export const fail = (status: number, message: string) => json({ error: message }, status)
 
+/** The subprotocol a browser's WebSocket asks for: browsers cannot set the Authorization header, so it carries the token. */
+export const BROWSER_PROTOCOL = 'tonton'
+const TOKEN_PROTOCOL = 'bearer.'
+
 export function bearerToken(req: Request): string {
   const header = req.headers.get('authorization') ?? ''
-  return header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+  if (header.startsWith('Bearer ')) return header.slice(7).trim()
+  return browserToken(req) ?? ''
+}
+
+/** `Sec-WebSocket-Protocol: tonton, bearer.<token>`, as the web app opens its socket. */
+export function browserToken(req: Request): string | null {
+  const offered = (req.headers.get('sec-websocket-protocol') ?? '').split(',').map(protocol => protocol.trim())
+  if (!offered.includes(BROWSER_PROTOCOL)) return null
+  const token = offered.find(protocol => protocol.startsWith(TOKEN_PROTOCOL))?.slice(TOKEN_PROTOCOL.length)
+  return token || null
 }
 
 export function clientIp(req: Request, server: Server<SocketData>, trustProxy: boolean): string {
