@@ -71,6 +71,16 @@ export interface PromptPayload {
   text: string
   images: { name: string; mediaType: string; data: string }[]
 }
+/** What the background service reports about its machine every minute. */
+export interface MachineHealth {
+  /** Share of all cores in use since the previous report, from 0 to 1. */
+  cpu: number
+  memoryUsed: number
+  memoryTotal: number
+  /** Null on machines without a battery. */
+  battery: { percent: number; charging: boolean } | null
+  at: string
+}
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
   version: string
@@ -110,6 +120,8 @@ export interface MachineSummary {
   online: boolean
   /** Agent version installed on the machine, null until an agent that reports it connects. */
   agentVersion: string | null
+  /** Sealed `MachineHealth`, null until the machine's service reports it. Older relays leave it out. */
+  health?: Sealed | null
 }
 
 // agent -> relay
@@ -121,6 +133,8 @@ export type AgentMessage =
   | { t: 'permission_closed'; sessionId: string; requestId: string }
   // Sent by the channel that ran an update. `detail` is a sealed `{ text }` explaining a failure.
   | { t: 'update_result'; ok: boolean; version: string | null; detail: Sealed | null }
+  // Sent by the background service every minute: a sealed `MachineHealth`.
+  | { t: 'health'; health: Sealed }
 
 // relay -> agent
 export type RelayToAgent =

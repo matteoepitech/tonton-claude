@@ -35,6 +35,8 @@ public struct WireMachine: Decodable, Sendable {
     public let lastSeen: String?
     public let online: Bool
     public let agentVersion: String?
+    /// Sealed `MachineHealth`. Missing from older relays.
+    public let health: String?
 }
 
 /// Messages the relay sends to the app.

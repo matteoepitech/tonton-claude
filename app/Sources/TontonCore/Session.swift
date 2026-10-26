@@ -249,8 +249,13 @@ public struct MachineInfo: Identifiable, Equatable, Sendable {
     public let online: Bool
     /// Installed agent version. Unknown for agents older than 0.4.0, and for machines not seen since the relay started.
     public let agentVersion: String?
+    /// The latest report of its background service, when it sent one.
+    public let health: MachineHealth?
 
-    public init(id: String, name: String, platform: String?, createdAt: Date, lastSeen: Date?, online: Bool, agentVersion: String?) {
+    public init(
+        id: String, name: String, platform: String?, createdAt: Date, lastSeen: Date?, online: Bool, agentVersion: String?,
+        health: MachineHealth? = nil
+    ) {
         self.id = id
         self.name = name
         self.platform = platform
@@ -258,6 +263,7 @@ public struct MachineInfo: Identifiable, Equatable, Sendable {
         self.lastSeen = lastSeen
         self.online = online
         self.agentVersion = agentVersion
+        self.health = health
     }
 
     public enum AgentUpdate: Equatable, Sendable {

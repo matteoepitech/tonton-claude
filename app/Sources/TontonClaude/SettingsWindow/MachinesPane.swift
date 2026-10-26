@@ -150,6 +150,12 @@ struct MachineRow: View {
                 Text(subtitle(sessions: sessions.count))
                     .font(.system(size: 11.5, design: .monospaced))
                     .foregroundStyle(Theme.textFaint)
+                if machine.online, let health = machine.health {
+                    Text(health.summary)
+                        .font(.system(size: 11.5, design: .monospaced))
+                        .foregroundStyle(health.isStale() ? Theme.textFaint : Theme.textDim)
+                        .help(health.isStale() ? "No report for a few minutes" : "Reported by the machine every minute")
+                }
                 if let error = store.updateErrors[machine.id] {
                     Text(error).font(.system(size: 11.5)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
                 }
