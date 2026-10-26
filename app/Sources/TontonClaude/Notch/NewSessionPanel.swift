@@ -47,7 +47,7 @@ struct NewSessionPanel: View {
         }
         .padding(14)
         .frame(width: 440)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.09)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.borderStrong))
         .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
         .onAppear {
@@ -71,7 +71,7 @@ struct NewSessionPanel: View {
                         }
                         .padding(.horizontal, 10)
                         .frame(height: 24)
-                        .background(Capsule().fill(selected ? Theme.accent.opacity(0.28) : .white.opacity(0.07)))
+                        .background(Capsule().fill(selected ? Theme.accent.opacity(0.28) : Theme.ink.opacity(0.07)))
                         .overlay(Capsule().stroke(selected ? Theme.accent.opacity(0.6) : .clear))
                     }
                     .buttonStyle(.plain)
@@ -89,7 +89,7 @@ struct NewSessionPanel: View {
         let startable = machine != nil && RecentFolders.isStartable(folder) && store.connection == .connected
         return HStack(spacing: 8) {
             Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(.secondary)
-            TextField("", text: $folder, prompt: Text("~/code/project").foregroundStyle(.white.opacity(0.35)))
+            TextField("", text: $folder, prompt: Text("~/code/project").foregroundStyle(Theme.ink.opacity(0.35)))
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, design: .monospaced))
                 .focused($focused)
@@ -98,7 +98,8 @@ struct NewSessionPanel: View {
                 if let machine { start(machine) }
             } label: {
                 Text("Start").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).frame(height: 22)
-                    .background(Capsule().fill(startable ? Theme.accent : .white.opacity(0.1)))
+                    .foregroundStyle(startable ? Theme.onAccent : Theme.text)
+                    .background(Capsule().fill(startable ? Theme.accent : Theme.ink.opacity(0.1)))
             }
             .buttonStyle(.plain)
             .disabled(!startable)
@@ -106,7 +107,7 @@ struct NewSessionPanel: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 32)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.07)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.07)))
     }
 
     @ViewBuilder private func recentFolders(_ machine: MachineInfo) -> some View {
@@ -121,7 +122,7 @@ struct NewSessionPanel: View {
                 }
                 .padding(.horizontal, 6)
                 .frame(height: 22)
-                .background(RoundedRectangle(cornerRadius: 6).fill(recent == folder ? Color.white.opacity(0.1) : .clear))
+                .background(RoundedRectangle(cornerRadius: 6).fill(recent == folder ? Theme.ink.opacity(0.1) : .clear))
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
                     folder = recent
@@ -196,7 +197,7 @@ private struct LaunchCard: View {
                     }
                 }
                 .padding(8)
-                .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.45)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(Theme.code))
             }
             if launch.state == .asking {
                 HStack(spacing: 8) {
@@ -207,11 +208,12 @@ private struct LaunchCard: View {
                         .font(.system(size: 11, weight: .medium))
                         .padding(.horizontal, 12)
                         .frame(height: 24)
-                        .background(Capsule().fill(.white.opacity(0.1)))
+                        .background(Capsule().fill(Theme.ink.opacity(0.1)))
                     Button("Confirm") { store.answerStart(launch, confirm: true) }
                         .disabled(!armed)
                         .buttonStyle(.plain)
                         .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.onAccent)
                         .padding(.horizontal, 12)
                         .frame(height: 24)
                         .background(Capsule().fill(Theme.accent.opacity(armed ? 1 : 0.4)))
@@ -224,7 +226,7 @@ private struct LaunchCard: View {
             }
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 9).fill(.white.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: 9).fill(Theme.ink.opacity(0.05)))
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(launch.state == .asking ? Theme.accent.opacity(0.5) : Theme.border))
     }
 

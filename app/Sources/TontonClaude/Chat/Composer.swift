@@ -264,7 +264,7 @@ struct Composer: View {
                         .focused($focusedVariable, equals: name)
                         .padding(.horizontal, 8)
                         .frame(height: 24)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.3)))
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.code))
                         .onSubmit { insertFilled(template) }
                 }
             }

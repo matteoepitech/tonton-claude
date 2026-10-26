@@ -64,7 +64,7 @@ struct ExpandedView: View {
                     Image(systemName: "plus").font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(state.showNewSession ? Theme.accent : .white.opacity(0.7))
+                .foregroundStyle(state.showNewSession ? Theme.accent : Theme.ink.opacity(0.7))
                 .help("Start a session on a machine (⌘N)")
             }
             Button {
