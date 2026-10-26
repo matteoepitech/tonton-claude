@@ -34,6 +34,7 @@ struct SessionListView: View {
                             let pinned = section.kind == .pinned
                             SessionRow(
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
+                                continues: store.autoContinue.contains(s.id),
                                 machine: pinned ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
                                 shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil
@@ -42,6 +43,9 @@ struct SessionListView: View {
                             .onTapGesture { store.selectedId = s.id }
                             .contextMenu {
                                 Button(pinned ? "Unpin" : "Pin to top") { store.togglePin(s.id) }
+                                if s.canChat {
+                                    Toggle("Continue when the limit resets", isOn: autoContinue(s.id))
+                                }
                                 if store.isOnThisMac(s) { LocalFolderActions(session: s, style: .menu) }
                                 Divider()
                                 Button("Remove from list") { store.dismiss(s.id) }
@@ -53,6 +57,10 @@ struct SessionListView: View {
             }
             .scrollIndicators(.never)
         }
+    }
+
+    private func autoContinue(_ sessionId: String) -> Binding<Bool> {
+        Binding(get: { store.autoContinue.contains(sessionId) }, set: { _ in store.toggleAutoContinue(sessionId) })
     }
 
     @ViewBuilder private func header(_ section: SessionSection) -> some View {
@@ -124,6 +132,8 @@ struct SessionRow: View {
     let session: SessionSummary
     let selected: Bool
     var showCost = false
+    /// Gets `continue` when the limit that stopped it resets.
+    var continues = false
     /// Shown in the pinned section, where sessions from every machine sit together.
     var machine: String?
     var shortcut: Int?
@@ -183,7 +193,10 @@ struct SessionRow: View {
                 ? Text(session.displayStatusText).foregroundColor(Color(nsColor: session.status.color)) : Text("")
             let separator = session.status.needsAttention && limit != nil ? Text(" · ").foregroundColor(.secondary) : Text("")
             let countdown = limit.flatMap { limit in
-                limit.level(at: now).map { Text("resets in \(limit.timeLeft(at: now))").foregroundColor($0.color) }
+                limit.level(at: now).map { level in
+                    let verb = continues && session.stoppedUntil(at: now) != nil ? "continues" : "resets"
+                    return Text("\(verb) in \(limit.timeLeft(at: now))").foregroundColor(level.color)
+                }
             }
             (attention + separator + (countdown ?? Text("")))
                 .font(.system(size: 10, weight: .medium))

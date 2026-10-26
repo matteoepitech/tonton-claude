@@ -172,6 +172,11 @@ public enum LimitResets {
     public static func lifted(_ sessions: [SessionSummary], at reset: Date) -> [SessionSummary] {
         sessions.filter { $0.status.isLive && $0.stoppedUntil(at: reset.addingTimeInterval(-1)) == reset }
     }
+
+    /// Among freed sessions, the ones to send `continue` to: those the user asked for that still take messages.
+    public static func toContinue(_ lifted: [SessionSummary], optedIn: Set<String>) -> [String] {
+        lifted.filter { optedIn.contains($0.id) && $0.canChat && $0.status.isLive }.map(\.id)
+    }
 }
 
 public struct MachineInfo: Identifiable, Equatable, Sendable {

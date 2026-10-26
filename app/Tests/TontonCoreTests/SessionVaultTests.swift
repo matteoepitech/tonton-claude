@@ -110,6 +110,13 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertEqual(LimitResets.upcoming(sessions, at: now), [reset, reset.addingTimeInterval(600)])
         XCTAssertEqual(LimitResets.lifted(sessions, at: reset).map(\.id), ["api", "web"])
         XCTAssertEqual(LimitResets.upcoming(sessions, at: reset.addingTimeInterval(601)), [])
+
+        // Only the sessions the user asked for get `continue`, and only if they still take messages.
+        let readOnly = SessionSummary(
+            id: "read-only", machineId: "m1", machine: "PC", platform: nil, cwd: "/x", project: "x", title: nil, status: .error,
+            statusText: nil, agentOnline: true, canChat: false, pendingPermissions: [], costUSD: nil, startedAt: now,
+            lastActivity: now, lastMessage: nil)
+        XCTAssertEqual(LimitResets.toContinue(sessions + [readOnly], optedIn: ["web", "ended", "read-only"]), ["web"])
     }
 
     func testTimeLeftReadsLikeTheNotch() {
