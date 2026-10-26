@@ -19,6 +19,7 @@ claude ─ hooks + MCP channel ─▶ agent ──sealed blobs──▶ relay �
 | `relay/` | Accounts and machines in SQLite, live sessions in memory, WebSocket routing. Never sees plaintext. | TypeScript (Bun) |
 | `shared/` | The wire protocol, the account token format and versions, used by the agent and the relay. | TypeScript |
 | `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
+| `raycast/` | A Raycast extension that lists the sessions and messages them through the app's AppleScript dictionary (`app/Resources/TontonClaude.sdef`). | TypeScript (React) |
 | `scripts/` | Release builds and the install scripts published with each release (`install.sh`, `install.ps1`, `install-relay.sh`). | TS, sh, PowerShell |
 | `test/` | Tests that run a real relay with a real agent. Unit tests live next to each part (`agent/test`, `relay/test`, `app/Tests`). | TypeScript |
 

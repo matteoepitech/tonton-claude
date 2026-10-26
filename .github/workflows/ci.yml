@@ -33,7 +33,21 @@ jobs:
       - run: swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos
       - run: swift build
       - run: swift test
+      - run: xmllint --noout Resources/TontonClaude.sdef
       - run: swiftc -O ../agent/tray/macos/main.swift -o "$RUNNER_TEMP/tonton-tray"
+
+  raycast:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: raycast
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx tsc --noEmit
 
   windows-scripts:
     runs-on: windows-latest

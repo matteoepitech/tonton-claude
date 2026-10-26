@@ -1,0 +1,39 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "tonton-claude",
+  "title": "Tonton Claude",
+  "description": "See your Claude Code sessions and message them, through the Tonton Claude app.",
+  "icon": "icon.png",
+  "author": "matteoepitech",
+  "categories": [
+    "Developer Tools",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "sessions",
+      "title": "Claude Sessions",
+      "subtitle": "Tonton Claude",
+      "description": "List the sessions in the notch, send them a message or a quick reply.",
+      "mode": "view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.9.0",
+    "@raycast/utils": "^2.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "typescript": "^5.9.0"
+  },
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "check": "tsc --noEmit"
+  }
+}

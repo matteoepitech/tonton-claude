@@ -12,6 +12,10 @@
       <direct-parameter type="text" description="A session id, or a project name."/>
       <result type="text"/>
     </command>
+    <command name="quick replies" code="TtClQRep" description="The quick replies of Settings › General, in their order.">
+      <cocoa class="TontonQuickRepliesCommand"/>
+      <result type="any" description="A list of text."/>
+    </command>
     <command name="send message" code="TtClSMsg" description="Sends a message to a session, as if typed in the notch. Needs Settings › General › Scripts can send messages.">
       <cocoa class="TontonSendMessageCommand"/>
       <direct-parameter type="text" description="What to send to Claude."/>
