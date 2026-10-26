@@ -31,6 +31,8 @@ final class NotchState: ObservableObject {
     static let pillHeight: CGFloat = 20
     /// Between the notch and its pills.
     static let pillGap: CGFloat = 8
+    /// ⌃ is held on its own in the open notch: the composer dictates.
+    @Published var pushToTalk = false
     /// Wider wings, so the right one fits the time left before a usage limit resets.
     @Published var wingCountdown = false
     /// The session the wings show, widened like the Dynamic Island (Settings › Notch › Live activity).

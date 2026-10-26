@@ -18,6 +18,9 @@ struct Composer: View {
     @State private var values: [String: String] = [:]
     @FocusState private var focusedVariable: String?
     @ObservedObject private var queues = MessageQueues.shared
+    @StateObject private var dictation = Dictation()
+    /// What was typed before dictation started: the transcript goes after it.
+    @State private var typedBeforeDictation = ""
 
     private var readOnlyReason: String {
         if session.machineId == LocalSessions.machineId {
@@ -34,6 +37,9 @@ struct Composer: View {
             if let filling { fillBar(filling) }
             field
             if !queues.items(for: session.id).isEmpty { queueList }
+            if let problem = dictation.problem {
+                Text(problem).font(.system(size: 10)).foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
+            }
             if !session.canChat {
                 Text(readOnlyReason)
                     .font(.system(size: 10))
@@ -56,6 +62,27 @@ struct Composer: View {
             focused = session.canChat
         }
         .onChange(of: text) { _, value in state.drafts[session.id] = value }
+        .onChange(of: state.pushToTalk) { _, held in held ? startDictation() : dictation.stop() }
+        .onChange(of: dictation.transcript) { _, words in text = DictationText.merge(typed: typedBeforeDictation, transcript: words) }
+        .onDisappear { dictation.stop() }
+    }
+
+    private func startDictation() {
+        guard session.canChat else { return }
+        typedBeforeDictation = text
+        dictation.start()
+    }
+
+    private var micButton: some View {
+        Button {
+            dictation.listening ? dictation.stop() : startDictation()
+        } label: {
+            Image(systemName: dictation.listening ? "mic.fill" : "mic")
+                .foregroundStyle(dictation.listening ? Theme.danger : .primary)
+                .symbolEffect(.pulse, isActive: dictation.listening)
+        }
+        .buttonStyle(.plain)
+        .help(dictation.listening ? "Stop dictating" : "Dictate a message (or hold ⌃)")
     }
 
     private var quickReplies: some View {
@@ -167,7 +194,8 @@ struct Composer: View {
             .keyboardShortcut("v", modifiers: [.command, .shift])
             .help("Paste an image from the clipboard (⌘⇧V)")
             templatesMenu
-            TextField(session.canChat ? "Message Claude…  (↩ send, ⌥↩ new line)" : "Read only", text: $text, axis: .vertical)
+            micButton
+            TextField(placeholder, text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .lineLimit(1...6)
@@ -188,6 +216,11 @@ struct Composer: View {
         .opacity(session.canChat ? 1 : 0.5)
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
+    }
+
+    private var placeholder: String {
+        if !session.canChat { return "Read only" }
+        return dictation.listening ? "Listening…" : "Message Claude…  (↩ send, ⌥↩ new line)"
     }
 
     private var templatesMenu: some View {
