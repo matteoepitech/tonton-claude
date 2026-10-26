@@ -89,6 +89,7 @@ final class SessionCommandsTests: XCTestCase {
             "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Haiku 4.5",
             "claude-haiku-4-5@20251001": "Haiku 4.5",
             "claude-fable-5-1": "Fable 5.1",
+            "claude-3-5-haiku-latest": "Haiku 3.5",
             "sonnet": "Sonnet",
             "gpt-5": "gpt-5",
             "claude-instant": "claude-instant",

@@ -25,7 +25,7 @@ public enum ModelName {
         guard let start = id.range(of: "claude-", options: .caseInsensitive) else { return nil }
         // `[1m]` asks for a million tokens of context, `@date` and `:0` come from cloud providers.
         let rest = id[start.upperBound...].lowercased().prefix { !"[@:".contains($0) }
-        var tokens = rest.split(separator: "-").map(String.init)
+        var tokens = rest.split(separator: "-").map(String.init).filter { $0 != "latest" }
         if let last = tokens.last, last.hasPrefix("v"), Int(last.dropFirst()) != nil { tokens.removeLast() }
         if let last = tokens.last, last.count == 8, Int(last) != nil { tokens.removeLast() }
         let words = tokens.filter { Int($0) == nil }

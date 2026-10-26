@@ -139,13 +139,14 @@ struct ChatHeader: View {
             }
             if session.commands.contains(.model) {
                 Divider()
+                // The tick is the family in use; picking it again still switches, to the latest model of that family.
                 Menu(SessionCommandName.model.label) {
                     ForEach(ModelFamily.allCases, id: \.self) { family in
                         Toggle(
                             family.label,
                             isOn: Binding(
                                 get: { session.modelFamily == family },
-                                set: { if $0 { store.sendCommand(.model, model: family, to: session.id) } }))
+                                set: { _ in store.sendCommand(.model, model: family, to: session.id) }))
                     }
                 }
             }
