@@ -122,7 +122,7 @@ struct ChatHeader: View {
             .foregroundStyle(on ? Theme.accent : .secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(on ? Theme.accent.opacity(0.16) : Color.white.opacity(0.06)))
+            .background(Capsule().fill(on ? Theme.accent.opacity(0.16) : Theme.ink.opacity(0.06)))
         }
         .buttonStyle(.plain)
         .help(on ? "Claude gets “continue” when the limit resets. Click to cancel." : "Send “continue” when the limit resets")
@@ -178,7 +178,7 @@ struct ChatHeader: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color.white.opacity(0.04))
+        .background(Theme.ink.opacity(0.04))
     }
 }
 
@@ -191,8 +191,8 @@ struct ContextGauge: View {
         let percent = "\(Int((context.fraction * 100).rounded()))%"
         HStack(spacing: 5) {
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.12))
-                Capsule().fill(near ? Color(nsColor: .systemOrange) : .white.opacity(0.5)).frame(width: 32 * context.fraction)
+                Capsule().fill(Theme.ink.opacity(0.12))
+                Capsule().fill(near ? Color(nsColor: .systemOrange) : Theme.ink.opacity(0.5)).frame(width: 32 * context.fraction)
             }
             .frame(width: 32, height: 4)
             Text(near ? "\(percent) · compacts soon" : "\(percent) context")

@@ -37,14 +37,14 @@ struct WrappedCard: View {
             }
             Spacer(minLength: 0)
         }
-        .foregroundStyle(Color.white)
+        .foregroundStyle(Theme.onAccent)
         .padding(24)
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
         .background(
             ZStack {
                 LinearGradient(colors: [Theme.accent, Theme.accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Circle().fill(Color.white.opacity(0.08)).frame(width: 260).offset(x: 150, y: -150)
-                Circle().fill(Color.white.opacity(0.06)).frame(width: 180).offset(x: -140, y: 170)
+                Circle().fill(Theme.onAccent.opacity(0.08)).frame(width: 260).offset(x: 150, y: -150)
+                Circle().fill(Theme.onAccent.opacity(0.06)).frame(width: 180).offset(x: -140, y: 170)
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 20))

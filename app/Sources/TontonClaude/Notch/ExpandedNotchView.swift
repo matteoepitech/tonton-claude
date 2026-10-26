@@ -27,7 +27,7 @@ struct ExpandedView: View {
                 } else {
                     HStack(spacing: 0) {
                         SessionListView().frame(width: 236)
-                        Rectangle().fill(.white.opacity(0.08)).frame(width: 1)
+                        Rectangle().fill(Theme.ink.opacity(0.08)).frame(width: 1)
                         if let s = store.selected {
                             ChatPanel(session: s).id(s.id)
                         } else {
@@ -59,17 +59,17 @@ struct ExpandedView: View {
                 Image(systemName: state.pinned ? "pin.fill" : "pin").font(.system(size: 12))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(state.pinned ? Theme.accent : .white.opacity(0.7))
+            .foregroundStyle(state.pinned ? Theme.accent : Theme.ink.opacity(0.7))
             .help(state.pinned ? "Unpin (closes when the pointer leaves)" : "Pin open")
             Button(action: onSettings) { Image(systemName: "gearshape").font(.system(size: 12)) }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(Theme.ink.opacity(0.7))
                 .help("Settings")
         }
         .padding(.horizontal, 14)
         // One band from the divider to the bottom edge, content centered in it.
         .frame(height: 46)
-        .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
+        .overlay(alignment: .top) { Rectangle().fill(Theme.ink.opacity(0.07)).frame(height: 1) }
     }
 
     @ViewBuilder private var connectionBadge: some View {
@@ -106,10 +106,10 @@ struct CenteredMessage: View {
         VStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(Theme.ink.opacity(0.85))
                 .frame(width: 58, height: 58)
-                .background(Circle().fill(.white.opacity(0.08)))
-                .overlay(Circle().stroke(.white.opacity(0.12)))
+                .background(Circle().fill(Theme.ink.opacity(0.08)))
+                .overlay(Circle().stroke(Theme.ink.opacity(0.12)))
             Text(title).font(.system(size: 15, weight: .semibold))
             Text(detail)
                 .font(.system(size: 12))
@@ -121,8 +121,8 @@ struct CenteredMessage: View {
                     Text(action).font(.system(size: 12, weight: .medium)).padding(.horizontal, 14).padding(.vertical, 6)
                 }
                 .buttonStyle(.plain)
-                .background(Capsule().fill(.white.opacity(0.14)))
-                .overlay(Capsule().stroke(.white.opacity(0.18)))
+                .background(Capsule().fill(Theme.ink.opacity(0.14)))
+                .overlay(Capsule().stroke(Theme.ink.opacity(0.18)))
                 .padding(.top, 4)
             }
         }
@@ -141,7 +141,7 @@ struct TodayCost: View {
             let budget = settings.dailyBudget
             Text(budget > 0 ? String(format: "Today $%.2f of $%d", spent, budget) : String(format: "Today $%.2f", spent))
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(budget > 0 && spent >= Double(budget) ? Theme.warning : .white.opacity(0.5))
+                .foregroundStyle(budget > 0 && spent >= Double(budget) ? Theme.warning : Theme.ink.opacity(0.5))
                 .padding(.trailing, 6)
                 .help("Spent today, as recorded on this Mac")
         }

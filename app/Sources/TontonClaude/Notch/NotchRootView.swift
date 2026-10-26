@@ -33,6 +33,7 @@ struct NotchRootView: View {
                         // Laid out once at its final size and revealed by the animated clip: resizing the conversation and its
                         // text field on every frame of the spring made opening and closing stutter.
                         ExpandedView(onSettings: onSettings)
+                            .foregroundStyle(Theme.text)
                             .padding(.horizontal, 14)
                             .frame(width: NotchState.expandedSize.width, height: NotchState.expandedSize.height)
                     }
@@ -41,7 +42,7 @@ struct NotchRootView: View {
             }
             .frame(width: size.width, height: size.height)
             .clipShape(shape)
-            .overlay(shape.stroke(Color.white.opacity(expanded ? 0.09 : 0), lineWidth: 1))
+            .overlay(shape.stroke(Theme.ink.opacity(expanded ? 0.09 : 0), lineWidth: 1))
             .overlay {
                 if let glow { NotchGlow(shape: shape, color: Color(nsColor: glow.color)).frame(width: size.width, height: size.height) }
             }
@@ -64,7 +65,9 @@ struct NotchRootView: View {
                 SessionPills(row: state.pills).padding(.top, state.collapsedSize.height + NotchState.pillGap)
             }
         }
-        .environment(\.colorScheme, .dark)
+        // The closed notch, its pills and the banner are part of the camera housing: always dark.
+        .environment(\.colorScheme, expanded ? Theme.palette.scheme : .dark)
+        .id(settings.theme)
     }
 }
 
@@ -80,13 +83,13 @@ struct GlassBackground: View {
             let solid = headerHeight / h
             let veil = GlassVeil(transparency: settings.notchTransparency)
             ZStack {
-                VisualEffect(material: .hudWindow, alwaysActive: true)
+                VisualEffect(material: Theme.palette.material, alwaysActive: true, scheme: Theme.palette.scheme)
                 LinearGradient(
                     stops: [
                         .init(color: .black, location: 0),
                         .init(color: .black, location: solid),
-                        .init(color: .black.opacity(veil.top), location: min(solid + 0.1, 1)),
-                        .init(color: .black.opacity(veil.bottom), location: 1),
+                        .init(color: Theme.palette.veil.opacity(veil.top), location: min(solid + 0.1, 1)),
+                        .init(color: Theme.palette.veil.opacity(veil.bottom), location: 1),
                     ], startPoint: .top, endPoint: .bottom)
                 RadialGradient(
                     colors: [Theme.accent.opacity(0.05), .clear], center: .bottomLeading, startRadius: 0, endRadius: geo.size.width * 0.7)

@@ -51,7 +51,7 @@ struct PermissionCard: View {
                     .lineLimit(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.06)))
             }
             HStack {
                 Spacer()
