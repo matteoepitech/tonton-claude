@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import type { AgentMessage, Entry, PermissionDetail, SealedEntry, UsageLimit } from '../../../shared/protocol'
+import type { AgentMessage, Entry, PermissionDetail, SealedEntry } from '../../../shared/protocol'
 import { seal } from '../crypto'
 import { parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
@@ -23,7 +23,7 @@ export class Conversation {
   private entries: Entry[] = []
   private title: string | undefined
   private costUSD: number | undefined
-  private fiveHourLimit: UsageLimit | undefined
+  private usage: SessionUsage = {}
   private lastUsage: string | null = null
   private usageTimer: Timer | null = null
   private readonly pending = new Map<string, PendingPermission>()
@@ -93,7 +93,7 @@ export class Conversation {
         this.costUSD = parsed.costUSD
         metaChanged = true
       }
-      if (this.updateLimit(parsed.fiveHourLimit)) metaChanged = true
+      if (this.updateUsage(parsed)) metaChanged = true
     }
     this.entries = [...this.entries, ...fresh].slice(-BACKLOG_SIZE)
     if (initial) return this.announce()
@@ -115,17 +115,20 @@ export class Conversation {
     if (raw === null || raw === this.lastUsage) return
     this.lastUsage = raw
     try {
-      if (this.updateLimit((JSON.parse(raw) as SessionUsage).fiveHourLimit)) this.postMeta()
+      if (this.updateUsage(JSON.parse(raw) as SessionUsage)) this.postMeta()
     } catch {
       // The status line replaces the file in one step: something else wrote this one.
     }
   }
 
-  /** Returns true when the reading is newer than the one already known. */
-  private updateLimit(reading: UsageLimit | undefined): boolean {
-    const next = newerLimit(this.fiveHourLimit, reading)
-    if (next === this.fiveHourLimit) return false
-    this.fiveHourLimit = next
+  /** Keeps the newest reading of each window. Returns true when one changed. */
+  private updateUsage(reading: SessionUsage): boolean {
+    const next = {
+      fiveHourLimit: newerLimit(this.usage.fiveHourLimit, reading.fiveHourLimit),
+      sevenDayLimit: newerLimit(this.usage.sevenDayLimit, reading.sevenDayLimit),
+    }
+    if (next.fiveHourLimit === this.usage.fiveHourLimit && next.sevenDayLimit === this.usage.sevenDayLimit) return false
+    this.usage = next
     return true
   }
 
@@ -135,7 +138,7 @@ export class Conversation {
       title: this.title,
       costUSD: this.costUSD,
       lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
-      fiveHourLimit: this.fiveHourLimit,
+      ...this.usage,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
   }

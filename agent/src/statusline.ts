@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { log } from './log'
-import { statusLineLimit, writeUsage } from './usage'
+import { statusLineLimit, statusLineUsage, writeUsage } from './usage'
 
 /** Claude Code cancels a status line when the next update comes; this only bounds a command that hangs. */
 const USER_COMMAND_TIMEOUT_MS = 10_000
@@ -28,8 +28,8 @@ export async function runStatusLine() {
     log('status line: unreadable input')
   }
   try {
-    const fiveHourLimit = statusLineLimit(input)
-    if (typeof input.session_id === 'string' && fiveHourLimit) writeUsage(input.session_id, { fiveHourLimit })
+    const usage = statusLineUsage(input)
+    if (typeof input.session_id === 'string' && Object.keys(usage).length) writeUsage(input.session_id, usage)
   } catch (error) {
     log('status line: could not record usage', String(error))
   }

@@ -40,6 +40,8 @@ export interface SessionMeta {
   lastMessage?: string
   /** The 5-hour window of the account the session runs on. Absent with an API key, and until Claude Code reports it. */
   fiveHourLimit?: UsageLimit
+  /** The weekly window, like the 5-hour one. */
+  sevenDayLimit?: UsageLimit
 }
 export interface StatusDetail {
   text: string

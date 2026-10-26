@@ -97,6 +97,14 @@ describe('parseLine', () => {
       resetsAt: '2026-10-20T12:00:00.000Z',
     })
     expect(refused({ status: 'rejected', rateLimitType: 'seven_day', resetsAt: 1792497600 }).fiveHourLimit).toBeUndefined()
+    // Weekly limits, including the Opus and Sonnet shares, hold the session until the week resets.
+    for (const rateLimitType of ['seven_day', 'seven_day_opus']) {
+      expect(refused({ status: 'rejected', rateLimitType, resetsAt: 1792497600 }).sevenDayLimit).toEqual({
+        usedPercent: 100,
+        resetsAt: '2026-10-20T12:00:00.000Z',
+      })
+    }
+    expect(refused({ status: 'rejected', rateLimitType: 'overage', resetsAt: 1792497600 }).sevenDayLimit).toBeUndefined()
     expect(refused({ status: 'allowed_warning', rateLimitType: 'five_hour', resetsAt: 1792497600 }).fiveHourLimit).toBeUndefined()
     expect(refused({ status: 'rejected', rateLimitType: 'five_hour' }).fiveHourLimit).toBeUndefined()
   })
