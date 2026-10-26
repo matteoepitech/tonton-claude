@@ -46,6 +46,10 @@ final class AppSettings: ObservableObject {
     @Published var hiddenMachines: Set<String>
     /// Icon and color per machine id.
     @Published var machineStyles: [String: MachineStyle]
+    /// Tool calls agents approve without asking (Settings › Machines).
+    @Published var autoApproveRules: [AutoApproveRule]
+    /// When the rules last changed: agents keep only newer sets.
+    @Published var autoApproveRulesDate: Date
     @Published var editor: EditorChoice
     @Published var terminal: TerminalChoice
     /// Session ids, in the order they were pinned.
@@ -129,6 +133,9 @@ final class AppSettings: ObservableObject {
         hiddenMachines = Set(value("hiddenMachines", [String]()))
         machineStyles =
             defaults.data(forKey: "machineStyles").flatMap { try? JSONDecoder().decode([String: MachineStyle].self, from: $0) } ?? [:]
+        autoApproveRules =
+            defaults.data(forKey: "autoApproveRules").flatMap { try? JSONDecoder().decode([AutoApproveRule].self, from: $0) } ?? []
+        autoApproveRulesDate = value("autoApproveRulesDate", Date(timeIntervalSince1970: 0))
         editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
         terminal = choice("terminal", .terminal)
         pinnedSessions = value("pinnedSessions", [String]())
@@ -172,6 +179,8 @@ final class AppSettings: ObservableObject {
         persist($promptTemplates.compactMap { try? JSONEncoder().encode($0) }, "promptTemplates")
         persist($hiddenMachines.map { Array($0).sorted() }, "hiddenMachines")
         persist($machineStyles.map { try? JSONEncoder().encode($0.filter { !$0.value.isEmpty }) }, "machineStyles")
+        persist($autoApproveRules.map { try? JSONEncoder().encode($0) }, "autoApproveRules")
+        persist($autoApproveRulesDate, "autoApproveRulesDate")
         persist($editor.map(\.rawValue), "editor")
         persist($terminal.map(\.rawValue), "terminal")
         persist($pinnedSessions, "pinnedSessions")
