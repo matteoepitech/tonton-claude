@@ -90,6 +90,15 @@ final class NotchWindowController {
         panel.contentView?.frame = NSRect(origin: .zero, size: size)
     }
 
+    /// Frame of the session pills under the collapsed notch, in screen coordinates.
+    private var pillsFrame: NSRect {
+        let width = state.pills.width
+        let top = panel.frame.maxY - state.collapsedSize.height - NotchState.pillGap
+        return NSRect(x: panel.frame.midX - width / 2, y: top - NotchState.pillHeight, width: width, height: NotchState.pillHeight)
+    }
+
+    private var pointerOnPills: Bool { state.mode == .collapsed && state.pills.pillCount > 0 && pillsFrame.contains(NSEvent.mouseLocation) }
+
     /// Frame of the visible shape, in screen coordinates.
     private func shapeFrame(_ size: CGSize) -> NSRect {
         NSRect(x: panel.frame.midX - size.width / 2, y: panel.frame.maxY - size.height, width: size.width, height: size.height)
@@ -257,6 +266,17 @@ final class NotchWindowController {
             .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
             .sink { [weak self] app in self?.otherAppActivated(app) }
             .store(in: &subscriptions)
+        store.sessionsPublisher.combineLatest(settings.$showPills, settings.$hiddenMachines, settings.$pinnedSessions)
+            .map { [store] sessions, on, hidden, pinned in
+                on
+                    ? PillRow(
+                        SessionLayout.ordered(sessions.filter { !hidden.contains($0.machine) }, pinned: pinned, thisMac: store.thisMachines)
+                    )
+                    : PillRow([])
+            }
+            .removeDuplicates()
+            .sink { [weak self] row in self?.state.pills = row }
+            .store(in: &subscriptions)
         store.attention
             .sink { [weak self] session in self?.alert(session, finished: false) }
             .store(in: &subscriptions)
@@ -320,7 +340,9 @@ final class NotchWindowController {
             })
         addMonitor(
             NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-                if let self, self.state.mode == .expanded, event.window === self.panel { self.openedByHover = false }
+                guard let self, event.window === self.panel else { return event }
+                if self.state.mode == .expanded { self.openedByHover = false }
+                if self.pointerOnPills { return self.clickedPill() ? nil : event }
                 return event
             })
         addMonitor(
@@ -340,6 +362,8 @@ final class NotchWindowController {
         let pointer = NSEvent.mouseLocation
         switch state.mode {
         case .collapsed, .peek:
+            // The panel only takes the mouse over the pills, so they can be clicked and the menu bar stays usable.
+            panel.ignoresMouseEvents = !pointerOnPills
             // A little slack below the shape makes it easy to reach.
             if settings.openOnHover && shapeFrame(state.currentSize).insetBy(dx: -6, dy: -6).contains(pointer) {
                 expand(byHover: true)
@@ -361,6 +385,14 @@ final class NotchWindowController {
                 }
             }
         }
+    }
+
+    /// Opens the notch on the session whose pill was clicked; the `+N` pill opens it as it was. Returns false between pills.
+    private func clickedPill() -> Bool {
+        guard let index = state.pills.pill(at: NSEvent.mouseLocation.x - pillsFrame.minX) else { return false }
+        if index < state.pills.sessions.count { store.selectedId = state.pills.sessions[index].id }
+        expand()
+        return true
     }
 
     /// Clicks in floating panels (launchers, Spotlight) are ignored: picking a clipboard item must not close the chat it pastes into.
