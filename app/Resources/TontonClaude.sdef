@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<!-- Tonton Claude's AppleScript dictionary. Shortcuts uses it through its Run AppleScript action. -->
+<dictionary title="Tonton Claude Terminology">
+  <suite name="Tonton Claude Suite" code="TtCl" description="The Claude Code sessions in the notch.">
+    <command name="session list" code="TtClSLst" description="Every session in the notch, live ones first, as records: session (its id), project, machine, status, title, folder, and cost when costs are shown.">
+      <cocoa class="TontonSessionListCommand"/>
+      <result type="any" description="A list of records."/>
+    </command>
+    <command name="session status" code="TtClSSts" description="The status of a session: starting, working, waiting, permission, idle, error, ended or offline.">
+      <cocoa class="TontonSessionStatusCommand"/>
+      <direct-parameter type="text" description="A session id, or a project name."/>
+      <result type="text"/>
+    </command>
+    <command name="send message" code="TtClSMsg" description="Sends a message to a session, as if typed in the notch. Needs Settings › General › Scripts can send messages.">
+      <cocoa class="TontonSendMessageCommand"/>
+      <direct-parameter type="text" description="What to send to Claude."/>
+      <parameter name="to" code="TtSn" type="text" description="A session id, or a project name.">
+        <cocoa key="session"/>
+      </parameter>
+    </command>
+  </suite>
+</dictionary>

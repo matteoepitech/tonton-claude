@@ -8,7 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
 
     private let settings = AppSettings.shared
-    private lazy var store = SessionStore(settings: settings)
+    /// Also read by the AppleScript commands.
+    private(set) lazy var store = SessionStore(settings: settings)
     private var notch: NotchWindowController?
     private var webhooks: WebhookNotifier?
     private var achievements: AchievementTracker?

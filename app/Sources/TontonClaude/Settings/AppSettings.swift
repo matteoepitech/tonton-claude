@@ -33,6 +33,8 @@ final class AppSettings: ObservableObject {
     @Published var display: DisplayChoice
     @Published var notchSize: NotchSizeChoice
     @Published var showCosts: Bool
+    /// AppleScript can always read the sessions; sending them messages needs this.
+    @Published var scriptsCanSend: Bool
     /// In dollars, 0 for none.
     @Published var dailyBudget: Int
     /// The last day the budget alert went off, so it only does once a day.
@@ -126,6 +128,7 @@ final class AppSettings: ObservableObject {
         display = choice("display", .builtIn)
         notchSize = choice("notchSize", .standard)
         showCosts = value("showCosts", true)
+        scriptsCanSend = value("scriptsCanSend", false)
         dailyBudget = value("dailyBudget", 0)
         budgetAlertDay = value("budgetAlertDay", "")
         hideFinishedAfterHours = value("hideFinishedAfterHours", 0)
@@ -178,6 +181,7 @@ final class AppSettings: ObservableObject {
         persist($display.map(\.rawValue), "display")
         persist($notchSize.map(\.rawValue), "notchSize")
         persist($showCosts, "showCosts")
+        persist($scriptsCanSend, "scriptsCanSend")
         persist($dailyBudget, "dailyBudget")
         persist($budgetAlertDay, "budgetAlertDay")
         persist($hideFinishedAfterHours, "hideFinishedAfterHours")

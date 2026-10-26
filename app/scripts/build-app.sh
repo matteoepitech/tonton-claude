@@ -41,6 +41,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/TontonClaude"
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+cp Resources/TontonClaude.sdef "$APP/Contents/Resources/"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -62,6 +63,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleURLSchemes</key><array><string>tonton</string></array>
   </dict></array>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppleScriptEnabled</key><true/>
+  <key>OSAScriptingDefinition</key><string>TontonClaude.sdef</string>
   <key>NSMicrophoneUsageDescription</key><string>Dictate messages to your Claude Code sessions from the notch.</string>
   <key>NSSpeechRecognitionUsageDescription</key><string>Turn what you dictate in the notch into text for Claude.</string>
 </dict>
