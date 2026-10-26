@@ -57,7 +57,8 @@ export function parseWin32Battery(json: string): Battery {
 
 function run(command: string[]): string {
   try {
-    const result = Bun.spawnSync(command, { stdout: 'pipe', stderr: 'ignore', timeout: 5000 })
+    // The service has no console on Windows: without windowsHide, each report would open a PowerShell window.
+    const result = Bun.spawnSync(command, { stdout: 'pipe', stderr: 'ignore', timeout: 5000, windowsHide: true })
     return result.success ? result.stdout.toString() : ''
   } catch {
     return ''

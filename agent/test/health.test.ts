@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import {
   broadcastAddress,
   cpuLoad,
@@ -70,5 +70,19 @@ describe('installedTools', () => {
     expect(installedTools({ claude: () => true, opencode: () => true })).toEqual(['claude', 'opencode'])
     expect(installedTools({ claude: () => false, opencode: () => true })).toEqual(['opencode'])
     expect(installedTools({ claude: () => true, opencode: () => false })).toEqual(['claude'])
+  })
+})
+
+describe('commands of the report', () => {
+  test('run hidden: on Windows the service has no console, and each would open a PowerShell window', () => {
+    const spawn = spyOn(Bun, 'spawnSync')
+    try {
+      readHealth({ busy: 0, total: 0 })
+      // Linux reads its battery from files: there may be nothing to run.
+      for (const [, options] of spawn.mock.calls) expect(options).toMatchObject({ windowsHide: true })
+      if (process.platform !== 'linux') expect(spawn).toHaveBeenCalled()
+    } finally {
+      spawn.mockRestore()
+    }
   })
 })
