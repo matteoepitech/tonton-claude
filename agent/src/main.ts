@@ -4,6 +4,7 @@ import { runHook } from './hook'
 import { install, status, uninstall } from './install'
 import { restartService } from './service/control'
 import { runService } from './service/index'
+import { runStatusLine } from './statusline'
 import { useToken } from './token'
 
 const USAGE = `Tonton Claude ${VERSION}
@@ -23,6 +24,9 @@ switch (command) {
     break
   case 'channel':
     await runChannel()
+    break
+  case 'statusline':
+    await runStatusLine()
     break
   case 'service':
     await runService(args)

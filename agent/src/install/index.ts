@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { parseAccountToken } from '../../../shared/account-token'
 import { defaultMachineName, loadConfig, paths, saveConfig, VERSION } from '../config'
 import { registerAutostart, restartService, runningServicePid, stopService } from '../service/control'
 import { installTrayFiles } from '../service/tray'
 import { useToken } from '../token'
-import { type ClaudeSettings, withoutTontonHooks, withTontonHooks } from './claude-settings'
+import { type ClaudeSettings, launcherSettings, withoutTontonHooks, withTontonHooks } from './claude-settings'
 import { removeLauncher, withLauncher } from './shell-profile'
-import { installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
+import { IS_WINDOWS, installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
 
 const done = (message: string) => console.log(`  \x1b[32m✓\x1b[0m ${message}`)
 const warn = (message: string) => console.log(`  \x1b[33m!\x1b[0m ${message}`)
@@ -52,7 +53,7 @@ export async function install(args: string[]) {
   installHooks(binary)
   if (registerMcpServer(binary)) done('MCP server "tonton" registered for Claude Code')
   else warn(`could not run "claude mcp add". Run it by hand: claude mcp add --scope user tonton -- "${binary}" channel`)
-  installLaunchers()
+  installLaunchers(binary)
   await installTrayFiles()
   if (registerAutostart()) done('background service starts at login')
   else warn('no user systemd here: the background service does not start at login. Sessions still work.')
@@ -94,13 +95,14 @@ function installHooks(binary: string) {
   done('hooks added to ~/.claude/settings.json')
 }
 
-function installLaunchers() {
+function installLaunchers(binary: string) {
+  writeFileSync(paths.launcherSettings, `${JSON.stringify(launcherSettings(binary, homedir(), IS_WINDOWS), null, 2)}\n`)
   const profiles = shellProfiles()
   if (!profiles.length) warn('no shell profile found: start claude with --dangerously-load-development-channels server:tonton')
   for (const { file, shell } of profiles) {
     mkdirSync(dirname(file), { recursive: true })
     const current = existsSync(file) ? readFileSync(file, 'utf8') : ''
-    writeFileSync(file, withLauncher(current, shell))
+    writeFileSync(file, withLauncher(current, shell, paths.launcherSettings))
     done(`claude launcher added to ${file}`)
   }
 }
@@ -120,7 +122,7 @@ export async function uninstall() {
     if (existsSync(file)) writeFileSync(file, removeLauncher(readFileSync(file, 'utf8')))
   }
   done('claude launcher removed from shell profiles')
-  for (const name of ['config.json', 'run', 'inbox', 'status.json', 'service.pid', 'tray.ps1', 'tonton.ico'])
+  for (const name of ['config.json', 'claude-settings.json', 'run', 'inbox', 'status.json', 'service.pid', 'tray.ps1', 'tonton.ico'])
     rmSync(join(paths.home, name), { recursive: true, force: true })
   done(`files removed. The binary stays in ${paths.bin}: delete the folder by hand if you want.`)
 }

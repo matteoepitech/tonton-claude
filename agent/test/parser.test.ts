@@ -89,6 +89,18 @@ describe('parseLine', () => {
     expect(parseLine(line({ type: 'system', subtype: 'compact_boundary' })).entries[0]).toMatchObject({ kind: 'system' })
   })
 
+  test('a session stopped by the 5-hour limit is at 100 % until the reset', () => {
+    const refused = (quotaLimits: object) =>
+      parseLine(line({ type: 'assistant', isApiErrorMessage: true, error: 'rate_limit', quotaLimits, message: { content: [] } }))
+    expect(refused({ status: 'rejected', rateLimitType: 'five_hour', resetsAt: 1792497600 }).fiveHourLimit).toEqual({
+      usedPercent: 100,
+      resetsAt: '2026-10-20T12:00:00.000Z',
+    })
+    expect(refused({ status: 'rejected', rateLimitType: 'seven_day', resetsAt: 1792497600 }).fiveHourLimit).toBeUndefined()
+    expect(refused({ status: 'allowed_warning', rateLimitType: 'five_hour', resetsAt: 1792497600 }).fiveHourLimit).toBeUndefined()
+    expect(refused({ status: 'rejected', rateLimitType: 'five_hour' }).fiveHourLimit).toBeUndefined()
+  })
+
   test('garbage and subagent lines are ignored', () => {
     expect(parseLine('{not json').entries).toEqual([])
     expect(parseLine(line({ type: 'user', isSidechain: true, message: { content: 'x' } })).entries).toEqual([])

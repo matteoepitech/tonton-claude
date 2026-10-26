@@ -28,10 +28,18 @@ export interface SessionInfo {
   cwd: string
   project: string
 }
+/** How much of a Claude plan's usage window is spent, as Claude Code reports it. */
+export interface UsageLimit {
+  /** 0 to 100. */
+  usedPercent: number
+  resetsAt: string
+}
 export interface SessionMeta {
   title?: string
   costUSD?: number
   lastMessage?: string
+  /** The 5-hour window of the account the session runs on. Absent with an API key, and until Claude Code reports it. */
+  fiveHourLimit?: UsageLimit
 }
 export interface StatusDetail {
   text: string

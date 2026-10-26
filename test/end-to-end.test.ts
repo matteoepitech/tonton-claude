@@ -188,6 +188,18 @@ describe('end to end', () => {
     expect(await open<{ text: string }>(key, live.entries[0].blob)).toMatchObject({ text: 'done' })
   })
 
+  test("the plan usage left by the session's status line reaches the app, sealed", async () => {
+    const fiveHourLimit = { usedPercent: 83, resetsAt: '2026-10-20T12:00:00.000Z' }
+    writeFileSync(join(dir, 'agent', 'run', `usage-${sessionId}.json`), JSON.stringify({ fiveHourLimit }))
+    const meta = async () => {
+      const blob = latestSession(app)?.meta
+      return blob ? await open<{ fiveHourLimit?: object }>(key, blob) : undefined
+    }
+    for (let i = 0; i < 80 && !(await meta())?.fiveHourLimit; i++) await Bun.sleep(50)
+    expect((await meta())?.fiveHourLimit).toEqual(fiveHourLimit)
+    expect(app.raw.join('')).not.toContain('usedPercent')
+  })
+
   test('a message sent from the notch while Claude is working reaches the app from the queue', async () => {
     const before = app.messages.length
     const prompt = '<channel source="tonton" sender="notch">\nAlso run the linter\n</channel>'

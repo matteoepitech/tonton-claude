@@ -1,4 +1,5 @@
-// Adds and removes the Tonton Claude hooks in ~/.claude/settings.json without touching anything else.
+// Adds and removes the Tonton Claude hooks in ~/.claude/settings.json without touching anything else, and builds the
+// settings the launcher adds on top.
 
 export const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'] as const
 
@@ -41,4 +42,24 @@ export function withTontonHooks(settings: ClaudeSettings, binary: string): Claud
     hooks[event] = [...(hooks[event] ?? []), { hooks: [hook] }]
   }
   return { ...clean, hooks }
+}
+
+/**
+ * What the launcher passes with --settings: a status line that reads plan usage, the only place Claude Code shares it.
+ * Command line settings come before the project's and the user's, so the user's status line still runs from there.
+ */
+export function launcherSettings(binary: string, home: string, windows: boolean): ClaudeSettings {
+  return { statusLine: { type: 'command', command: `${statusLineBinary(binary, home, windows)} statusline` } }
+}
+
+/**
+ * Claude Code runs status lines through a shell: sh, or on Windows Git Bash or PowerShell, which only agree on unquoted
+ * paths with forward slashes. `~` keeps the user name, which can hold spaces, out of it.
+ */
+function statusLineBinary(binary: string, home: string, windows: boolean): string {
+  if (!windows) return `'${binary.replace(/'/g, `'\\''`)}'`
+  const path = binary.replace(/\\/g, '/')
+  const homePath = home.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (path.toLowerCase().startsWith(`${homePath.toLowerCase()}/`)) return `~${path.slice(homePath.length)}`
+  return path.includes(' ') ? `"${path}"` : path
 }

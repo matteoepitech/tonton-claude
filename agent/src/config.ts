@@ -12,6 +12,8 @@ export const paths = {
   bin: join(HOME, 'bin'),
   /** One file per running claude process, written by hooks and read by its channel. */
   run: join(HOME, 'run'),
+  /** Passed to claude by the launcher with --settings. */
+  launcherSettings: join(HOME, 'claude-settings.json'),
   /** Images sent from the notch, handed to Claude as file paths. */
   inbox: join(HOME, 'inbox'),
   log: join(HOME, 'tonton.log'),
