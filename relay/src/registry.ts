@@ -39,6 +39,29 @@ const MIGRATIONS = [
   // Machines join with the account token instead of single-use codes.
   `ALTER TABLE accounts ADD COLUMN join_hash BLOB;
    DROP TABLE enrollments;`,
+  // Sessions and their sealed history, kept across restarts (relay/src/archive.ts). Ids, states, times and sealed blobs
+  // only: what the relay already holds in memory.
+  `CREATE TABLE sessions (
+     account_id TEXT NOT NULL,
+     id TEXT NOT NULL,
+     machine_id TEXT NOT NULL,
+     status TEXT NOT NULL,
+     info TEXT,
+     meta TEXT,
+     status_detail TEXT,
+     started_at TEXT NOT NULL,
+     last_activity TEXT NOT NULL,
+     PRIMARY KEY (account_id, id)
+   );
+   CREATE TABLE session_entries (
+     seq INTEGER PRIMARY KEY,
+     account_id TEXT NOT NULL,
+     session_id TEXT NOT NULL,
+     id TEXT NOT NULL,
+     ts TEXT NOT NULL,
+     blob TEXT NOT NULL
+   );
+   CREATE INDEX session_entries_session ON session_entries(account_id, session_id, id);`,
 ]
 
 interface MachineRow {
@@ -59,7 +82,8 @@ const toMachine = (row: MachineRow): Machine => ({
 
 /** Accounts, machines and enrollment codes. Only hashes of secrets are stored. */
 export class Registry {
-  private readonly db: Database
+  /** Also holds the session archive's tables, so that they migrate with the rest. */
+  readonly db: Database
 
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true })
