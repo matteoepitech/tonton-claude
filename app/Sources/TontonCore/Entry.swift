@@ -10,6 +10,17 @@ public struct ImageData: Codable, Equatable, Sendable {
     }
 }
 
+/// A text replacement of an Edit or MultiEdit call, cut by the agent when it is long.
+public struct FileEdit: Codable, Equatable, Sendable {
+    public let oldText: String
+    public let newText: String
+
+    public init(oldText: String, newText: String) {
+        self.oldText = oldText
+        self.newText = newText
+    }
+}
+
 public enum EntryKind: String, Codable, Sendable {
     case user, assistant, tool, system
     case toolResult = "tool_result"
@@ -27,10 +38,12 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
     public var name: String?
     public var summary: String?
     public var isError: Bool?
+    /// Edit and MultiEdit calls, from agents that send them.
+    public var edits: [FileEdit]?
 
     public init(
         id: String, ts: String, kind: EntryKind, text: String? = nil, images: [ImageData]? = nil, viaNotch: Bool? = nil,
-        toolUseId: String? = nil, name: String? = nil, summary: String? = nil, isError: Bool? = nil
+        toolUseId: String? = nil, name: String? = nil, summary: String? = nil, isError: Bool? = nil, edits: [FileEdit]? = nil
     ) {
         self.id = id
         self.ts = ts
@@ -42,6 +55,7 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
         self.name = name
         self.summary = summary
         self.isError = isError
+        self.edits = edits
     }
 
     /// The file a Read, Write or Edit call works on, when its summary holds the whole absolute path. The agent cuts long

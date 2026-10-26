@@ -13,11 +13,17 @@ export interface ImageData {
   data: string // base64
 }
 
+/** A text replacement of an Edit or MultiEdit call, cut when it is long. */
+export interface FileEdit {
+  oldText: string
+  newText: string
+}
+
 // A conversation entry, normalized from the Claude Code transcript (plaintext, before sealing).
 export type Entry =
   | { id: string; ts: string; kind: 'user'; text: string; images?: ImageData[]; viaNotch?: boolean }
   | { id: string; ts: string; kind: 'assistant'; text: string }
-  | { id: string; ts: string; kind: 'tool'; toolUseId: string; name: string; summary: string }
+  | { id: string; ts: string; kind: 'tool'; toolUseId: string; name: string; summary: string; edits?: FileEdit[] }
   | { id: string; ts: string; kind: 'tool_result'; toolUseId: string; text: string; isError: boolean; images?: ImageData[] }
   | { id: string; ts: string; kind: 'system'; text: string }
 

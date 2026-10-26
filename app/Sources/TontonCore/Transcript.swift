@@ -28,6 +28,9 @@ public enum Transcript {
     static let maxToolResultChars = 4000
     static let maxImageBase64 = 4 * 1024 * 1024
     static let maxSummaryChars = 300
+    /// Per side of an edit, and edits per call: enough to read the change.
+    static let maxEditChars = 4000
+    static let maxEdits = 20
     /// Internal tools that would only add noise to the conversation.
     static let hiddenTools: Set = ["ToolSearch"]
     /// Which input field describes a tool call best, per tool.
@@ -150,6 +153,18 @@ public enum Transcript {
         return entries + [userMessage(id, ts, texts.joined(separator: "\n"), images)].compactMap { $0 }
     }
 
+    /// The replacements of an Edit or MultiEdit call, for the diff.
+    static func fileEdits(_ name: String, _ input: Any?) -> [FileEdit] {
+        let fields = input as? [String: Any] ?? [:]
+        let raw = name == "Edit" ? [fields] : name == "MultiEdit" ? fields["edits"] as? [[String: Any]] ?? [] : []
+        func cut(_ text: String) -> String { text.count > maxEditChars ? String(text.prefix(maxEditChars)) + "\n…" : text }
+        return raw.compactMap { edit in
+            guard let old = edit["old_string"] as? String, let new = edit["new_string"] as? String else { return nil }
+            return FileEdit(oldText: cut(old), newText: cut(new))
+        }
+        .prefix(maxEdits).map { $0 }
+    }
+
     private static func assistantEntries(_ id: String, _ ts: String, _ content: [Any]) -> [Entry] {
         content.enumerated().compactMap { index, block in
             guard let block = block as? [String: Any] else { return nil }
@@ -160,9 +175,10 @@ public enum Transcript {
                 return Entry(id: entryId, ts: ts, kind: .assistant, text: text)
             }
             if block["type"] as? String == "tool_use", let name = block["name"] as? String, !hiddenTools.contains(name) {
+                let edits = fileEdits(name, block["input"])
                 return Entry(
                     id: entryId, ts: ts, kind: .tool, toolUseId: block["id"] as? String ?? "", name: name,
-                    summary: toolSummary(name, block["input"]))
+                    summary: toolSummary(name, block["input"]), edits: edits.isEmpty ? nil : edits)
             }
             return nil
         }
