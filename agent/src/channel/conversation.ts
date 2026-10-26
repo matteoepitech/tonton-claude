@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
-import type { AgentMessage, Entry, PermissionDetail, SealedEntry, TokenCounts } from '../../../shared/protocol'
+import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts } from '../../../shared/protocol'
 import { seal } from '../crypto'
-import { parseLine } from '../transcript/parser'
+import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
 import { newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import type { SessionLink } from './session-link'
@@ -26,6 +26,9 @@ export class Conversation {
   private tokens: TokenCounts | undefined
   /** API responses already in `tokens`. */
   private readonly countedRequests = new Set<string>()
+  private context: ContextUsage | undefined
+  /** The status line knows the window for sure; the transcript only gives the model's name. */
+  private windowFromStatusLine = false
   private usage: SessionUsage = {}
   private lastUsage: string | null = null
   private usageTimer: Timer | null = null
@@ -46,6 +49,7 @@ export class Conversation {
             this.entries = []
             this.tokens = undefined
             this.countedRequests.clear()
+            this.context = undefined
           },
         })
       : null
@@ -99,6 +103,7 @@ export class Conversation {
         metaChanged = true
       }
       if (this.updateUsage(parsed)) metaChanged = true
+      if (this.updateContext(parsed)) metaChanged = true
       if (parsed.usage && !this.countedRequests.has(parsed.usage.requestId)) {
         this.countedRequests.add(parsed.usage.requestId)
         this.tokens = addTokens(this.tokens, parsed.usage)
@@ -128,10 +133,31 @@ export class Conversation {
       const reading = JSON.parse(raw) as SessionUsage
       const costChanged = reading.costUSD !== undefined && reading.costUSD !== this.costUSD
       if (costChanged) this.costUSD = reading.costUSD
-      if (this.updateUsage(reading) || costChanged) this.postMeta()
+      const windowChanged = reading.contextWindow !== undefined && this.setWindow(reading.contextWindow, true)
+      if (this.updateUsage(reading) || costChanged || windowChanged) this.postMeta()
     } catch {
       // The status line replaces the file in one step: something else wrote this one.
     }
+  }
+
+  /**
+   * The context is the input of the last API response, as Claude Code counts it, and starts over at a compaction.
+   * Returns true when it changed.
+   */
+  private updateContext(parsed: ParsedLine): boolean {
+    let changed = false
+    if (parsed.contextWindow !== undefined && !this.windowFromStatusLine) changed = this.setWindow(parsed.contextWindow, false)
+    const used = parsed.compacted ? 0 : parsed.usage ? parsed.usage.input + parsed.usage.cacheRead + parsed.usage.cacheWrite : undefined
+    if (used === undefined || used === this.context?.usedTokens) return changed
+    this.context = { ...this.context, usedTokens: used }
+    return true
+  }
+
+  private setWindow(windowTokens: number, fromStatusLine: boolean): boolean {
+    this.windowFromStatusLine ||= fromStatusLine
+    if (windowTokens === this.context?.windowTokens) return false
+    this.context = { usedTokens: this.context?.usedTokens ?? 0, windowTokens }
+    return true
   }
 
   /** Keeps the newest reading of each window. Returns true when one changed. */
@@ -151,6 +177,7 @@ export class Conversation {
       title: this.title,
       costUSD: this.costUSD,
       tokens: this.tokens,
+      context: this.context,
       lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
       ...this.usage,
     }

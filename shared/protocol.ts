@@ -42,10 +42,17 @@ export interface TokenCounts {
   cacheRead: number
   cacheWrite: number
 }
+/** How full a session's context is: the input of its last API response, against the model's context window. */
+export interface ContextUsage {
+  usedTokens: number
+  /** Unknown with Claude Code versions that report neither the status line's window nor the model they asked for. */
+  windowTokens?: number
+}
 export interface SessionMeta {
   title?: string
   costUSD?: number
   tokens?: TokenCounts
+  context?: ContextUsage
   lastMessage?: string
   /** The 5-hour window of the account the session runs on. Absent with an API key, and until Claude Code reports it. */
   fiveHourLimit?: UsageLimit
