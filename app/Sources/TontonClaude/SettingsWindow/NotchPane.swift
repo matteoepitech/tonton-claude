@@ -26,6 +26,10 @@ struct NotchPane: View {
                     isOn: $settings.liveActivity)
                 Hairline()
                 ToggleRow(
+                    title: "Glow while working", detail: "A light runs around the notch while a session works, in its status color.",
+                    isOn: $settings.workingGlow)
+                Hairline()
+                ToggleRow(
                     title: "Open on approval requests", detail: "Expand the notch straight on the session asking for permission.",
                     isOn: $settings.openOnPermission)
             }
