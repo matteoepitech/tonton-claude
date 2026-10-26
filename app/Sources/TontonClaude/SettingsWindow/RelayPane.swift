@@ -216,7 +216,7 @@ struct AccountView: View {
 }
 
 extension RelayLatency.Level {
-    fileprivate var color: Color {
+    @MainActor fileprivate var color: Color {
         switch self {
         case .good: Theme.success
         case .fair: Theme.warning

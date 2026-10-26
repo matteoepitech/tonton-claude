@@ -73,9 +73,11 @@ enum ThemeChoice: String, CaseIterable, Identifiable {
 }
 
 /// The current palette's tokens. Views redraw on a theme change because the roots are keyed on it.
+/// On the main actor, so the compiler checks that the palette is only read and written from the main thread.
+@MainActor
 enum Theme {
     /// Set from AppSettings when the theme changes; read by every view.
-    nonisolated(unsafe) static var palette = ThemeChoice.midnight.palette
+    static var palette = ThemeChoice.midnight.palette
 
     static var bg: Color { palette.bg }
     static var surface: Color { palette.surface }
