@@ -4,6 +4,7 @@ import TontonCore
 struct SessionListView: View {
     @EnvironmentObject var store: SessionStore
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var state: NotchState
     @State private var query = ""
 
     var body: some View {
@@ -13,10 +14,10 @@ struct SessionListView: View {
         }
         let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions, thisMac: store.thisMachines)
         VStack(spacing: 0) {
-            if store.visibleSessions.count > 5 {
+            if !store.visibleSessions.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(.secondary)
-                    TextField("", text: $query, prompt: Text("Search sessions").foregroundStyle(.white.opacity(0.35)))
+                    TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(.white.opacity(0.35)))
                         .textFieldStyle(.plain)
                         .font(.system(size: 11))
                 }
@@ -52,10 +53,38 @@ struct SessionListView: View {
                             }
                         }
                     }
+                    if query.count >= ConversationSearch.minimumQueryLength { messageResults }
                 }
                 .padding(.trailing, 6)
             }
             .scrollIndicators(.never)
+        }
+    }
+
+    /// Messages that match the search, in every conversation the app has open: a click shows the message in its session.
+    @ViewBuilder private var messageResults: some View {
+        let matches = ConversationSearch.search(query, sessions: store.orderedSessions, entries: store.entries)
+        let projects = Dictionary(store.sessions.map { ($0.id, $0.project) }) { first, _ in first }
+        Text("MESSAGES").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.top, 10)
+        if matches.isEmpty {
+            Text("Nothing found in the conversations opened since Tonton Claude started, or on this Mac.")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 8)
+        }
+        ForEach(matches) { match in
+            VStack(alignment: .leading, spacing: 2) {
+                Text(projects[match.sessionId] ?? "").font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                Text(match.snippet).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                store.selectedId = match.sessionId
+                state.jumpTo = match.itemId
+            }
         }
     }
 
