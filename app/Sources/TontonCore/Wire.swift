@@ -84,6 +84,7 @@ struct SessionMeta: Codable {
     let lastMessage: String?
     var fiveHourLimit: WireUsageLimit?
     var sevenDayLimit: WireUsageLimit?
+    var tokens: TokenCounts?
 }
 struct WireUsageLimit: Codable { let usedPercent: Double; let resetsAt: String }
 struct StatusDetail: Codable { let text: String }

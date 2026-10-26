@@ -34,9 +34,18 @@ export interface UsageLimit {
   usedPercent: number
   resetsAt: string
 }
+/** Tokens of a session's API responses, summed from its transcript. */
+export interface TokenCounts {
+  input: number
+  output: number
+  /** Input read from or written to the prompt cache, billed apart from the rest. */
+  cacheRead: number
+  cacheWrite: number
+}
 export interface SessionMeta {
   title?: string
   costUSD?: number
+  tokens?: TokenCounts
   lastMessage?: string
   /** The 5-hour window of the account the session runs on. Absent with an API key, and until Claude Code reports it. */
   fiveHourLimit?: UsageLimit

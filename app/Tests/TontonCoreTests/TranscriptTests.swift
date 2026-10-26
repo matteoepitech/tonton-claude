@@ -126,4 +126,22 @@ final class TranscriptTests: XCTestCase {
         XCTAssertNil(refused(["status": "allowed_warning", "rateLimitType": "five_hour", "resetsAt": 1_792_497_600]))
         XCTAssertNil(refused(["status": "rejected", "rateLimitType": "five_hour"]))
     }
+
+    func testEachLineOfAnAPIResponseCarriesItsUsageMadeUpMessagesNone() {
+        let usage: [String: Any] = [
+            "input_tokens": 2, "output_tokens": 669, "cache_read_input_tokens": 24649, "cache_creation_input_tokens": 51084,
+            "speed": "standard",
+        ]
+        func response(_ fields: [String: Any]) -> Transcript.ResponseUsage? {
+            Transcript.parse(line(fields.merging(["type": "assistant"]) { mine, _ in mine })).usage
+        }
+        XCTAssertEqual(
+            response(["requestId": "req_1", "message": ["model": "claude-opus-5-5", "usage": usage, "content": []]]),
+            Transcript.ResponseUsage(requestId: "req_1", tokens: TokenCounts(input: 2, output: 669, cacheRead: 24649, cacheWrite: 51084)))
+        XCTAssertEqual(
+            response(["message": ["id": "msg_1", "usage": ["output_tokens": 5], "content": []]]),
+            Transcript.ResponseUsage(requestId: "msg_1", tokens: TokenCounts(output: 5)))
+        XCTAssertNil(response(["requestId": "req_2", "message": ["model": "<synthetic>", "usage": usage, "content": []]]))
+        XCTAssertNil(response(["requestId": "req_3", "message": ["content": []]]))
+    }
 }

@@ -200,6 +200,22 @@ describe('end to end', () => {
     expect(app.raw.join('')).not.toContain('usedPercent')
   })
 
+  test('tokens count each API response once, though Claude Code writes one line per content block', async () => {
+    const usage = { input_tokens: 10, output_tokens: 200, cache_read_input_tokens: 3000, cache_creation_input_tokens: 400 }
+    const block = (uuid: string, content: object) =>
+      line({ type: 'assistant', uuid, requestId: 'req_tokens', message: { model: 'claude-opus-5-5', usage, content: [content] } })
+    appendFileSync(
+      transcript,
+      block('t1', { type: 'text', text: 'Checking' }) + block('t2', { type: 'tool_use', id: 'x', name: 'Read', input: {} }),
+    )
+    const tokens = async () => {
+      const blob = latestSession(app)?.meta
+      return blob ? (await open<{ tokens?: object }>(key, blob)).tokens : undefined
+    }
+    for (let i = 0; i < 80 && !(await tokens()); i++) await Bun.sleep(50)
+    expect(await tokens()).toEqual({ input: 10, output: 200, cacheRead: 3000, cacheWrite: 400 })
+  })
+
   test('a message sent from the notch while Claude is working reaches the app from the queue', async () => {
     const before = app.messages.length
     const prompt = '<channel source="tonton" sender="notch">\nAlso run the linter\n</channel>'

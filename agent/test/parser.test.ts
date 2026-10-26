@@ -109,6 +109,35 @@ describe('parseLine', () => {
     expect(refused({ status: 'rejected', rateLimitType: 'five_hour' }).fiveHourLimit).toBeUndefined()
   })
 
+  test('each line of an API response carries its usage, Claude Code made-up messages none', () => {
+    const usage = {
+      input_tokens: 2,
+      output_tokens: 669,
+      cache_read_input_tokens: 24649,
+      cache_creation_input_tokens: 51084,
+      speed: 'standard',
+    }
+    const response = (fields: object) => parseLine(line({ type: 'assistant', ...fields })).usage
+    expect(response({ requestId: 'req_1', message: { model: 'claude-opus-5-5', usage, content: [] } })).toEqual({
+      requestId: 'req_1',
+      input: 2,
+      output: 669,
+      cacheRead: 24649,
+      cacheWrite: 51084,
+    })
+    // Older lines have no requestId: the message id groups them the same way.
+    expect(response({ message: { id: 'msg_1', usage: { output_tokens: 5 }, content: [] } })).toEqual({
+      requestId: 'msg_1',
+      input: 0,
+      output: 5,
+      cacheRead: 0,
+      cacheWrite: 0,
+    })
+    expect(response({ requestId: 'req_2', message: { model: '<synthetic>', usage, content: [] } })).toBeUndefined()
+    expect(response({ requestId: 'req_3', message: { content: [] } })).toBeUndefined()
+    expect(parseLine(line({ type: 'user', requestId: 'req_4', message: { usage, content: 'x' } })).usage).toBeUndefined()
+  })
+
   test('garbage and subagent lines are ignored', () => {
     expect(parseLine('{not json').entries).toEqual([])
     expect(parseLine(line({ type: 'user', isSidechain: true, message: { content: 'x' } })).entries).toEqual([])

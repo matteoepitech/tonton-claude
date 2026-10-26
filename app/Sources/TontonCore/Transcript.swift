@@ -11,6 +11,14 @@ public enum Transcript {
         public var fiveHourLimit: UsageLimit?
         /// Set when a weekly limit stopped the session.
         public var sevenDayLimit: UsageLimit?
+        /// Claude Code writes one line per content block, each with the whole response's usage: they only count once per
+        /// request.
+        public var usage: ResponseUsage?
+    }
+
+    public struct ResponseUsage: Equatable, Sendable {
+        public let requestId: String
+        public let tokens: TokenCounts
     }
 
     static let maxToolResultChars = 4000
@@ -43,6 +51,7 @@ public enum Transcript {
             // The weekly limit, or its Opus or Sonnet share: either way the session waits for that reset.
             if type == "five_hour" { result.fiveHourLimit = limit } else if type.hasPrefix("seven_day") { result.sevenDayLimit = limit }
         }
+        if type == "assistant" { result.usage = responseUsage(line) }
 
         let ts = line["timestamp"] as? String ?? ISO8601DateFormatter().string(from: Date())
         let id = line["uuid"] as? String ?? "\(type ?? "line")-\(ts)"
@@ -100,6 +109,18 @@ public enum Transcript {
     /// Lengths are counted in UTF-16 units, like JavaScript, so both parsers cut at the same place.
     private static func utf16Prefix(_ text: String, _ length: Int) -> String {
         String(decoding: Array(text.utf16.prefix(length)), as: UTF16.self)
+    }
+
+    /// Messages Claude Code makes up itself, such as API errors, are `<synthetic>` and cost nothing.
+    private static func responseUsage(_ line: [String: Any]) -> ResponseUsage? {
+        guard let message = line["message"] as? [String: Any], let usage = message["usage"] as? [String: Any],
+            let requestId = line["requestId"] as? String ?? message["id"] as? String, message["model"] as? String != "<synthetic>"
+        else { return nil }
+        func count(_ field: String) -> Int { (usage[field] as? NSNumber)?.intValue ?? 0 }
+        let tokens = TokenCounts(
+            input: count("input_tokens"), output: count("output_tokens"), cacheRead: count("cache_read_input_tokens"),
+            cacheWrite: count("cache_creation_input_tokens"))
+        return ResponseUsage(requestId: requestId, tokens: tokens)
     }
 
     private static func userEntries(_ id: String, _ ts: String, _ content: Any?) -> [Entry] {

@@ -40,6 +40,8 @@ describe('usage readings', () => {
       sevenDayLimit: { usedPercent: 99, resetsAt: '2026-10-26T07:33:20.000Z' },
     })
     expect(statusLineUsage({})).toEqual({})
+    expect(statusLineUsage({ cost: { total_cost_usd: 1.25 } })).toEqual({ costUSD: 1.25 })
+    expect(statusLineUsage({ cost: { total_cost_usd: '1.25' } })).toEqual({})
   })
 
   test('the newest reading wins: a later reset, or more usage in the same window', () => {

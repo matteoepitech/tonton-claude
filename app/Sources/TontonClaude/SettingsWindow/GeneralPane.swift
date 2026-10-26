@@ -45,7 +45,9 @@ struct GeneralPane: View {
             }
             GroupLabel(text: "Sessions")
             Card {
-                ToggleRow(title: "Show costs", detail: "Cost per session, and today's total in the notch bar.", isOn: $settings.showCosts)
+                ToggleRow(
+                    title: "Show costs", detail: "Cost and tokens per session, and today's total in the notch bar.",
+                    isOn: $settings.showCosts)
                 Hairline()
                 Row(title: "Hide finished sessions", detail: "Closed and offline sessions leave the list after a while.") {
                     ChoiceMenu(

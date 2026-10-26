@@ -38,7 +38,8 @@ public struct SessionVault: Sendable {
             lastActivity: ISO8601.parse(wire.lastActivity) ?? .distantPast,
             lastMessage: meta?.lastMessage,
             fiveHourLimit: meta?.fiveHourLimit.flatMap(usageLimit),
-            sevenDayLimit: meta?.sevenDayLimit.flatMap(usageLimit)
+            sevenDayLimit: meta?.sevenDayLimit.flatMap(usageLimit),
+            tokens: meta?.tokens
         )
     }
 
