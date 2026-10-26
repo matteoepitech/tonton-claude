@@ -18,6 +18,8 @@ final class NotchState: ObservableObject {
     var drafts: [String: String] = [:]
     /// Optional activity dots beside the camera (Settings › Notch); off means the notch is fully hidden at rest.
     @Published var showWings = false
+    /// Shown under the notch for a few seconds once unlocked.
+    @Published var achievement: Achievement?
     /// Wider wings, so the right one fits the time left before a usage limit resets.
     @Published var wingCountdown = false
 

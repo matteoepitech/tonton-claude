@@ -43,6 +43,14 @@ struct NotchRootView: View {
             Spacer(minLength: 0)
         }
         .frame(width: NotchState.expandedSize.width, height: NotchState.expandedSize.height, alignment: .top)
+        .overlay(alignment: .top) {
+            if let achievement = state.achievement {
+                AchievementToast(achievement: achievement)
+                    .padding(.top, size.height + 8)
+                    .transition(.scale(scale: 0.6, anchor: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: state.achievement)
         .environment(\.colorScheme, .dark)
     }
 }

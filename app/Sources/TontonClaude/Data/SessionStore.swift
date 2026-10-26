@@ -51,6 +51,10 @@ final class SessionStore: ObservableObject {
     @Published private(set) var autoContinue: Set<String> = []
     /// Requests can still be refused right at the reset: wait a little, as Claude Code does.
     private static let continueDelay: Duration = .seconds(30)
+    /// The user allowed a permission request from the notch.
+    let approved = PassthroughSubject<Void, Never>()
+    /// The user sent a message from the notch.
+    let sent = PassthroughSubject<Void, Never>()
 
     private let settings: AppSettings
     private let socket = RelaySocket()
@@ -271,10 +275,12 @@ final class SessionStore: ObservableObject {
     func sendPrompt(_ text: String, images: [OutgoingImage], to sessionId: String) {
         guard let payload = try? vault?.sealPrompt(text: text, images: images) else { return }
         socket.send(["t": "prompt", "sessionId": sessionId, "payload": payload])
+        sent.send()
     }
 
     func answer(_ request: PermissionRequest, allow: Bool, in sessionId: String) {
         socket.send(["t": "verdict", "sessionId": sessionId, "requestId": request.requestId, "behavior": allow ? "allow" : "deny"])
+        if allow { approved.send() }
     }
 
     func dismiss(_ sessionId: String) {
