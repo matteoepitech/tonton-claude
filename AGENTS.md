@@ -17,7 +17,7 @@ claude ─ hooks + MCP channel ─▶ agent ──sealed blobs──▶ relay �
 |---|---|---|
 | `agent/` | One binary per machine: a background service, Claude Code hooks, an MCP channel that streams the transcript and relays prompts and permissions. Tray icons in `agent/tray/` (Swift on macOS, PowerShell on Windows). | TypeScript (Bun) |
 | `relay/` | Accounts, machines and sealed session history in SQLite, live sessions in memory, WebSocket routing. Never sees plaintext. | TypeScript (Bun) |
-| `shared/` | The wire protocol, the account token format and versions, used by the agent and the relay. | TypeScript |
+| `shared/` | The client core: wire protocol, end-to-end crypto, account token, session models and a relay client. Used by the agent, the relay and the client apps, and runs in browsers. Versions, for the agent and the relay. | TypeScript |
 | `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
 | `raycast/` | A Raycast extension that lists the sessions and messages them through the app's AppleScript dictionary (`app/Resources/TontonClaude.sdef`). | TypeScript (React) |
 | `scripts/` | Release builds and the install scripts published with each release (`install.sh`, `install.ps1`, `install-relay.sh`). | TS, sh, PowerShell |
@@ -52,9 +52,17 @@ needs a value to route or limit, it must be something it can see today (ids, sta
 
 | TypeScript | Swift |
 |---|---|
-| `shared/protocol.ts` | `app/Sources/TontonCore/Wire.swift`, `Entry.swift` |
-| `agent/src/crypto.ts` | `app/Sources/TontonCore/E2E.swift` (same layout and additional data, `tonton/v1`) |
+| `shared/protocol.ts`, `shared/wire.ts` | `app/Sources/TontonCore/Wire.swift`, `Entry.swift` |
+| `shared/crypto.ts` | `app/Sources/TontonCore/E2E.swift` (same layout and additional data, `tonton/v1`) |
 | `shared/account-token.ts` | `app/Sources/TontonCore/Account.swift` |
+| `shared/session.ts`, `shared/vault.ts`, `shared/payloads.ts` | `app/Sources/TontonCore/Session.swift`, `SessionVault.swift` |
+
+`shared/test/swift-vectors.json` holds blobs and relay messages made by the Swift side, with what it reads from them; both
+test suites check it. After a change to what either side seals or reads, write it again with
+`TONTON_WRITE_VECTORS=1 swift test --filter VectorTests` in `app/`.
+
+**The client core runs in browsers.** Everything `shared/index.ts` exports uses WebCrypto and web APIs only, no Node or
+Bun ones: `bun run check` type-checks it against the DOM types alone (`shared/tsconfig.json`).
 
 **Versions mix in the wild.** The relay is only updated when its own code changes, and machines can run an agent older
 than the app until someone clicks **Update agent**. So a new app or agent must work with the deployed relay, and the

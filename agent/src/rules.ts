@@ -3,9 +3,9 @@
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { open } from '../../shared/crypto'
 import type { PermissionRule, RuleSet } from '../../shared/protocol'
 import { paths } from './config'
-import { open } from './crypto'
 import { log } from './log'
 
 /** Which input field a rule's pattern is matched against, per tool. */

@@ -1,6 +1,6 @@
 import { type AccountToken, parseAccountToken } from '../../shared/account-token'
+import { seal } from '../../shared/crypto'
 import { type AgentConfig, defaultMachineName, loadConfig, saveConfig, VERSION } from './config'
-import { seal } from './crypto'
 
 const host = (relay: string) => new URL(relay).host
 

@@ -1,0 +1,10 @@
+{
+  "name": "@tonton/shared",
+  "private": true,
+  "type": "module",
+  "description": "The Tonton Claude client core: wire protocol, end-to-end crypto, account token and session models. Runs in browsers.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./index.ts"
+  }
+}

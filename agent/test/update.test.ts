@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { seal } from '../../shared/crypto'
 import { isOlder } from '../../shared/version'
-import { seal } from '../src/crypto'
 import { agentBinaryName, parseChecksums, readOrder } from '../src/update'
 
 const newKey = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')

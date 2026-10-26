@@ -25,9 +25,13 @@ public enum E2E {
     }
 
     public static func open<T: Decodable>(_ blob: String, as type: T.Type, with key: SymmetricKey) throws -> T {
+        try JSONDecoder().decode(T.self, from: try plaintext(blob, with: key))
+    }
+
+    /// The JSON a blob holds.
+    static func plaintext(_ blob: String, with key: SymmetricKey) throws -> Data {
         guard let data = Data(base64Encoded: blob) else { throw Failure.invalidBlob }
-        let plaintext = try AES.GCM.open(try AES.GCM.SealedBox(combined: data), using: key, authenticating: additionalData)
-        return try JSONDecoder().decode(T.self, from: plaintext)
+        return try AES.GCM.open(try AES.GCM.SealedBox(combined: data), using: key, authenticating: additionalData)
     }
 }
 

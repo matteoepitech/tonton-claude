@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
+import { seal } from '../../../shared/crypto'
 import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts } from '../../../shared/protocol'
-import { seal } from '../crypto'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'

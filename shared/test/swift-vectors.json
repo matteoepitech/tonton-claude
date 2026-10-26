@@ -1,0 +1,233 @@
+{
+  "about" : "Made by app/Tests/TontonCoreTests/VectorTests.swift, read by shared/test/swift-vectors.test.ts.",
+  "accountToken" : {
+    "account" : "abcdefghijkl",
+    "key" : "skewX1AVtFUWVQNsHGZO4Ner9bat12qoGPjPuvgrJKk",
+    "relay" : "https://relay.example.com/tonton",
+    "secret" : "sssssssssssssssssssssssssssssssssssssssssss",
+    "token" : "tonton_eyJrZXkiOiJza2V3WDFBVnRGVVdWUU5zSEdaTzROZXI5YmF0MTJxb0dQalB1dmdySktrIiwiYWNjb3VudCI6ImFiY2RlZmdoaWprbCIsInJlbGF5IjoiaHR0cHM6XC9cL3JlbGF5LmV4YW1wbGUuY29tXC90b250b24iLCJzZWNyZXQiOiJzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3NzIn0"
+  },
+  "blobs" : [
+    {
+      "blob" : "Fzt2yX5mex46ahLqoDZWh9ruVb+zTFUrLk3yoFV7IQ4nNty6CqsApP+4u3nDWIUlglLzMD3tZ5bWFEBNFUybi59q2u8zH5iF+q3jSkR4jYja+TI6wbHAV/kOEneqDUfQJSTTzjumEBdSPIH+wOlfbtpgqDdpEOv4AhE2",
+      "name" : "prompt",
+      "plaintext" : "{\"images\":[{\"mediaType\":\"image\\/png\",\"name\":\"a.png\",\"data\":\"iVBORw0K\"}],\"text\":\"Run the tests\"}"
+    },
+    {
+      "blob" : "gFH4T82dvXLiWIiL7MERKis5nVxzIT0BOh4HiHMCSd1a7MsiGOZlbcW6VeAhqwrNd3fnFtzfUl2iKVw21dAbkr855UltlvCtgDIZpNUaBBRiI73V0khphgVM+25BA3Q4g1Sb+1zjGp7GHThrFDgZCw85tttF5zmzQ2uUzcF3xLevB2rnNdeYqoAV3GRqOQe7mHSNF1XGbersiPDUV7Mv5z2sZ6rdevJM/ZlP1nQgqg==",
+      "name" : "command",
+      "plaintext" : "{\"command\":{\"name\":\"compact\",\"sessionId\":\"s1\",\"id\":\"572a838d-f35a-4a70-bf43-bf852bb7138d\",\"issuedAt\":\"2026-10-20T12:00:00Z\"},\"text\":\"\",\"images\":[]}"
+    },
+    {
+      "blob" : "CqB/S8kvMlwcKC3x0cCPaFgOfbPmD1S4/LKhuBe/51tbL4BAs7i/8tYTeLRy2PfOPCwpuomMSdlQftn9EpqR8As9K0cfwUOjmmyI+anB7SvzpiF5DXLpv4+vjGeXgPAH5IOC1t407mpXlAaM0dmOCODcuXf3BQ2CPdufvaox1gdMNAXZk3UOAz6UVIL6DplIoAPFDfGViUxHP8O3ORhvarg14M05CyPB3L55kTr2RXkq2QrrgbolpSFghUbL",
+      "name" : "model command",
+      "plaintext" : "{\"text\":\"\",\"images\":[],\"command\":{\"sessionId\":\"s1\",\"name\":\"model\",\"id\":\"ec7b233c-84e8-45b5-b72d-b90684fd7825\",\"issuedAt\":\"2026-10-20T12:00:00Z\",\"model\":\"haiku\"}}"
+    },
+    {
+      "blob" : "jPJ5do1qe+2TBEXwXdCcGIw47clrehZ4yEiJ8RSwkuNOQ91ZJYxGoLO9dBExPL9cl4zU+nvNf0hUhsGSqQaLoEh3NuzQzCbWjneV26dyzaqb",
+      "name" : "update order",
+      "plaintext" : "{\"version\":\"0.9.2\",\"issuedAt\":\"2026-10-20T12:00:00Z\"}"
+    },
+    {
+      "blob" : "rwnHNBtzdc6imh5T3f9S74b/ZX/XybJV/rdu0HKwr6a3ATLez7g8LWdwd6/eZnnu19BTYTdxtiaNXpc50TRFts1f9b6E9ynG/YZIcGJlvsHUCVeWj86NhXOsiAYoagIp3jGqjtE2jXzvpzsy6Aat8Lk6BDZAnqZR1LRbN18=",
+      "name" : "start order",
+      "plaintext" : "{\"launchId\":\"abcdefgh12\",\"machineId\":\"m1\",\"cwd\":\"~\\/code\\/api\",\"issuedAt\":\"2026-10-20T12:00:00Z\"}"
+    },
+    {
+      "blob" : "7qD9jclBmyq3vq1q1vmrDC6DMvRTfXoEgVZfkh03/AzNwZxBmQujnH5pOxCyiPZo4+txJiZzcXll8l8O+KMcUxZk4wTxEgs9MvvmFwhgbQdYZxSE3nsPAuh7nIG910YyeLNSaOsoiO0ruUSUt52pnwVlf5wiqxw6SEz/UbMKD9pmQN/Brvf5",
+      "name" : "start answer",
+      "plaintext" : "{\"launchId\":\"abcdefgh12\",\"question\":\"q1\",\"machineId\":\"m1\",\"confirm\":true,\"issuedAt\":\"2026-10-20T12:00:00Z\"}"
+    },
+    {
+      "blob" : "Gz7JOmBlF2oKVprbu0bY9LkDdyBxQc9vndchNlZlgv+Fa+Ptxnvcgd1QPerQkLKRNVeUtL2HTTwop0evZArNXdtNRm94Buxq57cU14K4FZ4feReaGQpL29Nt1oImRnfMS+ubTdm4691Bsv/Z6/8=",
+      "name" : "rules",
+      "plaintext" : "{\"issuedAt\":\"2026-10-20T12:00:00Z\",\"rules\":[{\"pattern\":\"npm test\",\"tool\":\"Bash\"}]}"
+    },
+    {
+      "blob" : "wg2vGvgy/7Wc6LDToH4eqn/coRP1VXHYBkOcpI38b1UkMWCLwaejZwR/oo3iVxSu6Q==",
+      "name" : "machine name",
+      "plaintext" : "{\"name\":\"Studio ✨\"}"
+    }
+  ],
+  "expected" : {
+    "chat" : [
+      {
+        "id" : "u1",
+        "kind" : "user"
+      },
+      {
+        "id" : "a1",
+        "kind" : "assistant"
+      },
+      {
+        "id" : "t1",
+        "kind" : "tool",
+        "result" : "r1"
+      },
+      {
+        "id" : "t2",
+        "kind" : "tool"
+      },
+      {
+        "id" : "y1",
+        "kind" : "system"
+      }
+    ],
+    "entries" : [
+      {
+        "id" : "u1",
+        "kind" : "user",
+        "text" : "Déploie en staging",
+        "ts" : "2026-10-25T10:00:01.000Z",
+        "viaNotch" : true
+      },
+      {
+        "id" : "a1",
+        "kind" : "assistant",
+        "text" : "Déployé ✅",
+        "ts" : "2026-10-25T10:00:02.000Z"
+      },
+      {
+        "edits" : [
+          {
+            "newText" : "let a = 2",
+            "oldText" : "let a = 1"
+          }
+        ],
+        "id" : "t1",
+        "kind" : "tool",
+        "name" : "Edit",
+        "summary" : "/srv/app.ts",
+        "toolUseId" : "call-1",
+        "ts" : "2026-10-25T10:00:03.000Z"
+      },
+      {
+        "id" : "r1",
+        "isError" : false,
+        "kind" : "tool_result",
+        "text" : "ok",
+        "toolUseId" : "call-1",
+        "ts" : "2026-10-25T10:00:04.000Z"
+      },
+      {
+        "id" : "t2",
+        "kind" : "tool",
+        "name" : "Bash",
+        "summary" : "make deploy",
+        "toolUseId" : "call-2",
+        "ts" : "2026-10-25T10:00:05.000Z"
+      },
+      {
+        "id" : "y1",
+        "kind" : "system",
+        "text" : "Compacted",
+        "ts" : "2026-10-25T10:00:06.000Z"
+      }
+    ],
+    "machines" : [
+      {
+        "agentVersion" : "0.9.1",
+        "createdAt" : 1792922400000,
+        "health" : {
+          "at" : "2026-10-25T10:04:00.000Z",
+          "cpu" : 0.23,
+          "memoryTotal" : 17179869184,
+          "memoryUsed" : 12025908428,
+          "wake" : [
+            {
+              "broadcast" : "192.168.1.255",
+              "mac" : "a4:83:e7:12:34:56"
+            }
+          ]
+        },
+        "id" : "m1",
+        "lastSeen" : 1792922700000,
+        "name" : "PC-Studio",
+        "online" : true,
+        "platform" : "win32"
+      },
+      {
+        "createdAt" : 1792828800000,
+        "id" : "m2",
+        "name" : "Unknown machine",
+        "online" : false
+      }
+    ],
+    "sessions" : [
+      {
+        "acceptsCommands" : false,
+        "agentOnline" : true,
+        "canChat" : true,
+        "commands" : [
+          "compact",
+          "model"
+        ],
+        "context" : {
+          "usedTokens" : 250000,
+          "windowTokens" : 1000000
+        },
+        "costUSD" : 0.84,
+        "cwd" : "C:\\code\\api",
+        "displayStatusText" : "Wants to use Bash",
+        "fiveHourLimit" : {
+          "resetsAt" : 1792929600000,
+          "usedPercent" : 83.5
+        },
+        "id" : "s1",
+        "lastActivity" : 1792922700000,
+        "lastMessage" : "Deploying",
+        "machine" : "PC-Studio",
+        "machineId" : "m1",
+        "model" : "us.anthropic.claude-opus-4-5-20251101-v1:0",
+        "modelFamily" : "opus",
+        "modelName" : "Opus 4.5",
+        "pendingPermissions" : [
+          {
+            "description" : "Deploy to staging",
+            "inputPreview" : "{\"command\":\"make deploy\"}",
+            "requestId" : "abcde",
+            "toolName" : "Bash",
+            "ts" : "2026-10-25T10:05:00.000Z"
+          }
+        ],
+        "platform" : "win32",
+        "project" : "api",
+        "startedAt" : 1792922400123,
+        "status" : "permission",
+        "statusText" : "Claude needs your permission to use Bash",
+        "terminal" : true,
+        "title" : "Rate limit login ✅",
+        "tokens" : {
+          "cacheRead" : 250000,
+          "cacheWrite" : 9000,
+          "input" : 1200,
+          "output" : 340
+        }
+      },
+      {
+        "acceptsCommands" : false,
+        "agentOnline" : false,
+        "canChat" : false,
+        "commands" : [
+          "clear",
+          "compact"
+        ],
+        "cwd" : "",
+        "displayStatusText" : "Done",
+        "id" : "s2",
+        "machine" : "PC-Studio",
+        "machineId" : "m1",
+        "pendingPermissions" : [
+
+        ],
+        "project" : "Encrypted session",
+        "startedAt" : 1792918800000,
+        "status" : "idle",
+        "terminal" : false
+      }
+    ]
+  },
+  "history" : "{\"entries\":[{\"blob\":\"vuvF4JgeITtzm2AtadpRU8z/Gd72onx3BsVl8ViOZitJ9Rhpzx0Lr0iF0WaazmUjB0ijPnIxRhwCMPsBhOttvbTuPAKMU1ScGfyqmq86E4LDPAKeUAj7qu0ff5zMaHqt4NCXwDTnzMhy1fbeqbpU5uk7iYsGy+Xi+2OctUfoIsrJaw==\",\"id\":\"u1\",\"ts\":\"2026-10-25T10:00:01.000Z\"},{\"blob\":\"uXMKwIxUptzQc9inL86aaqPxpU/BhBW2OQytlEFi9hyGeK9v87LOvbC22/kSy6syYsVu5tpMZGvpygri1tCSUj5sTfLcz2FkgvkC06Hv9zoput1XIqBGfPMhfSCez9SpxwlPe/+cr9yuxaTd2RM7A6Y=\",\"id\":\"a1\",\"ts\":\"2026-10-25T10:00:02.000Z\"},{\"blob\":\"peYXpBs4291TdZNKeusAozVJJRAPMWSzAG3FfdLfwoiL4wPgdkc/HJoc6CsywHXVHjSSBnGA2+lzK9MLDPJ/3+9mqbcXoAq1//IAsOOqGD3LqgVPoMXC0mbnQAtjtSeP5z0+rqevw5/T/ERBOSNuQeBmF7aSEKlLdBLdR+2uhU9cLNxJ48UGCAKk9KN9UKTVCAFdcB/saHAmsW7h706LsI+Mw0iAatV6+DyadE7MIeWKh/RFrVGwfHdlBuSiKLLur9MT6ug8v2TyOw==\",\"id\":\"t1\",\"ts\":\"2026-10-25T10:00:03.000Z\"},{\"blob\":\"z5Z6gqecJ5hI8GW/Nxc+Hz3E+ZAtfK697gRxitwKrlBa4S5VysdomeqBlN0zMv/hIhZ7VNklaq94MWTl8NVoNQ==\",\"id\":\"f1\",\"ts\":\"2026-10-25T10:00:05.500Z\"},{\"blob\":\"/7h4I/35GFdWATImQIBXjbuoY9G8V3k3avZTewb2mIoALFz2XcWMUF974Dxa/NwW8Q1gd2YByxlg0LDlyu8PTPuZUdNuDV5wm6b5cBELS7vQEjWLeDpzcD31wK6fm5WBSSnsS7ZDVynh6AwvEIKOCQ7WlvvcivbtP9JcOUWoGKY4KzH6Empq0WdePbgo\",\"id\":\"r1\",\"ts\":\"2026-10-25T10:00:04.000Z\"},{\"blob\":\"VLwYGmEDUt76F3s1Im5KOBYnQa5DX2NfZp+vCFVLSMWYY5Gh2tC+hwHQHEbmATMRrL6g3tOvgkUMZhk/SYY+9X02hObS8EEEzOWZTPlANv93a4EQVH4rdiRyHeo7xHe0yinZcQIwd9px5hehkc08k4Dg+Ied48A/+lmUtI6/PDLXpocZ1y02usLbueTWS2CA\",\"id\":\"t2\",\"ts\":\"2026-10-25T10:00:05.000Z\"},{\"blob\":\"ZBDuig+K0OXbqNErumKgPdLbYjcV6HjcSiR7iQtGtT9mnoghjDKiEaoBiGVnWDb06zLcl7ecFFxyAQnR4eP/bDBiaZ0PrWDS8AwPapRMRUV3BLRqJ+SxVHEbtiNvpOdLe/0WU1HHgpji1A==\",\"id\":\"y1\",\"ts\":\"2026-10-25T10:00:06.000Z\"},{\"blob\":\"/7ArETZ5JNzHDaOATOo5CDe2Lm9NIxKpoHJ7jjCdQfgg0mWVh04ESdeUCWYWd8AtwMSzzb4quWmYFSsmFbYpQflPASayGLx0tAgQ51uv3qeIxZOHrDgXUXq6fR4zEjeLNnNA6rjP1nqXCZYMEV9ZKBA=\",\"id\":\"o1\",\"ts\":\"2026-10-25T10:00:07.000Z\"}],\"sessionId\":\"s1\",\"t\":\"history\"}",
+  "key" : "skewX1AVtFUWVQNsHGZO4Ner9bat12qoGPjPuvgrJKk",
+  "snapshot" : "{\"machines\":[{\"agentVersion\":\"0.9.1\",\"createdAt\":\"2026-10-25T10:00:00.000Z\",\"health\":\"hxCxMI3X/2eirg+DChu3rkdBudZ3p89kCIFntt/FFefsxdKprDActLqPjgKh4RZpZdDwPqUkcmtxJBkDoycaQOd9flFkK+pumHM1XJOdC5c/3zWLqRBIB4lIiW0088kMs8dIW39kJPVr5fMleJkXhj5WMV3K1B4NvokyrKDoluZUlYvc1rpwMOx7qEpDFDLBjc+2r5cOt/tD2ecALWGuTs/kmu1qsz0gXY/Ycymqf6BwG33lDurYeBmZtW4=\",\"id\":\"m1\",\"lastSeen\":\"2026-10-25T10:05:00Z\",\"name\":\"51RJtOdvZTjU5y3TiTN2+GyeBSHzJvKMvvSZkAyMd34utssmzTmaA+4YHpzKcCSSCvEf0Ux0qnkrlFcHtEfUJUWi7A==\",\"online\":true},{\"agentVersion\":null,\"createdAt\":\"2026-10-24T08:00:00.000Z\",\"id\":\"m2\",\"lastSeen\":null,\"name\":\"POXEKpgXY4/6TGIuVMeAggLDOabZDNR/tQ/egaEyjhKZKXbWCJNhj6g7qVVB\",\"online\":false}],\"sessions\":[{\"agentOnline\":true,\"canChat\":true,\"id\":\"s1\",\"info\":\"uAUezPuKCrrtfiJcbZBwqxOaFm4hz01wwyVk6t5mC+CoBsxzf/NaMIWUpx3e0zIpD/Fs6iwtHIqTt+Qf4uBxg4S8fQX4OPNSXXndwxWeXzHxbf9nDFfxNhwBwgy7qxXmA2EJ2BwVNeE6Hg9G\",\"lastActivity\":\"2026-10-25T10:05:00Z\",\"machineId\":\"m1\",\"meta\":\"yWe5JKSh24V6Yd3UvF/Bh1KPQgQqqVpbJTRItIhiSoCkzSB9U0YkKndi54cTQxwxY3KuFovz3VTzIpFdDafVESvbCNsEmAlfw/9aZeX94hLqVNKzIp6TQjXNSAzYixW4Zlkf+J0pk4Lgg7zaa9pBMR+4uUIEL9R1gSJC2ATpmsjsR5lD5w7Nrg52hp75PhdgJLV2LBwtw3NTmiP9mSBumC10npTtizdonUIVuMX1WXo9W87W+qqEM3w0uUqnk4hv3vdQrzqLwGOz8rMIWlkCw/OaRIFs8OpJmqU3dd227+TDJd4LpF3TsQSFeL04SWKpDNfAFXl/8HcYJ1lmau1aoSe8qrx0Z08IAojXrmErX7ym6abS/eEe8+ajvP/2IEYbuLY9Yv+mF45g59ylyklKuxaQvhmiJuJsGQDsmg89cXOev23kK1ZxX824DDXB1EVuHs2fJGzQ5vLgKurqtFcfXyD3NcPnzkiU0Qw2KXy+TlokTxFAYhvddjETxW7SkM+Zh0uejTgwyg==\",\"pendingPermissions\":[{\"blob\":\"xkwPajkKc+xSLIqndauTkG/8MCDH641eORW788EwFKkqgtMA/2q6DGRObCL+TsV7rKT7/VFAO0t6uYscM53ak9ww8+2AAunXVwHowxHR57FBCVUlB9JJMQdbZYacZ93w/SZ869DleNxD9sEYVwIGT40iOHfg/l2AGpOs52is1rM=\",\"requestId\":\"abcde\",\"ts\":\"2026-10-25T10:05:00.000Z\"},{\"blob\":\"YY/0BZGeOKKNB+IHbnviXGsUAvviR5X6E+flrEuP+wAA5s1bslRMNDNNLDxh4YnG2Qye3J/R+VX/v7zOtbwXH0jbhWC6B0XyLN1XF1aFJcEwus4b22pJoaXeyzhcFyOs51lt32isuH2EB1DHZ4dMz8UHXyxd7FIaSo1TlCUtVqQ=\",\"requestId\":\"fghij\",\"ts\":\"2026-10-25T10:05:01.000Z\"}],\"startedAt\":\"2026-10-25T10:00:00.123Z\",\"status\":\"permission\",\"statusDetail\":\"j+3CORwBrY9O/WJo6iXEviMn8aU2w2P8Eqqc9u4pdnFbM8SpfMfILhjvZH1hXdrmJsJ+rG49r6tJHkFxN2A7JN5l0fsMcj30s89QD1y+1g==\"},{\"agentOnline\":false,\"canChat\":false,\"id\":\"s2\",\"info\":\"bL5lKK5B6+wP0jp5FSMlBbYZHWdoopp/4k6iwmXR2FleKOiQ8q7pw5RZLzmR0n3EMhJ3qgfCQosDFjKn7/lh/VB8aGzWyBMxz2cFZYuudzcD\",\"lastActivity\":\"yesterday\",\"machineId\":\"m1\",\"meta\":\"Aa3cOCnJQTKt39viPLzBDWcWmfy3DZJgLiwXkNQ01YGg4XdWKzGq8Fr9HQaFXcU6oyqrIg0ao1zGPQ6EYM0+jFUaZP2y\",\"pendingPermissions\":[],\"startedAt\":\"2026-10-25T09:00:00.000Z\",\"status\":\"idle\",\"statusDetail\":null}],\"t\":\"snapshot\"}"
+}
