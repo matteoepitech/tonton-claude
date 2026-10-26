@@ -79,6 +79,13 @@ export class Conversation {
     for (const requestId of this.pending.keys()) this.postPermission(requestId)
   }
 
+  /** A line from the agent in the conversation, such as why a command from the notch was not typed. */
+  notice(text: string) {
+    const entry: Entry = { id: `notice-${crypto.randomUUID()}`, ts: new Date().toISOString(), kind: 'system', text }
+    this.entries.push(entry)
+    this.post(async () => ({ t: 'entries', sessionId: this.link.sessionId, entries: await this.sealEntries([entry]), reset: false }))
+  }
+
   addPermission(requestId: string, detail: PermissionDetail) {
     this.pending.set(requestId, { ...detail, ts: new Date().toISOString() })
     this.postPermission(requestId)
@@ -180,6 +187,7 @@ export class Conversation {
       context: this.context,
       lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
       ...this.usage,
+      terminal: Boolean(this.link.tmux),
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
   }

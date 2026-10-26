@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { HookPost } from '../../shared/protocol'
+import { terminalOf } from './channel/terminal'
 import { loadConfig, paths } from './config'
 import { seal } from './crypto'
 import { log } from './log'
@@ -71,6 +72,7 @@ function approveByRule(event: HookInput) {
 /** Tells the channel of the same claude process which session and transcript it serves. */
 function linkSession(event: HookInput) {
   mkdirSync(paths.run, { recursive: true, mode: 0o700 })
-  const link = { sessionId: event.session_id, transcriptPath: event.transcript_path ?? null, cwd: event.cwd ?? null }
+  // Hooks get Claude Code's environment, so they know whether it runs in tmux; its channel may not.
+  const link = { sessionId: event.session_id, transcriptPath: event.transcript_path ?? null, cwd: event.cwd ?? null, tmux: terminalOf() }
   writeFileSync(join(paths.run, `${process.ppid}.json`), JSON.stringify(link), { mode: 0o600 })
 }
