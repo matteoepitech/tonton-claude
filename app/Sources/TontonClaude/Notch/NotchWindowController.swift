@@ -232,6 +232,16 @@ final class NotchWindowController {
             .removeDuplicates()
             .sink { [weak self] show in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.showWings = show } }
             .store(in: &subscriptions)
+        // Limits reset with time alone, so check again every minute.
+        let minutes = Timer.publish(every: 60, on: .main, in: .common).autoconnect().prepend(Date())
+        store.sessionsPublisher.combineLatest(settings.$hiddenMachines, minutes)
+            .map { sessions, hidden, now in
+                let live = sessions.filter { $0.status.isLive && !hidden.contains($0.machine) }
+                return UsageLimit.soonest(live.map { $0.limitToWatch(at: now) }, at: now) != nil
+            }
+            .removeDuplicates()
+            .sink { [weak self] wide in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.wingCountdown = wide } }
+            .store(in: &subscriptions)
     }
 
     private func installEventMonitors() {

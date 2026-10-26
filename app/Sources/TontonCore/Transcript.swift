@@ -9,6 +9,8 @@ public enum Transcript {
         public var costUSD: Double?
         /// Set when the 5-hour limit stopped the session.
         public var fiveHourLimit: UsageLimit?
+        /// Set when a weekly limit stopped the session.
+        public var sevenDayLimit: UsageLimit?
     }
 
     static let maxToolResultChars = 4000
@@ -35,9 +37,11 @@ public enum Transcript {
         if type == "cost-state", let cost = line["totalCostUSD"] as? Double { result.costUSD = cost }
         // On the error message Claude Code writes when the plan's limit refuses a request.
         if let quota = line["quotaLimits"] as? [String: Any], quota["status"] as? String == "rejected",
-            quota["rateLimitType"] as? String == "five_hour", let resetsAt = quota["resetsAt"] as? Double, resetsAt > 0
+            let type = quota["rateLimitType"] as? String, let resetsAt = quota["resetsAt"] as? Double, resetsAt > 0
         {
-            result.fiveHourLimit = UsageLimit(usedPercent: 100, resetsAt: Date(timeIntervalSince1970: resetsAt))
+            let limit = UsageLimit(usedPercent: 100, resetsAt: Date(timeIntervalSince1970: resetsAt))
+            // The weekly limit, or its Opus or Sonnet share: either way the session waits for that reset.
+            if type == "five_hour" { result.fiveHourLimit = limit } else if type.hasPrefix("seven_day") { result.sevenDayLimit = limit }
         }
 
         let ts = line["timestamp"] as? String ?? ISO8601DateFormatter().string(from: Date())

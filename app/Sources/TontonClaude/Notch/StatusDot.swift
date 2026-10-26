@@ -31,7 +31,7 @@ struct LimitRing: View {
                     Circle().stroke(.white.opacity(0.14), lineWidth: 1.5)
                     Circle()
                         .trim(from: 0, to: min(max(limit.usedPercent, 0), 100) / 100)
-                        .stroke(color(level), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .stroke(level.color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                 }
                 .frame(width: diameter, height: diameter)
@@ -41,9 +41,11 @@ struct LimitRing: View {
             }
         }
     }
+}
 
-    private func color(_ level: UsageLimit.Level) -> Color {
-        switch level {
+extension UsageLimit.Level {
+    var color: Color {
+        switch self {
         case .normal: .white.opacity(0.55)
         case .high: Color(nsColor: .systemOrange)
         case .reached: Color(nsColor: .systemRed)
