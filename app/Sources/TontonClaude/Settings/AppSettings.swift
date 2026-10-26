@@ -54,6 +54,8 @@ final class AppSettings: ObservableObject {
     @Published var showActivityDots: Bool
     /// Tonton in the collapsed notch, in place of the status dot.
     @Published var showMascot: Bool
+    /// The collapsed notch widens to show what the most relevant session is doing.
+    @Published var liveActivity: Bool
     /// 0 is opaque, 0.5 the original glass, 1 the clearest (see GlassVeil).
     @Published var notchTransparency: Double
     @Published var openOnPermission: Bool
@@ -120,6 +122,7 @@ final class AppSettings: ObservableObject {
         openOnHover = value("openOnHover", true)
         showActivityDots = value("showActivityDots", false)
         showMascot = value("showMascot", false)
+        liveActivity = value("liveActivity", false)
         notchTransparency = value("notchTransparency", 0.5)
         openOnPermission = value("openOnPermission", false)
         showAlerts = value("showAlerts", true)
@@ -156,6 +159,7 @@ final class AppSettings: ObservableObject {
         persist($openOnHover, "openOnHover")
         persist($showActivityDots, "showActivityDots")
         persist($showMascot, "showMascot")
+        persist($liveActivity, "liveActivity")
         persist($notchTransparency, "notchTransparency")
         persist($openOnPermission, "openOnPermission")
         persist($showAlerts, "showAlerts")

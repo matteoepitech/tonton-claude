@@ -22,6 +22,10 @@ struct NotchPane: View {
                     isOn: $settings.showMascot)
                 Hairline()
                 ToggleRow(
+                    title: "Live activity", detail: "Widen the notch to show what a working session is doing, like the Dynamic Island.",
+                    isOn: $settings.liveActivity)
+                Hairline()
+                ToggleRow(
                     title: "Open on approval requests", detail: "Expand the notch straight on the session asking for permission.",
                     isOn: $settings.openOnPermission)
             }

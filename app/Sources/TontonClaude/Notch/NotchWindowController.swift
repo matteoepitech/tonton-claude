@@ -260,13 +260,24 @@ final class NotchWindowController {
             .filter { [settings] _ in settings.alertOnLimitReset }
             .sink { [weak self] sessions in self?.limitLifted(sessions) }
             .store(in: &subscriptions)
-        store.sessionsPublisher.combineLatest(
-            settings.$showActivityDots.combineLatest(settings.$showMascot).map { $0 || $1 }, settings.$hiddenMachines
-        )
-        .map { sessions, wings, hidden in wings && sessions.contains { $0.status.isLive && !hidden.contains($0.machine) } }
-        .removeDuplicates()
-        .sink { [weak self] show in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.showWings = show } }
-        .store(in: &subscriptions)
+        let shown = store.sessionsPublisher.combineLatest(settings.$hiddenMachines)
+            .map { sessions, hidden in sessions.filter { $0.status.isLive && !hidden.contains($0.machine) } }
+        let activity = shown.combineLatest(settings.$liveActivity).map { sessions, on in on ? LiveActivity.pick(sessions) : nil }
+        // A new session or a new state animates the wings; a new title within the same state just shows.
+        activity
+            .removeDuplicates { $0?.id == $1?.id && $0?.status == $1?.status }
+            .sink { [weak self] session in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.liveActivity = session }
+            }
+            .store(in: &subscriptions)
+        activity
+            .sink { [weak self] session in if let self, session?.id == self.state.liveActivity?.id { self.state.liveActivity = session } }
+            .store(in: &subscriptions)
+        shown.combineLatest(settings.$showActivityDots.combineLatest(settings.$showMascot).map { $0 || $1 }, activity)
+            .map { sessions, wings, activity in (wings && !sessions.isEmpty) || activity != nil }
+            .removeDuplicates()
+            .sink { [weak self] show in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.showWings = show } }
+            .store(in: &subscriptions)
         // Limits reset with time alone, so check again every minute.
         let minutes = Timer.publish(every: 60, on: .main, in: .common).autoconnect().prepend(Date())
         store.sessionsPublisher.combineLatest(settings.$hiddenMachines, minutes)

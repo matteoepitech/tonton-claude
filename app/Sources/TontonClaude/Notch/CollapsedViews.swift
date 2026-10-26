@@ -15,7 +15,9 @@ struct ActivityDots: View {
         // Sessions of one account share the window; across accounts, the one closest to its limit matters most.
         let limit = UsageLimit.fullest(live.map(\.fiveHourLimit))
         HStack(spacing: 0) {
-            if state.showWings {
+            if state.showWings, let activity = state.liveActivity {
+                LiveActivityWings(session: activity, mascot: settings.showMascot, width: state.currentWingWidth)
+            } else if state.showWings {
                 Group {
                     if settings.showMascot {
                         MascotView(status: urgent ?? .idle)
@@ -43,6 +45,31 @@ struct ActivityDots: View {
             }
         }
         .frame(height: state.notchSize.height)
+    }
+}
+
+/// The wings widened around the camera, like the Dynamic Island: the session's status and project on the left, what it
+/// needs or works on to the right.
+struct LiveActivityWings: View {
+    let session: SessionSummary
+    let mascot: Bool
+    let width: CGFloat
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if mascot { MascotView(status: session.status, size: 16) } else { StatusDot(status: session.status, size: 7) }
+            Text(session.project).font(.system(size: 11, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+        }
+        .padding(.horizontal, 10)
+        .frame(width: width, alignment: .leading)
+        Spacer(minLength: 0)
+        Text(LiveActivity.text(session))
+            .font(.system(size: 11))
+            .foregroundStyle(session.status.needsAttention ? Color(nsColor: session.status.color) : .white.opacity(0.7))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 10)
+            .frame(width: width, alignment: .leading)
     }
 }
 
