@@ -20,6 +20,19 @@ struct NotchPane: View {
                     title: "Open on approval requests", detail: "Expand the notch straight on the session asking for permission.",
                     isOn: $settings.openOnPermission)
             }
+            GroupLabel(text: "Look")
+            Card {
+                Row(
+                    title: "Transparency",
+                    detail: "How much of the desktop shows through the open notch. Text stays readable at every value."
+                ) {
+                    HStack(spacing: 8) {
+                        Text("Opaque").font(.system(size: 11)).foregroundStyle(Theme.textDim)
+                        Slider(value: $settings.notchTransparency, in: 0...1).tint(Theme.accent).frame(width: 150)
+                        Text("Clear").font(.system(size: 11)).foregroundStyle(Theme.textDim)
+                    }
+                }
+            }
             GroupLabel(text: "Alerts")
             Card {
                 ToggleRow(
