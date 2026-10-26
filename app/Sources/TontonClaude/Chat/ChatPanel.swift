@@ -5,7 +5,10 @@ import TontonCore
 struct ChatPanel: View {
     let session: SessionSummary
     @EnvironmentObject var store: SessionStore
+    @EnvironmentObject var state: NotchState
     @State private var pendingTexts: [String] = []
+    /// The item a search jumped to, highlighted for a moment.
+    @State private var highlighted: String?
 
     var body: some View {
         let entries = store.entries[session.id] ?? []
@@ -18,6 +21,7 @@ struct ChatPanel: View {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(items) { item in
                             ChatItemView(item: item, sessionWorking: session.status == .working)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.accent.opacity(item.id == highlighted ? 0.18 : 0)))
                         }
                         ForEach(Array(pendingTexts.enumerated()), id: \.offset) { _, text in
                             UserBubble(text: text, images: [], pending: true)
@@ -27,10 +31,13 @@ struct ChatPanel: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 }
-                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+                .onAppear { if !jump(proxy, items) { proxy.scrollTo("bottom", anchor: .bottom) } }
                 .onChange(of: entries.count) { _, _ in
+                    // The history of a session picked in the search may arrive after the panel opened.
+                    if jump(proxy, items) { return }
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
+                .onChange(of: state.jumpTo) { _, _ in _ = jump(proxy, items) }
                 // Each message from the notch that shows up in the transcript replaces the oldest "sending…" bubble, even
                 // when other entries arrive with it.
                 .onChange(of: delivered) { old, new in
@@ -48,6 +55,20 @@ struct ChatPanel: View {
                 pendingTexts.append(text.isEmpty ? "(\(images.count) image\(images.count == 1 ? "" : "s"))" : text)
             }
         }
+    }
+}
+
+extension ChatPanel {
+    /// Scrolls to the item the search picked, once it is in the conversation. False when there is none to show.
+    fileprivate func jump(_ proxy: ScrollViewProxy, _ items: [ChatItem]) -> Bool {
+        guard let id = state.jumpTo, items.contains(where: { $0.id == id }) else { return false }
+        state.jumpTo = nil
+        highlighted = id
+        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            withAnimation { if highlighted == id { highlighted = nil } }
+        }
+        return true
     }
 }
 

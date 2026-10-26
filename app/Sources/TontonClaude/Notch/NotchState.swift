@@ -20,6 +20,8 @@ final class NotchState: ObservableObject {
     @Published var showWings = false
     /// Shown under the notch for a few seconds once unlocked.
     @Published var achievement: Achievement?
+    /// A chat item to scroll to and highlight, picked in the search results.
+    @Published var jumpTo: String?
     /// Wider wings, so the right one fits the time left before a usage limit resets.
     @Published var wingCountdown = false
 
