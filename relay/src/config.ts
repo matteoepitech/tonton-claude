@@ -8,6 +8,8 @@ export interface RelayConfig {
   adminToken: string | null
   /** Trust X-Forwarded-For. Only enable behind a reverse proxy that sets it. */
   trustProxy: boolean
+  /** Where the relay runs, shown in the app next to the latency. Fly.io sets FLY_REGION. */
+  region: string | null
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): RelayConfig {
@@ -28,5 +30,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     registration,
     adminToken,
     trustProxy: env.TONTON_TRUST_PROXY === '1',
+    region: (env.TONTON_REGION || env.FLY_REGION || '').trim().slice(0, 40) || null,
   }
 }

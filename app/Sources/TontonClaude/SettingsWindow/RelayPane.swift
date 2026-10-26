@@ -129,6 +129,19 @@ struct AccountView: View {
                 Row(title: "Relay") {
                     Text(URL(string: account.relay)?.host ?? account.relay).font(Theme.mono).foregroundStyle(Theme.textDim)
                 }
+                if let latency = store.latency {
+                    Hairline()
+                    Row(
+                        title: "Latency",
+                        detail: latency.level == .high
+                            ? "High: approvals and replies will feel slow. A relay closer to you or your machines helps." : nil
+                    ) {
+                        HStack(spacing: 7) {
+                            Circle().fill(latency.level.color).frame(width: 7, height: 7)
+                            Text(latency.label).font(Theme.mono).foregroundStyle(Theme.textDim)
+                        }
+                    }
+                }
                 Hairline()
                 Row(title: "Account") { Text(account.accountId).font(Theme.mono).foregroundStyle(Theme.textDim).textSelection(.enabled) }
                 Hairline()
@@ -198,6 +211,16 @@ struct AccountView: View {
         case .paused: "Paused"
         case .notConfigured: "Not set up"
         case .failed(let why): why
+        }
+    }
+}
+
+extension RelayLatency.Level {
+    fileprivate var color: Color {
+        switch self {
+        case .good: Theme.success
+        case .fair: Theme.warning
+        case .high: Theme.danger
         }
     }
 }

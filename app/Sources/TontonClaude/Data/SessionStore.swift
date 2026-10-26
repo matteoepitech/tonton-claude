@@ -36,6 +36,7 @@ final class SessionStore: ObservableObject {
     /// The relay's history once it arrived, this Mac's transcript until then.
     var entries: [String: [Entry]] { localEntries.merging(relayEntries) { _, relay in relay } }
     @Published private(set) var connection: ConnectionState = .notConfigured
+    @Published private(set) var latency: RelayLatency?
     @Published var selectedId: String? {
         didSet { if selectedId != oldValue { subscribe() } }
     }
@@ -71,6 +72,7 @@ final class SessionStore: ObservableObject {
         self.settings = settings
         socket.onState = { [weak self] state in self?.socketStateChanged(state) }
         socket.onMessage = { [weak self] message in self?.handle(message) }
+        socket.onLatency = { [weak self] latency in self?.latency = latency }
         // The join secret does not change the connection.
         settings.$account.map { $0.map { [$0.relay, $0.token, $0.key] } }.removeDuplicates()
             .combineLatest(settings.$connectionEnabled)
