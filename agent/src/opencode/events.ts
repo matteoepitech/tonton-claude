@@ -1,4 +1,4 @@
-import type { Entry, SessionMeta, TokenCounts } from '../../../shared/protocol'
+import type { Entry, ImageData, PermissionDetail, SessionCommand, SessionMeta, TokenCounts } from '../../../shared/protocol'
 import { fileEdits, toolSummary } from '../transcript/parser'
 
 // OpenCode's plugin events, turned into what the notch shows for a Claude Code session: entries, a status and the meta.
@@ -35,14 +35,26 @@ export const FORWARDED_EVENTS = [
   'session.tool.called',
   'session.tool.success',
   'session.tool.failed',
+  'session.step.started',
   'session.step.ended',
   'session.step.failed',
+  'session.compaction.ended',
+  'session.compaction.succeeded',
+  'session.compaction.failed',
+  'session.compacted',
 ]
 
+/** What the notch can ask an OpenCode session: there is no `/clear` for a session that runs, only a new session. */
+export const OPENCODE_COMMANDS: SessionCommand['name'][] = ['compact', 'interrupt']
+
 const MAX_TOOL_RESULT_CHARS = 4000
+/** As for Claude Code: larger images stay out of the conversation. */
+const MAX_IMAGE_BASE64 = 4 * 1024 * 1024
 const MAX_LAST_MESSAGE_CHARS = 200
 /** Event ids already handled: OpenCode 2 hands each event to every plugin instance of the process. */
 const SEEN_EVENTS = 4000
+/** Entries kept per session for a reconnection, like a Claude Code channel. */
+const BACKLOG_SIZE = 400
 
 /** The Claude Code names of OpenCode's built-in tools, so the notch shows them with the same icons and summaries. */
 const TOOL_NAMES: Record<string, string> = {
@@ -63,6 +75,24 @@ const TOOL_NAMES: Record<string, string> = {
   task: 'Task',
   subagent: 'Task',
 }
+/** The field an auto-approve rule reads for each tool, as in a Claude Code tool call (agent/src/rules.ts). */
+const RULE_FIELDS: Record<string, string> = {
+  Bash: 'command',
+  Read: 'file_path',
+  Write: 'file_path',
+  Edit: 'file_path',
+  MultiEdit: 'file_path',
+  WebFetch: 'url',
+  Glob: 'pattern',
+  Grep: 'pattern',
+}
+/** What a failed command from the notch was meant to do. */
+const FAILED_ACTIONS: Record<string, string> = {
+  prompt: 'take the message',
+  reply: 'take the answer to its request',
+  compact: 'compact the conversation',
+  interrupt: 'stop',
+}
 /** OpenCode's input fields under the names the Claude Code parser reads. */
 const INPUT_FIELDS: Record<string, string> = { filePath: 'file_path', oldString: 'old_string', newString: 'new_string' }
 
@@ -73,12 +103,24 @@ export interface StatusChange {
   text?: string
 }
 
+/** A permission request, and what an auto-approve rule reads of it: the same fields as a Claude Code tool call. */
+export interface OpenCodePermission {
+  requestId: string
+  detail: PermissionDetail
+  input: Record<string, string>
+}
+
 export interface SessionUpdate {
   sessionId: string
   entries: Entry[]
   status?: StatusChange
-  /** The title, cost, tokens or last message changed. */
+  /** The title, cost, tokens, context or last message changed. */
   metaChanged: boolean
+  permission?: OpenCodePermission
+  /** A request was answered, in the notch or in OpenCode. */
+  permissionClosed?: string
+  /** The whole conversation, from OpenCode's own history: it replaces what the relay holds. */
+  history?: Entry[]
 }
 
 type Fields = Record<string, unknown>
@@ -93,7 +135,10 @@ interface Part {
   time?: { start?: number; end?: number }
   callID?: string
   tool?: string
-  state?: { status?: string; input?: Fields; output?: string; error?: string; time?: { start?: number } }
+  state?: { status?: string; input?: Fields; output?: string; error?: string; time?: { start?: number }; attachments?: unknown }
+  mime?: string
+  url?: string
+  filename?: string
 }
 
 interface MessageInfo {
@@ -121,8 +166,13 @@ class TrackedSession {
   /** Cost and tokens per assistant message. */
   readonly usage = new Map<string, Usage>()
   readonly sent = new Set<string>()
+  /** Every entry sent, in order, for the history to add to. */
+  order: Entry[] = []
   lastMessage: string | undefined
   lastStatus: string | undefined
+  model: { providerID: string; modelID: string } | undefined
+  /** The input of the last API call, as the context gauge counts it. */
+  contextUsed: number | undefined
 
   constructor(readonly id: string) {}
 }
@@ -131,6 +181,8 @@ class TrackedSession {
 export class OpenCodeTracker {
   private readonly sessions = new Map<string, TrackedSession>()
   private readonly seen = new Set<string>()
+  /** The context window of each model, by `provider/model`. */
+  private readonly windows = new Map<string, number>()
   /** When the event being handled happened: OpenCode 2 dates the event, not its data. */
   private eventTime = Date.now()
 
@@ -160,17 +212,25 @@ export class OpenCodeTracker {
     return this.sessions.get(sessionId)?.cwd
   }
 
+  /** The model the session last answered with, which OpenCode 1 needs to compact it. */
+  model(sessionId: string): { providerID: string; modelID: string } | undefined {
+    return this.sessions.get(sessionId)?.model
+  }
+
   meta(sessionId: string): SessionMeta {
     const session = this.sessions.get(sessionId)
     if (!session) return {}
     const usage = [...session.usage.values()]
     const costUSD = usage.reduce((sum, step) => sum + step.cost, 0)
     const tokens = usage.reduce(addTokens, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
+    const window = session.model ? this.windows.get(`${session.model.providerID}/${session.model.modelID}`) : undefined
     return {
       title: session.title,
       ...(usage.length ? { costUSD, tokens } : {}),
+      ...(session.contextUsed !== undefined ? { context: { usedTokens: session.contextUsed, windowTokens: window } } : {}),
       lastMessage: session.lastMessage,
       terminal: false,
+      commands: OPENCODE_COMMANDS,
     }
   }
 
@@ -202,16 +262,39 @@ export class OpenCodeTracker {
       case 'session.step.failed':
         return this.error(props.sessionID, props.error)
       case 'permission.updated':
-      case 'permission.asked': {
-        const tool = text(props.action) ?? text(props.permission) ?? text(props.type) ?? 'a tool'
-        return this.status(props.sessionID, {
-          hook: 'Notification',
-          notificationType: 'permission_prompt',
-          text: `OpenCode needs your permission to use ${TOOL_NAMES[tool] ?? tool}`,
-        })
+      case 'permission.asked':
+        return this.permission(props)
+      case 'permission.replied': {
+        const closed = text(props.requestID) ?? text(props.permissionID)
+        const updates = this.status(props.sessionID, { hook: 'UserPromptSubmit' })
+        const session = this.sessions.get(text(props.sessionID) ?? '')
+        if (!closed || !session || session.child) return updates
+        return updates.length ? updates.map(update => ({ ...update, permissionClosed: closed })) : this.withClosed(session, closed)
       }
-      case 'permission.replied':
-        return this.status(props.sessionID, { hook: 'UserPromptSubmit' })
+      case 'session.step.started': {
+        const session = this.session(props.sessionID)
+        const model = props.model as { id?: unknown; providerID?: unknown } | undefined
+        const modelID = text(model?.id)
+        const providerID = text(model?.providerID)
+        if (session && modelID && providerID) session.model = { providerID, modelID }
+        return []
+      }
+      case 'session.compaction.ended':
+      case 'session.compaction.succeeded':
+      case 'session.compacted':
+        return this.compacted(props.sessionID)
+      case 'session.compaction.failed': {
+        const error = props.error as { type?: unknown; message?: unknown } | undefined
+        // Cancelled by an interruption or a shutdown: nothing to say.
+        if (error?.type === 'aborted') return []
+        return this.failed({ sessionID: props.sessionID, op: 'compact', message: text(error?.message) })
+      }
+      case 'tonton.models':
+        return this.models(props.models)
+      case 'tonton.history':
+        return this.history(props)
+      case 'tonton.failed':
+        return this.failed(props)
       case 'message.updated':
         return this.message(props.info)
       case 'message.part.updated':
@@ -309,11 +392,12 @@ export class OpenCodeTracker {
 
   private prompt(props: Fields): SessionUpdate[] {
     const session = this.session(props.sessionID)
-    const item = props.item as { type?: unknown; payload?: { text?: unknown } } | undefined
+    const item = props.item as { type?: unknown; payload?: { text?: unknown; files?: unknown } } | undefined
     const id = text(props.inboxID)
-    const body = text(item?.payload?.text)
-    if (!session || !id || item?.type !== 'user' || !body) return []
-    return this.add(session, { id, ts: this.time(), kind: 'user', text: body })
+    const body = text(item?.payload?.text) ?? ''
+    const images = imagesOf(item?.payload?.files)
+    if (!session || !id || item?.type !== 'user' || (!body && !images.length)) return []
+    return this.add(session, { id, ts: this.time(), kind: 'user', text: body, ...(images.length ? { images } : {}) })
   }
 
   private text(props: Fields): SessionUpdate[] {
@@ -342,7 +426,8 @@ export class OpenCodeTracker {
     const output = failed
       ? (text((props.error as { message?: unknown } | undefined)?.message) ?? 'The tool failed')
       : content.flatMap(item => (item?.type === 'text' && typeof item.text === 'string' ? [item.text] : [])).join('\n')
-    return this.add(session, resultEntry(`${call}:result`, call, this.time(props.timestamp), output, failed))
+    const images = imagesOf(content.filter(item => item?.type === 'file'))
+    return this.add(session, resultEntry(`${call}:result`, call, this.time(props.timestamp), output, failed, images))
   }
 
   private step(props: Fields): SessionUpdate[] {
@@ -350,7 +435,9 @@ export class OpenCodeTracker {
     const message = text(props.assistantMessageID)
     if (!session || !message) return []
     // Each step is its own assistant message.
-    session.usage.set(message, usageOf(props.cost, props.tokens))
+    const usage = usageOf(props.cost, props.tokens)
+    session.usage.set(message, usage)
+    session.contextUsed = contextOf(usage)
     return this.update(session, [], undefined, true)
   }
 
@@ -374,6 +461,10 @@ export class OpenCodeTracker {
       const previous = session.usage.get(id)
       usageChanged = usage.cost !== previous?.cost || usage.tokens.output !== previous?.tokens.output
       session.usage.set(id, usage)
+      const providerID = text(fields.providerID)
+      const modelID = text(fields.modelID)
+      if (providerID && modelID) session.model = { providerID, modelID }
+      if (contextOf(usage) > 0) session.contextUsed = contextOf(usage)
     }
     // Parts can arrive before their message: they wait for its role.
     const entries = [...session.parts.values()].filter(part => part.messageID === id).flatMap(part => this.partEntries(session, part))
@@ -411,6 +502,9 @@ export class OpenCodeTracker {
       entries.push(
         message.role === 'user' ? { id: part.id, ts, kind: 'user', text: body } : { id: part.id, ts, kind: 'assistant', text: body },
       )
+    } else if (part.type === 'file' && message.role === 'user') {
+      const images = imagesOf([part])
+      if (images.length) entries.push({ id: part.id, ts, kind: 'user', text: part.filename ?? '', images })
     } else if (part.type === 'tool' && typeof part.tool === 'string' && part.state) {
       const { status } = part.state
       if (status !== 'running' && status !== 'completed' && status !== 'error') return []
@@ -418,10 +512,138 @@ export class OpenCodeTracker {
       entries.push(toolEntry(part.id, call, ts, part.tool, part.state.input ?? {}))
       if (status !== 'running') {
         const output = status === 'error' ? (part.state.error ?? '') : (part.state.output ?? '')
-        entries.push(resultEntry(`${part.id}:result`, call, ts, output, status === 'error'))
+        entries.push(resultEntry(`${part.id}:result`, call, ts, output, status === 'error', imagesOf(part.state.attachments)))
       }
     }
     return entries.filter(entry => this.markSent(session, entry))
+  }
+
+  // Requests, commands and history
+
+  private permission(props: Fields): SessionUpdate[] {
+    const raw = text(props.action) ?? text(props.permission) ?? text(props.type) ?? 'tool'
+    const toolName = TOOL_NAMES[raw] ?? raw
+    const updates = this.status(props.sessionID, {
+      hook: 'Notification',
+      notificationType: 'permission_prompt',
+      text: `OpenCode needs your permission to use ${toolName}`,
+    })
+    const requestId = text(props.id)
+    if (!requestId) return updates
+    // OpenCode 2 names what the call touches in `resources` (or `patterns`), OpenCode 1 in `pattern` and its metadata.
+    const metadata = (props.metadata && typeof props.metadata === 'object' ? props.metadata : {}) as Fields
+    const listed = [props.resources, props.patterns, props.pattern].flatMap(value =>
+      Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : typeof value === 'string' ? [value] : [],
+    )
+    const subject =
+      listed.join(' ') || text(metadata.command) || text(metadata.filePath) || text(metadata.url) || text(metadata.pattern) || ''
+    const field = RULE_FIELDS[toolName] ?? 'command'
+    const input = subject ? { [field]: subject } : {}
+    const permission: OpenCodePermission = {
+      requestId,
+      detail: { toolName, description: text(props.title) ?? subject ?? toolName, inputPreview: JSON.stringify(input) },
+      input,
+    }
+    return updates.map(update => ({ ...update, permission }))
+  }
+
+  private withClosed(session: TrackedSession, requestId: string): SessionUpdate[] {
+    return [{ sessionId: session.id, entries: [], metaChanged: false, permissionClosed: requestId }]
+  }
+
+  private compacted(sessionId: unknown): SessionUpdate[] {
+    const session = this.session(sessionId)
+    if (!session) return []
+    session.contextUsed = 0
+    const entry: Entry = { id: `compacted-${this.eventTime}`, ts: this.time(), kind: 'system', text: 'Conversation compacted' }
+    return this.markSent(session, entry) ? this.update(session, [entry], undefined, true) : []
+  }
+
+  private models(list: unknown): SessionUpdate[] {
+    if (!Array.isArray(list)) return []
+    for (const model of list as { providerID?: unknown; modelID?: unknown; context?: unknown }[]) {
+      const providerID = text(model?.providerID)
+      const modelID = text(model?.modelID)
+      if (providerID && modelID && number(model.context) > 0) this.windows.set(`${providerID}/${modelID}`, number(model.context))
+    }
+    return [...this.sessions.values()].flatMap(session => (session.model ? this.update(session, [], undefined, true) : []))
+  }
+
+  /** Why a command from the notch did not run, as a line in the conversation. */
+  private failed(props: Fields): SessionUpdate[] {
+    const session = this.session(props.sessionID)
+    const action = FAILED_ACTIONS[text(props.op) ?? '']
+    if (!session || !action) return []
+    const entry: Entry = {
+      id: `failed-${this.eventTime}-${session.order.length}`,
+      ts: this.time(),
+      kind: 'system',
+      text: `OpenCode did not ${action}: ${text(props.message) ?? 'unknown error'}`,
+    }
+    return this.add(session, entry)
+  }
+
+  /**
+   * The conversation OpenCode keeps, for a session the bridge starts following halfway: OpenCode 2's `session.context`, or
+   * OpenCode 1's messages with their parts. Entries already sent keep their place; the result replaces the relay's copy.
+   */
+  private history(props: Fields): SessionUpdate[] {
+    const session = this.session(props.sessionID)
+    if (!session) return []
+    if (props.info && typeof props.info === 'object') this.sessionInfo({ info: props.info })
+    const messages = Array.isArray(props.messages) ? (props.messages as Fields[]) : []
+    for (const message of messages) {
+      if (!message || typeof message !== 'object') continue
+      if (message.info && typeof message.info === 'object') {
+        // OpenCode 1: a message and its parts, as its events would bring them.
+        this.message({ ...(message.info as Fields), sessionID: session.id })
+        for (const part of Array.isArray(message.parts) ? message.parts : []) this.part({ ...(part as Fields), sessionID: session.id })
+      } else {
+        this.contextMessage(session, message)
+      }
+    }
+    if (session.child) return []
+    const history = [...session.order].sort((a, b) => a.ts.localeCompare(b.ts))
+    return [{ sessionId: session.id, entries: [], metaChanged: true, history }]
+  }
+
+  /** One message of OpenCode 2's `session.context`. */
+  private contextMessage(session: TrackedSession, message: Fields) {
+    const id = text(message.id)
+    const time = (message.time ?? {}) as { created?: unknown }
+    const ts = this.time(time.created)
+    if (!id) return
+    if (message.type === 'user' && text(message.text)) {
+      this.markSent(session, { id, ts, kind: 'user', text: message.text as string })
+      return
+    }
+    if (message.type !== 'assistant') return
+    const usage = usageOf(message.cost, message.tokens)
+    session.usage.set(id, usage)
+    session.contextUsed = contextOf(usage)
+    const model = message.model as { id?: unknown; providerID?: unknown } | undefined
+    if (text(model?.id) && text(model?.providerID))
+      session.model = { providerID: model?.providerID as string, modelID: model?.id as string }
+    let ordinal = 0
+    for (const content of Array.isArray(message.content) ? (message.content as Fields[]) : []) {
+      if (content?.type === 'text' && text(content.text)) {
+        this.markSent(session, { id: `${id}:${ordinal++}`, ts, kind: 'assistant', text: content.text as string })
+      } else if (content?.type === 'tool' && text(content.id)) {
+        const call = content.id as string
+        const state = (content.state ?? {}) as { status?: unknown; input?: unknown; content?: unknown; error?: { message?: unknown } }
+        const input = (state.input && typeof state.input === 'object' ? state.input : {}) as Fields
+        this.markSent(session, toolEntry(call, call, ts, text(content.name) ?? 'tool', input))
+        if (state.status === 'completed' || state.status === 'error') {
+          const output =
+            state.status === 'error'
+              ? (text(state.error?.message) ?? 'The tool failed')
+              : (Array.isArray(state.content) ? (state.content as { type?: unknown; text?: unknown }[]) : [])
+                  .flatMap(item => (item?.type === 'text' && typeof item.text === 'string' ? [item.text] : []))
+                  .join('\n')
+          this.markSent(session, resultEntry(`${call}:result`, call, ts, output, state.status === 'error'))
+        }
+      }
+    }
   }
 
   private add(session: TrackedSession, entry: Entry): SessionUpdate[] {
@@ -432,6 +654,8 @@ export class OpenCodeTracker {
   private markSent(session: TrackedSession, entry: Entry): boolean {
     if (session.sent.has(entry.id)) return false
     session.sent.add(entry.id)
+    session.order.push(entry)
+    if (session.order.length > BACKLOG_SIZE) session.order = session.order.slice(-BACKLOG_SIZE)
     if (entry.kind === 'user' || entry.kind === 'assistant') session.lastMessage = entry.text.slice(0, MAX_LAST_MESSAGE_CHARS)
     return true
   }
@@ -451,12 +675,22 @@ function toolEntry(id: string, call: string, ts: string, tool: string, input: Fi
   return { id, ts, kind: 'tool', toolUseId: call, name, summary: toolSummary(name, claudeInput), ...(edits.length ? { edits } : {}) }
 }
 
-function resultEntry(id: string, call: string, ts: string, output: string, isError: boolean): Entry {
+function resultEntry(id: string, call: string, ts: string, output: string, isError: boolean, images: ImageData[] = []): Entry {
   const cut =
     output.length > MAX_TOOL_RESULT_CHARS
       ? `${output.slice(0, MAX_TOOL_RESULT_CHARS)}\n… (${output.length - MAX_TOOL_RESULT_CHARS} characters truncated)`
       : output
-  return { id, ts, kind: 'tool_result', toolUseId: call, text: cut, isError }
+  return { id, ts, kind: 'tool_result', toolUseId: call, text: cut, isError, ...(images.length ? { images } : {}) }
+}
+
+/** The images among OpenCode's files: it passes them as data URLs. */
+function imagesOf(files: unknown): ImageData[] {
+  if (!Array.isArray(files)) return []
+  return files.flatMap(file => {
+    const url = file && typeof file === 'object' ? (file as { url?: unknown }).url : undefined
+    const match = typeof url === 'string' ? /^data:(image\/[\w.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(url) : null
+    return match && match[2].length <= MAX_IMAGE_BASE64 ? [{ mediaType: match[1], data: match[2] }] : []
+  })
 }
 
 function usageOf(cost: unknown, raw: unknown): Usage {
@@ -471,6 +705,11 @@ function usageOf(cost: unknown, raw: unknown): Usage {
       cacheWrite: number(tokens.cache?.write),
     },
   }
+}
+
+/** What the next call sends again: the input of this one, cached or not. */
+function contextOf(usage: Usage): number {
+  return usage.tokens.input + usage.tokens.cacheRead + usage.tokens.cacheWrite
 }
 
 function addTokens(total: TokenCounts, step: Usage): TokenCounts {

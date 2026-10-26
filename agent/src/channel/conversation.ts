@@ -5,6 +5,7 @@ import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
 import { newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import type { SessionLink } from './session-link'
+import { COMMANDS } from './terminal'
 
 const BACKLOG_SIZE = 400
 /** On reconnect only the latest entries keep their images, the rest is sent as text. */
@@ -188,6 +189,7 @@ export class Conversation {
       lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
       ...this.usage,
       terminal: Boolean(this.link.tmux),
+      commands: this.link.tmux ? [...COMMANDS] : [],
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
   }

@@ -76,6 +76,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let sevenDayLimit: UsageLimit?
     /// Runs in tmux, so the notch can type slash commands in it.
     public let terminal: Bool
+    /// What the notch can ask the session's agent to run: Claude Code in tmux types them, OpenCode runs them through its API.
+    public let commands: [SessionCommandName]
     /// The coding agent running the session, as the agent reports it: `opencode`, or nil for Claude Code and older agents.
     public let tool: String?
 
@@ -85,7 +87,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
         startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
         sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil, context: ContextUsage? = nil, terminal: Bool = false,
-        tool: String? = nil
+        tool: String? = nil, commands: [SessionCommandName]? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -109,6 +111,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.context = context
         self.terminal = terminal
         self.tool = tool
+        // Older agents run the slash commands in tmux only, and never interrupt.
+        self.commands = commands ?? (terminal ? [.compact, .clear] : [])
     }
 
     /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the

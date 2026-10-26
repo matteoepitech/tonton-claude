@@ -1,0 +1,137 @@
+{
+  "info": {
+    "id": "ses_e86ee8d8fffeHhEneE6LxTszCb",
+    "projectID": "7ba9e589a677baf1eb548c0f17af2533c64a69a6",
+    "cost": 0,
+    "tokens": {
+      "input": 360,
+      "output": 90,
+      "reasoning": 0,
+      "cache": {
+        "read": 0,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1793032549103,
+      "updated": 1793032549248,
+      "idle": 1793032549249
+    },
+    "title": "Probe title",
+    "location": {
+      "directory": "/Users/me/code/shop"
+    }
+  },
+  "messages": [
+    {
+      "id": "msg_179117312001EvER569p2vOOKG",
+      "time": {
+        "created": 1793032549186
+      },
+      "text": "Say hi with bash",
+      "type": "user"
+    },
+    {
+      "id": "msg_1791173470013EQ3m3NQ0bNZgf",
+      "time": {
+        "created": 1793032549195,
+        "streamed": 1793032549212,
+        "completed": 1793032549237
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "mock-model",
+        "providerID": "mock"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me check."
+        },
+        {
+          "type": "tool",
+          "id": "call_probe1",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "echo hi-from-probe",
+              "description": "Say hi"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "hi-from-probe\n"
+              }
+            ],
+            "metadata": {
+              "status": "completed",
+              "truncated": false,
+              "exit": 0
+            }
+          },
+          "time": {
+            "created": 1793032549209,
+            "ran": 1793032549211,
+            "completed": 1793032549235
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 120,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_179117379001BqAQ4sE8lKBpyj",
+      "time": {
+        "created": 1793032549244,
+        "streamed": 1793032549248,
+        "completed": 1793032549248
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "mock-model",
+        "providerID": "mock"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Done: the command printed hi-from-probe."
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 120,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_179117381002TebAXcSB3hKPkH",
+      "time": {
+        "created": 1793032549249
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ]
+}

@@ -129,10 +129,10 @@ struct ChatHeader: View {
         .help(on ? "Claude gets “continue” when the limit resets. Click to cancel." : "Send “continue” when the limit resets")
     }
 
-    /// Slash commands typed in the session's terminal: only for sessions in tmux, while Claude waits at its prompt.
+    /// Slash commands its agent runs: Claude Code sessions in tmux and OpenCode sessions, while the session waits for you.
     private var commands: some View {
         Menu {
-            ForEach(SessionCommandName.allCases, id: \.self) { name in
+            ForEach(session.menuCommands, id: \.self) { name in
                 Button(name.label) {
                     if name.needsConfirmation { confirming = name } else { store.sendCommand(name, to: session.id) }
                 }
@@ -146,7 +146,19 @@ struct ChatHeader: View {
         .fixedSize()
         .foregroundStyle(.secondary)
         .disabled(!session.acceptsCommands)
-        .help(session.acceptsCommands ? "Run a command in the session's terminal" : "Commands wait until Claude is done")
+        .help(session.acceptsCommands ? "Run a command in the session" : "Commands wait until the session is done")
+    }
+
+    /// Stops the turn, like Escape in the terminal.
+    private var interrupt: some View {
+        Button {
+            store.sendCommand(.interrupt, to: session.id)
+        } label: {
+            Image(systemName: "stop.circle").font(.system(size: 11))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help("Interrupt, like Escape in the terminal")
     }
 
     var body: some View {
@@ -164,7 +176,8 @@ struct ChatHeader: View {
                 }
                 Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
-                if session.terminal && session.canChat { commands }
+                if session.accepts(.interrupt) { interrupt }
+                if session.canChat && !session.menuCommands.isEmpty { commands }
                 Menu {
                     Button("Markdown…") { export(.markdown) }
                     Button("HTML page…") { export(.html) }

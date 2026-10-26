@@ -14,6 +14,7 @@ function replay(events: unknown[]) {
   const updates: SessionUpdate[] = events.flatMap(event => tracker.handle(event))
   return {
     tracker,
+    updates,
     entries: updates.flatMap(update => update.entries),
     statuses: updates.flatMap(update => (update.status ? [update.status] : [])),
   }
@@ -52,16 +53,99 @@ describe('OpenCode 2', () => {
     ])
   })
 
-  test('title, folder, cost and tokens make the meta', () => {
+  test('title, folder, cost, tokens and context make the meta, the window once the models are known', () => {
     const { tracker } = replay(events)
     expect(tracker.cwd(sessionId)).toBe('/Users/me/code/shop')
     expect(tracker.meta(sessionId)).toEqual({
       title: 'Probe title',
       costUSD: 0,
       tokens: { input: 240, output: 60, cacheRead: 0, cacheWrite: 0 },
+      context: { usedTokens: 120, windowTokens: undefined },
       lastMessage: 'Done: the command printed hi-from-probe.',
       terminal: false,
+      commands: ['compact', 'interrupt'],
     })
+    expect(tracker.model(sessionId)).toEqual({ providerID: 'mock', modelID: 'mock-model' })
+    const models = tracker.handle({
+      type: 'tonton.models',
+      data: { models: [{ providerID: 'mock', modelID: 'mock-model', context: 200_000 }] },
+    })
+    expect(models.map(update => update.sessionId)).toEqual([sessionId])
+    expect(tracker.meta(sessionId).context).toEqual({ usedTokens: 120, windowTokens: 200_000 })
+  })
+
+  test('the permission it asked for becomes a request card, closed once answered', () => {
+    const { updates } = replay(events)
+    expect(updates.flatMap(update => (update.permission ? [update.permission] : []))).toEqual([
+      {
+        requestId: 'per_178d2702e001LspZ8bx422WJrW',
+        detail: { toolName: 'Bash', description: 'echo hi-from-probe', inputPreview: '{"command":"echo hi-from-probe"}' },
+        input: { command: 'echo hi-from-probe' },
+      },
+    ])
+    expect(updates.flatMap(update => (update.permissionClosed ? [update.permissionClosed] : []))).toEqual([
+      'per_178d2702e001LspZ8bx422WJrW',
+    ])
+  })
+
+  test("OpenCode's history of a session gives the same entries as its events, live ones kept in place", () => {
+    const history = JSON.parse(readFileSync(join(import.meta.dir, 'fixtures/opencode-2.0.32-context.json'), 'utf8'))
+    const id = history.info.id
+    const tracker = new OpenCodeTracker()
+    // A message typed while the history was on its way.
+    tracker.handle({
+      id: 'late',
+      created: 1_893_456_000_000,
+      type: 'session.inbox.enqueued',
+      data: { sessionID: id, inboxID: 'msg_late', item: { type: 'user', payload: { text: 'And now?' } } },
+    })
+    const [update] = tracker.handle({ type: 'tonton.history', data: { sessionID: id, ...history } })
+    expect(update.history?.map(entry => [entry.kind, 'text' in entry ? entry.text : entry.kind === 'tool' ? entry.name : ''])).toEqual([
+      ['user', 'Say hi with bash'],
+      ['assistant', 'Let me check.'],
+      ['tool', 'Bash'],
+      ['tool_result', 'hi-from-probe\n'],
+      ['assistant', 'Done: the command printed hi-from-probe.'],
+      ['user', 'And now?'],
+    ])
+    expect(tracker.meta(id)).toMatchObject({ title: 'Probe title', tokens: { input: 240, output: 60 }, context: { usedTokens: 120 } })
+    expect(tracker.cwd(id)).toBe('/Users/me/code/shop')
+    // The live events of the same calls add nothing.
+    const again = tracker.handle({
+      type: 'session.text.ended',
+      data: { sessionID: id, assistantMessageID: history.messages[1].id, ordinal: 0, text: 'Let me check.' },
+    })
+    expect(again).toEqual([])
+  })
+
+  test('a command that failed in OpenCode says so in the conversation, a compaction empties the gauge', () => {
+    const { entries, tracker } = replay([
+      ...events,
+      { type: 'tonton.failed', data: { sessionID: sessionId, op: 'compact', message: 'nothing to compact' } },
+      { id: 'c1', created: 2, type: 'session.compaction.ended', data: { sessionID: sessionId } },
+      // A real refusal from OpenCode 2.0.32, and the cancel an interruption brings, which says nothing.
+      {
+        id: 'c2',
+        created: 3,
+        type: 'session.compaction.failed',
+        data: {
+          sessionID: sessionId,
+          error: { type: 'compaction.failed', message: 'Compaction summary did not match the required template' },
+        },
+      },
+      {
+        id: 'c3',
+        created: 4,
+        type: 'session.compaction.failed',
+        data: { sessionID: sessionId, error: { type: 'aborted', message: 'Compaction cancelled' } },
+      },
+    ])
+    expect(entries.slice(-3)).toMatchObject([
+      { kind: 'system', text: 'OpenCode did not compact the conversation: nothing to compact' },
+      { kind: 'system', text: 'Conversation compacted' },
+      { kind: 'system', text: 'OpenCode did not compact the conversation: Compaction summary did not match the required template' },
+    ])
+    expect(tracker.meta(sessionId).context?.usedTokens).toBe(0)
   })
 
   test('a failed run stays in error until the next prompt, an interrupted one says so', () => {
@@ -125,6 +209,51 @@ describe('OpenCode 1', () => {
     expect(tracker.cwd('ses_1')).toBe('/home/me/api')
   })
 
+  test('its history is the messages and their parts', () => {
+    const { updates } = replay([
+      {
+        type: 'tonton.history',
+        data: {
+          sessionID: 'ses_1',
+          info: session,
+          messages: [
+            {
+              info: { id: 'm1', role: 'user', time: { created: 1_700_000_000_000 } },
+              parts: [{ id: 'p1', messageID: 'm1', type: 'text', text: 'Hi' }],
+            },
+            {
+              info: {
+                id: 'm2',
+                role: 'assistant',
+                time: { created: 1_700_000_001_000, completed: 1 },
+                providerID: 'anthropic',
+                modelID: 'x',
+              },
+              parts: [{ id: 'p2', messageID: 'm2', type: 'text', text: 'Hello' }],
+            },
+          ],
+        },
+      },
+    ])
+    expect(updates.at(-1)?.history?.map(entry => entry.id)).toEqual(['p1', 'p2'])
+  })
+
+  test('a permission names what it touches from its pattern', () => {
+    const { updates } = replay([
+      {
+        type: 'permission.updated',
+        properties: { id: 'per_1', type: 'edit', pattern: '/home/me/api/a.ts', sessionID: 'ses_1', title: 'Edit a.ts', metadata: {} },
+      },
+      { type: 'permission.replied', properties: { sessionID: 'ses_1', permissionID: 'per_1', response: 'once' } },
+    ])
+    expect(updates.find(update => update.permission)?.permission).toEqual({
+      requestId: 'per_1',
+      detail: { toolName: 'Edit', description: 'Edit a.ts', inputPreview: '{"file_path":"/home/me/api/a.ts"}' },
+      input: { file_path: '/home/me/api/a.ts' },
+    })
+    expect(updates.find(update => update.permissionClosed)?.permissionClosed).toBe('per_1')
+  })
+
   test('text that only came as deltas is kept for the end of the message', () => {
     const { entries } = replay([
       message('m1', 'assistant'),
@@ -148,6 +277,32 @@ describe('OpenCode 1', () => {
     ])
     expect(statuses.map(status => status.hook)).toEqual(['UserPromptSubmit', 'Stop', 'UserPromptSubmit', 'Stop'])
     expect(entries).toMatchObject([{ kind: 'system', text: 'Interrupted by user' }])
+  })
+
+  test('images come as data URLs, other files are left out', () => {
+    const png = 'iVBORw0KGgo='
+    const { entries } = replay([
+      message('m1', 'user'),
+      part({ id: 'p1', messageID: 'm1', type: 'file', mime: 'image/png', filename: 'shot.png', url: `data:image/png;base64,${png}` }),
+      part({ id: 'p2', messageID: 'm1', type: 'file', mime: 'application/pdf', filename: 'a.pdf', url: 'file:///tmp/a.pdf' }),
+      {
+        id: 'e1',
+        created: 1,
+        type: 'session.tool.success',
+        data: {
+          sessionID: 'ses_1',
+          id: 'call_1',
+          content: [
+            { type: 'text', text: 'Took it' },
+            { type: 'file', mime: 'image/png', url: `data:image/png;base64,${png}` },
+          ],
+        },
+      },
+    ])
+    expect(entries).toMatchObject([
+      { id: 'p1', kind: 'user', text: 'shot.png', images: [{ mediaType: 'image/png', data: png }] },
+      { kind: 'tool_result', text: 'Took it', images: [{ mediaType: 'image/png', data: png }] },
+    ])
   })
 
   test('anything unexpected is skipped', () => {

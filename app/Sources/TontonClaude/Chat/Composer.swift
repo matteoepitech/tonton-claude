@@ -24,7 +24,8 @@ struct Composer: View {
 
     private var readOnlyReason: String {
         if session.tool == "opencode" {
-            return session.agentOnline ? "Read only: the notch can't message OpenCode sessions yet." : "Session offline: history only."
+            return session.agentOnline
+                ? "Read only: click Update agent for this machine to message its OpenCode sessions." : "Session offline: history only."
         }
         if session.machineId == LocalSessions.machineId {
             return "Read only: install the agent on this Mac (Settings › Machines) to reply from the notch."

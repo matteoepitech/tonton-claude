@@ -1,14 +1,15 @@
 import Foundation
 
-/// Slash commands the notch types in a session's terminal. A channel can't run them, but a session running in tmux can be
-/// typed into, and its agent does it.
+/// What the notch asks a session's agent to run. A Claude Code channel can't, but a session running in tmux can be typed
+/// into (Escape interrupts it), and OpenCode takes them through its API.
 public enum SessionCommandName: String, Codable, CaseIterable, Sendable {
-    case compact, clear
+    case compact, clear, interrupt
 
     public var label: String {
         switch self {
         case .compact: "Compact the conversation"
         case .clear: "Clear the conversation…"
+        case .interrupt: "Interrupt"
         }
     }
 
@@ -25,8 +26,15 @@ struct SessionCommand: Codable, Equatable {
 }
 
 extension SessionSummary {
-    /// Its agent can type in its terminal, and Claude waits at its prompt: Enter then only submits the command.
-    public var acceptsCommands: Bool {
-        terminal && canChat && agentOnline && (status == .idle || status == .waiting)
+    /// Its agent runs the command now: slash commands while the session waits at its prompt, where Enter only submits
+    /// them, and an interruption while it works.
+    public func accepts(_ command: SessionCommandName) -> Bool {
+        guard commands.contains(command), canChat, agentOnline else { return false }
+        return command == .interrupt ? status == .working : status == .idle || status == .waiting
     }
+
+    /// The slash commands of the menu in the chat header.
+    public var menuCommands: [SessionCommandName] { commands.filter { $0 != .interrupt } }
+
+    public var acceptsCommands: Bool { menuCommands.contains { accepts($0) } }
 }

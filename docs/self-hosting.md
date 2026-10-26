@@ -74,7 +74,7 @@ the previous agent until claude restarts.
 |---|---|---|---|
 | `claude` in a terminal (launcher installed) | ✅ | ✅ | ✅ |
 | Any other way (IDE, script, cmd.exe…) | ✅ | read only | — |
-| OpenCode (1 or 2) | ✅ | read only for now | status only for now |
+| OpenCode (1 or 2) | ✅ | ✅ | ✅ |
 
 On first launch, Claude Code asks you to confirm "I am using this for local development": channels are still a research preview.
 

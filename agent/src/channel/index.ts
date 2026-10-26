@@ -80,7 +80,7 @@ export async function runChannel() {
 }
 
 /** Images and files from the notch are written to the inbox and handed to Claude as paths it can Read. */
-function withAttachments(prompt: PromptPayload): string {
+export function withAttachments(prompt: PromptPayload): string {
   if (!prompt.images.length) return prompt.text
   mkdirSync(paths.inbox, { recursive: true, mode: 0o700 })
   const files = prompt.images.map((image, index) => {

@@ -68,6 +68,11 @@ export interface SessionMeta {
   sevenDayLimit?: UsageLimit
   /** The session runs in tmux, so the notch can type slash commands in it. Missing from older agents. */
   terminal?: boolean
+  /**
+   * The commands the agent can run in this session: Claude Code in tmux types them, OpenCode runs them through its API.
+   * Missing from older agents, which run `compact` and `clear` when `terminal` is set.
+   */
+  commands?: SessionCommand['name'][]
 }
 export interface StatusDetail {
   text: string
@@ -85,7 +90,7 @@ export interface PromptPayload {
 }
 /** Bound to its session and run once, so the relay can neither move a `/clear` to another session nor replay it. */
 export interface SessionCommand {
-  name: 'compact' | 'clear'
+  name: 'compact' | 'clear' | 'interrupt'
   sessionId: string
   /** Random, safe as a file name. */
   id: string
