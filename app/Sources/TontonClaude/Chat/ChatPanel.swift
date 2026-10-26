@@ -10,6 +10,8 @@ struct ChatPanel: View {
     @State private var dropTargeted = false
     /// The item a search jumped to, highlighted for a moment.
     @State private var highlighted: String?
+    /// When the last entry came in, which makes the thinking waveform jump.
+    @State private var lastEntry = Date.distantPast
 
     var body: some View {
         let entries = store.entries[session.id] ?? []
@@ -27,6 +29,7 @@ struct ChatPanel: View {
                         ForEach(Array(pendingTexts.enumerated()), id: \.offset) { _, text in
                             UserBubble(text: text, images: [], pending: true)
                         }
+                        if session.status == .working { ThinkingWave(lastEntry: lastEntry) }
                         Color.clear.frame(height: 1).id("bottom")
                     }
                     .padding(.horizontal, 12)
@@ -34,6 +37,7 @@ struct ChatPanel: View {
                 }
                 .onAppear { if !jump(proxy, items) { proxy.scrollTo("bottom", anchor: .bottom) } }
                 .onChange(of: entries.count) { _, _ in
+                    lastEntry = Date()
                     // The history of a session picked in the search may arrive after the panel opened.
                     if jump(proxy, items) { return }
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
@@ -197,5 +201,28 @@ struct ContextGauge: View {
         .help(
             "Context: \(TokenCounts.short(context.usedTokens)) of \(TokenCounts.short(context.windowTokens)) tokens. "
                 + "Claude Code compacts it at about \(TokenCounts.short(context.autoCompactAt)).")
+    }
+}
+
+/// Under the conversation while Claude works: a small waveform that jumps as entries stream in. Still with Reduce Motion.
+struct ThinkingWave: View {
+    let lastEntry: Date
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var start = Date()
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+            let levels = Waveform.levels(
+                time: context.date.timeIntervalSince(start), sinceEntry: context.date.timeIntervalSince(lastEntry), moving: !reduceMotion)
+            HStack(alignment: .center, spacing: 2) {
+                ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
+                    Capsule().fill(Theme.accent.opacity(0.85)).frame(width: 3, height: 3 + 11 * level)
+                }
+            }
+            .frame(height: 14)
+        }
+        .padding(.leading, 2)
+        .padding(.vertical, 2)
+        .accessibilityLabel("Claude is working")
     }
 }
