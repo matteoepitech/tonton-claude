@@ -119,6 +119,8 @@ struct GeneralPane: View {
                 }
                 .padding(16)
             }
+            GroupLabel(text: "Achievements")
+            AchievementsList()
             GroupLabel(text: "Keyboard shortcuts")
             Card {
                 ForEach(Array(shortcuts.enumerated()), id: \.offset) { index, item in
@@ -159,5 +161,33 @@ struct GeneralPane: View {
         guard !reply.isEmpty, !settings.quickReplies.contains(reply) else { return }
         settings.quickReplies.append(reply)
         newReply = ""
+    }
+}
+
+/// Every badge, unlocked ones in color.
+private struct AchievementsList: View {
+    @ObservedObject private var store = AchievementStore.shared
+
+    var body: some View {
+        Card {
+            ForEach(Array(Achievement.allCases.enumerated()), id: \.element) { index, achievement in
+                if index > 0 { Hairline() }
+                let unlocked = store.progress.unlocked.contains(achievement)
+                HStack(spacing: 12) {
+                    Image(systemName: unlocked ? achievement.symbol : "lock.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(unlocked ? Theme.warning : Theme.textFaint)
+                        .frame(width: 26)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(achievement.title).font(.system(size: 13, weight: .medium)).foregroundStyle(
+                            unlocked ? Theme.text : Theme.textDim)
+                        Text(achievement.detail).font(.system(size: 12)).foregroundStyle(Theme.textDim)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+        }
     }
 }
