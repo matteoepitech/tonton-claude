@@ -32,6 +32,8 @@ final class AppSettings: ObservableObject {
     /// Machines whose sessions stay out of the notch.
     @Published var hiddenMachines: Set<String>
     @Published var editor: EditorChoice
+    /// Session ids, in the order they were pinned.
+    @Published var pinnedSessions: [String]
 
     /// Notch and alerts
     @Published var openOnHover: Bool
@@ -82,6 +84,7 @@ final class AppSettings: ObservableObject {
         quickReplies = value("quickReplies", Self.defaultQuickReplies)
         hiddenMachines = Set(value("hiddenMachines", [String]()))
         editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
+        pinnedSessions = value("pinnedSessions", [String]())
         openOnHover = value("openOnHover", true)
         showActivityDots = value("showActivityDots", false)
         openOnPermission = value("openOnPermission", false)
@@ -106,6 +109,7 @@ final class AppSettings: ObservableObject {
         persist($quickReplies, "quickReplies")
         persist($hiddenMachines.map { Array($0).sorted() }, "hiddenMachines")
         persist($editor.map(\.rawValue), "editor")
+        persist($pinnedSessions, "pinnedSessions")
         persist($openOnHover, "openOnHover")
         persist($showActivityDots, "showActivityDots")
         persist($openOnPermission, "openOnPermission")

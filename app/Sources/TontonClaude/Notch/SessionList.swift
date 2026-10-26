@@ -11,11 +11,7 @@ struct SessionListView: View {
             query.isEmpty || $0.project.localizedCaseInsensitiveContains(query) || $0.machine.localizedCaseInsensitiveContains(query)
                 || ($0.title?.localizedCaseInsensitiveContains(query) ?? false)
         }
-        let groups = Dictionary(grouping: sessions, by: \.machine)
-        let machines = groups.keys.sorted { a, b in
-            let la = groups[a]!.contains { $0.status.isLive }, lb = groups[b]!.contains { $0.status.isLive }
-            return la != lb ? la : a.localizedCaseInsensitiveCompare(b) == .orderedAscending
-        }
+        let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions)
         VStack(spacing: 0) {
             if store.visibleSessions.count > 5 {
                 HStack(spacing: 6) {
@@ -32,25 +28,22 @@ struct SessionListView: View {
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2, pinnedViews: []) {
-                    ForEach(machines, id: \.self) { machine in
-                        HStack(spacing: 4) {
-                            Text(machine.uppercased())
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                            Spacer(minLength: 4)
-                            if let info = store.machines.first(where: { $0.id == groups[machine]?.first?.machineId }) {
-                                NotchAgentUpdate(machine: info)
+                    ForEach(sections, id: \.kind) { section in
+                        header(section)
+                        ForEach(Array(section.sessions.enumerated()), id: \.element.id) { index, s in
+                            let pinned = section.kind == .pinned
+                            SessionRow(
+                                session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
+                                machine: pinned ? s.machine : nil,
+                                // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
+                                shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture { store.selectedId = s.id }
+                            .contextMenu {
+                                Button(pinned ? "Unpin" : "Pin to top") { store.togglePin(s.id) }
+                                Button("Remove from list") { store.dismiss(s.id) }
                             }
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.top, 8)
-                        ForEach(groups[machine]!) { s in
-                            SessionRow(session: s, selected: s.id == store.selectedId, showCost: settings.showCosts)
-                                .contentShape(Rectangle())
-                                .onTapGesture { store.selectedId = s.id }
-                                .contextMenu {
-                                    Button("Remove from list") { store.dismiss(s.id) }
-                                }
                         }
                     }
                 }
@@ -58,6 +51,25 @@ struct SessionListView: View {
             }
             .scrollIndicators(.never)
         }
+    }
+
+    @ViewBuilder private func header(_ section: SessionSection) -> some View {
+        HStack(spacing: 4) {
+            switch section.kind {
+            case .pinned:
+                Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(.secondary)
+                Text("PINNED").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+            case .machine(let machine):
+                Text(machine.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                if let info = store.machines.first(where: { $0.id == section.sessions.first?.machineId }) {
+                    NotchAgentUpdate(machine: info)
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
     }
 }
 
@@ -105,14 +117,23 @@ struct SessionRow: View {
     let session: SessionSummary
     let selected: Bool
     var showCost = false
+    /// Shown in the pinned section, where sessions from every machine sit together.
+    var machine: String?
+    var shortcut: Int?
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             StatusDot(status: session.status).padding(.top, 5)
             VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(session.project).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(session.project).font(.system(size: 12, weight: .semibold)).lineLimit(1).layoutPriority(1)
+                    if let machine {
+                        Text(machine).font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
+                    }
                     Spacer(minLength: 4)
+                    if let shortcut {
+                        Text("⌘\(shortcut)").font(.system(size: 9, weight: .medium)).foregroundStyle(.tertiary)
+                    }
                     if !session.pendingPermissions.isEmpty {
                         Image(systemName: "lock.fill").font(.system(size: 9)).foregroundStyle(Theme.accent)
                     }

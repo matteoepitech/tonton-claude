@@ -301,14 +301,14 @@ final class NotchWindowController {
         collapse()
     }
 
-    /// Escape closes; ⌘1…⌘9 jump to a session; ⌘↑ and ⌘↓ move through the list.
+    /// Escape closes; ⌘1…⌘9 jump to a session in list order, pinned ones first; ⌘↑ and ⌘↓ move through the list.
     private func handleKey(_ event: NSEvent) -> Bool {
         if event.keyCode == UInt16(kVK_Escape) {
             collapse(force: true)
             return true
         }
         guard event.modifierFlags.contains(.command) else { return false }
-        let sessions = store.visibleSessions
+        let sessions = store.orderedSessions
         guard !sessions.isEmpty else { return false }
         if let digit = event.charactersIgnoringModifiers.flatMap(Int.init), (1...9).contains(digit) {
             if digit <= sessions.count { store.selectedId = sessions[digit - 1].id }
