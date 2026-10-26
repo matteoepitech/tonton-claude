@@ -12,6 +12,8 @@ public struct MachineHealth: Codable, Equatable, Sendable {
     public let memoryUsed: Double
     public let memoryTotal: Double
     public let battery: Battery?
+    /// Missing from older agents.
+    public let wake: [WakeOnLAN.Target]?
     public let at: String
 
     /// A report older than this means the service stopped sending: it is shown dimmed.

@@ -112,6 +112,7 @@ test('the service reports the machine health, sealed with the account key', asyn
   expect(health.memoryTotal).toBeGreaterThan(0)
   expect(health.cpu).toBeGreaterThanOrEqual(0)
   expect(health.cpu).toBeLessThanOrEqual(1)
+  expect(Array.isArray(health.wake)).toBe(true)
 })
 
 test('only one service runs per machine', async () => {

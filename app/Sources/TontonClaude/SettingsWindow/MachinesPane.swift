@@ -135,6 +135,7 @@ struct MachineRow: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var store: SessionStore
     @State private var confirmRevoke = false
+    @State private var wakeSent = false
 
     var body: some View {
         let sessions = store.sessions.filter { $0.machineId == machine.id }
@@ -161,6 +162,15 @@ struct MachineRow: View {
                 }
             }
             Spacer()
+            if !machine.online, let targets = machine.health?.wake, !targets.isEmpty {
+                Button(wakeSent ? "Sent" : "Wake") {
+                    WakeOnLAN.wake(targets)
+                    wakeSent = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { wakeSent = false }
+                }
+                .buttonStyle(ThemeButtonStyle())
+                .help("Sends a Wake-on-LAN packet on this Mac's network. \(machine.name) must be on the same network, with Wake-on-LAN on.")
+            }
             AgentUpdateButton(machine: machine)
             HStack(spacing: 5) {
                 Circle().fill(machine.online ? Theme.success : Theme.textFaint).frame(width: 6, height: 6)
