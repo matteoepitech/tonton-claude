@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { defaultLine, isTontonStatusLine, userStatusLine } from '../src/statusline'
-import { limit, newerLimit, statusLineLimit } from '../src/usage'
+import { limit, newerLimit, statusLineLimit, statusLineUsage } from '../src/usage'
 
 const AGENT = join(import.meta.dir, '../src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-statusline-'))
@@ -29,6 +29,17 @@ describe('usage readings', () => {
     expect(statusLineLimit({ rate_limits: { five_hour: { used_percentage: '41', resets_at: 1 } } })).toBeUndefined()
     expect(statusLineLimit(null)).toBeUndefined()
     expect(limit(140, 1792497600)?.usedPercent).toBe(100)
+  })
+
+  test('both windows, leaving out the ones Claude Code does not report', () => {
+    expect(statusLineUsage(input)).toEqual({
+      fiveHourLimit: { usedPercent: 41.2, resetsAt: '2026-10-20T12:00:00.000Z' },
+      sevenDayLimit: { usedPercent: 10, resetsAt: '2026-10-26T07:33:20.000Z' },
+    })
+    expect(statusLineUsage({ rate_limits: { seven_day: { used_percentage: 99, resets_at: 1793000000 } } })).toEqual({
+      sevenDayLimit: { usedPercent: 99, resetsAt: '2026-10-26T07:33:20.000Z' },
+    })
+    expect(statusLineUsage({})).toEqual({})
   })
 
   test('the newest reading wins: a later reset, or more usage in the same window', () => {
@@ -83,7 +94,7 @@ describe('status line', () => {
 
     expect(await run(input)).toEqual({ output: 'Opus · 23% context · 5h 41%', code: 0 })
     const usage = JSON.parse(readFileSync(join(home, 'run', `usage-${input.session_id}.json`), 'utf8'))
-    expect(usage).toEqual({ fiveHourLimit: { usedPercent: 41.2, resetsAt: '2026-10-20T12:00:00.000Z' } })
+    expect(usage).toEqual(statusLineUsage(input))
 
     // The user's command gets the same input.
     settings(join(config, 'settings.json'), {

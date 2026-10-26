@@ -58,12 +58,15 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let lastMessage: String?
     /// The 5-hour window of the Claude plan the session runs on. Nil with an API key, and with older agents.
     public let fiveHourLimit: UsageLimit?
+    /// The weekly window, like the 5-hour one.
+    public let sevenDayLimit: UsageLimit?
 
     public init(
         id: String, machineId: String, machine: String, platform: String?, cwd: String, project: String, title: String?,
         status: SessionStatus,
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
-        startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil
+        startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
+        sevenDayLimit: UsageLimit? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -82,6 +85,22 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.lastActivity = lastActivity
         self.lastMessage = lastMessage
         self.fiveHourLimit = fiveHourLimit
+        self.sevenDayLimit = sevenDayLimit
+    }
+
+    /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the
+    /// fullest one past 80 %. Nil while there is room.
+    public func limitToWatch(at now: Date = Date()) -> UsageLimit? {
+        let limits = [fiveHourLimit, sevenDayLimit].compactMap { $0 }
+        let reached = limits.filter { $0.level(at: now) == .reached }
+        if let last = reached.max(by: { $0.resetsAt < $1.resetsAt }) { return last }
+        return limits.filter { $0.level(at: now) == .high }.max { $0.usedPercent < $1.usedPercent }
+    }
+
+    /// When a session stopped by a usage limit can go again. Nil when no limit stops it.
+    public func stoppedUntil(at now: Date = Date()) -> Date? {
+        guard let limit = limitToWatch(at: now), limit.level(at: now) == .reached else { return nil }
+        return limit.resetsAt
     }
 
     /// Claude Code's notification texts, shortened for the notch.
@@ -89,6 +108,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         guard let text = statusText, !text.isEmpty else { return status.label }
         if let range = text.range(of: "needs your permission to use ") { return "Wants to use \(text[range.upperBound...])" }
         if text.contains("waiting for your input") { return "Waiting for you" }
+        // StopFailure's error type when the plan's limit refuses a request.
+        if text == "rate_limit" { return "Usage limit reached" }
         return text
     }
 }
@@ -120,6 +141,36 @@ public struct UsageLimit: Equatable, Sendable {
     /// The fullest window still running, for a gauge that stands for several sessions.
     public static func fullest(_ limits: [UsageLimit?], at now: Date = Date()) -> UsageLimit? {
         limits.compactMap { $0 }.filter { $0.level(at: now) != nil }.max { $0.usedPercent < $1.usedPercent }
+    }
+
+    /// Among the windows of several sessions, the one to count down to: the first one to free a stopped session, or else
+    /// the first one to reset.
+    public static func soonest(_ limits: [UsageLimit?], at now: Date = Date()) -> UsageLimit? {
+        let running = limits.compactMap { $0 }.filter { $0.level(at: now) != nil }
+        let reached = running.filter { $0.level(at: now) == .reached }
+        return (reached.isEmpty ? running : reached).min { $0.resetsAt < $1.resetsAt }
+    }
+
+    /// `1 h 42`, `42 min` or `2 d 5 h` until the reset, at least a minute.
+    public func timeLeft(at now: Date = Date()) -> String {
+        let minutes = max(1, Int((resetsAt.timeIntervalSince(now) / 60).rounded(.up)))
+        if minutes < 60 { return "\(minutes) min" }
+        if minutes < 24 * 60 { return "\(minutes / 60) h \(String(format: "%02d", minutes % 60))" }
+        let hours = minutes / 60
+        return hours % 24 == 0 ? "\(hours / 24) d" : "\(hours / 24) d \(hours % 24) h"
+    }
+}
+
+/// When the sessions a usage limit stopped can go again.
+public enum LimitResets {
+    /// The reset times still to come among the live sessions a limit stopped.
+    public static func upcoming(_ sessions: [SessionSummary], at now: Date = Date()) -> Set<Date> {
+        Set(sessions.filter(\.status.isLive).compactMap { $0.stoppedUntil(at: now) })
+    }
+
+    /// The live sessions that `reset` frees: the ones stopped until then, read just before it.
+    public static func lifted(_ sessions: [SessionSummary], at reset: Date) -> [SessionSummary] {
+        sessions.filter { $0.status.isLive && $0.stoppedUntil(at: reset.addingTimeInterval(-1)) == reset }
     }
 }
 

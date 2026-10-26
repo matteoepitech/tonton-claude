@@ -160,11 +160,11 @@ struct SessionRow: View {
                         Text(String(format: "$%.2f", cost)).font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
                     }
                 }
-                if session.status.needsAttention {
-                    Text(session.displayStatusText)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color(nsColor: session.status.color))
-                        .lineLimit(1)
+                if session.status.needsAttention || session.status.isLive && session.limitToWatch() != nil {
+                    // Re-read twice a minute: the countdown runs, and the limit disappears once it resets.
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        statusLine(at: context.date)
+                    }
                 }
             }
         }
@@ -172,5 +172,22 @@ struct SessionRow: View {
         .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Color.white.opacity(0.12) : .clear))
         .opacity(session.status.isLive ? 1 : 0.55)
+    }
+
+    /// What needs the user, then when a limit that stopped the session, or is about to, resets.
+    @ViewBuilder private func statusLine(at now: Date) -> some View {
+        let limit = session.status.isLive ? session.limitToWatch(at: now) : nil
+        if session.status.needsAttention || limit != nil {
+            let attention =
+                session.status.needsAttention
+                ? Text(session.displayStatusText).foregroundColor(Color(nsColor: session.status.color)) : Text("")
+            let separator = session.status.needsAttention && limit != nil ? Text(" · ").foregroundColor(.secondary) : Text("")
+            let countdown = limit.flatMap { limit in
+                limit.level(at: now).map { Text("resets in \(limit.timeLeft(at: now))").foregroundColor($0.color) }
+            }
+            (attention + separator + (countdown ?? Text("")))
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+        }
     }
 }

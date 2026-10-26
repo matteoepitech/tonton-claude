@@ -8,6 +8,7 @@ import { paths } from './config'
 
 export interface SessionUsage {
   fiveHourLimit?: UsageLimit
+  sevenDayLimit?: UsageLimit
 }
 
 interface Window {
@@ -15,10 +16,17 @@ interface Window {
   resets_at?: unknown
 }
 
-/** `rate_limits.five_hour` of the status line input: a percentage and a reset time in Unix seconds. */
-export function statusLineLimit(input: unknown): UsageLimit | undefined {
-  const window = (input as { rate_limits?: { five_hour?: Window } } | null)?.rate_limits?.five_hour
+/** A window of `rate_limits` in the status line input: a percentage and a reset time in Unix seconds. */
+export function statusLineLimit(input: unknown, name: 'five_hour' | 'seven_day' = 'five_hour'): UsageLimit | undefined {
+  const window = (input as { rate_limits?: Record<string, Window | undefined> } | null)?.rate_limits?.[name]
   return limit(window?.used_percentage, window?.resets_at)
+}
+
+/** Both windows of the status line input, leaving out the ones it does not report. */
+export function statusLineUsage(input: unknown): SessionUsage {
+  const fiveHourLimit = statusLineLimit(input, 'five_hour')
+  const sevenDayLimit = statusLineLimit(input, 'seven_day')
+  return { ...(fiveHourLimit ? { fiveHourLimit } : {}), ...(sevenDayLimit ? { sevenDayLimit } : {}) }
 }
 
 /** Builds a limit from Claude Code's numbers, or nothing when they are missing or out of range. */

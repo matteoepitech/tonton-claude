@@ -67,6 +67,62 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertNil(UsageLimit.fullest([nil, expired], at: now))
     }
 
+    func testTheCountdownFollowsTheWindowThatStopsTheSession() {
+        let now = Date(timeIntervalSince1970: 1_792_497_600)
+        func session(fiveHour: Double?, sevenDay: Double?) -> SessionSummary {
+            SessionSummary(
+                id: "s1", machineId: "m1", machine: "PC", platform: nil, cwd: "/x", project: "x", title: nil, status: .error,
+                statusText: "rate_limit", agentOnline: true, canChat: true, pendingPermissions: [], costUSD: nil, startedAt: now,
+                lastActivity: now, lastMessage: nil,
+                fiveHourLimit: fiveHour.map { UsageLimit(usedPercent: $0, resetsAt: now.addingTimeInterval(3600)) },
+                sevenDayLimit: sevenDay.map { UsageLimit(usedPercent: $0, resetsAt: now.addingTimeInterval(3 * 86400)) })
+        }
+        XCTAssertNil(session(fiveHour: 40, sevenDay: 70).limitToWatch(at: now))
+        XCTAssertEqual(session(fiveHour: 85, sevenDay: 92).limitToWatch(at: now)?.usedPercent, 92)
+        XCTAssertEqual(session(fiveHour: 100, sevenDay: 92).limitToWatch(at: now)?.usedPercent, 100)
+        // Stopped by both: free again only once the week resets.
+        XCTAssertEqual(session(fiveHour: 100, sevenDay: 100).limitToWatch(at: now)?.resetsAt, now.addingTimeInterval(3 * 86400))
+        XCTAssertNil(session(fiveHour: 100, sevenDay: nil).limitToWatch(at: now.addingTimeInterval(3600)))
+        XCTAssertEqual(session(fiveHour: 100, sevenDay: nil).displayStatusText, "Usage limit reached")
+
+        let stopped = UsageLimit(usedPercent: 100, resetsAt: now.addingTimeInterval(7200))
+        let close = UsageLimit(usedPercent: 85, resetsAt: now.addingTimeInterval(600))
+        XCTAssertEqual(UsageLimit.soonest([close, nil, stopped], at: now), stopped)
+        XCTAssertEqual(UsageLimit.soonest([close, UsageLimit(usedPercent: 90, resetsAt: now.addingTimeInterval(900))], at: now), close)
+        XCTAssertNil(UsageLimit.soonest([nil], at: now))
+    }
+
+    func testStoppedSessionsAreFreedAtTheirReset() {
+        let now = Date(timeIntervalSince1970: 1_792_497_600)
+        let reset = now.addingTimeInterval(1800)
+        func session(_ id: String, _ status: SessionStatus = .error, used: Double = 100, resetsAt: Date) -> SessionSummary {
+            SessionSummary(
+                id: id, machineId: "m1", machine: "PC", platform: nil, cwd: "/x", project: id, title: nil, status: status,
+                statusText: nil, agentOnline: true, canChat: true, pendingPermissions: [], costUSD: nil, startedAt: now,
+                lastActivity: now, lastMessage: nil, fiveHourLimit: UsageLimit(usedPercent: used, resetsAt: resetsAt))
+        }
+        let sessions = [
+            session("api", resetsAt: reset), session("web", resetsAt: reset), session("close", used: 90, resetsAt: reset),
+            session("ended", .ended, resetsAt: reset), session("later", resetsAt: reset.addingTimeInterval(600)),
+        ]
+        XCTAssertEqual(sessions[0].stoppedUntil(at: now), reset)
+        XCTAssertNil(sessions[2].stoppedUntil(at: now))
+        XCTAssertEqual(LimitResets.upcoming(sessions, at: now), [reset, reset.addingTimeInterval(600)])
+        XCTAssertEqual(LimitResets.lifted(sessions, at: reset).map(\.id), ["api", "web"])
+        XCTAssertEqual(LimitResets.upcoming(sessions, at: reset.addingTimeInterval(601)), [])
+    }
+
+    func testTimeLeftReadsLikeTheNotch() {
+        let now = Date(timeIntervalSince1970: 1_792_497_600)
+        func left(_ seconds: TimeInterval) -> String { UsageLimit(usedPercent: 90, resetsAt: now + seconds).timeLeft(at: now) }
+        XCTAssertEqual(left(102 * 60), "1 h 42")
+        XCTAssertEqual(left(65 * 60), "1 h 05")
+        XCTAssertEqual(left(42 * 60 - 30), "42 min")
+        XCTAssertEqual(left(10), "1 min")
+        XCTAssertEqual(left(2 * 86400 + 5 * 3600), "2 d 5 h")
+        XCTAssertEqual(left(3 * 86400), "3 d")
+    }
+
     func testUnreadableFieldsDegradeToPlaceholders() throws {
         let foreign = try E2E.seal(SessionInfo(machine: "x", platform: nil, cwd: "x", project: "x"), with: SymmetricKey(size: .bits256))
         let json = """

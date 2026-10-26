@@ -113,6 +113,16 @@ final class TranscriptTests: XCTestCase {
             refused(["status": "rejected", "rateLimitType": "five_hour", "resetsAt": 1_792_497_600]),
             UsageLimit(usedPercent: 100, resetsAt: Date(timeIntervalSince1970: 1_792_497_600)))
         XCTAssertNil(refused(["status": "rejected", "rateLimitType": "seven_day", "resetsAt": 1_792_497_600]))
+        // Weekly limits, including the Opus and Sonnet shares, hold the session until the week resets.
+        for type in ["seven_day", "seven_day_opus"] {
+            let fields: [String: Any] = [
+                "type": "assistant", "quotaLimits": ["status": "rejected", "rateLimitType": type, "resetsAt": 1_792_497_600],
+                "message": ["content": []],
+            ]
+            XCTAssertEqual(
+                Transcript.parse(line(fields)).sevenDayLimit,
+                UsageLimit(usedPercent: 100, resetsAt: Date(timeIntervalSince1970: 1_792_497_600)))
+        }
         XCTAssertNil(refused(["status": "allowed_warning", "rateLimitType": "five_hour", "resetsAt": 1_792_497_600]))
         XCTAssertNil(refused(["status": "rejected", "rateLimitType": "five_hour"]))
     }

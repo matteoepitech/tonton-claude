@@ -51,6 +51,8 @@ final class AppSettings: ObservableObject {
     @Published var openOnPermission: Bool
     @Published var showAlerts: Bool
     @Published var alertOnFinish: Bool
+    /// When a session stopped by a usage limit can go again.
+    @Published var alertOnLimitReset: Bool
     @Published var soundOnAttention: Bool
     @Published var alertSound: String
     @Published var haptics: Bool
@@ -104,6 +106,7 @@ final class AppSettings: ObservableObject {
         openOnPermission = value("openOnPermission", false)
         showAlerts = value("showAlerts", true)
         alertOnFinish = value("alertOnFinish", false)
+        alertOnLimitReset = value("alertOnLimitReset", true)
         soundOnAttention = value("soundOnAttention", true)
         alertSound = value("alertSound", "Glass")
         haptics = value("haptics", true)
@@ -131,6 +134,7 @@ final class AppSettings: ObservableObject {
         persist($openOnPermission, "openOnPermission")
         persist($showAlerts, "showAlerts")
         persist($alertOnFinish, "alertOnFinish")
+        persist($alertOnLimitReset, "alertOnLimitReset")
         persist($soundOnAttention, "soundOnAttention")
         persist($alertSound, "alertSound")
         persist($haptics, "haptics")

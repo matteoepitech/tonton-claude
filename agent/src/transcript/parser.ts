@@ -32,6 +32,8 @@ export interface ParsedLine {
   costUSD?: number
   /** Set when the 5-hour limit stopped the session. */
   fiveHourLimit?: UsageLimit
+  /** Set when a weekly limit stopped the session. */
+  sevenDayLimit?: UsageLimit
 }
 
 interface Block {
@@ -69,6 +71,8 @@ export function parseLine(raw: string): ParsedLine {
   if (line.type === 'cost-state' && typeof line.totalCostUSD === 'number') result.costUSD = line.totalCostUSD
   const quota = line.quotaLimits
   if (quota?.status === 'rejected' && quota.rateLimitType === 'five_hour') result.fiveHourLimit = limit(100, quota.resetsAt)
+  // The weekly limit, or its Opus or Sonnet share: either way the session waits for that reset.
+  if (quota?.status === 'rejected' && quota.rateLimitType?.startsWith('seven_day')) result.sevenDayLimit = limit(100, quota.resetsAt)
 
   const id = line.uuid ?? `${line.type}-${line.timestamp}`
   const ts = line.timestamp ?? new Date().toISOString()

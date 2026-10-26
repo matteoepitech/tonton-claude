@@ -45,12 +45,16 @@ final class SessionStore: ObservableObject {
     let attention = PassthroughSubject<SessionSummary, Never>()
     /// A session went from working to done.
     let finished = PassthroughSubject<SessionSummary, Never>()
+    /// Sessions a usage limit stopped, the moment it resets.
+    let limitLifted = PassthroughSubject<[SessionSummary], Never>()
 
     private let settings: AppSettings
     private let socket = RelaySocket()
     private let api = RelayAPI()
     private var vault: SessionVault?
     private let localWatcher = LocalSessionWatcher()
+    /// One per reset time of the sessions a usage limit stopped.
+    private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()
 
     init(settings: AppSettings) {
@@ -66,6 +70,29 @@ final class SessionStore: ObservableObject {
             .store(in: &subscriptions)
         localWatcher.onChange = { [weak self] sessions, entries in self?.localChanged(sessions, entries) }
         localWatcher.start()
+        sessionsPublisher.combineLatest(settings.$hiddenMachines)
+            .sink { [weak self] sessions, hidden in self?.scheduleLimitResets(sessions.filter { !hidden.contains($0.machine) }) }
+            .store(in: &subscriptions)
+    }
+
+    /// Keeps a timer for each reset time of the stopped sessions. Timers already due are left to fire: a session update in
+    /// the same instant must not swallow the alert.
+    private func scheduleLimitResets(_ sessions: [SessionSummary]) {
+        let now = Date()
+        let resets = LimitResets.upcoming(sessions, at: now)
+        for (reset, timer) in resetTimers where !resets.contains(reset) && reset > now {
+            timer.cancel()
+            resetTimers[reset] = nil
+        }
+        for reset in resets where resetTimers[reset] == nil {
+            resetTimers[reset] = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(reset.timeIntervalSinceNow))
+                guard !Task.isCancelled, let self else { return }
+                self.resetTimers[reset] = nil
+                let lifted = LimitResets.lifted(self.visibleSessions, at: reset)
+                if !lifted.isEmpty { self.limitLifted.send(lifted) }
+            }
+        }
     }
 
     // MARK: Derived state

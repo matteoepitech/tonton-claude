@@ -78,7 +78,13 @@ public enum RelayMessage: Decodable, Sendable {
 // Plaintext payloads inside sealed fields.
 
 struct SessionInfo: Codable { let machine: String; let platform: String?; let cwd: String; let project: String }
-struct SessionMeta: Codable { let title: String?; let costUSD: Double?; let lastMessage: String?; var fiveHourLimit: WireUsageLimit? }
+struct SessionMeta: Codable {
+    let title: String?
+    let costUSD: Double?
+    let lastMessage: String?
+    var fiveHourLimit: WireUsageLimit?
+    var sevenDayLimit: WireUsageLimit?
+}
 struct WireUsageLimit: Codable { let usedPercent: Double; let resetsAt: String }
 struct StatusDetail: Codable { let text: String }
 struct PermissionDetail: Codable { let toolName: String; let description: String; let inputPreview: String }

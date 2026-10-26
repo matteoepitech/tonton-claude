@@ -1,7 +1,8 @@
 import SwiftUI
 import TontonCore
 
-/// Optional dots beside the camera: the most urgent status on the left, the live session count on the right.
+/// Optional dots beside the camera: the most urgent status on the left, the live session count on the right, or the time
+/// left before a usage limit resets when a session is close to it or stopped by it.
 struct ActivityDots: View {
     @EnvironmentObject var state: NotchState
     @EnvironmentObject var store: SessionStore
@@ -14,12 +15,23 @@ struct ActivityDots: View {
         let limit = UsageLimit.fullest(live.map(\.fiveHourLimit))
         HStack(spacing: 0) {
             if state.showWings {
-                Group { if let urgent { StatusDot(status: urgent, size: 7, limit: limit) } }.frame(width: NotchState.wingWidth)
+                Group { if let urgent { StatusDot(status: urgent, size: 7, limit: limit) } }.frame(width: state.currentWingWidth)
                 Spacer(minLength: 0)
-                Text("\(live.count)")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(store.attentionCount > 0 ? Theme.warning : .white.opacity(0.6))
-                    .frame(width: NotchState.wingWidth)
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    let countdown = UsageLimit.soonest(live.map { $0.limitToWatch(at: context.date) }, at: context.date)
+                    if state.wingCountdown, let countdown, let level = countdown.level(at: context.date) {
+                        Text(countdown.timeLeft(at: context.date))
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(level.color)
+                            .lineLimit(1)
+                            .help("A usage limit resets in \(countdown.timeLeft(at: context.date))")
+                    } else {
+                        Text("\(live.count)")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(store.attentionCount > 0 ? Theme.warning : .white.opacity(0.6))
+                    }
+                }
+                .frame(width: state.currentWingWidth)
             }
         }
         .frame(height: state.notchSize.height)
@@ -36,7 +48,7 @@ struct PeekView: View {
                 HStack(spacing: 8) {
                     StatusDot(status: s.status, limit: s.fiveHourLimit)
                     Text("\(s.machine) · \(s.project)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                    Text(s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(state.peekText ?? s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .frame(height: NotchState.peekHeight)
                 .padding(.horizontal, 14)

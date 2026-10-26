@@ -10,10 +10,10 @@ enum Notifier {
     }
 
     @MainActor
-    static func post(_ session: SessionSummary, finished: Bool) {
+    static func post(_ session: SessionSummary, body: String) {
         let content = UNMutableNotificationContent()
         content.title = "\(session.machine) · \(session.project)"
-        content.body = finished ? "Claude is done." : session.displayStatusText
+        content.body = body
         content.userInfo = ["sessionId": session.id]
         content.threadIdentifier = session.id
         let request = UNNotificationRequest(identifier: "\(session.id)-\(Date().timeIntervalSince1970)", content: content, trigger: nil)
