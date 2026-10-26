@@ -43,5 +43,6 @@ final class ShareTests: XCTestCase {
         }
         XCTAssertEqual(["0.7.0", "0.8.0", "0.10.1", "0.0.0"].map { machine($0).sealsShares }, [false, true, true, true])
         XCTAssertFalse(machine(nil).sealsShares)
+        XCTAssertEqual(["0.7.9", "0.8.0", "0.0.0"].map { machine($0).keepsSessionRules }, [false, true, true])
     }
 }

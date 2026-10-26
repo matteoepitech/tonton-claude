@@ -5,7 +5,7 @@ import type { HookPost } from '../../shared/protocol'
 import { terminalOf } from './channel/terminal'
 import { type AgentConfig, loadConfig, paths } from './config'
 import { log } from './log'
-import { matchingRule, readRules } from './rules'
+import { clearSessionRules, matchingRule, readRules, sessionRules } from './rules'
 import { runningTasksIn } from './transcript/background'
 
 interface HookInput {
@@ -33,6 +33,7 @@ export async function runHook() {
     if (!event?.session_id) return
     linkSession(event)
     if (event.hook_event_name === 'PermissionRequest') return approveByRule(event)
+    if (event.hook_event_name === 'SessionEnd') clearSessionRules(event.session_id)
 
     const config = loadConfig()
     if (!config) return
@@ -70,11 +71,12 @@ export function waitsForBackground(event: Pick<HookInput, 'hook_event_name' | 'n
 }
 
 /**
- * Claude Code asks before this call: approve it when an auto-approve rule from the app matches. Otherwise print nothing,
- * and the user is asked as usual, in the terminal or the notch.
+ * Claude Code asks before this call: approve it when an auto-approve rule from the app, or one allowed for this session,
+ * matches. Otherwise print nothing, and the user is asked as usual, in the terminal or the notch.
  */
 function approveByRule(event: HookInput) {
-  const rule = event.tool_name ? matchingRule(readRules()?.rules ?? [], event.tool_name, event.tool_input) : undefined
+  const rules = [...(readRules()?.rules ?? []), ...sessionRules(event.session_id)]
+  const rule = event.tool_name ? matchingRule(rules, event.tool_name, event.tool_input) : undefined
   if (!rule) return
   log('approved by an auto-approve rule', { tool: rule.tool })
   const decision = { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } }

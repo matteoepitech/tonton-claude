@@ -410,6 +410,50 @@ esac
     expect(await ask('npm test && rm -rf ~')).toBe('')
   })
 
+  test('"allow for this session" lets calls like the allowed one through the hook, and only for this session', async () => {
+    const home = join(dir, 'agent')
+    const env = { ...process.env, TONTON_HOME: home, TONTON_SERVICE: 'off' } as Record<string, string>
+    const ask = async (command: string, session = sessionId) => {
+      const input = { hook_event_name: 'PermissionRequest', session_id: session, tool_name: 'Bash', tool_input: { command } }
+      const hook = Bun.spawn(['bun', AGENT, 'hook'], { env, stdin: new Blob([JSON.stringify(input)]), stdout: 'pipe' })
+      return new Response(hook.stdout).text()
+    }
+    const request = async (requestId: string, command: string) => {
+      const params = { request_id: requestId, tool_name: 'Bash', description: command, input_preview: JSON.stringify({ command }) }
+      await claude.notification({ method: 'notifications/claude/channel/permission_request', params })
+      await eventually(() => latestSession(app)?.pendingPermissions.some(p => p.requestId === requestId), 'the request')
+    }
+    const answered = (requestId: string) =>
+      eventually(
+        () => notifications.find(n => n.method === 'notifications/claude/channel/permission' && n.params?.request_id === requestId),
+        'the verdict',
+      )
+    const rules = [
+      { tool: 'Bash', pattern: 'make deploy' },
+      { tool: 'Bash', pattern: 'make deploy *' },
+    ]
+
+    // Rules sealed for another session are dropped, even with the right key.
+    await request('other', 'make release')
+    const forged = await seal(key, { sessionId: 'another-session', requestId: 'other', rules: [{ tool: 'Bash', pattern: 'make release' }] })
+    app.socket.send(JSON.stringify({ t: 'verdict', sessionId, requestId: 'other', behavior: 'allow', rule: forged }))
+    await answered('other')
+    expect(await ask('make release')).toBe('')
+
+    await request('fghij', 'make deploy --prod')
+    const rule = await seal(key, { sessionId, requestId: 'fghij', rules })
+    app.socket.send(JSON.stringify({ t: 'verdict', sessionId, requestId: 'fghij', behavior: 'allow', rule }))
+    await answered('fghij')
+    await eventually(() => existsSync(join(home, 'session-rules', `${sessionId}.json`)), 'the session rules')
+    expect(JSON.parse(await ask('make deploy --staging'))).toEqual({
+      hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } },
+    })
+    expect(await ask('make clean')).toBe('')
+    expect(await ask('make deploy && rm -rf ~')).toBe('')
+    // Another session of the machine is still asked.
+    expect(await ask('make deploy --staging', 'another-session')).toBe('')
+  })
+
   test('a start order reaches the machine and its answer comes back sealed; another account starts nothing', async () => {
     // A folder that does not exist: the agent answers without starting anything on the developer's machine.
     const missing = join(dir, 'missing')

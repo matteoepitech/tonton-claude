@@ -2,7 +2,7 @@
 // the account key and folded into an immutable state. UI-agnostic, so the web, Windows and Linux apps only render it.
 // Mirrors RelaySocket.swift and SessionStore.swift.
 
-import type { AppMessage, Entry, ModelAlias, RelayToApp, SessionCommand, StartDetail } from './protocol'
+import type { AppMessage, Entry, ModelAlias, PermissionRule, RelayToApp, SessionCommand, StartDetail } from './protocol'
 import { type Machine, type Session, sortSessions } from './session'
 import type { OutgoingImage, Vault } from './vault'
 import { parseRelayMessage } from './wire'
@@ -179,6 +179,12 @@ export class RelayClient {
 
   answer(sessionId: string, requestId: string, allow: boolean): boolean {
     return this.send({ t: 'verdict', sessionId, requestId, behavior: allow ? 'allow' : 'deny' })
+  }
+
+  /** Allows the request, and calls like it until the session ends (`sessionRuleFor`). */
+  async allowForSession(sessionId: string, requestId: string, rules: PermissionRule[]): Promise<boolean> {
+    const rule = await this.options.vault.sealSessionRules(sessionId, requestId, rules)
+    return this.send({ t: 'verdict', sessionId, requestId, behavior: 'allow', rule })
   }
 
   /** Removes a finished session from the account's list. */

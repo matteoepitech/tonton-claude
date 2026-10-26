@@ -309,10 +309,15 @@ public struct MachineInfo: Identifiable, Equatable, Sendable {
 
     /// Agents from this version seal a copy of a session for a read-only share; older ones ignore the order.
     public static let sharesSince = "0.8.0"
+    /// Agents from this version keep what "Allow for this session" allows; older ones only allow the one call.
+    public static let sessionRulesSince = "0.8.0"
+
+    public var sealsShares: Bool { runs(atLeast: Self.sharesSince) }
+    public var keepsSessionRules: Bool { runs(atLeast: Self.sessionRulesSince) }
 
     /// Development builds report 0.0.0 and run the current code.
-    public var sealsShares: Bool {
+    private func runs(atLeast version: String) -> Bool {
         guard let agentVersion else { return false }
-        return agentVersion == "0.0.0" || agentVersion.compare(Self.sharesSince, options: .numeric) != .orderedAscending
+        return agentVersion == "0.0.0" || agentVersion.compare(version, options: .numeric) != .orderedAscending
     }
 }

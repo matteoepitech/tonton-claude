@@ -2,8 +2,17 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { seal } from '../../shared/crypto'
-import { applyRules, matches, matchingRule, readRules } from '../src/rules'
+import { newAccountKey, seal } from '../../shared/crypto'
+import {
+  addSessionRules,
+  applyRules,
+  clearSessionRules,
+  matches,
+  matchingRule,
+  openSessionRules,
+  readRules,
+  sessionRules,
+} from '../src/rules'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-rules-'))
 const file = join(dir, 'rules.json')
@@ -58,5 +67,34 @@ describe('auto-approve rules', () => {
     expect(readRules(file)?.rules).toEqual([{ tool: 'Bash', pattern: 'npm test' }])
     await applyRules(key, await seal(key, { rules: [], issuedAt: '2026-10-26T11:00:00Z' }), file)
     expect(readRules(file)?.rules).toEqual([])
+  })
+})
+
+describe('rules for the rest of a session', () => {
+  const folder = join(dir, 'session-rules')
+  const rules = [{ tool: 'Bash', pattern: 'npm test' }]
+
+  test('only rules sealed with the account key, for this session and request, are taken', async () => {
+    const key = newAccountKey()
+    const sealed = (fields: object) => seal(key, { sessionId: 'ses_1', requestId: 'r1', rules, ...fields })
+    expect(await openSessionRules(key, await sealed({}), 'ses_1', 'r1')).toEqual(rules)
+    expect(await openSessionRules(key, await sealed({ sessionId: 'ses_2' }), 'ses_1', 'r1')).toEqual([])
+    expect(await openSessionRules(key, await sealed({ requestId: 'r2' }), 'ses_1', 'r1')).toEqual([])
+    expect(await openSessionRules(newAccountKey(), await sealed({}), 'ses_1', 'r1')).toEqual([])
+    expect(await openSessionRules(key, await sealed({ rules: [{ tool: '' }, { tool: 'Edit' }] }), 'ses_1', 'r1')).toEqual([
+      { tool: 'Edit' },
+    ])
+  })
+
+  test('they add up per session, and go once it ends', () => {
+    addSessionRules('ses_1', rules, folder)
+    addSessionRules('ses_1', [{ tool: 'Edit' }], folder)
+    addSessionRules('../ses_2', [{ tool: 'Read' }], folder)
+    expect(sessionRules('ses_1', folder)).toEqual([...rules, { tool: 'Edit' }])
+    expect(sessionRules('../ses_2', folder)).toEqual([{ tool: 'Read' }])
+    expect(sessionRules('ses_3', folder)).toEqual([])
+    clearSessionRules('ses_1', folder)
+    expect(sessionRules('ses_1', folder)).toEqual([])
+    expect(sessionRules('../ses_2', folder)).toEqual([{ tool: 'Read' }])
   })
 })

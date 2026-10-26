@@ -382,6 +382,20 @@ final class SessionStore: ObservableObject {
         if allow { approved.send() }
     }
 
+    /// What "Allow for this session" offers, for sessions an agent serves: it keeps the rules until the session ends.
+    func sessionRule(for request: PermissionRequest, in session: SessionSummary) -> SessionRule? {
+        guard relaySessions.contains(where: { $0.id == session.id }), !isOpenCodeHere(session.id),
+            machines.first(where: { $0.id == session.machineId })?.keepsSessionRules == true
+        else { return nil }
+        return SessionRule.suggested(tool: request.toolName, inputPreview: request.inputPreview)
+    }
+
+    func allowForSession(_ request: PermissionRequest, rule: SessionRule, in sessionId: String) {
+        guard let sealed = try? vault?.sealSessionRules(rule.rules, for: sessionId, requestId: request.requestId) else { return }
+        socket.send(["t": "verdict", "sessionId": sessionId, "requestId": request.requestId, "behavior": "allow", "rule": sealed])
+        approved.send()
+    }
+
     func dismiss(_ sessionId: String) {
         guard relaySessions.contains(where: { $0.id == sessionId }) else {
             dismissedLocal.insert(sessionId)

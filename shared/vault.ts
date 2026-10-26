@@ -17,10 +17,12 @@ import type {
   Entry,
   MachineSummary,
   ModelAlias,
+  PermissionRule,
   PromptPayload,
   Sealed,
   SealedEntry,
   SessionCommand,
+  SessionRules,
   SessionSummary,
   StartDetail,
   UsageLimit,
@@ -128,6 +130,12 @@ export class Vault {
       ...(name === 'model' && options.model ? { model: options.model } : {}),
     }
     const payload: PromptPayload = { text: '', images: [], command }
+    return seal(this.key, payload)
+  }
+
+  /** "Allow for this session": the rules go with the verdict, bound to its session and request. */
+  sealSessionRules(sessionId: string, requestId: string, rules: PermissionRule[]): Promise<Sealed> {
+    const payload: SessionRules = { sessionId, requestId, rules }
     return seal(this.key, payload)
   }
 

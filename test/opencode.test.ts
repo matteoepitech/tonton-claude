@@ -171,6 +171,28 @@ describe('OpenCode through the relay', () => {
     expect(latest()?.pendingPermissions.some(p => p.requestId === 'per_tests')).toBe(false)
   })
 
+  test('"allow for this session" answers the next calls like it without asking, as for Claude Code', async () => {
+    const ask = (id: string, command: string, call: string) =>
+      emit('permission.asked', { id, action: 'shell', resources: [command], source: { type: 'tool', id: call } })
+    const reply = (id: string) => eventually(() => commands.find(c => c.op === 'reply' && c.requestID === id), `the reply to ${id}`)
+    ask('per_make1', 'make deploy --prod', 'call_m1')
+    await eventually(() => latest()?.pendingPermissions.some(p => p.requestId === 'per_make1'), 'the request')
+    const rules = [
+      { tool: 'Bash', pattern: 'make deploy' },
+      { tool: 'Bash', pattern: 'make deploy *' },
+    ]
+    const rule = await seal(key, { sessionId: SESSION, requestId: 'per_make1', rules })
+    app.send(JSON.stringify({ t: 'verdict', sessionId: SESSION, requestId: 'per_make1', behavior: 'allow', rule }))
+    expect(await reply('per_make1')).toMatchObject({ decision: 'once' })
+    await Bun.sleep(200)
+    ask('per_make2', 'make deploy --staging', 'call_m2')
+    expect(await reply('per_make2')).toMatchObject({ decision: 'once' })
+    // Anything else is still asked.
+    ask('per_make3', 'make clean', 'call_m3')
+    await eventually(() => latest()?.pendingPermissions.some(p => p.requestId === 'per_make3'), 'the other request')
+    expect(commands.some(c => c.op === 'reply' && c.requestID === 'per_make3')).toBe(false)
+  })
+
   test('compact and interrupt run through OpenCode, clear says why it cannot', async () => {
     app.send(JSON.stringify({ t: 'prompt', sessionId: SESSION, payload: await sealedCommand('compact') }))
     app.send(JSON.stringify({ t: 'prompt', sessionId: SESSION, payload: await sealedCommand('interrupt') }))

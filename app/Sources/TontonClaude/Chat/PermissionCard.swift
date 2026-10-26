@@ -6,6 +6,9 @@ import TontonCore
 /// left to deny. The swipe arrives as scroll events, read in the notch panel while they start over the card.
 struct PermissionCard: View {
     let request: PermissionRequest
+    /// Nil when the session cannot keep one: sessions on this Mac without the agent.
+    var sessionRule: SessionRule?
+    var allowForSession: (SessionRule) -> Void = { _ in }
     let answer: (Bool) -> Void
     @EnvironmentObject var settings: AppSettings
     @State private var swipe = SwipeToAnswer()
@@ -56,6 +59,13 @@ struct PermissionCard: View {
             HStack {
                 Spacer()
                 Button("Deny") { answer(false) }
+                if let sessionRule {
+                    // The meaning first: only the end of a long command is cut.
+                    Button("Allow for this session: \(sessionRule.label)") { allowForSession(sessionRule) }
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help("\(sessionRule.label): calls like this one are allowed without asking until the session ends.")
+                }
                 Button("Allow") { answer(true) }
                     .keyboardShortcut(.return, modifiers: .command)
                     .buttonStyle(.borderedProminent)

@@ -5,7 +5,7 @@ import type { PromptPayload, RelayToAgent, SessionCommand } from '../../../share
 import { loadConfig, paths } from '../config'
 import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
-import { receiveRules } from '../rules'
+import { addSessionRules, openSessionRules, receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { Conversation } from './conversation'
 import { ChannelServer } from './mcp'
@@ -50,6 +50,10 @@ export async function runChannel() {
 
   const onRelayMessage = async (message: Extract<RelayToAgent, { t: 'prompt' | 'verdict' }>) => {
     if (message.t === 'verdict') {
+      if (message.behavior === 'allow' && message.rule && conversation) {
+        const { sessionId } = conversation.link
+        addSessionRules(sessionId, await openSessionRules(config.key, message.rule, sessionId, message.requestId))
+      }
       conversation?.resolvePermission(message.requestId)
       await mcp.answerPermission(message.requestId, message.behavior)
       return

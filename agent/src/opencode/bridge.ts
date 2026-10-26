@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { open, seal } from '../../../shared/crypto'
-import type { Entry, PromptPayload, RelayToAgent, SealedEntry, SessionCommand, SessionInfo } from '../../../shared/protocol'
+import type { Entry, PermissionRule, PromptPayload, RelayToAgent, SealedEntry, SessionCommand, SessionInfo } from '../../../shared/protocol'
 import { withAttachments } from '../channel'
 import { projectOf } from '../channel/conversation'
 import { RelayConnection } from '../channel/relay-connection'
@@ -11,7 +11,7 @@ import { type AgentConfig, loadConfig, paths } from '../config'
 import { postHook } from '../hook'
 import { openCodeStarts } from '../launch'
 import { log } from '../log'
-import { matchingRule, readRules, receiveRules } from '../rules'
+import { matchingRule, openSessionRules, readRules, receiveRules } from '../rules'
 import { OPENCODE_COMMANDS, type OpenCodePermission, OpenCodeTracker, type SessionUpdate } from './events'
 
 const BACKLOG_SIZE = 400
@@ -41,6 +41,8 @@ class Link {
   private readonly fromNotch: string[] = []
   /** OpenCode 1 takes the model with each message: the one the notch switched to, if it did. */
   private chosenModel: { providerID: string; modelID: string } | undefined
+  /** What "Allow for this session" allowed: gone with the bridge, when OpenCode exits. */
+  private readonly sessionRules: PermissionRule[] = []
   /** Read-only shares of this session, as for Claude Code. */
   private readonly shares: SessionShares
 
@@ -85,7 +87,8 @@ class Link {
 
   /** Shows a request in the notch, unless an auto-approve rule from the app answers it. */
   ask(permission: OpenCodePermission) {
-    const rule = matchingRule(readRules()?.rules ?? [], permission.detail.toolName, permission.input)
+    const rules = [...(readRules()?.rules ?? []), ...this.sessionRules]
+    const rule = matchingRule(rules, permission.detail.toolName, permission.input)
     if (rule) {
       log('approved by an auto-approve rule', { tool: rule.tool })
       this.send({ op: 'reply', sessionID: this.sessionId, directory: this.cwd(), requestID: permission.requestId, decision: 'once' })
@@ -131,12 +134,17 @@ class Link {
     else if (message.t === 'verdict') {
       const permission = [...this.pending.values()].find(item => shortId(item.requestId) === message.requestId)
       if (!permission) return
+      if (message.behavior === 'allow' && message.rule) void this.allowForSession(message.rule, message.requestId)
       const decision = message.behavior === 'allow' ? 'once' : 'reject'
       this.send({ op: 'reply', sessionID: this.sessionId, directory: this.cwd(), requestID: permission.requestId, decision })
       this.close(permission.requestId)
     } else if (message.t === 'prompt') {
       void this.prompt(message.payload)
     }
+  }
+
+  private async allowForSession(sealed: string, requestId: string) {
+    this.sessionRules.push(...(await openSessionRules(this.config.key, sealed, this.sessionId, requestId)))
   }
 
   private async prompt(sealed: string) {

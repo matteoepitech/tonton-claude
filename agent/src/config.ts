@@ -14,6 +14,8 @@ export const paths = {
   run: join(HOME, 'run'),
   /** Auto-approve rules from the app, read by the PermissionRequest hook. */
   rules: join(HOME, 'rules.json'),
+  /** What "Allow for this session" allowed, one file per Claude Code session until it ends. */
+  sessionRules: join(HOME, 'session-rules'),
   /** Passed to claude by the launcher with --settings. */
   launcherSettings: join(HOME, 'claude-settings.json'),
   /** Images sent from the notch, handed to Claude as file paths. */
