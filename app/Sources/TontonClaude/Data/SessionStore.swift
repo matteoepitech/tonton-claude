@@ -61,6 +61,18 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    /// The list as the notch shows it, pinned sessions first.
+    var sections: [SessionSection] { SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions) }
+    var orderedSessions: [SessionSummary] { SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions) }
+
+    func togglePin(_ sessionId: String) {
+        if settings.pinnedSessions.contains(sessionId) {
+            settings.pinnedSessions.removeAll { $0 == sessionId }
+        } else {
+            settings.pinnedSessions.append(sessionId)
+        }
+    }
+
     var attentionCount: Int { visibleSessions.filter(\.status.needsAttention).count }
 
     var todayCost: Double {
@@ -100,6 +112,9 @@ final class SessionStore: ObservableObject {
         case .snapshot(let wireSessions, let wireMachines):
             machines = vault.machines(wireMachines)
             sessions = sorted(wireSessions.map { vault.session($0, machines: machines) })
+            // The snapshot lists every session the relay still has: pins of the others can go.
+            let pins = settings.pinnedSessions.filter { id in sessions.contains { $0.id == id } }
+            if pins != settings.pinnedSessions { settings.pinnedSessions = pins }
             if selectedId == nil || !sessions.contains(where: { $0.id == selectedId }) { selectedId = preferredSelection() }
         case .session(let wire):
             update(vault.session(wire, machines: machines))
@@ -108,6 +123,7 @@ final class SessionStore: ObservableObject {
         case .removed(let sessionId):
             sessions.removeAll { $0.id == sessionId }
             entries[sessionId] = nil
+            settings.pinnedSessions.removeAll { $0 == sessionId }
             if selectedId == sessionId { selectedId = preferredSelection() }
         case .history(let sessionId, let wireEntries):
             entries[sessionId] = vault.entries(wireEntries)
