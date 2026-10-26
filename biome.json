@@ -1,7 +1,18 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
   "files": {
-    "includes": ["agent/**", "relay/**", "shared/**", "scripts/**", "test/**", "*.json", "!**/node_modules", "!**/dist", "!**/data"]
+    "includes": [
+      "agent/**",
+      "relay/**",
+      "shared/**",
+      "scripts/**",
+      "test/**",
+      "raycast/src/**",
+      "*.json",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/data"
+    ]
   },
   "formatter": {
     "enabled": true,

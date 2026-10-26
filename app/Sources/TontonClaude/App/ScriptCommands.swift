@@ -32,6 +32,17 @@ final class SessionStatusCommand: NSScriptCommand {
     }
 }
 
+@objc(TontonQuickRepliesCommand)
+final class QuickRepliesCommand: NSScriptCommand {
+    override func performDefaultImplementation() -> Any? {
+        MainActor.assumeIsolated {
+            let list = NSAppleEventDescriptor.list()
+            for reply in AppSettings.shared.quickReplies { list.insert(NSAppleEventDescriptor(string: reply), at: 0) }
+            return list
+        }
+    }
+}
+
 @objc(TontonSendMessageCommand)
 final class SendMessageCommand: NSScriptCommand {
     override func performDefaultImplementation() -> Any? {
