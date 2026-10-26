@@ -56,22 +56,15 @@ struct ChatHeader: View {
     @EnvironmentObject var store: SessionStore
     @EnvironmentObject var settings: AppSettings
 
-    /// Saves the conversation as Markdown (tool calls as list items, results left out).
-    private func export() {
-        var md = "# \(session.title ?? session.project)\n\n_\(session.machine) · \(session.cwd)_\n\n"
-        for item in ChatItem.build(from: store.entries[session.id] ?? []) {
-            switch item {
-            case .user(let e): md += "**You:** \(e.text ?? "")\n\n"
-            case .assistant(let e): md += "\(e.text ?? "")\n\n"
-            case .tool(let call, let result):
-                md += "- `\(call.name ?? "tool")` \(call.summary ?? "")\(result?.isError == true ? " (failed)" : "")\n\n"
-            case .system(let e): md += "> \(e.text ?? "")\n\n"
-            }
-        }
+    /// Saves the conversation as Markdown or as a standalone HTML page, images included (see ConversationExport).
+    private func export(_ format: ConversationExport.Format) {
+        let text = ConversationExport.render(
+            format, title: session.title ?? session.project, subtitle: "\(session.machine) · \(session.cwd)",
+            entries: store.entries[session.id] ?? [])
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.init(filenameExtension: "md")!]
-        panel.nameFieldStringValue = "\(session.project)-\(session.id.prefix(8)).md"
-        if panel.runAboveNotch() == .OK, let url = panel.url { try? md.write(to: url, atomically: true, encoding: .utf8) }
+        panel.allowedContentTypes = [.init(filenameExtension: format.fileExtension)].compactMap { $0 }
+        panel.nameFieldStringValue = "\(session.project)-\(session.id.prefix(8)).\(format.fileExtension)"
+        if panel.runAboveNotch() == .OK, let url = panel.url { try? text.write(to: url, atomically: true, encoding: .utf8) }
     }
 
     var body: some View {
@@ -86,14 +79,18 @@ struct ChatHeader: View {
                 }
                 Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
-                Button {
-                    export()
+                Menu {
+                    Button("Markdown…") { export(.markdown) }
+                    Button("HTML page…") { export(.html) }
                 } label: {
                     Image(systemName: "square.and.arrow.up").font(.system(size: 11))
                 }
+                .menuStyle(.button)
                 .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
                 .foregroundStyle(.secondary)
-                .help("Export the conversation as Markdown")
+                .help("Export the conversation, images included")
             }
             HStack {
                 Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
