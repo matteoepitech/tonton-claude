@@ -6,6 +6,7 @@ import TontonCore
 struct ActivityDots: View {
     @EnvironmentObject var state: NotchState
     @EnvironmentObject var store: SessionStore
+    @EnvironmentObject var settings: AppSettings
 
     var body: some View {
         let live = store.visibleSessions.filter { $0.status.isLive }
@@ -15,7 +16,14 @@ struct ActivityDots: View {
         let limit = UsageLimit.fullest(live.map(\.fiveHourLimit))
         HStack(spacing: 0) {
             if state.showWings {
-                Group { if let urgent { StatusDot(status: urgent, size: 7, limit: limit) } }.frame(width: state.currentWingWidth)
+                Group {
+                    if settings.showMascot {
+                        MascotView(status: urgent ?? .idle)
+                    } else if let urgent {
+                        StatusDot(status: urgent, size: 7, limit: limit)
+                    }
+                }
+                .frame(width: state.currentWingWidth)
                 Spacer(minLength: 0)
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     let countdown = UsageLimit.soonest(live.map { $0.limitToWatch(at: context.date) }, at: context.date)
