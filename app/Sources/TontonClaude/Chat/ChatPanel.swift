@@ -97,6 +97,7 @@ struct ChatHeader: View {
     let session: SessionSummary
     @EnvironmentObject var store: SessionStore
     @EnvironmentObject var settings: AppSettings
+    @State private var confirming: SessionCommandName?
 
     /// Saves the conversation as Markdown or as a standalone HTML page, images included (see ConversationExport).
     private func export(_ format: ConversationExport.Format) {
@@ -128,6 +129,26 @@ struct ChatHeader: View {
         .help(on ? "Claude gets “continue” when the limit resets. Click to cancel." : "Send “continue” when the limit resets")
     }
 
+    /// Slash commands typed in the session's terminal: only for sessions in tmux, while Claude waits at its prompt.
+    private var commands: some View {
+        Menu {
+            ForEach(SessionCommandName.allCases, id: \.self) { name in
+                Button(name.label) {
+                    if name.needsConfirmation { confirming = name } else { store.sendCommand(name, to: session.id) }
+                }
+            }
+        } label: {
+            Image(systemName: "terminal").font(.system(size: 11))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .foregroundStyle(.secondary)
+        .disabled(!session.acceptsCommands)
+        .help(session.acceptsCommands ? "Run a command in the session's terminal" : "Commands wait until Claude is done")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
@@ -143,6 +164,7 @@ struct ChatHeader: View {
                 }
                 Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
+                if session.terminal && session.canChat { commands }
                 Menu {
                     Button("Markdown…") { export(.markdown) }
                     Button("HTML page…") { export(.html) }
@@ -175,10 +197,45 @@ struct ChatHeader: View {
                         .onTapGesture { store.lastError = nil }
                 }
             }
+            if let confirming {
+                ClearConfirmation(cancel: { self.confirming = nil }) {
+                    self.confirming = nil
+                    store.sendCommand(confirming, to: session.id)
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Theme.ink.opacity(0.04))
+    }
+}
+
+/// Asked in place before `/clear`: the notch is a panel above every window, where an alert would not show.
+struct ClearConfirmation: View {
+    let cancel: () -> Void
+    let clear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Clear the conversation? Claude starts over without what was said so far.")
+                .font(.system(size: 11))
+                .lineLimit(2)
+            Spacer(minLength: 8)
+            Button("Cancel", action: cancel)
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .padding(.horizontal, 10)
+                .frame(height: 22)
+                .background(Capsule().fill(Theme.ink.opacity(0.1)))
+            Button("Clear", action: clear)
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .frame(height: 22)
+                .background(Capsule().fill(Theme.danger))
+        }
+        .padding(.top, 4)
     }
 }
 

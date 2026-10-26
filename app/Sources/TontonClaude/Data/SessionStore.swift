@@ -313,6 +313,12 @@ final class SessionStore: ObservableObject {
         sent.send()
     }
 
+    /// Typed in the session's terminal by its agent. What it says back, if it could not, shows in the conversation.
+    func sendCommand(_ name: SessionCommandName, to sessionId: String) {
+        guard let payload = try? vault?.sealCommand(name, for: sessionId) else { return }
+        socket.send(["t": "prompt", "sessionId": sessionId, "payload": payload])
+    }
+
     func answer(_ request: PermissionRequest, allow: Bool, in sessionId: String) {
         socket.send(["t": "verdict", "sessionId": sessionId, "requestId": request.requestId, "behavior": allow ? "allow" : "deny"])
         if allow { approved.send() }

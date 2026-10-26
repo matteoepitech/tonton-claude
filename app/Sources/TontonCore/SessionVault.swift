@@ -40,7 +40,8 @@ public struct SessionVault: Sendable {
             fiveHourLimit: meta?.fiveHourLimit.flatMap(usageLimit),
             sevenDayLimit: meta?.sevenDayLimit.flatMap(usageLimit),
             tokens: meta?.tokens,
-            context: meta?.context.map { ContextUsage(usedTokens: $0.usedTokens, windowTokens: $0.windowTokens) }
+            context: meta?.context.map { ContextUsage(usedTokens: $0.usedTokens, windowTokens: $0.windowTokens) },
+            terminal: meta?.terminal ?? false
         )
     }
 
@@ -70,6 +71,13 @@ public struct SessionVault: Sendable {
 
     public func sealPrompt(text: String, images: [OutgoingImage]) throws -> String {
         try E2E.seal(PromptPayload(text: text, images: images), with: key)
+    }
+
+    /// A slash command for the session's terminal, sent like a message. Its random id lets the agent run it once.
+    public func sealCommand(_ name: SessionCommandName, for sessionId: String, issuedAt: Date = Date()) throws -> String {
+        let command = SessionCommand(
+            name: name, sessionId: sessionId, id: UUID().uuidString.lowercased(), issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+        return try E2E.seal(PromptPayload(text: "", images: [], command: command), with: key)
     }
 
     /// Agents only obey orders sealed with the account key and issued in the last minutes.

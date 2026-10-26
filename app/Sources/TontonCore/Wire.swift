@@ -96,6 +96,8 @@ struct SessionMeta: Codable {
     var sevenDayLimit: WireUsageLimit?
     var tokens: TokenCounts?
     var context: WireContext?
+    /// Missing from older agents.
+    var terminal: Bool?
 }
 struct WireContext: Codable { let usedTokens: Int; let windowTokens: Int? }
 struct WireUsageLimit: Codable { let usedPercent: Double; let resetsAt: String }
@@ -115,7 +117,11 @@ public struct OutgoingImage: Codable, Sendable {
     }
 }
 
-struct PromptPayload: Codable { let text: String; let images: [OutgoingImage] }
+struct PromptPayload: Codable {
+    let text: String
+    let images: [OutgoingImage]
+    var command: SessionCommand?
+}
 struct UpdateOrder: Codable { let version: String; let issuedAt: String }
 struct StartOrder: Codable { let launchId: String; let machineId: String; let cwd: String; let issuedAt: String }
 struct StartAnswer: Codable {

@@ -80,6 +80,9 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Starting a session.** <kbd>+</kbd> in the open notch, or <kbd>⌘</kbd> <kbd>N</kbd>, starts claude in a folder of any
   machine, in a tmux session you can attach to later. The machine needs tmux, so not Windows. The questions Claude Code
   asks on the way, like trusting the folder, show up in the notch: nothing is confirmed for you.
+- **Slash commands.** Claude Code doesn't let a channel run `/compact` or `/clear`, so the notch types them in the
+  session's terminal instead. That works for sessions running in tmux, like the ones started from the notch: a terminal
+  icon in the session's header, once Claude is done. `/clear` asks first.
 - **Changing relay or account.** Click the Tonton Claude icon next to the clock on that machine › **Set token…** and paste
   the token from the app. **Regenerate** in Settings › Machines makes a new one: every machine is signed out until it gets it.
 - **AppleScript and Shortcuts.** Scripts can read the sessions (`session list`, `session status "api"`) and, once
