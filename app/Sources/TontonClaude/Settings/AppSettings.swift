@@ -18,7 +18,7 @@ final class AppSettings: ObservableObject {
         PromptTemplate(
             name: "Fix an issue", text: "Fix issue #{number}: read it with gh issue view {number}, make the change and run the tests."),
     ]
-    static let alertSounds = ["Glass", "Tink", "Ping", "Pop", "Purr", "Hero", "Submarine", "Funk", "Bottle", "Frog"]
+    static let alertSounds = ["Glass", "Tink", "Ping", "Pop", "Purr", "Hero", "Submarine", "Funk", "Bottle", "Frog", "Basso"]
 
     /// Relay
     @Published var serverURL: String
@@ -70,7 +70,8 @@ final class AppSettings: ObservableObject {
     /// When a session stopped by a usage limit can go again.
     @Published var alertOnLimitReset: Bool
     @Published var soundOnAttention: Bool
-    @Published var alertSound: String
+    /// The sound of each `SoundEvent`, by its raw value.
+    @Published var eventSounds: [String: String]
     @Published var haptics: Bool
     @Published var systemNotifications: Bool
     @Published var quietHours: Bool
@@ -85,6 +86,8 @@ final class AppSettings: ObservableObject {
     @Published var webhookIncludeLastMessage: Bool
 
     var isConfigured: Bool { account != nil }
+
+    func sound(for event: SoundEvent) -> String { eventSounds[event.rawValue] ?? "Glass" }
     var relayURL: String { account?.relay ?? serverURL }
 
     /// No sound, banner or notification while quiet hours are on.
@@ -139,7 +142,9 @@ final class AppSettings: ObservableObject {
         confettiAfterMinutes = value("confettiAfterMinutes", 0)
         alertOnLimitReset = value("alertOnLimitReset", true)
         soundOnAttention = value("soundOnAttention", true)
-        alertSound = value("alertSound", "Glass")
+        // Before sounds per event, one sound played for everything: it stays the sound of every event.
+        let single = value("alertSound", "Glass")
+        eventSounds = value("eventSounds", Dictionary(uniqueKeysWithValues: SoundEvent.allCases.map { ($0.rawValue, single) }))
         haptics = value("haptics", true)
         systemNotifications = value("systemNotifications", false)
         quietHours = value("quietHours", false)
@@ -179,7 +184,7 @@ final class AppSettings: ObservableObject {
         persist($confettiAfterMinutes, "confettiAfterMinutes")
         persist($alertOnLimitReset, "alertOnLimitReset")
         persist($soundOnAttention, "soundOnAttention")
-        persist($alertSound, "alertSound")
+        persist($eventSounds, "eventSounds")
         persist($haptics, "haptics")
         persist($systemNotifications, "systemNotifications")
         persist($quietHours, "quietHours")

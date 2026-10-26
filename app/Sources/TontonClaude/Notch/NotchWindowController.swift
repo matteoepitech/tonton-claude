@@ -178,7 +178,7 @@ final class NotchWindowController {
     /// A session needs the user or just finished: sound, haptics, notification, then the banner or the open notch.
     private func alert(_ session: SessionSummary, finished: Bool) {
         guard !settings.isQuietNow else { return }
-        signal()
+        signal(.of(session.status, finished: finished))
         if settings.systemNotifications { Notifier.post(session, body: finished ? "Claude is done." : session.displayStatusText) }
         if settings.openOnPermission && session.status == .permission {
             store.selectedId = session.id
@@ -191,7 +191,7 @@ final class NotchWindowController {
     /// Sessions a usage limit stopped can go again: the same sound and banner, once for all of them.
     private func limitLifted(_ sessions: [SessionSummary]) {
         guard let session = sessions.first, !settings.isQuietNow else { return }
-        signal()
+        signal(.finished)
         if settings.systemNotifications {
             let more = sessions.count > 1 ? " \(sessions.count) sessions can go again." : " Claude can go again."
             Notifier.post(session, body: "The usage limit reset." + more)
@@ -210,15 +210,15 @@ final class NotchWindowController {
         }
     }
 
-    private func signal() {
-        if settings.soundOnAttention { NSSound(named: settings.alertSound)?.play() }
+    private func signal(_ event: SoundEvent) {
+        if settings.soundOnAttention { SoundPlayer.play(settings.sound(for: event)) }
         if settings.haptics { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
     }
 
     /// Today's spending went past the daily budget of Settings › General.
     private func budgetExceeded(_ spent: Double) {
         guard !settings.isQuietNow else { return }
-        signal()
+        signal(.question)
         let text = String(format: "Today's cost passed $%d: $%.2f so far", settings.dailyBudget, spent)
         if settings.systemNotifications { Notifier.post(title: "Daily budget", body: text) }
         peek(nil, text: text)
