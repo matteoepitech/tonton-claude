@@ -114,6 +114,21 @@ curl -fsSL https://github.com/matteoepitech/tonton-claude/releases/latest/downlo
 
 The Mac app connects with the system settings of the Mac (System Settings › Network › Proxies), like Safari.
 
+## The web app
+
+`tonton-web.html` is the whole web app in one file, published with each release (`bun run web` builds it in `dist/`).
+Open it from disk, or put it on any static host: it has no server side.
+
+- It signs in with the account's recovery key (Settings › Relay in the Mac app). Its JSON holds the relay, the app's
+  token and the end-to-end key. **Remember on this device** keeps the key in IndexedDB as a `CryptoKey` that cannot be
+  exported, so no script can read it back.
+- It decrypts and encrypts in the page with WebCrypto, like the Mac app with CryptoKit. The relay sees what it sees from
+  the Mac app: ids, states, sizes and sealed blobs.
+- Browsers cannot set the `Authorization` header of a WebSocket. The page opens `/ws/app` with the subprotocols
+  `tonton` and `bearer.<token>`, and the relay answers with `tonton` only. Relays before 0.8.0 refuse it.
+- Its Content-Security-Policy allows its own inline script and style, and WebSocket connections, nothing else. It never
+  puts what a session says into the page as HTML.
+
 ## Running your own relay
 
 The relay is a single executable behind any HTTPS reverse proxy with WebSocket support. It only needs updating when its own

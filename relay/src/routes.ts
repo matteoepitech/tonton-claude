@@ -2,7 +2,7 @@ import type { Server } from 'bun'
 import type { HookPost } from '../../shared/protocol'
 import { RELEASES_URL } from '../../shared/version'
 import type { RelayContext } from './context'
-import { bearerToken, clientIp, fail, json, readJson } from './http'
+import { BROWSER_PROTOCOL, bearerToken, browserToken, clientIp, fail, json, readJson } from './http'
 import type { SocketData } from './hub'
 import { renderMetrics } from './metrics'
 import { safeEqual, sha256 } from './tokens'
@@ -122,7 +122,9 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
   if (path === '/ws/app') {
     const data: SocketData = { role: 'app', accountId, machineId: null, sessionId: null, agentVersion: null, service: false }
     // The app shows the region next to the latency it measures with WebSocket pings.
-    const headers = ctx.config.region ? { 'x-tonton-region': ctx.config.region } : undefined
+    const headers: Record<string, string> = ctx.config.region ? { 'x-tonton-region': ctx.config.region } : {}
+    // A browser must get one of the subprotocols it offered back: the one without the token.
+    if (browserToken(req)) headers['sec-websocket-protocol'] = BROWSER_PROTOCOL
     return server.upgrade(req, { data, headers }) ? undefined : fail(400, 'WebSocket expected.')
   }
   if (path === '/api/ping') return json({ ok: true, accountId })

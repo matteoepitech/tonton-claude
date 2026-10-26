@@ -1,7 +1,9 @@
 // Compiles the agents and the relay into standalone executables in dist/ (no runtime needed where they run), with the
-// version of the release inlined. Usage: bun run build [--version 1.2.3] [name filter, e.g. windows or relay]
+// version of the release inlined, and the web app into one HTML file.
+// Usage: bun run build [--version 1.2.3] [name filter, e.g. windows, relay or web]
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { buildWeb } from './build-web'
 
 const targets = [
   ['agent/src/main.ts', 'bun-darwin-arm64', 'tonton-darwin-arm64'],
@@ -35,6 +37,7 @@ for (const [entry, target, name] of targets) {
   )
   if (build.exitCode !== 0) process.exit(build.exitCode ?? 1)
 }
+if (!only || 'tonton-web.html'.includes(only)) await buildWeb(join(out, 'tonton-web.html'))
 console.log(`built ${version} in dist/`)
 
 /** The latest release tag, for local builds. */
