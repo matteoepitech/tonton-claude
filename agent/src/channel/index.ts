@@ -3,6 +3,7 @@ import { basename, join } from 'node:path'
 import type { PromptPayload, RelayToAgent } from '../../../shared/protocol'
 import { loadConfig, paths } from '../config'
 import { open } from '../crypto'
+import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
 import { receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
@@ -36,6 +37,8 @@ export async function runChannel() {
     message: message => {
       if (message.t === 'update') void handleUpdateOrder(config, message.order, relay)
       else if (message.t === 'rules') void receiveRules(config.key, message.rules)
+      else if (message.t === 'start_session') receiveStartOrder(config, message.launchId, message.order, relay)
+      else if (message.t === 'start_answer') void handleStartAnswer(config, message.launchId, message.answer)
       else if (conversation && message.sessionId === conversation.link.sessionId) void onRelayMessage(message)
     },
   })

@@ -1,6 +1,7 @@
 import { RelayConnection } from '../channel/relay-connection'
 import { loadConfig, VERSION } from '../config'
 import { seal } from '../crypto'
+import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
 import { receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
@@ -56,6 +57,8 @@ export async function runService(args: string[]) {
       message: message => {
         if (message.t === 'update') void handleUpdateOrder(config, message.order, relay)
         else if (message.t === 'rules') void receiveRules(config.key, message.rules)
+        else if (message.t === 'start_session') receiveStartOrder(config, message.launchId, message.order, relay)
+        else if (message.t === 'start_answer') void handleStartAnswer(config, message.launchId, message.answer)
       },
     })
     connection = relay
