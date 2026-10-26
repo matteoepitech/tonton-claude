@@ -62,12 +62,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleURLSchemes</key><array><string>tonton</string></array>
   </dict></array>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSMicrophoneUsageDescription</key><string>Dictate messages to your Claude Code sessions from the notch.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Turn what you dictate in the notch into text for Claude.</string>
 </dict>
 </plist>
 PLIST
 
 if [ -n "$CODESIGN_IDENTITY" ]; then
-  codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$APP"
+  codesign --force --options runtime --timestamp --entitlements Resources/TontonClaude.entitlements --sign "$CODESIGN_IDENTITY" "$APP"
 else
   codesign --force --sign - "$APP"
 fi

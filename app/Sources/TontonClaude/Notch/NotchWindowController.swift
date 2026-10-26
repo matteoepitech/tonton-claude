@@ -46,6 +46,8 @@ final class NotchWindowController {
     private var openedByHover = false
     /// The last other app in front, given back the focus when the notch closes.
     private var previousApp: NSRunningApplication?
+    /// ⌃ pressed alone: dictation starts unless another key comes first.
+    private var pushToTalkTask: Task<Void, Never>?
 
     init(store: SessionStore, settings: AppSettings) {
         self.store = store
@@ -346,12 +348,34 @@ final class NotchWindowController {
                 return event
             })
         addMonitor(
+            NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+                if let self, event.window === self.panel { self.modifiersChanged(event) }
+                return event
+            })
+        addMonitor(
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self, self.state.mode == .expanded, event.window === self.panel else { return event }
+                // ⌃ was part of a shortcut (⌃A, ⌃E…), not a press to talk.
+                self.pushToTalkTask?.cancel()
                 if self.handleKey(event) { return nil }
                 self.openedByHover = false
                 return event
             })
+    }
+
+    /// Holding ⌃ alone dictates into the composer, after a moment so ⌃ shortcuts keep working; releasing it stops.
+    private func modifiersChanged(_ event: NSEvent) {
+        let held = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
+        pushToTalkTask?.cancel()
+        guard held == .control, state.mode == .expanded else {
+            if state.pushToTalk { state.pushToTalk = false }
+            return
+        }
+        pushToTalkTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            self?.state.pushToTalk = true
+        }
     }
 
     private func addMonitor(_ monitor: Any?) {

@@ -10,7 +10,7 @@ struct GeneralPane: View {
         [
             ("Toggle the notch", settings.hotkey.keys), ("Close the notch", ["esc"]), ("Jump to session 1…9, pinned first", ["⌘", "1…9"]),
             ("Previous / next session", ["⌘", "↑↓"]), ("Send a message", ["↩"]), ("New line", ["⌥", "↩"]),
-            ("Allow the pending request", ["⌘", "↩"]), ("Paste an image", ["⌘", "⇧", "V"]),
+            ("Allow the pending request", ["⌘", "↩"]), ("Dictate a message (hold)", ["⌃"]), ("Paste an image", ["⌘", "⇧", "V"]),
         ].filter { !$0.1.isEmpty }
     }
 
