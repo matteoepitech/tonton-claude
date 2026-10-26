@@ -73,10 +73,14 @@ final class SessionStore: ObservableObject {
     private let api = RelayAPI()
     private var vault: SessionVault?
     private let localWatcher = LocalSessionWatcher()
+    /// This Mac's OpenCode 2 sessions, from OpenCode's own service. The notch can write to them without the agent.
+    private let openCodeWatcher = OpenCodeLocalWatcher()
+    private var claudeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
+    private var openCodeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
     /// Cost and tokens per day and the monthly recap, for Settings › Usage.
     private(set) lazy var usage = UsageRecorder(
         sessions: sessionsPublisher, tasks: taskDone.eraseToAnyPublisher(),
-        entries: $localEntries.combineLatest($relayEntries).map { local, relay in local.merging(relay) { _, relay in relay } }
+        entries: $localEntries.combineLatest($relayEntries).map { local, relay in LocalSessions.entries(local: local, relay: relay) }
             .eraseToAnyPublisher(),
         settings: settings)
     /// One per reset time of the sessions a usage limit stopped.
@@ -97,8 +101,16 @@ final class SessionStore: ObservableObject {
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.connect() }
             .store(in: &subscriptions)
-        localWatcher.onChange = { [weak self] sessions, entries in self?.localChanged(sessions, entries) }
+        localWatcher.onChange = { [weak self] sessions, entries in
+            self?.claudeHere = (sessions, entries)
+            self?.localChanged()
+        }
         localWatcher.start()
+        openCodeWatcher.onChange = { [weak self] sessions, entries in
+            self?.openCodeHere = (sessions, entries)
+            self?.localChanged()
+        }
+        openCodeWatcher.start()
         // A new set goes to every machine, and replaces the one the relay keeps for each.
         settings.$autoApproveRulesDate.dropFirst().removeDuplicates()
             .sink { [weak self] _ in
@@ -270,7 +282,9 @@ final class SessionStore: ObservableObject {
         notify(session, previous: previous)
     }
 
-    private func localChanged(_ sessions: [SessionSummary], _ entries: [String: [Entry]]) {
+    private func localChanged() {
+        let sessions = claudeHere.sessions + openCodeHere.sessions
+        let entries = claudeHere.entries.merging(openCodeHere.entries) { claude, _ in claude }
         let relayIds = Set(relaySessions.map(\.id))
         let previous = Dictionary(localSessions.map { ($0.id, $0) }) { first, _ in first }
         localSessions = sessions
@@ -307,7 +321,17 @@ final class SessionStore: ObservableObject {
         socket.send(["t": "subscribe", "sessionId": selectedId ?? NSNull()])
     }
 
+    /// An OpenCode session of this Mac that no agent reports: the notch talks to OpenCode's service itself.
+    private func isOpenCodeHere(_ sessionId: String) -> Bool {
+        !relaySessions.contains { $0.id == sessionId } && openCodeHere.sessions.contains { $0.id == sessionId }
+    }
+
     func sendPrompt(_ text: String, images: [OutgoingImage], to sessionId: String) {
+        if isOpenCodeHere(sessionId) {
+            openCodeWatcher.prompt(text, images: images, to: sessionId)
+            sent.send()
+            return
+        }
         guard let payload = try? vault?.sealPrompt(text: text, images: images) else { return }
         socket.send(["t": "prompt", "sessionId": sessionId, "payload": payload])
         sent.send()
@@ -315,11 +339,20 @@ final class SessionStore: ObservableObject {
 
     /// Typed in the session's terminal by its agent. What it says back, if it could not, shows in the conversation.
     func sendCommand(_ name: SessionCommandName, model: ModelFamily? = nil, to sessionId: String) {
+        if isOpenCodeHere(sessionId) {
+            if name == .compact { openCodeWatcher.compact(sessionId) }
+            return
+        }
         guard let payload = try? vault?.sealCommand(name, model: model, for: sessionId) else { return }
         socket.send(["t": "prompt", "sessionId": sessionId, "payload": payload])
     }
 
     func answer(_ request: PermissionRequest, allow: Bool, in sessionId: String) {
+        if isOpenCodeHere(sessionId) {
+            openCodeWatcher.answer(request.requestId, allow: allow, in: sessionId)
+            if allow { approved.send() }
+            return
+        }
         socket.send(["t": "verdict", "sessionId": sessionId, "requestId": request.requestId, "behavior": allow ? "allow" : "deny"])
         if allow { approved.send() }
     }
