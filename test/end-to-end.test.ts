@@ -188,6 +188,29 @@ describe('end to end', () => {
     expect(await open<{ text: string }>(key, live.entries[0].blob)).toMatchObject({ text: 'done' })
   })
 
+  test('what Claude wrote while the Mac was away is waiting when it comes back', async () => {
+    appendFileSync(
+      transcript,
+      line({ type: 'assistant', uuid: 'away', message: { content: [{ type: 'text', text: 'written while away' }] } }),
+    )
+    // Wait until the relay has it, then connect a Mac that was not there when it arrived.
+    await eventually(
+      () => app.messages.some(m => m.t === 'entries' && m.entries.some(e => e.id.startsWith('away'))),
+      'the relay storing it',
+    )
+    const back = await connectApp(accountToken)
+    try {
+      back.socket.send(JSON.stringify({ t: 'subscribe', sessionId }))
+      const history = await eventually(() => back.messages.find(m => m.t === 'history' && m.entries.length > 0), 'the history')
+      if (history.t !== 'history') throw new Error('unexpected message')
+      const texts = await Promise.all(history.entries.map(async e => (await open<{ text?: string }>(key, e.blob)).text))
+      expect(texts).toContain('written while away')
+      expect(texts).toContain('SECRET prompt')
+    } finally {
+      back.socket.close()
+    }
+  })
+
   test("the plan usage left by the session's status line reaches the app, sealed", async () => {
     const fiveHourLimit = { usedPercent: 83, resetsAt: '2026-10-20T12:00:00.000Z' }
     writeFileSync(join(dir, 'agent', 'run', `usage-${sessionId}.json`), JSON.stringify({ fiveHourLimit }))

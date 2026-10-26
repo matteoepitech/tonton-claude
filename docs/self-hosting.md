@@ -40,6 +40,11 @@ the app, the agents and the relay. The relay only relays: updating the app and t
   relay, and checks the version it reports before swapping it in.
 - **Abuse limits.** Per-IP rate limits on sign-ups, joins and failed authentications; caps on machines and sessions per account.
 
+**While your Mac is away.** The relay keeps each session's sealed history, so the notch catches up when the Mac wakes
+or reconnects: up to 800 entries and 16 MB per session, 128 MB per account, the oldest going first. Finished sessions
+are dropped after 6 hours. The history lives in the relay's memory, so a relay restart loses it; agents send theirs
+again when they reconnect.
+
 What a relay can still see: that an account exists, how many machines and sessions it has, session states (working, waiting…)
 and timing.
 
