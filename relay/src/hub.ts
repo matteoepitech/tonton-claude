@@ -41,6 +41,12 @@ export class Hub {
     return (this.machines.get(machineId)?.size ?? 0) > 0
   }
 
+  /** The machine's background service, or else any of its connections. */
+  machineSocket(machineId: string): Socket | null {
+    const sockets = [...(this.machines.get(machineId) ?? [])]
+    return sockets.find(socket => socket.data.service) ?? sockets[0] ?? null
+  }
+
   /** A socket of the machine whose agent knows how to update itself, the background service when it runs. */
   updatableSocket(machineId: string): Socket | null {
     const sockets = [...(this.machines.get(machineId) ?? [])].filter(socket => socket.data.agentVersion)

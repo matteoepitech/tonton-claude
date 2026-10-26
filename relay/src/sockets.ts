@@ -2,8 +2,15 @@ import type { WebSocketHandler } from 'bun'
 import type { AgentMessage, AppMessage, RelayToAgent, RelayToApp } from '../../shared/protocol'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
-import { HEALTH_MIN_INTERVAL_MS, MAX_HEALTH_BYTES, MAX_RULES_BYTES, MAX_WS_MESSAGE_BYTES } from './limits'
-import { isRequestId, isSealed, isSessionId, isText, isVersion } from './validate'
+import {
+  HEALTH_MIN_INTERVAL_MS,
+  MAX_HEALTH_BYTES,
+  MAX_RULES_BYTES,
+  MAX_START_DETAIL_BYTES,
+  MAX_START_ORDER_BYTES,
+  MAX_WS_MESSAGE_BYTES,
+} from './limits'
+import { isLaunchId, isRequestId, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
 
 export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<SocketData> {
   return {
@@ -58,6 +65,19 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
     if (!isSealed(message.health, MAX_HEALTH_BYTES) || (previous && Date.now() - previous.at < HEALTH_MIN_INTERVAL_MS)) return
     ctx.health.set(machineId, { blob: message.health, at: Date.now() })
     ctx.pushMachines(accountId)
+    return
+  }
+  if (message?.t === 'session_start') {
+    const { launchId, state, detail, sessionId } = message
+    if (!isLaunchId(launchId) || !isStartState(state)) return
+    ctx.hub.sendToApps(accountId, {
+      t: 'session_start',
+      machineId,
+      launchId,
+      state,
+      detail: isSealed(detail, MAX_START_DETAIL_BYTES) ? detail : null,
+      ...(isSessionId(sessionId) ? { sessionId } : {}),
+    })
     return
   }
   if (!isSessionId(message?.sessionId)) return
@@ -125,6 +145,23 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     case 'dismiss':
       if (isSessionId(message.sessionId)) ctx.sessions.remove(accountId, message.sessionId)
       break
+    case 'start_session': {
+      const { machineId, launchId, order } = message
+      if (!isText(machineId, 32) || !isLaunchId(launchId) || !isSealed(order, MAX_START_ORDER_BYTES)) return
+      if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
+      const agent = ctx.hub.machineSocket(machineId)
+      if (agent) agent.send(JSON.stringify({ t: 'start_session', launchId, order } satisfies RelayToAgent))
+      else send(socket, { t: 'session_start', machineId, launchId, state: 'failed', reason: 'offline' })
+      break
+    }
+    case 'start_answer': {
+      const { machineId, launchId, answer } = message
+      if (!isText(machineId, 32) || !isLaunchId(launchId) || !isSealed(answer, MAX_START_ORDER_BYTES)) return
+      if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
+      // Only the connection that runs this start acts on it.
+      ctx.hub.sendToMachine(machineId, { t: 'start_answer', launchId, answer })
+      break
+    }
     case 'update_agent':
       if (isText(message.machineId, 32) && isSealed(message.order, 4096)) requestUpdate(ctx, socket, message.machineId, message.order)
       break

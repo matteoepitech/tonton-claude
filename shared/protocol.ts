@@ -101,6 +101,18 @@ export interface RuleSet {
   rules: PermissionRule[]
   issuedAt: string
 }
+/** Sealed by the app: start claude in this folder of the machine. Recent, like update orders. */
+export interface StartOrder {
+  cwd: string
+  issuedAt: string
+}
+/** Sealed by the app: the user's answer to a question Claude Code asks while it starts. */
+export interface StartAnswer {
+  confirm: boolean
+  issuedAt: string
+}
+/** Where a start stands. `asking` comes with the question, `failed` with why, both sealed `{ text }`. */
+export type StartState = 'starting' | 'asking' | 'started' | 'failed'
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
   version: string
@@ -155,6 +167,8 @@ export type AgentMessage =
   | { t: 'update_result'; ok: boolean; version: string | null; detail: Sealed | null }
   // Sent by the background service every minute: a sealed `MachineHealth`.
   | { t: 'health'; health: Sealed }
+  // A start from the app: `sessionId` once claude runs.
+  | { t: 'session_start'; launchId: string; state: StartState; detail: Sealed | null; sessionId?: string }
 
 // relay -> agent
 export type RelayToAgent =
@@ -163,6 +177,8 @@ export type RelayToAgent =
   | { t: 'update'; order: Sealed }
   // The machine's auto-approve rules, sealed `RuleSet`: on each connection, and when the app changes them.
   | { t: 'rules'; rules: Sealed }
+  | { t: 'start_session'; launchId: string; order: Sealed }
+  | { t: 'start_answer'; launchId: string; answer: Sealed }
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -181,6 +197,16 @@ export type RelayToApp =
   | { t: 'error'; message: string }
   // `reason` when the relay could not ask the machine, `detail` when the agent tried and failed.
   | { t: 'agent_update'; machineId: string; ok: boolean; reason?: 'offline' | 'unsupported'; detail?: Sealed | null }
+  // `reason` when the relay could not reach the machine.
+  | {
+      t: 'session_start'
+      machineId: string
+      launchId: string
+      state: StartState
+      reason?: 'offline'
+      detail?: Sealed | null
+      sessionId?: string
+    }
 
 // app -> relay
 export type AppMessage =
@@ -190,3 +216,5 @@ export type AppMessage =
   | { t: 'dismiss'; sessionId: string }
   | { t: 'update_agent'; machineId: string; order: Sealed }
   | { t: 'rules'; machineId: string; rules: Sealed }
+  | { t: 'start_session'; machineId: string; launchId: string; order: Sealed }
+  | { t: 'start_answer'; machineId: string; launchId: string; answer: Sealed }

@@ -11,6 +11,10 @@ export const HEALTH_MIN_INTERVAL_MS = 10_000
 export const MAX_PENDING_PERMISSIONS = 10
 /** Sealed auto-approve rules of one machine. */
 export const MAX_RULES_BYTES = 64 * 1024
+/** A sealed order to start a session, or the user's answer to one of its questions: a folder path, a yes or no. */
+export const MAX_START_ORDER_BYTES = 4096
+/** A sealed question claude asks before a started session runs, with the screen it shows. */
+export const MAX_START_DETAIL_BYTES = 16 * 1024
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
 export const FINISHED_SESSION_TTL_MS = 6 * 60 * 60_000
