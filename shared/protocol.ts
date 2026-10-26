@@ -101,6 +101,41 @@ export interface RuleSet {
   rules: PermissionRule[]
   issuedAt: string
 }
+/**
+ * Sealed by the app: start claude in this folder of this machine. Every machine of the account has the key, so the order
+ * names the one it is for. Recent, like update orders, and run once.
+ */
+export interface StartOrder {
+  launchId: string
+  machineId: string
+  cwd: string
+  issuedAt: string
+}
+/** Sealed by the app: the user's answer to one question of one start, which the relay cannot reuse for another. */
+export interface StartAnswer {
+  launchId: string
+  machineId: string
+  /** The `question` of the `StartDetail` the user answered. */
+  question: string
+  confirm: boolean
+  issuedAt: string
+}
+export type StartState = 'starting' | 'asking' | 'started' | 'failed'
+/**
+ * Sealed by the agent with each `session_start`. The app goes by it, not by the plain fields the relay could change, and
+ * drops one that names another start, machine or state.
+ */
+export interface StartDetail {
+  launchId: string
+  machineId: string
+  state: StartState
+  /** The question while `asking`, why while `failed`, each followed by the last lines of Claude Code's screen. */
+  text?: string
+  /** A new random id for each question asked, that the answer repeats. */
+  question?: string
+  /** Once `started`. */
+  sessionId?: string
+}
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
   version: string
@@ -155,6 +190,8 @@ export type AgentMessage =
   | { t: 'update_result'; ok: boolean; version: string | null; detail: Sealed | null }
   // Sent by the background service every minute: a sealed `MachineHealth`.
   | { t: 'health'; health: Sealed }
+  // A start from the app: `sessionId` once claude runs.
+  | { t: 'session_start'; launchId: string; state: StartState; detail: Sealed }
 
 // relay -> agent
 export type RelayToAgent =
@@ -163,6 +200,8 @@ export type RelayToAgent =
   | { t: 'update'; order: Sealed }
   // The machine's auto-approve rules, sealed `RuleSet`: on each connection, and when the app changes them.
   | { t: 'rules'; rules: Sealed }
+  | { t: 'start_session'; launchId: string; order: Sealed }
+  | { t: 'start_answer'; launchId: string; answer: Sealed }
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -181,6 +220,15 @@ export type RelayToApp =
   | { t: 'error'; message: string }
   // `reason` when the relay could not ask the machine, `detail` when the agent tried and failed.
   | { t: 'agent_update'; machineId: string; ok: boolean; reason?: 'offline' | 'unsupported'; detail?: Sealed | null }
+  // `reason` when the relay could not reach the machine.
+  | {
+      t: 'session_start'
+      machineId: string
+      launchId: string
+      state: StartState
+      reason?: 'offline'
+      detail?: Sealed | null
+    }
 
 // app -> relay
 export type AppMessage =
@@ -190,3 +238,5 @@ export type AppMessage =
   | { t: 'dismiss'; sessionId: string }
   | { t: 'update_agent'; machineId: string; order: Sealed }
   | { t: 'rules'; machineId: string; rules: Sealed }
+  | { t: 'start_session'; machineId: string; launchId: string; order: Sealed }
+  | { t: 'start_answer'; machineId: string; launchId: string; answer: Sealed }

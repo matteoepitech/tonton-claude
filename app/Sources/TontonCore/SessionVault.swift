@@ -77,6 +77,26 @@ public struct SessionVault: Sendable {
         try E2E.seal(UpdateOrder(version: version, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
     }
 
+    /// Starts claude in a folder of one machine. Like update orders, agents refuse old ones, and run each launch once.
+    public func sealStartOrder(launchId: String, machineId: String, cwd: String, issuedAt: Date = Date()) throws -> String {
+        let order = StartOrder(launchId: launchId, machineId: machineId, cwd: cwd, issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+        return try E2E.seal(order, with: key)
+    }
+
+    /// The user's answer to one question of a start.
+    public func sealStartAnswer(
+        launchId: String, machineId: String, question: String, confirm: Bool, issuedAt: Date = Date()
+    ) throws -> String {
+        let answer = StartAnswer(
+            launchId: launchId, machineId: machineId, question: question, confirm: confirm,
+            issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+        return try E2E.seal(answer, with: key)
+    }
+
+    public func startDetail(_ blob: String?) -> StartDetail? {
+        open(blob, as: StartDetail.self)
+    }
+
     /// A machine's auto-approve rules. Agents keep a set only if it is newer than theirs.
     public func sealRules(_ rules: [PermissionRule], issuedAt: Date) throws -> String {
         try E2E.seal(RuleSet(rules: rules, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)

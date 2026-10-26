@@ -56,6 +56,8 @@ final class AppSettings: ObservableObject {
     @Published var terminal: TerminalChoice
     /// Session ids, in the order they were pinned.
     @Published var pinnedSessions: [String]
+    /// Folders sessions were started in from the notch, most recent first, per machine id.
+    @Published var startFolders: [String: [String]]
 
     /// Notch and alerts
     @Published var openOnHover: Bool
@@ -145,6 +147,7 @@ final class AppSettings: ObservableObject {
         editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
         terminal = choice("terminal", .terminal)
         pinnedSessions = value("pinnedSessions", [String]())
+        startFolders = value("startFolders", [String: [String]]())
         openOnHover = value("openOnHover", true)
         showActivityDots = value("showActivityDots", false)
         showMascot = value("showMascot", false)
@@ -194,6 +197,7 @@ final class AppSettings: ObservableObject {
         persist($editor.map(\.rawValue), "editor")
         persist($terminal.map(\.rawValue), "terminal")
         persist($pinnedSessions, "pinnedSessions")
+        persist($startFolders, "startFolders")
         persist($openOnHover, "openOnHover")
         persist($showActivityDots, "showActivityDots")
         persist($showMascot, "showMascot")

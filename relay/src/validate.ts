@@ -10,4 +10,9 @@ export const isSessionId = (value: unknown): value is string => isText(value, 12
 
 export const isRequestId = (value: unknown): value is string => isText(value, 32)
 
+export const isLaunchId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]{8,32}$/.test(value)
+
+export const isStartState = (value: unknown): value is 'starting' | 'asking' | 'started' | 'failed' =>
+  value === 'starting' || value === 'asking' || value === 'started' || value === 'failed'
+
 export const isVersion = (value: unknown): value is string => typeof value === 'string' && VERSION_PATTERN.test(value)

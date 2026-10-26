@@ -28,6 +28,10 @@ final class SessionStore: ObservableObject {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         return version == "0.0.0" ? nil : version
     }()
+    /// Sessions started from the notch, until they run or the user dismisses why they failed.
+    @Published private(set) var launches: [SessionLaunch] = []
+    /// A started session to select once the relay lists it.
+    private var launchSelection: String?
     /// Machines asked to update that have not answered yet.
     @Published private(set) var updatingMachines: Set<String> = []
     @Published private(set) var updateErrors: [String: String] = [:]
@@ -59,6 +63,10 @@ final class SessionStore: ObservableObject {
     let approved = PassthroughSubject<Void, Never>()
     /// The user sent a message from the notch.
     let sent = PassthroughSubject<Void, Never>()
+    /// Claude Code asks a question while a session started from the notch starts.
+    let launchAsks = PassthroughSubject<SessionLaunch, Never>()
+    /// A session started from the notch runs.
+    let launchStarted = PassthroughSubject<SessionLaunch, Never>()
 
     private let settings: AppSettings
     private let socket = RelaySocket()
@@ -189,6 +197,8 @@ final class SessionStore: ObservableObject {
         relayEntries = [:]
         updatingMachines = []
         updateErrors = [:]
+        launches = []
+        launchSelection = nil
         guard settings.connectionEnabled else {
             socket.disconnect(to: .paused)
             return
@@ -239,6 +249,8 @@ final class SessionStore: ObservableObject {
             lastError = text
         case .agentUpdate(let machineId, let ok, let reason, let detail):
             updateFinished(machineId, ok: ok, reason: reason, detail: vault.detailText(detail))
+        case .sessionStart(let machineId, let launchId, let state, let reason, let detail):
+            launchReported(launchId, machineId: machineId, state: state, reason: reason, detail: vault.startDetail(detail))
         case .unknown:
             break
         }
@@ -251,7 +263,10 @@ final class SessionStore: ObservableObject {
         } else {
             relaySessions.append(session)
         }
-        if selectedId == nil { selectedId = session.id }
+        if selectedId == nil || session.id == launchSelection {
+            selectedId = session.id
+            launchSelection = nil
+        }
         notify(session, previous: previous)
     }
 
@@ -325,6 +340,64 @@ final class SessionStore: ObservableObject {
             socket.send(["t": "rules", "machineId": machine.id, "rules": sealed])
             rulesSentTo.insert(machine.id)
         }
+    }
+
+    // MARK: Starting sessions
+
+    /// Folders to offer for a new session on the machine.
+    func recentFolders(on machineId: String) -> [String] {
+        RecentFolders.list(started: settings.startFolders[machineId] ?? [], sessions: sessions, machineId: machineId)
+    }
+
+    /// Asks the machine's agent to start claude in the folder. Its answers come back as `session_start` messages.
+    func startSession(on machine: MachineInfo, in folder: String) {
+        let folder = RecentFolders.normalized(folder)
+        guard connection == .connected, RecentFolders.isStartable(folder) else { return }
+        let launch = SessionLaunch(machineId: machine.id, cwd: folder)
+        guard let order = try? vault?.sealStartOrder(launchId: launch.id, machineId: machine.id, cwd: folder) else { return }
+        launches.append(launch)
+        settings.startFolders[machine.id] = RecentFolders.adding(folder, to: settings.startFolders[machine.id] ?? [])
+        socket.send(["t": "start_session", "machineId": machine.id, "launchId": launch.id, "order": order])
+        // An agent too old to start sessions never answers.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard let self, let current = self.launches.first(where: { $0.id == launch.id }), current.state == .sending else { return }
+            self.replace(current.failed("No answer from \(machine.name). Its agent may be too old to start sessions: update it."))
+        }
+    }
+
+    /// The user's answer to the question a start is waiting on.
+    func answerStart(_ launch: SessionLaunch, confirm: Bool) {
+        guard launch.state == .asking, let question = launch.questionId,
+            let answer = try? vault?.sealStartAnswer(launchId: launch.id, machineId: launch.machineId, question: question, confirm: confirm)
+        else { return }
+        socket.send(["t": "start_answer", "machineId": launch.machineId, "launchId": launch.id, "answer": answer])
+        replace(launch.answered(question))
+    }
+
+    func dismissLaunch(_ id: String) {
+        launches.removeAll { $0.id == id }
+    }
+
+    private func launchReported(_ id: String, machineId: String, state: String, reason: String?, detail: StartDetail?) {
+        guard let launch = launches.first(where: { $0.id == id && $0.machineId == machineId }) else { return }
+        let name = machines.first { $0.id == machineId }?.name ?? "The machine"
+        let next = launch.reported(state, reason: reason, detail: detail, machine: name)
+        guard next != launch else { return }
+        if next.state == .started {
+            launches.removeAll { $0.id == id }
+            if let sessionId = next.sessionId {
+                if sessions.contains(where: { $0.id == sessionId }) { selectedId = sessionId } else { launchSelection = sessionId }
+            }
+            launchStarted.send(next)
+            return
+        }
+        replace(next)
+        if next.state == .asking { launchAsks.send(next) }
+    }
+
+    private func replace(_ launch: SessionLaunch) {
+        launches = launches.map { $0.id == launch.id ? launch : $0 }
     }
 
     // MARK: Agent updates
