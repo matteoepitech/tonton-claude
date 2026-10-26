@@ -32,6 +32,8 @@ final class NotchState: ObservableObject {
     @Published var jumpTo: String?
     /// Live sessions as pills under the collapsed notch (Settings › Notch › Session pills).
     @Published var pills = PillRow([])
+    /// The pill whose session shows in a card under it, while the pointer rests on it.
+    @Published var previewPill: Int?
     static let pillHeight: CGFloat = 20
     /// Between the notch and its pills.
     static let pillGap: CGFloat = 8
