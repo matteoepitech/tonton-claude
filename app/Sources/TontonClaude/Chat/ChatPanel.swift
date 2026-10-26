@@ -133,7 +133,9 @@ struct ChatHeader: View {
             HStack(spacing: 6) {
                 StatusDot(status: session.status, limit: session.fiveHourLimit)
                 Text(session.project).font(.system(size: 13, weight: .bold))
-                Text("· \(store.isOnThisMac(session) ? "This Mac" : session.machine)").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("·").font(.system(size: 12)).foregroundStyle(.secondary)
+                if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11) }
+                Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
                     Text(String(format: "$%.2f", cost)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)

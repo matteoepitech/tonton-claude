@@ -37,6 +37,7 @@ struct SessionListView: View {
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
                                 continues: store.autoContinue.contains(s.id),
                                 machine: pinned ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
+                                machineStyle: settings.machineStyles[s.machineId],
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
                                 shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil
                             )
@@ -100,11 +101,18 @@ struct SessionListView: View {
                 Text("PINNED").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
             case .thisMac:
-                Image(systemName: "laptopcomputer").font(.system(size: 9)).foregroundStyle(.secondary)
+                if let style = store.thisMac.flatMap({ settings.machineStyles[$0] }), !style.isEmpty {
+                    MachineBadge(style: style, size: 9)
+                } else {
+                    Image(systemName: "laptopcomputer").font(.system(size: 9)).foregroundStyle(.secondary)
+                }
                 Text("THIS MAC").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
                 if let info = store.machines.first(where: { $0.id == store.thisMac }) { NotchAgentUpdate(machine: info) }
             case .machine(let machine):
+                if let style = section.sessions.first.flatMap({ settings.machineStyles[$0.machineId] }) {
+                    MachineBadge(style: style, size: 9)
+                }
                 Text(machine.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
                 if let info = store.machines.first(where: { $0.id == section.sessions.first?.machineId }) {
@@ -165,6 +173,7 @@ struct SessionRow: View {
     var continues = false
     /// Shown in the pinned section, where sessions from every machine sit together.
     var machine: String?
+    var machineStyle: MachineStyle?
     var shortcut: Int?
 
     var body: some View {
@@ -174,6 +183,7 @@ struct SessionRow: View {
                 HStack(spacing: 5) {
                     Text(session.project).font(.system(size: 12, weight: .semibold)).lineLimit(1).layoutPriority(1)
                     if let machine {
+                        if let machineStyle { MachineBadge(style: machineStyle, size: 9) }
                         Text(machine).font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 4)

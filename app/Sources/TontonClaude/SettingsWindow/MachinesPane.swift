@@ -136,6 +136,7 @@ struct MachineRow: View {
     @EnvironmentObject var store: SessionStore
     @State private var confirmRevoke = false
     @State private var wakeSent = false
+    @State private var pickingStyle = false
 
     var body: some View {
         let sessions = store.sessions.filter { $0.machineId == machine.id }
@@ -145,7 +146,7 @@ struct MachineRow: View {
             set: { on in if on { settings.hiddenMachines.remove(machine.name) } else { settings.hiddenMachines.insert(machine.name) } }
         )
         HStack(spacing: 12) {
-            IconTile(systemName: icon)
+            styleButton
             VStack(alignment: .leading, spacing: 3) {
                 Text(machine.name).font(.system(size: 13, weight: .medium))
                 Text(subtitle(sessions: sessions.count))
@@ -196,6 +197,30 @@ struct MachineRow: View {
         } message: {
             Text("The machine is signed out immediately. You can add it again later with a new install command.")
         }
+    }
+
+    /// The machine's icon, or its platform's: a click picks another icon and a color.
+    private var styleButton: some View {
+        let style = Binding(
+            get: { settings.machineStyles[machine.id] ?? MachineStyle() },
+            set: { settings.machineStyles[machine.id] = $0.isEmpty ? nil : $0 })
+        return Button {
+            pickingStyle = true
+        } label: {
+            ZStack {
+                if style.wrappedValue.symbol == nil {
+                    IconTile(systemName: icon, tint: MachineBadge.color(style.wrappedValue.color) ?? Theme.textDim)
+                } else {
+                    MachineBadge(style: style.wrappedValue, size: 14)
+                        .frame(width: 30, height: 30)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(Theme.raised))
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.border))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help("Pick an icon and a color for \(machine.name)")
+        .popover(isPresented: $pickingStyle, arrowEdge: .bottom) { MachineStylePicker(style: style) }
     }
 
     private func subtitle(sessions: Int) -> String {
