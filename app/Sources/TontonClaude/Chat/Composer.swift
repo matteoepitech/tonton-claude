@@ -11,6 +11,10 @@ struct Composer: View {
     @State private var attachments: [Attachment] = []
     @State private var text = ""
     @FocusState private var focused: Bool
+    /// The template whose placeholders are being filled in, above the field.
+    @State private var filling: PromptTemplate?
+    @State private var values: [String: String] = [:]
+    @FocusState private var focusedVariable: String?
 
     private var readOnlyReason: String {
         if session.machineId == LocalSessions.machineId {
@@ -24,6 +28,7 @@ struct Composer: View {
         VStack(alignment: .leading, spacing: 6) {
             if session.canChat && !settings.quickReplies.isEmpty { quickReplies }
             if !attachments.isEmpty { attachmentStrip }
+            if let filling { fillBar(filling) }
             field
             if !session.canChat {
                 Text(readOnlyReason)
@@ -103,6 +108,7 @@ struct Composer: View {
             .buttonStyle(.plain)
             .keyboardShortcut("v", modifiers: [.command, .shift])
             .help("Paste an image from the clipboard (⌘⇧V)")
+            templatesMenu
             TextField(session.canChat ? "Message Claude…  (↩ send, ⌥↩ new line)" : "Read only", text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
@@ -118,6 +124,84 @@ struct Composer: View {
         .opacity(session.canChat ? 1 : 0.5)
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
+    }
+
+    private var templatesMenu: some View {
+        Menu {
+            ForEach(settings.promptTemplates) { template in
+                Button(template.name.isEmpty ? template.text : template.name) { use(template) }
+            }
+            if !settings.promptTemplates.isEmpty { Divider() }
+            Button("Edit templates…") { AppDelegate.shared?.showSettings(pane: .general) }
+        } label: {
+            Image(systemName: "text.badge.plus")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Insert a prompt template")
+    }
+
+    /// One field per placeholder, and a preview of what goes into the message.
+    private func fillBar(_ template: PromptTemplate) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(template.name).font(.system(size: 11, weight: .semibold))
+                Spacer()
+                Button {
+                    filling = nil
+                } label: {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Cancel")
+            }
+            ForEach(template.variables, id: \.self) { name in
+                HStack(spacing: 8) {
+                    Text(name).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).frame(width: 90, alignment: .leading)
+                    TextField("", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }))
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .focused($focusedVariable, equals: name)
+                        .padding(.horizontal, 8)
+                        .frame(height: 24)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.3)))
+                        .onSubmit { insertFilled(template) }
+                }
+            }
+            HStack(alignment: .bottom) {
+                Text(template.filled(values.filter { !$0.value.isEmpty }))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Button("Insert") { insertFilled(template) }.buttonStyle(.plain).font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.06)))
+    }
+
+    private func use(_ template: PromptTemplate) {
+        guard let first = template.variables.first else { return insert(template.text) }
+        values = [:]
+        filling = template
+        DispatchQueue.main.async { focusedVariable = first }
+    }
+
+    private func insertFilled(_ template: PromptTemplate) {
+        insert(template.filled(values.filter { !$0.value.isEmpty }))
+        filling = nil
+    }
+
+    /// Into the message, after what is already typed.
+    private func insert(_ prompt: String) {
+        let separator = text.isEmpty || text.hasSuffix(" ") || text.hasSuffix("\n") ? "" : " "
+        text += separator + prompt
+        focused = true
     }
 
     private var canSend: Bool {
