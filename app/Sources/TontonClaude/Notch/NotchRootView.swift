@@ -56,6 +56,9 @@ struct NotchRootView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: state.achievement)
+        .overlay {
+            if let seed = state.confetti { ConfettiBurst(seed: seed, from: CGPoint(x: NotchState.expandedSize.width / 2, y: size.height)) }
+        }
         .environment(\.colorScheme, .dark)
     }
 }
@@ -128,5 +131,37 @@ struct NotchGlow: View {
             guard !reduceMotion else { return }
             withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) { angle = 360 }
         }
+    }
+}
+
+/// Confetti bursting out from under the notch and falling down the screen.
+struct ConfettiBurst: View {
+    let seed: UInt64
+    let from: CGPoint
+    @State private var start = Date()
+
+    private static let colors: [Color] = [
+        Theme.accent, Theme.success, Theme.warning, Theme.danger, .white, Color(nsColor: .systemTeal),
+    ]
+
+    var body: some View {
+        let pieces = Confetti.pieces(seed: seed, colors: Self.colors.count)
+        TimelineView(.animation) { context in
+            Canvas { graphics, _ in
+                let time = context.date.timeIntervalSince(start)
+                for piece in pieces {
+                    let placement = Confetti.placement(of: piece, at: time, from: from)
+                    var pen = graphics
+                    pen.opacity = placement.opacity
+                    pen.translateBy(x: placement.position.x, y: placement.position.y)
+                    pen.rotate(by: .radians(placement.angle))
+                    let size = piece.size
+                    pen.fill(
+                        Path(CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height)),
+                        with: .color(Self.colors[piece.color]))
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }

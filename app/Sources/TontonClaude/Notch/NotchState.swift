@@ -11,6 +11,8 @@ final class NotchState: ObservableObject {
     @Published var peekSession: SessionSummary?
     /// Shown in the banner instead of the session's status.
     @Published var peekText: String?
+    /// Set while confetti falls from the notch, to the seed of the burst.
+    @Published var confetti: UInt64?
     @Published var notchSize = CGSize(width: 200, height: 32)
     @Published var hasPhysicalNotch = false
     /// Unsent text per session, kept when the notch closes or the selection changes. Not published: a keystroke must only

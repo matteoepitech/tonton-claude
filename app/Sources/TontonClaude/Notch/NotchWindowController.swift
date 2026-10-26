@@ -199,6 +199,17 @@ final class NotchWindowController {
         peek(session, text: "Usage limit reset")
     }
 
+    /// Confetti from the notch for a long task done. None with Reduce Motion or during quiet hours.
+    private func celebrate() {
+        guard !settings.isQuietNow, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let seed = UInt64.random(in: 1...UInt64.max)
+        state.confetti = seed
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Confetti.duration + 0.2))
+            if self?.state.confetti == seed { self?.state.confetti = nil }
+        }
+    }
+
     private func signal() {
         if settings.soundOnAttention { NSSound(named: settings.alertSound)?.play() }
         if settings.haptics { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
@@ -248,6 +259,10 @@ final class NotchWindowController {
             .store(in: &subscriptions)
         store.attention
             .sink { [weak self] session in self?.alert(session, finished: false) }
+            .store(in: &subscriptions)
+        store.taskDone
+            .filter { [settings] _, worked in settings.confettiAfterMinutes > 0 && worked >= Double(settings.confettiAfterMinutes) * 60 }
+            .sink { [weak self] _ in self?.celebrate() }
             .store(in: &subscriptions)
         store.finished
             .filter { [settings] _ in settings.alertOnFinish }
