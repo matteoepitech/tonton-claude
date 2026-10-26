@@ -8,6 +8,8 @@ final class NotchState: ObservableObject {
 
     @Published var mode: Mode = .collapsed
     @Published var pinned = false
+    /// The ⌘K command palette is open over the notch.
+    @Published var showPalette = false
     @Published var peekSession: SessionSummary?
     /// Shown in the banner instead of the session's status.
     @Published var peekText: String?

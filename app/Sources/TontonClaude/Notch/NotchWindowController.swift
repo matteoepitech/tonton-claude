@@ -122,6 +122,7 @@ final class NotchWindowController {
     func collapse(force: Bool = false) {
         collapseTask?.cancel()
         if force { state.pinned = false }
+        state.showPalette = false
         guard !state.pinned, state.mode != .collapsed else { return }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { state.mode = .collapsed }
         overlapTask?.cancel()
@@ -431,10 +432,17 @@ final class NotchWindowController {
     /// Escape closes; ⌘1…⌘9 jump to a session in list order, pinned ones first; ⌘↑ and ⌘↓ move through the list.
     private func handleKey(_ event: NSEvent) -> Bool {
         if event.keyCode == UInt16(kVK_Escape) {
-            collapse(force: true)
+            // Escape closes the palette first, then the notch.
+            if state.showPalette { state.showPalette = false } else { collapse(force: true) }
             return true
         }
         guard event.modifierFlags.contains(.command) else { return false }
+        if event.charactersIgnoringModifiers == "k" {
+            state.showPalette.toggle()
+            return true
+        }
+        // The palette's own arrows move its selection.
+        if state.showPalette { return false }
         let sessions = store.orderedSessions
         guard !sessions.isEmpty else { return false }
         if let digit = event.charactersIgnoringModifiers.flatMap(Int.init), (1...9).contains(digit) {

@@ -41,6 +41,9 @@ struct ExpandedView: View {
             bottomBar
         }
         .padding(.horizontal, 6)
+        .overlay(alignment: .top) {
+            if state.showPalette { CommandPalette().padding(.top, max(state.notchSize.height, 30) + 24) }
+        }
     }
 
     private var bottomBar: some View {
