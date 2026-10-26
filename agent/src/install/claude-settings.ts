@@ -1,7 +1,16 @@
 // Adds and removes the Tonton Claude hooks in ~/.claude/settings.json without touching anything else, and builds the
 // settings the launcher adds on top.
 
-export const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'] as const
+export const HOOK_EVENTS = [
+  'SessionStart',
+  'UserPromptSubmit',
+  'Notification',
+  'Stop',
+  'StopFailure',
+  'SessionEnd',
+  // Approves the calls the app's auto-approve rules allow.
+  'PermissionRequest',
+] as const
 
 interface HookCommand {
   type: string

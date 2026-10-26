@@ -323,6 +323,27 @@ esac
     },
   )
 
+  test('auto-approve rules from the app reach the machine, and its hook approves what they allow', async () => {
+    const home = join(dir, 'agent')
+    const env = { ...process.env, TONTON_HOME: home, TONTON_SERVICE: 'off' } as Record<string, string>
+    const ask = async (command: string) => {
+      const input = { hook_event_name: 'PermissionRequest', session_id: sessionId, tool_name: 'Bash', tool_input: { command } }
+      const hook = Bun.spawn(['bun', AGENT, 'hook'], { env, stdin: new Blob([JSON.stringify(input)]), stdout: 'pipe' })
+      return new Response(hook.stdout).text()
+    }
+    const rules = (issuedAt: string, pattern: string) => seal(key, { rules: [{ tool: 'Bash', pattern }], issuedAt })
+
+    // Another account can't hand rules to this machine.
+    stranger.socket.send(JSON.stringify({ t: 'rules', machineId: machine.machineId, rules: await rules('2026-10-26T10:00:00Z', '*') }))
+    app.socket.send(JSON.stringify({ t: 'rules', machineId: machine.machineId, rules: await rules('2026-10-26T10:00:00Z', 'npm test*') }))
+    await eventually(() => existsSync(join(home, 'rules.json')), 'the rules')
+    expect(JSON.parse(await ask('npm test -- --watch'))).toEqual({
+      hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } },
+    })
+    expect(await ask('rm -rf ~')).toBe('')
+    expect(await ask('npm test && rm -rf ~')).toBe('')
+  })
+
   test('revoking the machine signs it out and removes its sessions', async () => {
     expect((await api(`/api/machines/${machine.machineId}`, { method: 'DELETE', token: otherAccountToken })).status).toBe(404)
     expect((await api(`/api/machines/${machine.machineId}`, { method: 'DELETE', token: accountToken })).ok).toBe(true)

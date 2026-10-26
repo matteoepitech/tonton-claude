@@ -70,6 +70,8 @@ final class SessionStore: ObservableObject {
     /// One per reset time of the sessions a usage limit stopped.
     private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()
+    /// Machines that got the current auto-approve rules since the app connected.
+    private var rulesSentTo: Set<String> = []
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -85,6 +87,13 @@ final class SessionStore: ObservableObject {
             .store(in: &subscriptions)
         localWatcher.onChange = { [weak self] sessions, entries in self?.localChanged(sessions, entries) }
         localWatcher.start()
+        // A new set goes to every machine, and replaces the one the relay keeps for each.
+        settings.$autoApproveRulesDate.dropFirst().removeDuplicates()
+            .sink { [weak self] _ in
+                self?.rulesSentTo = []
+                Task { @MainActor in self?.sendRules() }
+            }
+            .store(in: &subscriptions)
         sessionsPublisher.combineLatest(settings.$hiddenMachines)
             .sink { [weak self] sessions, hidden in self?.scheduleLimitResets(sessions.filter { !hidden.contains($0.machine) }) }
             .store(in: &subscriptions)
@@ -199,6 +208,8 @@ final class SessionStore: ObservableObject {
         switch message {
         case .snapshot(let wireSessions, let wireMachines):
             machines = vault.machines(wireMachines)
+            rulesSentTo = []
+            sendRules()
             thisMac = settings.account.flatMap { LocalAgent.machineId(for: $0.accountId) }
             relaySessions = Self.sorted(wireSessions.map { vault.session($0, machines: machines) })
             // The snapshot lists every session the relay still has: pins of the others can go.
@@ -209,6 +220,7 @@ final class SessionStore: ObservableObject {
             update(vault.session(wire, machines: machines))
         case .machines(let wireMachines):
             machines = vault.machines(wireMachines)
+            sendRules()
             thisMac = settings.account.flatMap { LocalAgent.machineId(for: $0.accountId) }
         case .removed(let sessionId):
             relaySessions.removeAll { $0.id == sessionId }
@@ -295,6 +307,20 @@ final class SessionStore: ObservableObject {
             return
         }
         socket.send(["t": "dismiss", "sessionId": sessionId])
+    }
+
+    // MARK: Auto-approve rules
+
+    /// Seals each machine's rules and sends them to the ones that don't have them yet. The relay passes them on to the
+    /// machine now and on each of its next connections; an empty set clears rules removed in the app.
+    private func sendRules() {
+        guard connection == .connected, let vault else { return }
+        for machine in machines where !rulesSentTo.contains(machine.id) {
+            let rules = AutoApproveRule.rules(settings.autoApproveRules, for: machine.id)
+            guard let sealed = try? vault.sealRules(rules, issuedAt: settings.autoApproveRulesDate) else { continue }
+            socket.send(["t": "rules", "machineId": machine.id, "rules": sealed])
+            rulesSentTo.insert(machine.id)
+        }
     }
 
     // MARK: Agent updates

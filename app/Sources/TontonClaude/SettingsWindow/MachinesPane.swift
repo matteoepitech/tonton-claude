@@ -41,6 +41,7 @@ struct MachinesPane: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textFaint)
                     .padding(.top, 10)
+                AutoApproveRules()
             }
         }
     }

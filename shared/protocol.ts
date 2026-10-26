@@ -90,6 +90,17 @@ export interface MachineHealth {
   wake?: { mac: string; broadcast: string }[]
   at: string
 }
+/** A tool call the agent approves without asking: the tool, and a pattern for its command, path or URL. */
+export interface PermissionRule {
+  tool: string
+  /** `npm test` matches that command only, `npm run *` any command starting with `npm run `. Empty: any call of the tool. */
+  pattern?: string
+}
+/** Sealed by the app with its date, so the relay can neither forge rules nor bring back older ones. */
+export interface RuleSet {
+  rules: PermissionRule[]
+  issuedAt: string
+}
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
   version: string
@@ -150,6 +161,8 @@ export type RelayToAgent =
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny' }
   | { t: 'update'; order: Sealed }
+  // The machine's auto-approve rules, sealed `RuleSet`: on each connection, and when the app changes them.
+  | { t: 'rules'; rules: Sealed }
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -176,3 +189,4 @@ export type AppMessage =
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny' }
   | { t: 'dismiss'; sessionId: string }
   | { t: 'update_agent'; machineId: string; order: Sealed }
+  | { t: 'rules'; machineId: string; rules: Sealed }

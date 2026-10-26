@@ -77,6 +77,11 @@ public struct SessionVault: Sendable {
         try E2E.seal(UpdateOrder(version: version, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
     }
 
+    /// A machine's auto-approve rules. Agents keep a set only if it is newer than theirs.
+    public func sealRules(_ rules: [PermissionRule], issuedAt: Date) throws -> String {
+        try E2E.seal(RuleSet(rules: rules, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
+    }
+
     /// The text of a sealed `{ text }` detail, such as the reason an agent update failed.
     public func detailText(_ blob: String?) -> String? {
         open(blob, as: StatusDetail.self)?.text

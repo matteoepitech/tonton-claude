@@ -59,11 +59,17 @@ export class Hub {
     return true
   }
 
-  sendToAgent(accountId: string, message: Exclude<RelayToAgent, { t: 'update' }>): boolean {
+  sendToAgent(accountId: string, message: Extract<RelayToAgent, { sessionId: string }>): boolean {
     const agent = this.agents.get(sessionKey(accountId, message.sessionId))
     if (!agent) return false
     agent.send(JSON.stringify(message))
     return true
+  }
+
+  /** To every connection of the machine: its service and the channel of each session. */
+  sendToMachine(machineId: string, message: RelayToAgent) {
+    const raw = JSON.stringify(message)
+    for (const socket of this.machines.get(machineId) ?? []) socket.send(raw)
   }
 
   sendToApps(accountId: string, message: RelayToApp, filter?: (socket: Socket) => boolean) {

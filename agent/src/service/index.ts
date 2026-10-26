@@ -2,6 +2,7 @@ import { RelayConnection } from '../channel/relay-connection'
 import { loadConfig, VERSION } from '../config'
 import { seal } from '../crypto'
 import { log } from '../log'
+import { receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { acquireLock, releaseLock } from './control'
 import { cpuTimes, readHealth } from './health'
@@ -54,6 +55,7 @@ export async function runService(args: string[]) {
       revoked: () => writeStatus('revoked', config.server),
       message: message => {
         if (message.t === 'update') void handleUpdateOrder(config, message.order, relay)
+        else if (message.t === 'rules') void receiveRules(config.key, message.rules)
       },
     })
     connection = relay

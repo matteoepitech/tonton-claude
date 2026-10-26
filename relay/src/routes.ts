@@ -62,7 +62,7 @@ async function accountToken(ctx: RelayContext, req: Request, accountId: string):
   if (!result) return fail(409, 'This account already has a token. Copy it from the Mac where it was created, or regenerate it.')
   for (const machineId of result.revoked) {
     ctx.hub.disconnectMachine(machineId, 'token regenerated')
-    ctx.agentVersions.delete(machineId)
+    ctx.forgetMachine(machineId)
     ctx.sessions.removeMachine(accountId, machineId)
   }
   if (result.revoked.length) ctx.pushMachines(accountId)
@@ -118,7 +118,7 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
     const machineId = machinePath[1]
     if (!ctx.registry.revokeMachine(accountId, machineId)) return fail(404, 'No such machine.')
     ctx.hub.disconnectMachine(machineId, 'revoked')
-    ctx.agentVersions.delete(machineId)
+    ctx.forgetMachine(machineId)
     ctx.sessions.removeMachine(accountId, machineId)
     ctx.pushMachines(accountId)
     return json({ ok: true })
@@ -127,7 +127,7 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
   if (path === '/api/account' && req.method === 'DELETE') {
     for (const machine of ctx.registry.machines(accountId)) {
       ctx.hub.disconnectMachine(machine.id, 'account deleted')
-      ctx.agentVersions.delete(machine.id)
+      ctx.forgetMachine(machine.id)
     }
     ctx.hub.disconnectApps(accountId, 'account deleted')
     ctx.registry.deleteAccount(accountId)
