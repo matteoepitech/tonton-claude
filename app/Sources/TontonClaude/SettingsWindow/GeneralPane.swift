@@ -93,6 +93,13 @@ struct GeneralPane: View {
                         + "message Claude, e.g. send message \"run the tests\" to \"api\".",
                     isOn: $settings.scriptsCanSend)
             }
+            GroupLabel(text: "Updates")
+            Card {
+                ToggleRow(
+                    title: "Show what's new after an update",
+                    detail: "The release notes open once when a new version starts. They come from the release on GitHub.",
+                    isOn: $settings.showWhatsNew)
+            }
             GroupLabel(text: "Quick replies")
             Card {
                 VStack(alignment: .leading, spacing: 10) {
@@ -153,9 +160,12 @@ struct GeneralPane: View {
                 }
             }
             HStack {
-                Text("Tonton Claude \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
+                Text("Tonton Claude \(AppDelegate.version ?? "dev")")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textFaint)
+                if AppDelegate.version.map(WhatsNew.isRelease) == true {
+                    Button("What's new") { AppDelegate.shared?.showWhatsNew() }.buttonStyle(.link).font(.system(size: 12))
+                }
                 Spacer()
                 Button("Quit Tonton Claude") { NSApp.terminate(nil) }.buttonStyle(ThemeButtonStyle())
             }

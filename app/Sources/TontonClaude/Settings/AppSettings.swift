@@ -35,6 +35,10 @@ final class AppSettings: ObservableObject {
     @Published var showCosts: Bool
     /// AppleScript can always read the sessions; sending them messages needs this.
     @Published var scriptsCanSend: Bool
+    /// The release notes open once after each update.
+    @Published var showWhatsNew: Bool
+    /// The version whose notes were last shown, or that was installed fresh: "" before this setting existed.
+    @Published var whatsNewVersion: String
     /// In dollars, 0 for none.
     @Published var dailyBudget: Int
     /// The last day the budget alert went off, so it only does once a day.
@@ -131,6 +135,8 @@ final class AppSettings: ObservableObject {
         notchSize = choice("notchSize", .standard)
         showCosts = value("showCosts", true)
         scriptsCanSend = value("scriptsCanSend", false)
+        showWhatsNew = value("showWhatsNew", true)
+        whatsNewVersion = value("whatsNewVersion", "")
         dailyBudget = value("dailyBudget", 0)
         budgetAlertDay = value("budgetAlertDay", "")
         hideFinishedAfterHours = value("hideFinishedAfterHours", 0)
@@ -185,6 +191,8 @@ final class AppSettings: ObservableObject {
         persist($notchSize.map(\.rawValue), "notchSize")
         persist($showCosts, "showCosts")
         persist($scriptsCanSend, "scriptsCanSend")
+        persist($showWhatsNew, "showWhatsNew")
+        persist($whatsNewVersion, "whatsNewVersion")
         persist($dailyBudget, "dailyBudget")
         persist($budgetAlertDay, "budgetAlertDay")
         persist($hideFinishedAfterHours, "hideFinishedAfterHours")

@@ -77,6 +77,8 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Updating agents.** When a machine runs an older agent than your app, **Update agent** shows up next to it in the notch
   and in **Settings › Machines**: one click and it installs the matching release. Agents installed before 0.4.0 need the
   install command once more, which the app copies for you.
+- **What's new.** The first time a new version of the app starts, its release notes open, read from the release on GitHub.
+  **Settings › General** turns that off, and its **What's new** link, next to the version, shows them again.
 - **Starting a session.** <kbd>+</kbd> in the open notch, or <kbd>⌘</kbd> <kbd>N</kbd>, starts claude in a folder of any
   machine, in a tmux session you can attach to later. The machine needs tmux, so not Windows. The questions Claude Code
   asks on the way, like trusting the folder, show up in the notch: nothing is confirmed for you.
