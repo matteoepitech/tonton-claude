@@ -4,14 +4,16 @@ import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
 import {
   HEALTH_MIN_INTERVAL_MS,
+  MAX_AGENT_LOG_BYTES,
   MAX_HEALTH_BYTES,
+  MAX_LOG_REQUEST_BYTES,
   MAX_RULES_BYTES,
   MAX_START_DETAIL_BYTES,
   MAX_START_ORDER_BYTES,
   MAX_VIEWERS_PER_SHARE,
   MAX_WS_MESSAGE_BYTES,
 } from './limits'
-import { isLaunchId, isRequestId, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
+import { isLaunchId, isLogRequestId, isRequestId, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
 
 export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<SocketData> {
   return {
@@ -82,6 +84,12 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
     const { launchId, state, detail } = message
     if (!isLaunchId(launchId) || !isStartState(state) || !isSealed(detail, MAX_START_DETAIL_BYTES)) return
     ctx.hub.sendToApps(accountId, { t: 'session_start', machineId, launchId, state, detail })
+    return
+  }
+  if (message?.t === 'agent_logs') {
+    const { requestId, logs } = message
+    if (!isLogRequestId(requestId) || !isSealed(logs, MAX_AGENT_LOG_BYTES)) return
+    ctx.hub.sendToApps(accountId, { t: 'agent_logs', machineId, requestId, logs })
     return
   }
   if (!isSessionId(message?.sessionId)) return
@@ -184,6 +192,16 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
       if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
       // Only the connection that runs this start acts on it.
       ctx.hub.sendToMachine(machineId, { t: 'start_answer', launchId, answer })
+      break
+    }
+    case 'agent_logs': {
+      const { machineId, requestId, request } = message
+      if (!isText(machineId, 32) || !isLogRequestId(requestId) || !isSealed(request, MAX_LOG_REQUEST_BYTES)) return
+      if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
+      // Every process of the machine reads the same log: one of them answers, the background service when it runs.
+      const agent = ctx.hub.machineSocket(machineId)
+      if (agent) ctx.hub.send(agent, { t: 'agent_logs', requestId, request })
+      else ctx.hub.send(socket, { t: 'agent_logs', machineId, requestId, reason: 'offline' })
       break
     }
     case 'update_agent':

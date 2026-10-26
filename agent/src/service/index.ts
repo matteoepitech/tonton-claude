@@ -3,6 +3,7 @@ import { RelayConnection } from '../channel/relay-connection'
 import { loadConfig, VERSION } from '../config'
 import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
+import { handleLogRequest } from '../logs'
 import { receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { acquireLock, releaseLock } from './control'
@@ -59,6 +60,7 @@ export async function runService(args: string[]) {
         else if (message.t === 'rules') void receiveRules(config.key, message.rules)
         else if (message.t === 'start_session') receiveStartOrder(config, message.launchId, message.order, relay)
         else if (message.t === 'start_answer') void handleStartAnswer(config, message.launchId, message.answer)
+        else if (message.t === 'agent_logs') void handleLogRequest(config, message.requestId, message.request, relay)
       },
     })
     connection = relay

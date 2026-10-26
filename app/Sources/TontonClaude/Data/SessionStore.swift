@@ -35,6 +35,8 @@ final class SessionStore: ObservableObject {
     /// Machines asked to update that have not answered yet.
     @Published private(set) var updatingMachines: Set<String> = []
     @Published private(set) var updateErrors: [String: String] = [:]
+    /// Requests for agent logs, by machine, while their panel is open in Settings › Machines.
+    @Published private(set) var agentLogs: [String: AgentLogRequest] = [:]
     @Published private var relayEntries: [String: [Entry]] = [:]
     @Published private var localEntries: [String: [Entry]] = [:]
     /// The relay's history once it arrived, this Mac's transcript until then.
@@ -222,6 +224,7 @@ final class SessionStore: ObservableObject {
         updateErrors = [:]
         launches = []
         launchSelection = nil
+        agentLogs = [:]
         guard settings.connectionEnabled else {
             socket.disconnect(to: .paused)
             return
@@ -276,6 +279,8 @@ final class SessionStore: ObservableObject {
             updateFinished(machineId, ok: ok, reason: reason, detail: vault.detailText(detail))
         case .sessionStart(let machineId, let launchId, let state, let reason, let detail):
             launchReported(launchId, machineId: machineId, state: state, reason: reason, detail: vault.startDetail(detail))
+        case .agentLogs(let machineId, let requestId, let reason, let logs):
+            logReceived(machineId: machineId, requestId: requestId, reason: reason, log: vault.agentLog(logs))
         case .unknown:
             break
         }
@@ -558,6 +563,36 @@ final class SessionStore: ObservableObject {
         guard let account = settings.account else { return }
         try await api.revokeShare(id, of: account)
         shares.removeAll { $0.id == id }
+    }
+
+    // MARK: Agent logs
+
+    /// Asks the machine for the end of its agent log, sealed on the way back. A new request replaces the previous one.
+    func requestLog(of machine: MachineInfo) {
+        let request = AgentLogRequest(machineId: machine.id, previous: agentLogs[machine.id]?.log)
+        guard connection == .connected, let sealed = try? vault?.sealLogRequest(requestId: request.id, machineId: machine.id) else {
+            agentLogs[machine.id] = request.failed("Not connected to the relay.")
+            return
+        }
+        agentLogs[machine.id] = request
+        socket.send(["t": "agent_logs", "machineId": machine.id, "requestId": request.id, "request": sealed])
+        // An agent or a relay too old to send logs never answers.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, let current = self.agentLogs[machine.id], current.id == request.id, current.isLoading else { return }
+            self.agentLogs[machine.id] = current.failed(
+                "No answer from \(machine.name). Its agent may be too old to send its log: update it.")
+        }
+    }
+
+    func closeLog(of machineId: String) {
+        agentLogs[machineId] = nil
+    }
+
+    private func logReceived(machineId: String, requestId: String, reason: String?, log: AgentLog?) {
+        guard let request = agentLogs[machineId], request.id == requestId else { return }
+        let name = machines.first { $0.id == machineId }?.name ?? "The machine"
+        agentLogs[machineId] = request.received(reason: reason, log: log, machine: name)
     }
 
     // MARK: Account

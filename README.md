@@ -102,6 +102,8 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Behind a proxy.** The agent goes through `HTTPS_PROXY` and skips the hosts in `NO_PROXY`, like curl. Set them before
   running the install line: the background service keeps the ones it was installed with. See
   [the details](docs/self-hosting.md#behind-a-proxy).
+- **Agent log.** In **Settings › Machines**, **Show agent log** in a machine's menu reads the end of its log, sealed on the
+  way. It says what the agent did, never what Claude wrote, and keys and tokens are taken out before it leaves.
 - **Changing relay or account.** Click the Tonton Claude icon next to the clock on that machine › **Set token…** and paste
   the token from the app. **Regenerate** in Settings › Machines makes a new one: every machine is signed out until it gets it.
 - **AppleScript and Shortcuts.** Scripts can read the sessions (`session list`, `session status "api"`) and, once

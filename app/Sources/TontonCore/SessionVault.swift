@@ -116,6 +116,16 @@ public struct SessionVault: Sendable {
         open(blob, as: StartDetail.self)
     }
 
+    /// Asks a machine for the end of its agent log. It names the machine, and agents refuse old ones.
+    public func sealLogRequest(requestId: String, machineId: String, issuedAt: Date = Date()) throws -> String {
+        try E2E.seal(
+            LogRequest(requestId: requestId, machineId: machineId, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
+    }
+
+    public func agentLog(_ blob: String?) -> AgentLog? {
+        open(blob, as: AgentLog.self)
+    }
+
     /// A machine's auto-approve rules. Agents keep a set only if it is newer than theirs.
     public func sealRules(_ rules: [PermissionRule], issuedAt: Date) throws -> String {
         try E2E.seal(RuleSet(rules: rules, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
