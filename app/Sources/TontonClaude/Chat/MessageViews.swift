@@ -40,6 +40,7 @@ struct UserBubble: View {
                         .textSelection(.enabled)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
+                        .foregroundStyle(Theme.onAccent)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.accent.opacity(pending ? 0.35 : 0.8)))
                 }
                 if viaNotch || pending {
@@ -139,11 +140,11 @@ struct ToolRow: View {
                 }
                 .frame(maxHeight: 180)
                 .padding(6)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.05)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.05)))
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
     }
 }

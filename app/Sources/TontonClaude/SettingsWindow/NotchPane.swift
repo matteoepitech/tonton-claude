@@ -39,6 +39,12 @@ struct NotchPane: View {
             }
             GroupLabel(text: "Look")
             Card {
+                Row(title: "Theme", detail: "Colors of the open notch and of this window. The closed notch stays black, like the camera.") {
+                    ChoiceMenu(selection: settings.theme.rawValue, options: ThemeChoice.allCases.map { ($0.rawValue, $0.label) }) {
+                        settings.theme = ThemeChoice(rawValue: $0) ?? .midnight
+                    }
+                }
+                Hairline()
                 Row(
                     title: "Transparency",
                     detail: "How much of the desktop shows through the open notch. Text stays readable at every value."

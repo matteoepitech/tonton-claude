@@ -24,7 +24,7 @@ struct CommandPalette: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("", text: $query, prompt: Text("Sessions, machines, settings…").foregroundStyle(.white.opacity(0.35)))
+                TextField("", text: $query, prompt: Text("Sessions, machines, settings…").foregroundStyle(Theme.ink.opacity(0.35)))
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
                     .focused($focused)
@@ -51,7 +51,7 @@ struct CommandPalette: View {
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 34)
-                .background(index == selection ? Color.white.opacity(0.1) : .clear)
+                .background(index == selection ? Theme.ink.opacity(0.1) : .clear)
                 .contentShape(Rectangle())
                 .onTapGesture { finish(item) }
             }
@@ -60,7 +60,7 @@ struct CommandPalette: View {
             }
         }
         .frame(width: 440)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.09)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.borderStrong))
         .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
         .onAppear { focused = true }

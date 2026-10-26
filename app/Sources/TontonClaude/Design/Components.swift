@@ -4,16 +4,21 @@ import SwiftUI
 struct VisualEffect: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     var alwaysActive = false
+    /// Light or dark glass, whatever the system appearance: the theme decides.
+    var scheme: ColorScheme = .dark
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let v = NSVisualEffectView()
-        v.material = material
         v.blendingMode = .behindWindow
         v.state = alwaysActive ? .active : .followsWindowActiveState
+        updateNSView(v, context: context)
         return v
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.material = material
+        view.appearance = NSAppearance(named: scheme == .light ? .aqua : .darkAqua)
+    }
 }
 
 /// Compact switch: indigo when on, a dim groove when off.
@@ -104,7 +109,7 @@ struct Card<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) { content }
             .padding(padding)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.035)))
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.ink.opacity(0.035)))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
     }
 }

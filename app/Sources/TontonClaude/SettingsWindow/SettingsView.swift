@@ -77,12 +77,13 @@ struct SettingsView: View {
         // Frosted window: the desktop shows through, blurred, under a dark tint (same feel as the notch).
         .background {
             ZStack {
-                VisualEffect(material: .hudWindow, alwaysActive: true)
+                VisualEffect(material: Theme.palette.material, alwaysActive: true, scheme: Theme.palette.scheme)
                 Theme.bg.opacity(0.8)
             }
         }
         .foregroundStyle(Theme.text)
-        .environment(\.colorScheme, .dark)
+        .environment(\.colorScheme, Theme.palette.scheme)
+        .id(settings.theme)
         .ignoresSafeArea()
     }
 }
@@ -141,7 +142,7 @@ struct Sidebar: View {
             ConnectionFooter()
         }
         .frame(maxHeight: .infinity)
-        .background(Color.white.opacity(0.025))
+        .background(Theme.ink.opacity(0.025))
     }
 }
 
@@ -202,7 +203,7 @@ struct ConnectionFooter: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.04)))
+        .background(RoundedRectangle(cornerRadius: 9).fill(Theme.ink.opacity(0.04)))
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.border))
         .padding(10)
     }

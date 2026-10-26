@@ -38,7 +38,7 @@ struct CodeBlock: View {
         ScrollView(.horizontal) {
             Text(code).font(.system(size: 11, design: .monospaced)).textSelection(.enabled).padding(8)
         }
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.07)))
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.07)))
         .overlay(alignment: .topTrailing) {
             if hovering || copied {
                 Button(action: copy) {
@@ -86,7 +86,7 @@ struct MarkdownTableView: View {
             }
         }
         .textSelection(.enabled)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.04)))
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.04)))
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border))
     }
 

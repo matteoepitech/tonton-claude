@@ -95,8 +95,8 @@ struct Composer: View {
                         Text(reply).font(.system(size: 11)).lineLimit(1).padding(.horizontal, 10).frame(height: 24)
                     }
                     .buttonStyle(.plain)
-                    .background(Capsule().fill(.white.opacity(0.08)))
-                    .overlay(Capsule().stroke(.white.opacity(0.1)))
+                    .background(Capsule().fill(Theme.ink.opacity(0.08)))
+                    .overlay(Capsule().stroke(Theme.ink.opacity(0.1)))
                     .help("Send “\(reply)”")
                 }
             }
@@ -156,7 +156,7 @@ struct Composer: View {
         }
         .padding(.horizontal, 8)
         .frame(width: 150, height: 44, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.08)))
     }
 
     /// Joins the message if it fits what one message can carry; otherwise says why.
@@ -215,7 +215,7 @@ struct Composer: View {
         .disabled(!session.canChat)
         .opacity(session.canChat ? 1 : 0.5)
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.ink.opacity(0.08)))
     }
 
     private var placeholder: String {
@@ -279,7 +279,7 @@ struct Composer: View {
             }
         }
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.ink.opacity(0.06)))
     }
 
     private func use(_ template: PromptTemplate) {
@@ -334,7 +334,7 @@ struct Composer: View {
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 24)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.05)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.05)))
             }
         }
     }

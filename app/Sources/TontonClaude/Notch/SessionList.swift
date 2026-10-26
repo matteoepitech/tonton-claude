@@ -17,13 +17,13 @@ struct SessionListView: View {
             if !store.visibleSessions.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(.secondary)
-                    TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(.white.opacity(0.35)))
+                    TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(Theme.ink.opacity(0.35)))
                         .textFieldStyle(.plain)
                         .font(.system(size: 11))
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 26)
-                .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.07)))
+                .background(RoundedRectangle(cornerRadius: 7).fill(Theme.ink.opacity(0.07)))
                 .padding(.trailing, 6)
                 .padding(.bottom, 4)
             }
@@ -219,7 +219,7 @@ struct SessionRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Color.white.opacity(0.12) : .clear))
+        .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Theme.ink.opacity(0.12) : .clear))
         .opacity(session.status.isLive ? 1 : 0.55)
     }
 

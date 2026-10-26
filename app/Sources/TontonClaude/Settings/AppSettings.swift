@@ -68,6 +68,9 @@ final class AppSettings: ObservableObject {
     @Published var showPills: Bool
     /// 0 is opaque, 0.5 the original glass, 1 the clearest (see GlassVeil).
     @Published var notchTransparency: Double
+    @Published var theme: ThemeChoice {
+        didSet { Theme.palette = theme.palette }
+    }
     @Published var openOnPermission: Bool
     @Published var showAlerts: Bool
     @Published var alertOnFinish: Bool
@@ -146,6 +149,9 @@ final class AppSettings: ObservableObject {
         workingGlow = value("workingGlow", true)
         showPills = value("showPills", false)
         notchTransparency = value("notchTransparency", 0.5)
+        let theme = choice("theme", ThemeChoice.midnight)
+        self.theme = theme
+        Theme.palette = theme.palette
         openOnPermission = value("openOnPermission", false)
         showAlerts = value("showAlerts", true)
         alertOnFinish = value("alertOnFinish", false)
@@ -191,6 +197,7 @@ final class AppSettings: ObservableObject {
         persist($workingGlow, "workingGlow")
         persist($showPills, "showPills")
         persist($notchTransparency, "notchTransparency")
+        persist($theme.map(\.rawValue), "theme")
         persist($openOnPermission, "openOnPermission")
         persist($showAlerts, "showAlerts")
         persist($alertOnFinish, "alertOnFinish")

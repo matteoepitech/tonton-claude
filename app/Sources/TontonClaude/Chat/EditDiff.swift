@@ -32,7 +32,7 @@ struct EditDiff: View {
         }
         .padding(.vertical, 4)
         .textSelection(.enabled)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.04)))
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.04)))
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
