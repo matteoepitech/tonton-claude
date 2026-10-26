@@ -78,4 +78,16 @@ final class LocalSessionsTests: XCTestCase {
         conversation.apply(TranscriptTail.Read(lines: [lines[0]], reset: true))
         XCTAssertEqual(conversation.entries.map(\.text), ["m0"])
     }
+
+    func testTokensCountEachResponseOnceAndStartOverOnAReset() {
+        var conversation = LocalSessions.Conversation()
+        let usage = #""usage":{"input_tokens":10,"output_tokens":200,"cache_read_input_tokens":3000,"cache_creation_input_tokens":400}"#
+        let block = { (uuid: String, request: String) in
+            #"{"type":"assistant","uuid":"\#(uuid)","requestId":"\#(request)","message":{"model":"claude-opus-5-5",\#(usage),"content":[]}}"#
+        }
+        conversation.apply(TranscriptTail.Read(lines: [block("a1", "req_1"), block("a2", "req_1"), block("a3", "req_2")]))
+        XCTAssertEqual(conversation.tokens, TokenCounts(input: 20, output: 400, cacheRead: 6000, cacheWrite: 800))
+        conversation.apply(TranscriptTail.Read(lines: [block("a1", "req_1")], reset: true))
+        XCTAssertEqual(conversation.tokens, TokenCounts(input: 10, output: 200, cacheRead: 3000, cacheWrite: 400))
+    }
 }

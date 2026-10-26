@@ -82,11 +82,18 @@ public enum LocalSessions {
         public private(set) var costUSD: Double?
         public private(set) var fiveHourLimit: UsageLimit?
         public private(set) var sevenDayLimit: UsageLimit?
+        public private(set) var tokens: TokenCounts?
+        /// API responses already in `tokens`.
+        private var countedRequests: Set<String> = []
 
         public init() {}
 
         public mutating func apply(_ read: TranscriptTail.Read) {
-            if read.reset { entries = [] }
+            if read.reset {
+                entries = []
+                tokens = nil
+                countedRequests = []
+            }
             for line in read.lines {
                 let parsed = Transcript.parse(line)
                 entries += parsed.entries
@@ -94,6 +101,9 @@ public enum LocalSessions {
                 if let cost = parsed.costUSD { costUSD = cost }
                 if let limit = parsed.fiveHourLimit { fiveHourLimit = limit }
                 if let limit = parsed.sevenDayLimit { sevenDayLimit = limit }
+                if let usage = parsed.usage, countedRequests.insert(usage.requestId).inserted {
+                    tokens = (tokens ?? TokenCounts()) + usage.tokens
+                }
             }
             if entries.count > LocalSessions.maxEntries { entries.removeFirst(entries.count - LocalSessions.maxEntries) }
         }
@@ -114,6 +124,6 @@ public enum LocalSessions {
             status: endedAt == nil ? record.sessionStatus : .ended, statusText: nil, agentOnline: true, canChat: false,
             pendingPermissions: [], costUSD: conversation.costUSD, startedAt: started, lastActivity: endedAt ?? updated,
             lastMessage: conversation.lastMessage, fiveHourLimit: conversation.fiveHourLimit,
-            sevenDayLimit: conversation.sevenDayLimit)
+            sevenDayLimit: conversation.sevenDayLimit, tokens: conversation.tokens)
     }
 }

@@ -95,6 +95,7 @@ struct ChatHeader: View {
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
                     Text(String(format: "$%.2f", cost)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        .help("Estimated by Claude Code at list price")
                 }
                 Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
@@ -114,6 +115,15 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
+                if settings.showCosts, let tokens = session.tokens {
+                    Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                        .help(
+                            "\(tokens.input.formatted()) input, \(tokens.cacheRead.formatted()) read from the cache, "
+                                + "\(tokens.cacheWrite.formatted()) written to it, \(tokens.output.formatted()) output")
+                }
                 if session.canChat, let reset = session.stoppedUntil() { autoContinueToggle(until: reset) }
                 if let err = store.lastError {
                     Text(err).font(.system(size: 10)).foregroundStyle(.red).lineLimit(1)

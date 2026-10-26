@@ -119,6 +119,21 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertEqual(LimitResets.toContinue(sessions + [readOnly], optedIn: ["web", "ended", "read-only"]), ["web"])
     }
 
+    func testTokensComeWithTheMetaAndReadShort() throws {
+        let tokens = TokenCounts(input: 10, output: 48_200, cacheRead: 1_200_000, cacheWrite: 3_400)
+        let meta = SessionMeta(title: nil, costUSD: 1.5, lastMessage: nil, tokens: tokens)
+        let wire = WireSession(
+            id: "s1", machineId: "m1", status: .working, agentOnline: true, canChat: true, info: nil, meta: try sealed(meta),
+            statusDetail: nil, pendingPermissions: [], startedAt: "x", lastActivity: "x")
+        XCTAssertEqual(vault.session(wire, machines: []).tokens, tokens)
+        XCTAssertEqual(tokens.allInput, 1_203_410)
+        XCTAssertEqual(TokenCounts.short(950), "950")
+        XCTAssertEqual(TokenCounts.short(4_200), "4.2k")
+        XCTAssertEqual(TokenCounts.short(5_000), "5k")
+        XCTAssertEqual(TokenCounts.short(48_200), "48k")
+        XCTAssertEqual(TokenCounts.short(1_203_410), "1.2M")
+    }
+
     func testTimeLeftReadsLikeTheNotch() {
         let now = Date(timeIntervalSince1970: 1_792_497_600)
         func left(_ seconds: TimeInterval) -> String { UsageLimit(usedPercent: 90, resetsAt: now + seconds).timeLeft(at: now) }

@@ -53,6 +53,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let canChat: Bool
     public let pendingPermissions: [PermissionRequest]
     public let costUSD: Double?
+    /// Nil with older agents.
+    public let tokens: TokenCounts?
     public let startedAt: Date
     public let lastActivity: Date
     public let lastMessage: String?
@@ -66,7 +68,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         status: SessionStatus,
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
         startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
-        sevenDayLimit: UsageLimit? = nil
+        sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -86,6 +88,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.lastMessage = lastMessage
         self.fiveHourLimit = fiveHourLimit
         self.sevenDayLimit = sevenDayLimit
+        self.tokens = tokens
     }
 
     /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the
@@ -111,6 +114,40 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         // StopFailure's error type when the plan's limit refuses a request.
         if text == "rate_limit" { return "Usage limit reached" }
         return text
+    }
+}
+
+/// Tokens of a session's API responses, summed from its transcript.
+public struct TokenCounts: Codable, Equatable, Sendable {
+    public var input: Int
+    public var output: Int
+    /// Input read from or written to the prompt cache, billed apart from the rest.
+    public var cacheRead: Int
+    public var cacheWrite: Int
+
+    public init(input: Int = 0, output: Int = 0, cacheRead: Int = 0, cacheWrite: Int = 0) {
+        self.input = input
+        self.output = output
+        self.cacheRead = cacheRead
+        self.cacheWrite = cacheWrite
+    }
+
+    /// Everything the model read, cached or not.
+    public var allInput: Int { input + cacheRead + cacheWrite }
+
+    public static func + (a: TokenCounts, b: TokenCounts) -> TokenCounts {
+        TokenCounts(
+            input: a.input + b.input, output: a.output + b.output, cacheRead: a.cacheRead + b.cacheRead,
+            cacheWrite: a.cacheWrite + b.cacheWrite)
+    }
+
+    /// `950`, `4.2k`, `48k`, `1.2M`.
+    public static func short(_ count: Int) -> String {
+        func trimmed(_ value: Double) -> String { String(format: "%.1f", value).replacingOccurrences(of: ".0", with: "") }
+        if count < 1000 { return "\(count)" }
+        if count < 10_000 { return "\(trimmed(Double(count) / 1000))k" }
+        if count < 1_000_000 { return "\(count / 1000)k" }
+        return "\(trimmed(Double(count) / 1_000_000))M"
     }
 }
 
