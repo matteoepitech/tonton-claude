@@ -1,4 +1,4 @@
-import type { Entry, ImageData, TokenCounts, UsageLimit } from '../../../shared/protocol'
+import type { Entry, FileEdit, ImageData, TokenCounts, UsageLimit } from '../../../shared/protocol'
 import { limit } from '../usage'
 
 // Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
@@ -6,6 +6,9 @@ import { limit } from '../usage'
 const MAX_TOOL_RESULT_CHARS = 4000
 const MAX_IMAGE_BASE64 = 4 * 1024 * 1024
 const MAX_SUMMARY_CHARS = 300
+/** Per side of an edit, and edits per call: enough to read the change, not to resend whole files. */
+const MAX_EDIT_CHARS = 4000
+const MAX_EDITS = 20
 /** Internal tools that would only add noise to the conversation. */
 const HIDDEN_TOOLS = new Set(['ToolSearch'])
 /** Wrapped user content that Claude Code adds and that should not appear as a message. */
@@ -152,6 +155,7 @@ function assistantEntries(id: string, ts: string, content: Block[]): Entry[] {
         return { id: entryId, ts, kind: 'assistant', text: block.text }
       }
       if (block.type === 'tool_use' && typeof block.name === 'string' && !HIDDEN_TOOLS.has(block.name)) {
+        const edits = fileEdits(block.name, block.input)
         return {
           id: entryId,
           ts,
@@ -159,6 +163,7 @@ function assistantEntries(id: string, ts: string, content: Block[]): Entry[] {
           toolUseId: String(block.id),
           name: block.name,
           summary: toolSummary(block.name, block.input),
+          ...(edits.length ? { edits } : {}),
         }
       }
       return null
@@ -213,6 +218,20 @@ function addImage(images: ImageData[], block: Block) {
   if (source?.type === 'base64' && typeof source.data === 'string' && source.data.length <= MAX_IMAGE_BASE64) {
     images.push({ mediaType: source.media_type ?? 'image/png', data: source.data })
   }
+}
+
+/** The replacements of an Edit or MultiEdit call, for the app to show as a diff. */
+export function fileEdits(name: string, input: unknown): FileEdit[] {
+  const fields = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  const raw = name === 'Edit' ? [fields] : name === 'MultiEdit' && Array.isArray(fields.edits) ? fields.edits : []
+  const cut = (text: string) => (text.length > MAX_EDIT_CHARS ? `${text.slice(0, MAX_EDIT_CHARS)}\n…` : text)
+  return raw
+    .filter(
+      (edit): edit is { old_string: string; new_string: string } =>
+        typeof edit?.old_string === 'string' && typeof edit?.new_string === 'string',
+    )
+    .slice(0, MAX_EDITS)
+    .map(edit => ({ oldText: cut(edit.old_string), newText: cut(edit.new_string) }))
 }
 
 export function toolSummary(name: string, input: unknown): string {

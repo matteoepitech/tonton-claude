@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { parseLine, toolSummary } from '../src/transcript/parser'
+import { fileEdits, parseLine, toolSummary } from '../src/transcript/parser'
 
 const line = (fields: object) => JSON.stringify({ uuid: 'u1', timestamp: '2026-10-25T10:00:00Z', ...fields })
 
@@ -150,6 +150,31 @@ describe('parseLine', () => {
   test('garbage and subagent lines are ignored', () => {
     expect(parseLine('{not json').entries).toEqual([])
     expect(parseLine(line({ type: 'user', isSidechain: true, message: { content: 'x' } })).entries).toEqual([])
+  })
+})
+
+describe('fileEdits', () => {
+  test('Edit and MultiEdit calls carry their replacements for the diff', () => {
+    const { entries } = parseLine(
+      line({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: '/a.ts', old_string: 'a', new_string: 'b' } }],
+        },
+      }),
+    )
+    expect(entries[0]).toMatchObject({ kind: 'tool', summary: '/a.ts', edits: [{ oldText: 'a', newText: 'b' }] })
+    const multi = {
+      file_path: '/a.ts',
+      edits: [
+        { old_string: 'x', new_string: 'y' },
+        { old_string: 1, new_string: 'z' },
+      ],
+    }
+    expect(fileEdits('MultiEdit', multi)).toEqual([{ oldText: 'x', newText: 'y' }])
+    expect(fileEdits('Edit', { old_string: 'a'.repeat(5000), new_string: '' })[0].oldText).toHaveLength(4002)
+    expect(fileEdits('Read', { file_path: '/a.ts' })).toEqual([])
+    expect(fileEdits('Edit', null)).toEqual([])
   })
 })
 
