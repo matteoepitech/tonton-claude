@@ -47,6 +47,10 @@ final class SessionStore: ObservableObject {
     let finished = PassthroughSubject<SessionSummary, Never>()
     /// Sessions a usage limit stopped, the moment it resets.
     let limitLifted = PassthroughSubject<[SessionSummary], Never>()
+    /// Sessions that get `continue` when a usage limit that stopped them resets. Kept while the app runs.
+    @Published private(set) var autoContinue: Set<String> = []
+    /// Requests can still be refused right at the reset: wait a little, as Claude Code does.
+    private static let continueDelay: Duration = .seconds(30)
 
     private let settings: AppSettings
     private let socket = RelaySocket()
@@ -73,6 +77,23 @@ final class SessionStore: ObservableObject {
         sessionsPublisher.combineLatest(settings.$hiddenMachines)
             .sink { [weak self] sessions, hidden in self?.scheduleLimitResets(sessions.filter { !hidden.contains($0.machine) }) }
             .store(in: &subscriptions)
+        limitLifted.sink { [weak self] sessions in self?.continueAfterLimit(sessions) }.store(in: &subscriptions)
+    }
+
+    func toggleAutoContinue(_ sessionId: String) {
+        if autoContinue.contains(sessionId) { autoContinue.remove(sessionId) } else { autoContinue.insert(sessionId) }
+    }
+
+    /// Sends `continue` through the chat channel to the freed sessions that asked for it.
+    private func continueAfterLimit(_ lifted: [SessionSummary]) {
+        guard !LimitResets.toContinue(lifted, optedIn: autoContinue).isEmpty else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.continueDelay)
+            guard let self else { return }
+            // Read again: the user may have changed their mind, or the session closed, in the meantime.
+            let current = lifted.compactMap { session in self.sessions.first { $0.id == session.id } }
+            for id in LimitResets.toContinue(current, optedIn: self.autoContinue) { self.sendPrompt("continue", images: [], to: id) }
+        }
     }
 
     /// Keeps a timer for each reset time of the stopped sessions. Timers already due are left to fire: a session update in

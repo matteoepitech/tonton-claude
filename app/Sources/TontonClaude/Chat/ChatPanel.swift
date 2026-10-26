@@ -67,6 +67,25 @@ struct ChatHeader: View {
         if panel.runAboveNotch() == .OK, let url = panel.url { try? text.write(to: url, atomically: true, encoding: .utf8) }
     }
 
+    /// Offered while a usage limit stops the session: send `continue` once it resets.
+    private func autoContinueToggle(until reset: Date) -> some View {
+        let on = store.autoContinue.contains(session.id)
+        return Button {
+            store.toggleAutoContinue(session.id)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 9))
+                Text("Continue at \(reset.formatted(date: .omitted, time: .shortened))").font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(on ? Theme.accent : .secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(on ? Theme.accent.opacity(0.16) : Color.white.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+        .help(on ? "Claude gets “continue” when the limit resets. Click to cancel." : "Send “continue” when the limit resets")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
@@ -95,6 +114,7 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
+                if session.canChat, let reset = session.stoppedUntil() { autoContinueToggle(until: reset) }
                 if let err = store.lastError {
                     Text(err).font(.system(size: 10)).foregroundStyle(.red).lineLimit(1)
                         .onTapGesture { store.lastError = nil }
