@@ -83,6 +83,9 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Slash commands.** Claude Code doesn't let a channel run `/compact` or `/clear`, so the notch types them in the
   session's terminal instead. That works for sessions running in tmux, like the ones started from the notch: a terminal
   icon in the session's header, once Claude is done. `/clear` asks first.
+- **Behind a proxy.** The agent goes through `HTTPS_PROXY` and skips the hosts in `NO_PROXY`, like curl. Set them before
+  running the install line: the background service keeps the ones it was installed with. See
+  [the details](docs/self-hosting.md#behind-a-proxy).
 - **Changing relay or account.** Click the Tonton Claude icon next to the clock on that machine › **Set token…** and paste
   the token from the app. **Regenerate** in Settings › Machines makes a new one: every machine is signed out until it gets it.
 - **AppleScript and Shortcuts.** Scripts can read the sessions (`session list`, `session status "api"`) and, once
