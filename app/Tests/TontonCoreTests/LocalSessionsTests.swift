@@ -102,4 +102,14 @@ final class LocalSessionsTests: XCTestCase {
         conversation.apply(TranscriptTail.Read(lines: [#"{"type":"system","subtype":"compact_boundary","uuid":"c1"}"#]))
         XCTAssertEqual(conversation.contextTokens, 0)
     }
+
+    func testAnEmptyRelayHistoryDoesNotHideTheTranscript() {
+        let local = Entry(id: "u1", ts: "2026-10-26T10:00:00Z", kind: .user, text: "from the transcript")
+        let relay = Entry(id: "u1", ts: "2026-10-26T10:00:00Z", kind: .user, text: "from the relay")
+        // Selecting a session of this Mac subscribes to it on the relay, which knows nothing about it without an agent.
+        XCTAssertEqual(LocalSessions.entries(local: ["s1": [local]], relay: ["s1": []])["s1"], [local])
+        XCTAssertEqual(LocalSessions.entries(local: ["s1": [local]], relay: ["s1": [relay]])["s1"], [relay])
+        XCTAssertEqual(LocalSessions.entries(local: [:], relay: ["s2": [relay]])["s2"], [relay])
+        XCTAssertEqual(LocalSessions.entries(local: [:], relay: ["s3": []])["s3"], [])
+    }
 }

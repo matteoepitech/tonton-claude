@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { HookPost } from '../../shared/protocol'
 import { terminalOf } from './channel/terminal'
-import { loadConfig, paths } from './config'
+import { type AgentConfig, loadConfig, paths } from './config'
 import { seal } from './crypto'
 import { log } from './log'
 import { matchingRule, readRules } from './rules'
@@ -35,26 +35,22 @@ export async function runHook() {
 
     const config = loadConfig()
     if (!config) return
-    // Only the event type travels in clear: any text is sealed with the account key.
-    const text = event.message ?? event.error ?? event.reason
-    const body: HookPost = {
-      event: {
-        hook_event_name: event.hook_event_name,
-        session_id: event.session_id,
-        notification_type: event.notification_type,
-        source: event.source,
-      },
-      ...(text ? { detail: await seal(config.key, { text }) } : {}),
-    }
-    await fetch(`${config.server}/api/hook`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${config.token}` },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(event.hook_event_name === 'SessionEnd' ? 1000 : 2000),
-    })
+    const { hook_event_name, session_id, notification_type, source } = event
+    await postHook(config, { hook_event_name, session_id, notification_type, source }, event.message ?? event.error ?? event.reason)
   } catch (error) {
     log('hook failed', String(error))
   }
+}
+
+/** Sends a status change to the relay. Only the event type travels in clear: any text is sealed with the account key. */
+export async function postHook(config: AgentConfig, event: HookPost['event'], text?: string) {
+  const body: HookPost = { event, ...(text ? { detail: await seal(config.key, { text }) } : {}) }
+  await fetch(`${config.server}/api/hook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${config.token}` },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(event.hook_event_name === 'SessionEnd' ? 1000 : 2000),
+  })
 }
 
 /**

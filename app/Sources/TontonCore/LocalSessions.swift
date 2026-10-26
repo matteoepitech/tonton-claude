@@ -119,6 +119,13 @@ public enum LocalSessions {
         }
     }
 
+    /// The conversations the app shows: the relay's copy of a session, which comes with an agent that can chat, or else this
+    /// Mac's transcript. The relay answers a subscription to a session it does not know with an empty history, which must
+    /// not hide the transcript.
+    public static func entries(local: [String: [Entry]], relay: [String: [Entry]]) -> [String: [Entry]] {
+        local.merging(relay) { local, relay in relay.isEmpty ? local : relay }
+    }
+
     /// The session as the notch shows it. `endedAt` is set once its process is gone.
     public static func summary(_ record: Record, _ conversation: Conversation, endedAt: Date? = nil) -> SessionSummary {
         let cwd = record.cwd.hasSuffix("/") && record.cwd.count > 1 ? String(record.cwd.dropLast()) : record.cwd

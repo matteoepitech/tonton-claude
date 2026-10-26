@@ -41,7 +41,8 @@ public struct SessionVault: Sendable {
             sevenDayLimit: meta?.sevenDayLimit.flatMap(usageLimit),
             tokens: meta?.tokens,
             context: meta?.context.map { ContextUsage(usedTokens: $0.usedTokens, windowTokens: $0.windowTokens) },
-            terminal: meta?.terminal ?? false
+            terminal: meta?.terminal ?? false,
+            tool: info?.tool
         )
     }
 

@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { HOOK_EVENTS, launcherSettings, withoutTontonHooks, withTontonHooks } from '../src/install/claude-settings'
+import { installOpenCodePlugin, openCodeConfigDir, removeOpenCodePlugin } from '../src/install/opencode'
 import { launcherBlock, removeLauncher, withLauncher } from '../src/install/shell-profile'
 
 const BINARY = '/home/user/.tonton/bin/tonton'
@@ -67,5 +71,26 @@ describe('launcher settings', () => {
       '~/.tonton/bin/tonton.exe statusline',
     )
     expect(command('D:\\tools\\tonton.exe', 'C:\\Users\\jean', true)).toBe('D:/tools/tonton.exe statusline')
+  })
+})
+
+describe('OpenCode plugin', () => {
+  test('lives in the global configuration folder, which XDG_CONFIG_HOME moves', () => {
+    expect(openCodeConfigDir({}, '/home/user')).toBe(join('/home/user', '.config', 'opencode'))
+    expect(openCodeConfigDir({ XDG_CONFIG_HOME: '/xdg' }, '/home/user')).toBe(join('/xdg', 'opencode'))
+  })
+
+  test('is written next to the user plugins with the installed binary, and removed alone', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tonton-opencode-config-'))
+    try {
+      const file = installOpenCodePlugin(BINARY, dir)
+      expect(file).toBe(join(dir, 'plugins', 'tonton-claude.js'))
+      expect(readFileSync(file, 'utf8')).toContain(JSON.stringify([BINARY, 'opencode']))
+      removeOpenCodePlugin(dir)
+      expect(existsSync(file)).toBe(false)
+      expect(existsSync(join(dir, 'plugins'))).toBe(true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

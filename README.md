@@ -69,6 +69,8 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
   [run your own](docs/self-hosting.md) in a few minutes.
 - **Can the relay read my code?** No. Messages are encrypted on your machines with a key that never leaves them.
 - **Which machines?** Anything that runs Claude Code: Windows, macOS and Linux.
+- **OpenCode?** Yes: the installer adds a plugin to OpenCode when it finds it, and its sessions show up in the notch too,
+  read only for now.
 - **First launch.** Claude Code asks you to confirm "I am using this for local development" once per launch, because the
   feature Tonton Claude uses is still in preview.
 - **Status line.** Claude Code only shares your plan's usage with status lines, so sessions started from a terminal get one

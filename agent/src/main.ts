@@ -2,6 +2,7 @@ import { runChannel } from './channel'
 import { loadConfig, saveConfig, VERSION } from './config'
 import { runHook } from './hook'
 import { install, status, uninstall } from './install'
+import { runOpenCode } from './opencode/bridge'
 import { restartService } from './service/control'
 import { runService } from './service/index'
 import { runStatusLine } from './statusline'
@@ -24,6 +25,9 @@ switch (command) {
     break
   case 'channel':
     await runChannel()
+    break
+  case 'opencode':
+    await runOpenCode()
     break
   case 'statusline':
     await runStatusLine()

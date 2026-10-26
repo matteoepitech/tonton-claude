@@ -33,6 +33,8 @@ export interface SessionInfo {
   platform?: string
   cwd: string
   project: string
+  /** The coding agent running the session. Missing for Claude Code, and from older agents. */
+  tool?: 'opencode'
 }
 /** How much of a Claude plan's usage window is spent, as Claude Code reports it. */
 export interface UsageLimit {

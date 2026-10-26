@@ -15,12 +15,14 @@ struct MascotView: View {
         TimelineView(.periodic(from: .now, by: Self.frameDuration)) { context in
             let tick = Int(context.date.timeIntervalSinceReferenceDate / Self.frameDuration)
             let frame = frames[reduceMotion ? 0 : tick % frames.count]
+            let shift = Mascot.centering(pose)
             Canvas { graphics, canvas in
                 let pixel = canvas.width / CGFloat(Mascot.size)
                 for (y, row) in frame.enumerated() {
                     for (x, character) in row.enumerated() {
                         guard let color = Self.color(character) else { continue }
-                        let square = CGRect(x: CGFloat(x) * pixel, y: CGFloat(y) * pixel, width: pixel, height: pixel)
+                        let square = CGRect(
+                            x: CGFloat(x + shift.x) * pixel, y: CGFloat(y + shift.y) * pixel, width: pixel, height: pixel)
                         graphics.fill(Path(square), with: .color(color))
                     }
                 }
