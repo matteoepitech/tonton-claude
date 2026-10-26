@@ -30,6 +30,10 @@ struct NotchPane: View {
                     isOn: $settings.workingGlow)
                 Hairline()
                 ToggleRow(
+                    title: "Session pills", detail: "Each live session as a small pill under the notch. Click one to open it.",
+                    isOn: $settings.showPills)
+                Hairline()
+                ToggleRow(
                     title: "Open on approval requests", detail: "Expand the notch straight on the session asking for permission.",
                     isOn: $settings.openOnPermission)
             }

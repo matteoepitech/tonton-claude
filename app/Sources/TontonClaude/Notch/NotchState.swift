@@ -26,6 +26,11 @@ final class NotchState: ObservableObject {
     @Published var achievement: Achievement?
     /// A chat item to scroll to and highlight, picked in the search results.
     @Published var jumpTo: String?
+    /// Live sessions as pills under the collapsed notch (Settings › Notch › Session pills).
+    @Published var pills = PillRow([])
+    static let pillHeight: CGFloat = 20
+    /// Between the notch and its pills.
+    static let pillGap: CGFloat = 8
     /// Wider wings, so the right one fits the time left before a usage limit resets.
     @Published var wingCountdown = false
     /// The session the wings show, widened like the Dynamic Island (Settings › Notch › Live activity).

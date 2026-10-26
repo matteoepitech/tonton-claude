@@ -59,6 +59,11 @@ struct NotchRootView: View {
         .overlay {
             if let seed = state.confetti { ConfettiBurst(seed: seed, from: CGPoint(x: NotchState.expandedSize.width / 2, y: size.height)) }
         }
+        .overlay(alignment: .top) {
+            if state.mode == .collapsed && state.pills.pillCount > 0 {
+                SessionPills(row: state.pills).padding(.top, state.collapsedSize.height + NotchState.pillGap)
+            }
+        }
         .environment(\.colorScheme, .dark)
     }
 }
@@ -163,5 +168,35 @@ struct ConfettiBurst: View {
             }
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// Live sessions as small pills under the collapsed notch, readable without opening it. Clicks are handled by the window
+/// controller, which knows where the pointer is.
+struct SessionPills: View {
+    let row: PillRow
+
+    var body: some View {
+        HStack(spacing: PillRow.spacing) {
+            ForEach(row.sessions) { session in
+                pill {
+                    StatusDot(status: session.status, size: 6)
+                    Text(session.project).font(.system(size: 10, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+                }
+                .overlay(Capsule().stroke(Color(nsColor: session.status.color).opacity(session.status.needsAttention ? 0.9 : 0.35)))
+            }
+            if row.more > 0 {
+                pill { Text("+\(row.more)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
+                    .overlay(Capsule().stroke(.white.opacity(0.15)))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func pill<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 5) { content() }
+            .padding(.horizontal, 8)
+            .frame(width: PillRow.pillWidth, height: NotchState.pillHeight)
+            .background(Capsule().fill(.black.opacity(0.88)))
     }
 }

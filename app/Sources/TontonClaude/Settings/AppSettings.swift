@@ -60,6 +60,8 @@ final class AppSettings: ObservableObject {
     @Published var liveActivity: Bool
     /// A light around the notch while a session works.
     @Published var workingGlow: Bool
+    /// Live sessions as pills under the collapsed notch.
+    @Published var showPills: Bool
     /// 0 is opaque, 0.5 the original glass, 1 the clearest (see GlassVeil).
     @Published var notchTransparency: Double
     @Published var openOnPermission: Bool
@@ -135,6 +137,7 @@ final class AppSettings: ObservableObject {
         showMascot = value("showMascot", false)
         liveActivity = value("liveActivity", false)
         workingGlow = value("workingGlow", true)
+        showPills = value("showPills", false)
         notchTransparency = value("notchTransparency", 0.5)
         openOnPermission = value("openOnPermission", false)
         showAlerts = value("showAlerts", true)
@@ -177,6 +180,7 @@ final class AppSettings: ObservableObject {
         persist($showMascot, "showMascot")
         persist($liveActivity, "liveActivity")
         persist($workingGlow, "workingGlow")
+        persist($showPills, "showPills")
         persist($notchTransparency, "notchTransparency")
         persist($openOnPermission, "openOnPermission")
         persist($showAlerts, "showAlerts")
