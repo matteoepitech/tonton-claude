@@ -2,7 +2,7 @@
 // questions it asks on the way (loading the channel, trusting the folder) go to the notch, and only the user's answer
 // moves it on.
 
-import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { StartAnswer, StartDetail, StartOrder, StartState } from '../../shared/protocol'
@@ -10,6 +10,7 @@ import type { RelayConnection } from './channel/relay-connection'
 import { type AgentConfig, paths } from './config'
 import { open, seal } from './crypto'
 import { log } from './log'
+import { claimOnce } from './once'
 
 /** Older orders are refused so the relay cannot replay one later. */
 const ORDER_TTL_MS = 10 * 60_000
@@ -89,28 +90,8 @@ export async function handleStartOrder(
 
 type Report = (state: StartState, fields?: Pick<StartDetail, 'text' | 'question' | 'sessionId'>) => void
 
-/** Marks the start as run, in a file every process of the machine sees: `taken` if one already did. */
-export function claim(launchId: string, run: string, now = Date.now()): 'claimed' | 'taken' | Error {
-  const folder = join(run, 'launches')
-  try {
-    mkdirSync(folder, { recursive: true, mode: 0o700 })
-  } catch (error) {
-    return error instanceof Error ? error : new Error(String(error))
-  }
-  for (const file of readdirSync(folder)) {
-    // Another process may clear the same old claims at the same time.
-    try {
-      if (now - statSync(join(folder, file)).mtimeMs > 2 * ORDER_TTL_MS) rmSync(join(folder, file), { force: true })
-    } catch {}
-  }
-  try {
-    writeFileSync(join(folder, launchId), '', { flag: 'wx', mode: 0o600 })
-    return 'claimed'
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return 'taken'
-    return error instanceof Error ? error : new Error(String(error))
-  }
-}
+/** Marks the start as run on this machine: `taken` if one of its processes already did. */
+export const claim = (launchId: string, run: string, now = Date.now()) => claimOnce(join(run, 'launches'), launchId, 2 * ORDER_TTL_MS, now)
 
 /** The user's answer to the question a start is waiting on. */
 export async function handleStartAnswer(config: AgentConfig, launchId: string, sealed: string) {

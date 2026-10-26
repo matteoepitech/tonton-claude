@@ -64,6 +64,8 @@ export interface SessionMeta {
   fiveHourLimit?: UsageLimit
   /** The weekly window, like the 5-hour one. */
   sevenDayLimit?: UsageLimit
+  /** The session runs in tmux, so the notch can type slash commands in it. Missing from older agents. */
+  terminal?: boolean
 }
 export interface StatusDetail {
   text: string
@@ -76,6 +78,16 @@ export interface PermissionDetail {
 export interface PromptPayload {
   text: string
   images: { name: string; mediaType: string; data: string }[]
+  /** A slash command to type in the session's terminal instead of a message. Sent only to sessions whose meta says `terminal`. */
+  command?: SessionCommand
+}
+/** Bound to its session and run once, so the relay can neither move a `/clear` to another session nor replay it. */
+export interface SessionCommand {
+  name: 'compact' | 'clear'
+  sessionId: string
+  /** Random, safe as a file name. */
+  id: string
+  issuedAt: string
 }
 /** What the background service reports about its machine every minute. */
 export interface MachineHealth {

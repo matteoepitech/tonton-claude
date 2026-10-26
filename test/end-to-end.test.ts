@@ -170,6 +170,22 @@ describe('end to end', () => {
     expect(notifications.filter(n => n.method === 'notifications/claude/channel')).toHaveLength(1)
   })
 
+  test('a slash command for a session outside tmux comes back as a note in the conversation, not as a message', async () => {
+    const meta = await eventually(() => latestSession(app)?.meta, 'the meta')
+    expect(await open(key, meta)).toMatchObject({ terminal: false })
+    const before = app.messages.length
+    const delivered = notifications.length
+    const command = { name: 'compact', sessionId, id: `command-${Date.now()}`, issuedAt: new Date().toISOString() }
+    app.socket.send(JSON.stringify({ t: 'prompt', sessionId, payload: await seal(key, { text: '', images: [], command }) }))
+    const note = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'the note')
+    if (note.t !== 'entries') throw new Error('unexpected message')
+    expect(await open(key, note.entries[0].blob)).toMatchObject({
+      kind: 'system',
+      text: '/compact was not run: This session does not run in tmux, so commands from the notch cannot be typed in it.',
+    })
+    expect(notifications).toHaveLength(delivered)
+  })
+
   test('permission prompts round-trip', async () => {
     const params = { request_id: 'abcde', tool_name: 'Bash', description: 'Deploy', input_preview: '{"command":"deploy"}' }
     await claude.notification({ method: 'notifications/claude/channel/permission_request', params })
@@ -182,8 +198,9 @@ describe('end to end', () => {
   })
 
   test('new transcript lines stream live', async () => {
+    const before = app.messages.length
     appendFileSync(transcript, line({ type: 'assistant', uuid: 'a2', message: { content: [{ type: 'text', text: 'done' }] } }))
-    const live = await eventually(() => app.messages.find(m => m.t === 'entries'), 'live entries')
+    const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'live entries')
     if (live.t !== 'entries') throw new Error('unexpected message')
     expect(await open<{ text: string }>(key, live.entries[0].blob)).toMatchObject({ text: 'done' })
   })

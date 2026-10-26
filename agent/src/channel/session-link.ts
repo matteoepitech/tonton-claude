@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { paths } from '../config'
+import type { TerminalPane } from './terminal'
 
 const POLL_MS = 700
 /** Before giving up on the hook link and guessing from the working directory. */
@@ -11,6 +12,8 @@ export interface SessionLink {
   sessionId: string
   transcriptPath: string | null
   cwd: string | null
+  /** Where Claude Code runs, when it runs in tmux. Missing from links written by older hooks. */
+  tmux?: TerminalPane | null
 }
 
 /**
@@ -40,7 +43,8 @@ export class SessionLinkWatcher {
     if (!next) return
     // Some hook events carry no transcript path: keep the one already known for this session.
     if (next.sessionId === this.current?.sessionId && !next.transcriptPath) next = { ...next, transcriptPath: this.current.transcriptPath }
-    if (next.sessionId === this.current?.sessionId && next.transcriptPath === this.current?.transcriptPath) return
+    const sameTerminal = JSON.stringify(next.tmux ?? null) === JSON.stringify(this.current?.tmux ?? null)
+    if (next.sessionId === this.current?.sessionId && next.transcriptPath === this.current?.transcriptPath && sameTerminal) return
     this.current = next
     this.onChange(next)
   }

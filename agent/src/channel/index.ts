@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { PromptPayload, RelayToAgent } from '../../../shared/protocol'
+import type { PromptPayload, RelayToAgent, SessionCommand } from '../../../shared/protocol'
 import { loadConfig, paths } from '../config'
 import { open } from '../crypto'
 import { handleStartAnswer, receiveStartOrder } from '../launch'
@@ -11,6 +11,7 @@ import { Conversation } from './conversation'
 import { ChannelServer } from './mcp'
 import { RelayConnection } from './relay-connection'
 import { type SessionLink, SessionLinkWatcher } from './session-link'
+import { runCommand } from './terminal'
 
 const PARENT_CHECK_MS = 5000
 
@@ -56,7 +57,15 @@ export async function runChannel() {
       log('dropped a prompt that does not decrypt with the account key')
       return
     }
+    if (prompt.command) return typeCommand(prompt.command)
     await mcp.inject(withAttachments(prompt))
+  }
+
+  const typeCommand = (command: SessionCommand) => {
+    if (!conversation) return
+    const result = runCommand(command, conversation.link.sessionId, conversation.link.tmux ?? null, { run: paths.run })
+    log('command from the notch', { name: command.name, typed: result.typed })
+    if (!result.typed && result.why) conversation.notice(`/${command.name} was not run: ${result.why}`)
   }
 
   const follow = (link: SessionLink) => {
