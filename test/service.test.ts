@@ -4,11 +4,11 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { open } from '../agent/src/crypto'
 import type { ServiceStatus } from '../agent/src/service/status'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { encodeAccountToken, parseAccountToken } from '../shared/account-token'
+import { open } from '../shared/crypto'
 import type { MachineHealth, MachineSummary, RelayToApp } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')

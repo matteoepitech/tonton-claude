@@ -41,6 +41,8 @@ TONTON_REGISTRATION=open
 #TONTON_ADMIN_TOKEN=
 # 1 to read client IPs from X-Forwarded-For, only behind a reverse proxy that sets it.
 TONTON_TRUST_PROXY=0
+# Set to turn on /metrics (Prometheus) for this bearer token (24+ characters).
+#TONTON_METRICS_TOKEN=
 EOF
   chmod 600 /etc/tonton/tonton.env
 fi

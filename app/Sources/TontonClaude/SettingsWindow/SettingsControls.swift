@@ -56,7 +56,7 @@ struct Segmented: View {
             }
         }
         .padding(2)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.3)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.code))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
     }
 }

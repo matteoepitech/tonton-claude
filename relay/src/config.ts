@@ -10,6 +10,8 @@ export interface RelayConfig {
   trustProxy: boolean
   /** Where the relay runs, shown in the app next to the latency. Fly.io sets FLY_REGION. */
   region: string | null
+  /** Bearer token that opens `/metrics`. Without one the page does not exist. */
+  metricsToken: string | null
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): RelayConfig {
@@ -21,6 +23,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (registration === 'closed' && (!adminToken || adminToken.length < 24)) {
     throw new Error('TONTON_ADMIN_TOKEN (24+ characters) is required when registration is closed')
   }
+  const metricsToken = env.TONTON_METRICS_TOKEN || null
+  if (metricsToken && metricsToken.length < 24) throw new Error('TONTON_METRICS_TOKEN must be 24+ characters')
   const port = Number(env.PORT ?? 7777)
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`invalid PORT "${env.PORT}"`)
 
@@ -31,5 +35,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     adminToken,
     trustProxy: env.TONTON_TRUST_PROXY === '1',
     region: (env.TONTON_REGION || env.FLY_REGION || '').trim().slice(0, 40) || null,
+    metricsToken,
   }
 }

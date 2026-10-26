@@ -1,7 +1,9 @@
 import type { MachineSummary } from '../../shared/protocol'
+import { SessionArchive } from './archive'
 import type { RelayConfig } from './config'
 import { Hub } from './hub'
 import { RATE_LIMITS } from './limits'
+import type { RelayCounts } from './metrics'
 import { RateLimiter } from './rate-limit'
 import { Registry } from './registry'
 import { SessionStore } from './sessions'
@@ -20,17 +22,23 @@ export class RelayContext {
    */
   readonly rules = new Map<string, string>()
   readonly sessions: SessionStore
+  private readonly archive: SessionArchive
   readonly signups = new RateLimiter(RATE_LIMITS.signups.limit, RATE_LIMITS.signups.windowMs)
   readonly claims = new RateLimiter(RATE_LIMITS.claims.limit, RATE_LIMITS.claims.windowMs)
   readonly failedAuth = new RateLimiter(RATE_LIMITS.failedAuth.limit, RATE_LIMITS.failedAuth.windowMs)
   private readonly pruneTimer: Timer
+  private readonly startedAt = Date.now()
 
   constructor(readonly config: RelayConfig) {
     this.registry = new Registry(config.dataDir)
-    this.sessions = new SessionStore({
-      updated: (accountId, session) => this.hub.sendToApps(accountId, { t: 'session', session }),
-      removed: (accountId, sessionId) => this.hub.sendToApps(accountId, { t: 'removed', sessionId }),
-    })
+    this.archive = new SessionArchive(this.registry.db)
+    this.sessions = new SessionStore(
+      {
+        updated: (accountId, session) => this.hub.sendToApps(accountId, { t: 'session', session }),
+        removed: (accountId, sessionId) => this.hub.sendToApps(accountId, { t: 'removed', sessionId }),
+      },
+      this.archive,
+    )
     this.pruneTimer = setInterval(() => {
       for (const limiter of [this.signups, this.claims, this.failedAuth]) limiter.prune()
     }, 60_000)
@@ -55,6 +63,22 @@ export class RelayContext {
     this.health.delete(machineId)
   }
 
+  /** What the metrics page shows: totals over the whole relay. */
+  counts(): RelayCounts {
+    const { sockets, machinesOnline } = this.hub.counts()
+    const sessions = this.sessions.stats()
+    return {
+      ...this.registry.counts(),
+      machinesOnline,
+      sockets,
+      sessions: sessions.byStatus,
+      historyEntries: sessions.entries,
+      historyBytes: sessions.bytes,
+      traffic: this.hub.traffic,
+      startedAt: this.startedAt,
+    }
+  }
+
   pushMachines(accountId: string) {
     this.hub.sendToApps(accountId, { t: 'machines', machines: this.machineList(accountId) })
   }
@@ -62,6 +86,7 @@ export class RelayContext {
   dispose() {
     clearInterval(this.pruneTimer)
     this.sessions.dispose()
+    this.archive.close()
     this.registry.close()
   }
 }

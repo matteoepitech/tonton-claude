@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { open, seal } from '../agent/src/crypto'
 import { agentBinaryName, TRAY_HELPER_NAME } from '../agent/src/update'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
+import { open, seal } from '../shared/crypto'
 import type { RelayToApp, SessionSummary } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
@@ -172,7 +172,8 @@ describe('end to end', () => {
 
   test('a slash command for a session outside tmux comes back as a note in the conversation, not as a message', async () => {
     const meta = await eventually(() => latestSession(app)?.meta, 'the meta')
-    expect(await open(key, meta)).toMatchObject({ terminal: false })
+    // Outside tmux nothing can be typed: the agent offers no command, and refuses one sent anyway.
+    expect(await open(key, meta)).toMatchObject({ terminal: false, commands: [] })
     const before = app.messages.length
     const delivered = notifications.length
     const command = { name: 'compact', sessionId, id: `command-${Date.now()}`, issuedAt: new Date().toISOString() }
@@ -273,6 +274,31 @@ describe('end to end', () => {
     appendFileSync(transcript, line({ type: 'system', subtype: 'compact_boundary', uuid: 'c2' }))
     for (let i = 0; i < 80 && (await context())?.usedTokens !== 0; i++) await Bun.sleep(50)
     expect(await context()).toEqual({ usedTokens: 0, windowTokens: 1_000_000 })
+  })
+
+  test("the model reaches the app: the status line's right after a switch, then each response's", async () => {
+    const meta = async () => {
+      const blob = latestSession(app)?.meta
+      return blob ? await open<{ model?: string; fiveHourLimit?: { usedPercent: number } }>(key, blob) : undefined
+    }
+    const until = async (check: (read: Awaited<ReturnType<typeof meta>>) => boolean) => {
+      for (let i = 0; i < 80 && !check(await meta()); i++) await Bun.sleep(50)
+      return meta()
+    }
+    const usageFile = join(dir, 'agent', 'run', `usage-${sessionId}.json`)
+    expect((await until(read => read?.model === 'claude-opus-5-5'))?.model).toBe('claude-opus-5-5')
+    writeFileSync(usageFile, JSON.stringify({ model: 'claude-haiku-5-5' }))
+    expect((await until(read => read?.model === 'claude-haiku-5-5'))?.model).toBe('claude-haiku-5-5')
+
+    const message = { model: 'claude-sonnet-5-5', content: [{ type: 'text', text: 'From Sonnet' }] }
+    appendFileSync(transcript, line({ type: 'assistant', uuid: 'm1', message }))
+    expect((await until(read => read?.model === 'claude-sonnet-5-5'))?.model).toBe('claude-sonnet-5-5')
+    // The status line writes again for something else: its model, older than that response, changes nothing.
+    const fiveHourLimit = { usedPercent: 90, resetsAt: '2026-10-20T12:00:00.000Z' }
+    writeFileSync(usageFile, JSON.stringify({ model: 'claude-haiku-5-5', fiveHourLimit }))
+    const after = await until(read => read?.fiveHourLimit?.usedPercent === 90)
+    expect(after?.fiveHourLimit).toEqual(fiveHourLimit)
+    expect(after?.model).toBe('claude-sonnet-5-5')
   })
 
   test('a message sent from the notch while Claude is working reaches the app from the queue', async () => {

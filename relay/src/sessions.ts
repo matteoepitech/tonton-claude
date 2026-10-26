@@ -1,4 +1,5 @@
 import type { HookPost, Sealed, SealedEntry, SealedPermission, SessionStatus, SessionSummary } from '../../shared/protocol'
+import type { ArchivedSession, SessionArchive } from './archive'
 import {
   FINISHED_SESSION_TTL_MS,
   MAX_ACCOUNT_BYTES,
@@ -7,6 +8,7 @@ import {
   MAX_SESSION_BYTES,
   MAX_SESSIONS_PER_ACCOUNT,
 } from './limits'
+import { SESSION_STATUSES } from './metrics'
 
 export interface SessionListener {
   updated(accountId: string, session: SessionSummary): void
@@ -29,13 +31,18 @@ const HOOK_STATUS: Record<string, SessionStatus | undefined> = {
 
 /**
  * Live sessions, in memory and partitioned by account. Every content field is a sealed blob the relay cannot read.
- * Memory is bounded per session and per account; the oldest history goes first.
+ * Memory is bounded per session and per account; the oldest history goes first. With an archive, every change is also
+ * written to disk, and the sessions come back from it after a restart.
  */
 export class SessionStore {
   private readonly accounts = new Map<string, Map<string, Session>>()
   private readonly gcTimer: Timer
 
-  constructor(private readonly listener: SessionListener) {
+  constructor(
+    private readonly listener: SessionListener,
+    private readonly archive: SessionArchive | null = null,
+  ) {
+    if (archive) this.restore(archive.load())
     this.gcTimer = setInterval(() => this.collectFinished(), 60_000)
   }
 
@@ -49,6 +56,21 @@ export class SessionStore {
 
   history(accountId: string, sessionId: string): SealedEntry[] {
     return this.get(accountId, sessionId)?.history ?? []
+  }
+
+  /** Totals over every account, for the metrics page. */
+  stats(): { byStatus: Record<SessionStatus, number>; entries: number; bytes: number } {
+    const byStatus = Object.fromEntries(SESSION_STATUSES.map(status => [status, 0])) as Record<SessionStatus, number>
+    let entries = 0
+    let bytes = 0
+    for (const sessions of this.accounts.values()) {
+      for (const session of sessions.values()) {
+        byStatus[session.status]++
+        entries += session.history.length
+        bytes += session.historyBytes
+      }
+    }
+    return { byStatus, entries, bytes }
   }
 
   applyHook(accountId: string, machineId: string, { event, detail }: HookPost) {
@@ -99,6 +121,7 @@ export class SessionStore {
       session.history = []
       session.historyIds.clear()
       session.historyBytes = 0
+      this.archive?.clearEntries(accountId, sessionId)
     }
     const fresh = entries.filter(entry => !session.historyIds.has(entry.id))
     for (const entry of fresh) {
@@ -106,7 +129,8 @@ export class SessionStore {
       session.historyIds.add(entry.id)
       session.historyBytes += entry.blob.length
     }
-    trimHistory(session, MAX_ENTRIES_PER_SESSION, MAX_SESSION_BYTES)
+    if (fresh.length) this.archive?.addEntries(accountId, sessionId, fresh)
+    this.trim(accountId, session, MAX_ENTRIES_PER_SESSION, MAX_SESSION_BYTES)
     this.enforceAccountBudget(accountId)
 
     if (fresh.length && !reset && (session.status === 'idle' || session.status === 'starting')) session.status = 'working'
@@ -142,7 +166,9 @@ export class SessionStore {
   }
 
   remove(accountId: string, sessionId: string) {
-    if (this.accounts.get(accountId)?.delete(sessionId)) this.listener.removed(accountId, sessionId)
+    if (!this.accounts.get(accountId)?.delete(sessionId)) return
+    this.archive?.removeSession(accountId, sessionId)
+    this.listener.removed(accountId, sessionId)
   }
 
   removeMachine(accountId: string, machineId: string) {
@@ -153,10 +179,20 @@ export class SessionStore {
 
   removeAccount(accountId: string) {
     this.accounts.delete(accountId)
+    this.archive?.removeAccount(accountId)
   }
 
   private get(accountId: string, sessionId: string): Session | undefined {
     return this.accounts.get(accountId)?.get(sessionId)
+  }
+
+  private accountSessions(accountId: string): Map<string, Session> {
+    let sessions = this.accounts.get(accountId)
+    if (!sessions) {
+      sessions = new Map()
+      this.accounts.set(accountId, sessions)
+    }
+    return sessions
   }
 
   private sessionsOf(accountId: string): Session[] {
@@ -165,11 +201,7 @@ export class SessionStore {
 
   /** Finds or creates a session. A machine can only ever touch its own sessions. */
   private ensure(accountId: string, machineId: string, sessionId: string): Session | null {
-    let sessions = this.accounts.get(accountId)
-    if (!sessions) {
-      sessions = new Map()
-      this.accounts.set(accountId, sessions)
-    }
+    const sessions = this.accountSessions(accountId)
     const existing = sessions.get(sessionId)
     if (existing) return existing.machineId === machineId ? existing : null
 
@@ -197,7 +229,34 @@ export class SessionStore {
 
   private changed(accountId: string, session: Session) {
     session.lastActivity = new Date().toISOString()
+    this.archive?.saveSession(accountId, session)
     this.listener.updated(accountId, toSummary(session))
+  }
+
+  /** Sessions saved before a restart. Their agents are gone until they reconnect and say hello again. */
+  private restore(saved: ArchivedSession[]) {
+    for (const { accountId, history, ...summary } of saved) {
+      const session: Session = {
+        ...summary,
+        status: summary.status === 'ended' ? 'ended' : 'offline',
+        agentOnline: false,
+        canChat: false,
+        pendingPermissions: [],
+        history,
+        historyIds: new Set(history.map(entry => entry.id)),
+        historyBytes: history.reduce((sum, entry) => sum + entry.blob.length, 0),
+      }
+      this.accountSessions(accountId).set(session.id, session)
+      this.trim(accountId, session, MAX_ENTRIES_PER_SESSION, MAX_SESSION_BYTES)
+    }
+    for (const accountId of this.accounts.keys()) this.enforceAccountBudget(accountId)
+    this.collectFinished()
+  }
+
+  /** Drops the oldest history beyond the limits, on disk too. */
+  private trim(accountId: string, session: Session, maxEntries: number, maxBytes: number) {
+    const dropped = trimHistory(session, maxEntries, maxBytes)
+    if (dropped.length) this.archive?.dropEntries(accountId, session.id, dropped)
   }
 
   /** Makes room for a new session: the least recently active offline one, or the least recent overall. */
@@ -214,7 +273,7 @@ export class SessionStore {
     if (total <= MAX_ACCOUNT_BYTES) return
     for (const session of sessions.sort((a, b) => a.lastActivity.localeCompare(b.lastActivity))) {
       const before = session.historyBytes
-      trimHistory(session, Math.floor(session.history.length / 2), Math.floor(session.historyBytes / 2))
+      this.trim(accountId, session, Math.floor(session.history.length / 2), Math.floor(session.historyBytes / 2))
       total -= before - session.historyBytes
       if (total <= MAX_ACCOUNT_BYTES) return
     }
@@ -232,13 +291,17 @@ export class SessionStore {
   }
 }
 
-function trimHistory(session: Session, maxEntries: number, maxBytes: number) {
+/** Returns the ids of the entries it dropped. */
+function trimHistory(session: Session, maxEntries: number, maxBytes: number): string[] {
+  const dropped: string[] = []
   while (session.history.length > maxEntries || (session.historyBytes > maxBytes && session.history.length > 0)) {
-    const dropped = session.history.shift()
-    if (!dropped) break
-    session.historyIds.delete(dropped.id)
-    session.historyBytes -= dropped.blob.length
+    const entry = session.history.shift()
+    if (!entry) break
+    session.historyIds.delete(entry.id)
+    session.historyBytes -= entry.blob.length
+    dropped.push(entry.id)
   }
+  return dropped
 }
 
 function toSummary(session: Session): SessionSummary {

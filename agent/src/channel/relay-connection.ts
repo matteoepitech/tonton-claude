@@ -1,6 +1,7 @@
 import type { AgentMessage, RelayToAgent } from '../../../shared/protocol'
 import { type AgentConfig, installedVersion } from '../config'
 import { log } from '../log'
+import { proxyFor, shownProxy } from '../proxy'
 
 const MAX_BACKOFF_MS = 30_000
 /** Close code the relay uses when the machine was revoked or the account deleted. */
@@ -34,13 +35,22 @@ export class RelayConnection {
     if (this.stopped) return
     const url = `${this.config.server.replace(/^http/, 'ws')}/ws/agent`
     const headers = { authorization: `Bearer ${this.config.token}`, 'x-tonton-agent': installedVersion(), 'x-tonton-role': this.role }
-    // Bun accepts headers on the WebSocket constructor; the DOM typings do not know about it.
-    const socket = new WebSocket(url, { headers } as unknown as string[])
+    // fetch() reads HTTPS_PROXY and NO_PROXY by itself, Bun's WebSocket only takes the proxy it is given.
+    const proxy = proxyFor(url)
+    let socket: WebSocket
+    try {
+      // Bun accepts headers and a proxy on the WebSocket constructor; the DOM typings do not know about them.
+      socket = new WebSocket(url, { headers, proxy: proxy?.url } as unknown as string[])
+    } catch (error) {
+      log(`${this.role}: could not open the relay connection`, String(error))
+      this.retry()
+      return
+    }
     this.socket = socket
 
     socket.onopen = () => {
       this.backoff = 1000
-      log(`${this.role}: relay connected`)
+      log(`${this.role}: relay connected`, proxy ? { proxy: shownProxy(proxy.url) } : undefined)
       this.events.connected()
     }
     socket.onmessage = event => {
@@ -60,10 +70,14 @@ export class RelayConnection {
         return
       }
       this.events.disconnected?.()
-      setTimeout(() => this.connect(), this.backoff)
-      this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS)
+      this.retry()
     }
     socket.onerror = () => {}
+  }
+
+  private retry() {
+    setTimeout(() => this.connect(), this.backoff)
+    this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS)
   }
 
   stop() {

@@ -29,6 +29,7 @@ The app creates both (Settings › Relay, then Settings › Machines). Without t
 ACCOUNT=$(curl -s -X POST http://127.0.0.1:7777/api/accounts)     # { accountId, token }
 TOKEN=$(ACCOUNT="$ACCOUNT" bun -e '
 import { encodeAccountToken } from "./shared/account-token"
+import { newAccountKey } from "./shared/crypto"
 const relay = "http://127.0.0.1:7777"
 const { accountId, token } = JSON.parse(process.env.ACCOUNT)
 const response = await fetch(`${relay}/api/account/token`, {
@@ -37,7 +38,7 @@ const response = await fetch(`${relay}/api/account/token`, {
   body: JSON.stringify({ regenerate: false }),
 })
 const { secret } = await response.json()
-const key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")
+const key = newAccountKey()
 console.log(encodeAccountToken({ relay, account: accountId, secret, key }))')
 ```
 

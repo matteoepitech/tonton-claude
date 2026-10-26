@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { seal } from '../src/crypto'
+import { seal } from '../../shared/crypto'
 import { applyRules, matches, matchingRule, readRules } from '../src/rules'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-rules-'))

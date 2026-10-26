@@ -85,6 +85,7 @@ public enum LocalSessions {
         public private(set) var tokens: TokenCounts?
         public private(set) var contextTokens: Int?
         public private(set) var contextWindow: Int?
+        public private(set) var model: String?
         /// API responses already in `tokens`.
         private var countedRequests: Set<String> = []
 
@@ -105,6 +106,7 @@ public enum LocalSessions {
                 if let limit = parsed.fiveHourLimit { fiveHourLimit = limit }
                 if let limit = parsed.sevenDayLimit { sevenDayLimit = limit }
                 if let window = parsed.contextWindow { contextWindow = window }
+                if let model = parsed.model { self.model = model }
                 if parsed.compacted { contextTokens = 0 }
                 if let usage = parsed.usage { contextTokens = usage.tokens.allInput }
                 if let usage = parsed.usage, countedRequests.insert(usage.requestId).inserted {
@@ -138,6 +140,7 @@ public enum LocalSessions {
             pendingPermissions: [], costUSD: conversation.costUSD, startedAt: started, lastActivity: endedAt ?? updated,
             lastMessage: conversation.lastMessage, fiveHourLimit: conversation.fiveHourLimit,
             sevenDayLimit: conversation.sevenDayLimit, tokens: conversation.tokens,
-            context: conversation.contextTokens.map { ContextUsage(usedTokens: $0, windowTokens: conversation.contextWindow) })
+            context: conversation.contextTokens.map { ContextUsage(usedTokens: $0, windowTokens: conversation.contextWindow) },
+            model: conversation.model)
     }
 }

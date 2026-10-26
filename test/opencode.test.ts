@@ -4,10 +4,10 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { open, seal } from '../agent/src/crypto'
 import type { PluginCommand } from '../agent/src/opencode/bridge'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
+import { open, seal } from '../shared/crypto'
 import type { Entry, RelayToApp, SessionInfo, SessionMeta, SessionSummary } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')

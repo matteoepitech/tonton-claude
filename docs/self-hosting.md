@@ -16,8 +16,9 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 | Part | Role |
 |---|---|
 | `agent/` | One binary per machine. A background service keeps the machine reachable and shows a tray icon to change relay; Claude Code hooks report status; an MCP *channel* streams the transcript, injects messages from the notch and relays permission prompts. |
-| `relay/` | The relay. Accounts and machines in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
+| `relay/` | The relay. Accounts, machines and the sealed history of sessions in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
 | `app/` | The macOS app living in the notch (SwiftUI), plus its settings window. |
+| `shared/` | The client core shared by the agent, the relay and the clients: wire protocol, AES-256-GCM sealing with WebCrypto, account token, session models. It runs in browsers. |
 | `scripts/` | Builds, and the install scripts published with each release. |
 
 ## Security model
@@ -42,8 +43,9 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 
 **While your Mac is away.** The relay keeps each session's sealed history, so the notch catches up when the Mac wakes
 or reconnects: up to 800 entries and 16 MB per session, 128 MB per account, the oldest going first. Finished sessions
-are dropped after 6 hours. The history lives in the relay's memory, so a relay restart loses it; agents send theirs
-again when they reconnect.
+are dropped after 6 hours. The history is in memory and in the relay's database, so it survives a restart of the relay:
+sessions come back offline until their agent reconnects. The database holds the same as the memory: ids, states, times
+and sealed blobs.
 
 What a relay can still see: that an account exists, how many machines and sessions it has, session states (working, waiting…)
 and timing.
@@ -78,6 +80,40 @@ the previous agent until claude restarts.
 
 On first launch, Claude Code asks you to confirm "I am using this for local development": channels are still a research preview.
 
+## Behind a proxy
+
+Machines on a company network often reach the internet through an HTTP proxy. The agent reads the same variables as curl:
+
+| Variable | Meaning |
+|---|---|
+| `HTTPS_PROXY` | Proxy for a relay on `https://` (the hosted one), and for updates from GitHub. `http://user:password@proxy:3128` if it wants a password. |
+| `HTTP_PROXY` | Proxy for a relay on `http://`, such as a self-hosted one on the local network. |
+| `ALL_PROXY` | Used when the one above is not set. |
+| `NO_PROXY` | Hosts that are reached directly, separated by commas: `relay.corp` (and its subdomains), `relay.corp:8443`, `10.0.0.0/8`, or `*`. |
+
+Lower case names work too (`https_proxy`), and win over upper case ones. The proxy must be an HTTP or HTTPS proxy; SOCKS
+proxies are not supported. Every connection of the agent goes through it: joining with the token, the WebSocket of the
+background service and of each session, hooks, and updates from GitHub.
+
+Set the variables before running the install line, in the same terminal:
+
+```sh
+export HTTPS_PROXY=http://proxy.corp:3128
+curl -fsSL https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.sh | TONTON_TOKEN='<token>' sh
+```
+
+- **macOS and Linux.** The background service does not start from a shell, so the installer writes the proxy variables it
+  sees into the LaunchAgent or the systemd unit. After changing proxy, run the install line again. Sessions get the
+  variables of the terminal claude starts from, so keep them in your shell profile.
+- **Windows.** The service gets your user environment variables, not those of a PowerShell window: set them with
+  `setx HTTPS_PROXY http://proxy.corp:3128`, then sign out and back in. Windows PowerShell does not read `HTTPS_PROXY`
+  itself, so download the install script through the proxy:
+  `$env:HTTPS_PROXY='http://proxy.corp:3128'; $env:TONTON_TOKEN='<token>'; irm -Proxy $env:HTTPS_PROXY https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.ps1 | iex`
+
+`tonton status` shows the proxy in use, without its password, and whether the relay answers through it.
+
+The Mac app connects with the system settings of the Mac (System Settings › Network › Proxies), like Safari.
+
 ## Running your own relay
 
 The relay is a single executable behind any HTTPS reverse proxy with WebSocket support. It only needs updating when its own
@@ -99,6 +135,7 @@ sandbox; data goes to `/var/lib/tonton`. Configuration lives in `/etc/tonton/ton
 | `TONTON_ADMIN_TOKEN` | With `closed`, the bearer token allowed to create accounts (24+ characters) |
 | `TONTON_TRUST_PROXY` | `1` to read the client IP from `X-Forwarded-For`. Only behind a reverse proxy that sets it. |
 | `TONTON_REGION` | Optional: where the relay runs (e.g. `Paris`), shown in the app next to the latency. On Fly.io, `FLY_REGION` is used. |
+| `TONTON_METRICS_TOKEN` | Optional: turns on `/metrics` for this bearer token (24+ characters). See [Monitoring](#monitoring). |
 
 **Docker**: the image `ghcr.io/matteoepitech/tonton-claude-relay` is published with each release, for amd64 and arm64.
 `docker compose up -d` with the `docker-compose.yml` of this repository; data is kept in the `tonton-data` volume. Add
@@ -106,6 +143,38 @@ sandbox; data goes to `/var/lib/tonton`. Configuration lives in `/etc/tonton/ton
 around `ufw`.
 
 Then in the app: Settings › Relay › Self-hosted, enter your URL and create an account.
+
+### Monitoring
+
+`/health` answers `ok` while the relay runs, for uptime checks and container health checks.
+
+`/metrics` gives counts in the Prometheus text format. It is off by default: set `TONTON_METRICS_TOKEN` and scrape it
+with that token.
+
+```yaml
+scrape_configs:
+  - job_name: tonton
+    scheme: https
+    static_configs:
+      - targets: ['relay.example.com']
+    authorization:
+      credentials: <TONTON_METRICS_TOKEN>
+```
+
+| Metric | What |
+|---|---|
+| `tonton_relay_info{version}` | The relay's version |
+| `tonton_relay_start_time_seconds` | When the relay started |
+| `tonton_accounts`, `tonton_machines` | Accounts, and machines that joined one |
+| `tonton_machines_online` | Machines with at least one connection |
+| `tonton_sockets{role}` | Open WebSockets: `app` for Macs, `agent` for machine services and sessions |
+| `tonton_sessions{status}` | Sessions the relay holds, by status (`working`, `idle`, `offline`…) |
+| `tonton_history_entries`, `tonton_history_bytes` | The sealed history the relay holds |
+| `tonton_ws_messages_received_total{role}`, `tonton_ws_messages_sent_total{role}` | WebSocket messages since the start |
+| `tonton_ws_received_bytes_total{role}`, `tonton_ws_sent_bytes_total{role}` | Their size |
+
+Every value is a total over the whole relay: nothing sealed, no id, nothing per account. Wrong tokens count as failed
+attempts, like wrong account tokens, and the same per-IP limit applies.
 
 ## Building from source
 

@@ -166,7 +166,7 @@ struct AccountView: View {
                             .textSelection(.enabled)
                             .padding(.horizontal, 10)
                             .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                            .background(RoundedRectangle(cornerRadius: 7).fill(Color.black.opacity(0.35)))
+                            .background(RoundedRectangle(cornerRadius: 7).fill(Theme.code))
                             .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.borderStrong))
                         Button {
                             reveal.toggle()
@@ -216,7 +216,7 @@ struct AccountView: View {
 }
 
 extension RelayLatency.Level {
-    fileprivate var color: Color {
+    @MainActor fileprivate var color: Color {
         switch self {
         case .good: Theme.success
         case .fair: Theme.warning

@@ -314,8 +314,8 @@ final class SessionStore: ObservableObject {
     }
 
     /// Typed in the session's terminal by its agent. What it says back, if it could not, shows in the conversation.
-    func sendCommand(_ name: SessionCommandName, to sessionId: String) {
-        guard let payload = try? vault?.sealCommand(name, for: sessionId) else { return }
+    func sendCommand(_ name: SessionCommandName, model: ModelFamily? = nil, to sessionId: String) {
+        guard let payload = try? vault?.sealCommand(name, model: model, for: sessionId) else { return }
         socket.send(["t": "prompt", "sessionId": sessionId, "payload": payload])
     }
 

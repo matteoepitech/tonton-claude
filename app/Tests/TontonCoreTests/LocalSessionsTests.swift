@@ -112,4 +112,16 @@ final class LocalSessionsTests: XCTestCase {
         XCTAssertEqual(LocalSessions.entries(local: [:], relay: ["s2": [relay]])["s2"], [relay])
         XCTAssertEqual(LocalSessions.entries(local: [:], relay: ["s3": []])["s3"], [])
     }
+
+    func testTheModelIsTheOneOfTheLastResponse() {
+        var conversation = LocalSessions.Conversation()
+        let answer = { (model: String) in #"{"type":"assistant","uuid":"a1","message":{"model":"\#(model)","content":[]}}"# }
+        conversation.apply(TranscriptTail.Read(lines: [answer("claude-opus-5-5"), answer("claude-haiku-5-5")]))
+        XCTAssertEqual(conversation.model, "claude-haiku-5-5")
+        // An API error Claude Code writes itself names no model.
+        conversation.apply(TranscriptTail.Read(lines: [answer("<synthetic>")]))
+        XCTAssertEqual(conversation.model, "claude-haiku-5-5")
+        let record = LocalSessions.Record(pid: 1, sessionId: "s1", cwd: "/x", status: nil)
+        XCTAssertEqual(LocalSessions.summary(record, conversation).modelName, "Haiku 5.5")
+    }
 }

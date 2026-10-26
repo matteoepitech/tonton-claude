@@ -1,5 +1,5 @@
 import type { WebSocketHandler } from 'bun'
-import type { AgentMessage, AppMessage, RelayToAgent, RelayToApp } from '../../shared/protocol'
+import type { AgentMessage, AppMessage } from '../../shared/protocol'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
 import {
@@ -22,18 +22,19 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
       if (socket.data.role === 'app') {
         ctx.hub.addApp(socket)
         const { accountId } = socket.data
-        send(socket, { t: 'snapshot', sessions: ctx.sessions.list(accountId), machines: ctx.machineList(accountId) })
+        ctx.hub.send(socket, { t: 'snapshot', sessions: ctx.sessions.list(accountId), machines: ctx.machineList(accountId) })
       } else {
         const { machineId, agentVersion } = socket.data
         if (machineId && agentVersion) ctx.agentVersions.set(machineId, agentVersion)
         ctx.hub.addMachineSocket(socket)
         const rules = machineId ? ctx.rules.get(machineId) : undefined
-        if (rules) socket.send(JSON.stringify({ t: 'rules', rules } satisfies RelayToAgent))
+        if (rules) ctx.hub.send(socket, { t: 'rules', rules })
         onMachinePresence(ctx, socket)
       }
     },
 
     message(socket, raw) {
+      ctx.hub.traffic.count('received', socket.data.role, Buffer.byteLength(raw))
       const message = parse(raw)
       if (!message) return
       if (socket.data.role === 'agent') handleAgentMessage(ctx, socket, message as AgentMessage)
@@ -118,13 +119,13 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     case 'subscribe': {
       socket.data.sessionId = isSessionId(message.sessionId) ? message.sessionId : null
       const sessionId = socket.data.sessionId
-      if (sessionId) send(socket, { t: 'history', sessionId, entries: ctx.sessions.history(accountId, sessionId) })
+      if (sessionId) ctx.hub.send(socket, { t: 'history', sessionId, entries: ctx.sessions.history(accountId, sessionId) })
       break
     }
     case 'prompt':
       if (!isSessionId(message.sessionId) || !isSealed(message.payload)) return
       if (!ctx.hub.sendToAgent(accountId, { t: 'prompt', sessionId: message.sessionId, payload: message.payload })) {
-        send(socket, { t: 'error', message: 'This session does not accept messages (channel inactive).' })
+        ctx.hub.send(socket, { t: 'error', message: 'This session does not accept messages (channel inactive).' })
       }
       break
     case 'verdict': {
@@ -143,8 +144,8 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
       if (!isText(machineId, 32) || !isLaunchId(launchId) || !isSealed(order, MAX_START_ORDER_BYTES)) return
       if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
       const agent = ctx.hub.machineSocket(machineId)
-      if (agent) agent.send(JSON.stringify({ t: 'start_session', launchId, order } satisfies RelayToAgent))
-      else send(socket, { t: 'session_start', machineId, launchId, state: 'failed', reason: 'offline' })
+      if (agent) ctx.hub.send(agent, { t: 'start_session', launchId, order })
+      else ctx.hub.send(socket, { t: 'session_start', machineId, launchId, state: 'failed', reason: 'offline' })
       break
     }
     case 'start_answer': {
@@ -176,11 +177,10 @@ function requestUpdate(ctx: RelayContext, app: Socket, machineId: string, order:
   const agent = ctx.hub.updatableSocket(machineId)
   if (!agent) {
     const reason = ctx.hub.isMachineOnline(machineId) ? 'unsupported' : 'offline'
-    send(app, { t: 'agent_update', machineId, ok: false, reason })
+    ctx.hub.send(app, { t: 'agent_update', machineId, ok: false, reason })
     return
   }
-  const update: RelayToAgent = { t: 'update', order }
-  agent.send(JSON.stringify(update))
+  ctx.hub.send(agent, { t: 'update', order })
 }
 
 function onUpdateResult(ctx: RelayContext, accountId: string, machineId: string, message: Extract<AgentMessage, { t: 'update_result' }>) {
@@ -196,10 +196,6 @@ function onUpdateResult(ctx: RelayContext, accountId: string, machineId: string,
 function onMachinePresence(ctx: RelayContext, socket: Socket) {
   if (socket.data.machineId) ctx.registry.touchMachine(socket.data.machineId)
   ctx.pushMachines(socket.data.accountId)
-}
-
-function send(socket: Socket, message: RelayToApp) {
-  socket.send(JSON.stringify(message))
 }
 
 function parse(raw: string | Buffer): unknown {

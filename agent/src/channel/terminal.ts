@@ -2,7 +2,7 @@
 // Claude Code reads `/compact` there as text, but a session running in tmux can be typed into like a keyboard would.
 
 import { join } from 'node:path'
-import type { SessionCommand } from '../../../shared/protocol'
+import type { ModelAlias, SessionCommand } from '../../../shared/protocol'
 import { claimOnce } from '../once'
 
 /** The tmux server and pane of a Claude Code process, from the environment its hooks inherit. */
@@ -11,7 +11,8 @@ export interface TerminalPane {
   pane: string
 }
 
-export const COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear', 'interrupt']
+export const COMMANDS: readonly SessionCommand['name'][] = ['compact', 'clear', 'model', 'interrupt']
+const MODELS: readonly ModelAlias[] = ['opus', 'sonnet', 'haiku']
 /** Older commands are refused so the relay cannot replay one later, as with update orders. */
 const COMMAND_TTL_MS = 10 * 60_000
 const COMMAND_ID = /^[a-z0-9-]{8,64}$/
@@ -46,12 +47,14 @@ export function runCommand(
     const pressed = tmux(terminal, ['send-keys', '-t', terminal.pane, 'Escape'])
     return pressed.ok ? { typed: true } : refuse(`tmux could not press Escape in the terminal: ${pressed.output}`)
   }
+  const text = commandText(command)
+  if (!text) return refuse('The command is not for this session.')
   const screen = tmux(terminal, ['capture-pane', '-p', '-t', terminal.pane])
   if (!screen.ok) return refuse(`tmux could not read the terminal: ${screen.output}`)
   const busy = whyBusy(screen.output)
   if (busy) return refuse(busy)
-  // Literally, then Enter: the text is a fixed command name, never something from the relay.
-  const typed = tmux(terminal, ['send-keys', '-t', terminal.pane, '-l', `/${command.name}`])
+  // Literally, then Enter: the text comes from the lists above, never from the relay.
+  const typed = tmux(terminal, ['send-keys', '-t', terminal.pane, '-l', text])
   if (!typed.ok) return refuse(`tmux could not type in the terminal: ${typed.output}`)
   tmux(terminal, ['send-keys', '-t', terminal.pane, 'Enter'])
   return { typed: true }
@@ -59,8 +62,8 @@ export function runCommand(
 
 /** Why a command from the app must not run in this session, or null. Also used for OpenCode sessions. */
 export function whyInvalid(command: SessionCommand, sessionId: string, now = Date.now()): string | null {
-  if (!COMMANDS.includes(command.name) || command.sessionId !== sessionId || !COMMAND_ID.test(command.id))
-    return 'The command is not for this session.'
+  const known = command.name === 'interrupt' ? command.model === undefined : commandText(command) !== null
+  if (!known || command.sessionId !== sessionId || !COMMAND_ID.test(command.id)) return 'The command is not for this session.'
   if (!(Math.abs(now - Date.parse(command.issuedAt)) <= COMMAND_TTL_MS)) return 'The command expired. Check the clock of this machine.'
   return null
 }
@@ -71,6 +74,13 @@ export function claimCommand(command: SessionCommand, run: string, now = Date.no
   if (claimed === 'taken') return { typed: false, why: null }
   if (claimed instanceof Error) return { typed: false, why: `Could not record the command on this machine: ${claimed.message}` }
   return true
+}
+
+/** What to type for a known command, or null. A model is one of the aliases, and only `/model` takes one. */
+export function commandText({ name, model }: SessionCommand): string | null {
+  if (!COMMANDS.includes(name) || name === 'interrupt') return null
+  if (name !== 'model') return model === undefined ? `/${name}` : null
+  return model !== undefined && MODELS.includes(model) ? `/model ${model}` : null
 }
 
 /** Enter must only submit the command: not while Claude works, nor on a question with its own choices. */

@@ -1,6 +1,6 @@
+import { seal } from '../../../shared/crypto'
 import { RelayConnection } from '../channel/relay-connection'
 import { loadConfig, VERSION } from '../config'
-import { seal } from '../crypto'
 import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
 import { receiveRules } from '../rules'

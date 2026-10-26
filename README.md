@@ -79,12 +79,18 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Updating agents.** When a machine runs an older agent than your app, **Update agent** shows up next to it in the notch
   and in **Settings › Machines**: one click and it installs the matching release. Agents installed before 0.4.0 need the
   install command once more, which the app copies for you.
+- **What's new.** The first time a new version of the app starts, its release notes open, read from the release on GitHub.
+  **Settings › General** turns that off, and its **What's new** link, next to the version, shows them again.
 - **Starting a session.** <kbd>+</kbd> in the open notch, or <kbd>⌘</kbd> <kbd>N</kbd>, starts claude in a folder of any
   machine, in a tmux session you can attach to later. The machine needs tmux, so not Windows. The questions Claude Code
   asks on the way, like trusting the folder, show up in the notch: nothing is confirmed for you.
-- **Slash commands.** Claude Code doesn't let a channel run `/compact` or `/clear`, so the notch types them in the
-  session's terminal instead. That works for sessions running in tmux, like the ones started from the notch: a terminal
-  icon in the session's header, once Claude is done. `/clear` asks first.
+- **Slash commands.** Claude Code doesn't let a channel run `/compact`, `/clear` or `/model`, so the notch types them in
+  the session's terminal instead. That works for sessions running in tmux, like the ones started from the notch: a
+  terminal icon in the session's header, once Claude is done. `/clear` asks first, and **Model** switches to Opus, Sonnet
+  or Haiku. The header shows the model of every session.
+- **Behind a proxy.** The agent goes through `HTTPS_PROXY` and skips the hosts in `NO_PROXY`, like curl. Set them before
+  running the install line: the background service keeps the ones it was installed with. See
+  [the details](docs/self-hosting.md#behind-a-proxy).
 - **Changing relay or account.** Click the Tonton Claude icon next to the clock on that machine › **Set token…** and paste
   the token from the app. **Regenerate** in Settings › Machines makes a new one: every machine is signed out until it gets it.
 - **AppleScript and Shortcuts.** Scripts can read the sessions (`session list`, `session status "api"`) and, once

@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { seal } from '../../shared/crypto'
 import type { HookPost } from '../../shared/protocol'
 import { terminalOf } from './channel/terminal'
 import { type AgentConfig, loadConfig, paths } from './config'
-import { seal } from './crypto'
 import { log } from './log'
 import { matchingRule, readRules } from './rules'
 

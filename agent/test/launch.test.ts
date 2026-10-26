@@ -3,9 +3,9 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { open, seal } from '../../shared/crypto'
 import type { AgentMessage, StartDetail } from '../../shared/protocol'
 import type { AgentConfig } from '../src/config'
-import { open, seal } from '../src/crypto'
 import { claim, descendsFrom, fromHome, handleStartAnswer, handleStartOrder, newSession } from '../src/launch'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-launch-'))

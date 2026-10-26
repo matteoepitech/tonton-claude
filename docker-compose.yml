@@ -7,6 +7,7 @@ services:
     environment:
       TONTON_REGISTRATION: ${TONTON_REGISTRATION:-open}
       TONTON_ADMIN_TOKEN: ${TONTON_ADMIN_TOKEN:-}
+      TONTON_METRICS_TOKEN: ${TONTON_METRICS_TOKEN:-}
     volumes:
       - tonton-data:/data
 

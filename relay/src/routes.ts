@@ -4,6 +4,8 @@ import { RELEASES_URL } from '../../shared/version'
 import type { RelayContext } from './context'
 import { bearerToken, clientIp, fail, json, readJson } from './http'
 import type { SocketData } from './hub'
+import { renderMetrics } from './metrics'
+import { safeEqual, sha256 } from './tokens'
 import { isSealed, isSessionId, isText, isVersion } from './validate'
 
 type RelayServer = Server<SocketData>
@@ -16,6 +18,7 @@ export function createFetchHandler(ctx: RelayContext) {
     const path = url.pathname
 
     if (path === '/health') return new Response('ok')
+    if (path === '/metrics') return metrics(ctx, req, clientIp(req, server, ctx.config.trustProxy))
     // Agents and install scripts used to be served here: they are published with the releases now. Old commands that
     // update an enrolled machine (`irm <relay>/install.ps1 | iex`) keep working.
     if (path === '/install.sh' || path === '/install.ps1') return Response.redirect(`${RELEASES_URL}/latest/download${path}`, 302)
@@ -30,6 +33,19 @@ export function createFetchHandler(ctx: RelayContext) {
     if (path === '/api/hook' || path === '/api/agent/ping' || path === '/ws/agent') return agentRoute(ctx, req, server, path, ip)
     return appRoute(ctx, req, server, path, ip)
   }
+}
+
+/** Off unless the operator set a token: how busy the relay is concerns them only. */
+function metrics(ctx: RelayContext, req: Request, ip: string): Response {
+  const token = ctx.config.metricsToken
+  if (!token) return fail(404, 'not found')
+  if (ctx.failedAuth.isBlocked(ip)) return fail(429, 'Too many failed attempts, try again later.')
+  if (!safeEqual(sha256(bearerToken(req)), sha256(token))) {
+    ctx.failedAuth.hit(ip)
+    return fail(401, 'unauthorized')
+  }
+  const headers = { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store' }
+  return new Response(renderMetrics(ctx.counts()), { headers })
 }
 
 function createAccount(ctx: RelayContext, req: Request, ip: string): Response {

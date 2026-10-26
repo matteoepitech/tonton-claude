@@ -137,6 +137,19 @@ struct ChatHeader: View {
                     if name.needsConfirmation { confirming = name } else { store.sendCommand(name, to: session.id) }
                 }
             }
+            if session.commands.contains(.model) {
+                Divider()
+                // The tick is the family in use; picking it again still switches, to the latest model of that family.
+                Menu(SessionCommandName.model.label) {
+                    ForEach(ModelFamily.allCases, id: \.self) { family in
+                        Toggle(
+                            family.label,
+                            isOn: Binding(
+                                get: { session.modelFamily == family },
+                                set: { _ in store.sendCommand(.model, model: family, to: session.id) }))
+                    }
+                }
+            }
         } label: {
             Image(systemName: "terminal").font(.system(size: 11))
         }
@@ -194,6 +207,10 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
+                if let model = session.modelName {
+                    Text(model).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                        .help("The model Claude Code uses in this session")
+                }
                 if let context = session.context { ContextGauge(context: context) }
                 if settings.showCosts, let tokens = session.tokens {
                     Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")

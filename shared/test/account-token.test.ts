@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { encodeAccountToken, normalizeRelay, parseAccountToken } from '../../shared/account-token'
+import { encodeAccountToken, normalizeRelay, parseAccountToken } from '../account-token'
 
 const token = { relay: 'https://relay.example.com', account: 'abcdefghijkl', secret: 's'.repeat(43), key: 'k'.repeat(43) }
 

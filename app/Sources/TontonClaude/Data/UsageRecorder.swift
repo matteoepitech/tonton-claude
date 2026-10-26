@@ -9,6 +9,8 @@ final class UsageRecorder: ObservableObject {
     @Published private(set) var history: UsageHistory
     /// The monthly recap.
     @Published private(set) var wrapped: WrappedLog
+    /// When Claude works, for the heat map.
+    @Published private(set) var hours: BusyHours
     /// Today's spending went past the daily budget, with what was spent so far. Once a day.
     let budgetExceeded = PassthroughSubject<Double, Never>()
     private let settings: AppSettings
@@ -21,6 +23,7 @@ final class UsageRecorder: ObservableObject {
         self.settings = settings
         history = Self.load(UsageHistory.self, from: "usage.json") ?? UsageHistory()
         wrapped = Self.load(WrappedLog.self, from: "wrapped.json") ?? WrappedLog()
+        hours = Self.load(BusyHours.self, from: "hours.json") ?? BusyHours()
         // Working sessions report every few seconds: one reading every few seconds is plenty.
         sessions
             .throttle(for: .seconds(5), scheduler: RunLoop.main, latest: true)
@@ -28,8 +31,11 @@ final class UsageRecorder: ObservableObject {
             .store(in: &subscriptions)
         tasks
             .sink { [weak self] task in
-                self?.wrapped.worked(task.worked, session: task.session.id, project: task.session.project)
-                self?.saveWrapped()
+                guard let self else { return }
+                wrapped.worked(task.worked, session: task.session.id, project: task.session.project)
+                saveWrapped()
+                hours.worked(task.worked, until: Date())
+                save(hours, to: "hours.json")
             }
             .store(in: &subscriptions)
         // Conversations grow with each entry: counting the calls once things settle is enough.

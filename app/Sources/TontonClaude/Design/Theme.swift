@@ -18,6 +18,8 @@ struct Palette: Equatable {
     var onAccent: Color = .white
     /// The color of translucent fills and hairlines: white on dark themes, black on light ones.
     var ink: Color
+    /// Behind code and typed values: fields, tokens and keys, a terminal's screen. Sunk in black on the dark themes.
+    var code: Color = .black.opacity(0.35)
     var scheme: ColorScheme
     /// The frosted glass behind the open notch.
     var material: NSVisualEffectView.Material
@@ -52,8 +54,8 @@ enum ThemeChoice: String, CaseIterable, Identifiable {
             Palette(
                 bg: Color(hex: 0xF7F4EC), surface: Color(hex: 0xFFFDF7), text: Color(hex: 0x1F1D1A), textDim: Color(hex: 0x6E685E),
                 textFaint: Color(hex: 0x9E978B), accent: Color(hex: 0x2F5BD3), accentDeep: Color(hex: 0x2448B0),
-                success: Color(hex: 0x2E8B57), danger: Color(hex: 0xC0392B), warning: Color(hex: 0xA86A12), ink: .black, scheme: .light,
-                material: .popover, veil: Color(hex: 0xF7F4EC))
+                success: Color(hex: 0x2E8B57), danger: Color(hex: 0xC0392B), warning: Color(hex: 0xA86A12), ink: .black,
+                code: .black.opacity(0.05), scheme: .light, material: .popover, veil: Color(hex: 0xF7F4EC))
         // A phosphor screen: green on black.
         case .terminal:
             Palette(
@@ -73,9 +75,11 @@ enum ThemeChoice: String, CaseIterable, Identifiable {
 }
 
 /// The current palette's tokens. Views redraw on a theme change because the roots are keyed on it.
+/// On the main actor, so the compiler checks that the palette is only read and written from the main thread.
+@MainActor
 enum Theme {
     /// Set from AppSettings when the theme changes; read by every view.
-    nonisolated(unsafe) static var palette = ThemeChoice.midnight.palette
+    static var palette = ThemeChoice.midnight.palette
 
     static var bg: Color { palette.bg }
     static var surface: Color { palette.surface }
@@ -93,6 +97,7 @@ enum Theme {
     static var danger: Color { palette.danger }
     static var warning: Color { palette.warning }
     static var ink: Color { palette.ink }
+    static var code: Color { palette.code }
     static var onAccent: Color { palette.onAccent }
 
     static var accentGradient: LinearGradient { LinearGradient(colors: [accent, accentDeep], startPoint: .top, endPoint: .bottom) }
