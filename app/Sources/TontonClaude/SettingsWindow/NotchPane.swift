@@ -71,10 +71,20 @@ struct NotchPane: View {
                 ToggleRow(title: "Sound", detail: "Plays with the banner.", isOn: $settings.soundOnAttention)
                 if settings.soundOnAttention {
                     Hairline()
-                    Row(title: "Alert sound") {
-                        ChoiceMenu(selection: settings.alertSound, options: AppSettings.alertSounds.map { ($0, $0) }) { name in
-                            settings.alertSound = name
-                            NSSound(named: name)?.play()
+                    Row(title: "Sound pack", detail: "Sets the sound of every event below.") {
+                        ChoiceMenu(selection: currentPack, options: SoundPack.allCases.map { ($0.rawValue, $0.label) } + mixed) { id in
+                            guard let pack = SoundPack(rawValue: id) else { return }
+                            for event in SoundEvent.allCases { settings.eventSounds[event.rawValue] = pack.sound(for: event) }
+                            SoundPlayer.play(pack.sound(for: .finished))
+                        }
+                    }
+                    ForEach(SoundEvent.allCases, id: \.self) { event in
+                        Hairline()
+                        Row(title: Self.title(event)) {
+                            ChoiceMenu(selection: settings.sound(for: event), options: SoundPlayer.names.map { ($0, $0) }) { name in
+                                settings.eventSounds[event.rawValue] = name
+                                SoundPlayer.play(name)
+                            }
                         }
                     }
                 }
@@ -118,6 +128,23 @@ struct NotchPane: View {
             }
         }
     }
+
+    /// The pack every event's sound comes from, or none when they were picked one by one.
+    private var currentPack: String {
+        SoundPack.allCases.first { pack in SoundEvent.allCases.allSatisfy { settings.sound(for: $0) == pack.sound(for: $0) } }?
+            .rawValue ?? "custom"
+    }
+
+    private var mixed: [(id: String, label: String)] { currentPack == "custom" ? [("custom", "Custom")] : [] }
+
+    private static func title(_ event: SoundEvent) -> String {
+        switch event {
+        case .finished: "When Claude is done"
+        case .permission: "Approval requests"
+        case .question: "Questions"
+        case .error: "Errors"
+        }
+    }
 }
 
 /// One webhook address, with a button that posts a test message to it.
@@ -155,4 +182,5 @@ private struct WebhookField: View {
             sending = false
         }
     }
+
 }
