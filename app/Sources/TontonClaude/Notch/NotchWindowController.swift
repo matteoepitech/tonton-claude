@@ -123,6 +123,7 @@ final class NotchWindowController {
         collapseTask?.cancel()
         if force { state.pinned = false }
         state.showPalette = false
+        state.showNewSession = false
         guard !state.pinned, state.mode != .collapsed else { return }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { state.mode = .collapsed }
         overlapTask?.cancel()
@@ -283,6 +284,17 @@ final class NotchWindowController {
         store.attention
             .sink { [weak self] session in self?.alert(session, finished: false) }
             .store(in: &subscriptions)
+        // The user started the session: its questions open the notch whatever the settings say.
+        store.launchAsks
+            .sink { [weak self] _ in
+                if self?.settings.isQuietNow == false { self?.signal(.question) }
+                self?.state.showNewSession = true
+                self?.expand()
+            }
+            .store(in: &subscriptions)
+        store.launchStarted
+            .sink { [weak self] _ in if self?.store.launches.isEmpty == true { self?.state.showNewSession = false } }
+            .store(in: &subscriptions)
         store.taskDone
             .filter { [settings] _, worked in settings.confettiAfterMinutes > 0 && worked >= Double(settings.confettiAfterMinutes) * 60 }
             .sink { [weak self] _ in self?.celebrate() }
@@ -432,8 +444,14 @@ final class NotchWindowController {
     /// Escape closes; ⌘1…⌘9 jump to a session in list order, pinned ones first; ⌘↑ and ⌘↓ move through the list.
     private func handleKey(_ event: NSEvent) -> Bool {
         if event.keyCode == UInt16(kVK_Escape) {
-            // Escape closes the palette first, then the notch.
-            if state.showPalette { state.showPalette = false } else { collapse(force: true) }
+            // Escape closes the palette or the new session panel first, then the notch.
+            if state.showPalette {
+                state.showPalette = false
+            } else if state.showNewSession {
+                state.showNewSession = false
+            } else {
+                collapse(force: true)
+            }
             return true
         }
         guard event.modifierFlags.contains(.command) else { return false }
@@ -441,8 +459,14 @@ final class NotchWindowController {
             state.showPalette.toggle()
             return true
         }
-        // The palette's own arrows move its selection.
-        if state.showPalette { return false }
+        // ⌥⌘N is the default shortcut that opens the notch.
+        if event.charactersIgnoringModifiers == "n", !event.modifierFlags.contains(.option), settings.isConfigured {
+            state.showPalette = false
+            state.showNewSession.toggle()
+            return true
+        }
+        // The palette's own arrows move its selection, and the panel's field its cursor.
+        if state.showPalette || state.showNewSession { return false }
         let sessions = store.orderedSessions
         guard !sessions.isEmpty else { return false }
         if let digit = event.charactersIgnoringModifiers.flatMap(Int.init), (1...9).contains(digit) {

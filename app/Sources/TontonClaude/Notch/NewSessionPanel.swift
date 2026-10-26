@@ -1,0 +1,246 @@
+import SwiftUI
+import TontonCore
+
+/// ⌘N in the open notch: pick a machine and a folder, and its agent starts claude there. The questions Claude Code asks
+/// on the way show up here until the session runs.
+struct NewSessionPanel: View {
+    @EnvironmentObject var state: NotchState
+    @EnvironmentObject var store: SessionStore
+    @EnvironmentObject var settings: AppSettings
+    @State private var machineId: String?
+    @State private var folder = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        // This Mac first, then by name.
+        let machines = store.machines.sorted {
+            ($0.id == store.thisMac ? 0 : 1, $0.name.lowercased()) < ($1.id == store.thisMac ? 0 : 1, $1.name.lowercased())
+        }
+        let machine = machines.first { $0.id == machineId && canStart($0) }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("New session").font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Button {
+                    state.showNewSession = false
+                } label: {
+                    Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Close (esc)")
+            }
+            .padding(.bottom, 10)
+            if machines.isEmpty {
+                Text("No machine is linked to the account yet. Add one in Settings › Machines.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            } else {
+                machinePicker(machines)
+                folderField(machine)
+                if let machine { recentFolders(machine) }
+            }
+            ForEach(store.launches) { launch in
+                LaunchCard(launch: launch, machine: store.machines.first { $0.id == launch.machineId }?.name ?? "the machine")
+                    .padding(.top, 10)
+            }
+        }
+        .padding(14)
+        .frame(width: 440)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.09)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.borderStrong))
+        .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
+        .onAppear {
+            machineId = machineId ?? (machines.first { $0.id == store.selected?.machineId } ?? machines.first(where: canStart))?.id
+            focused = true
+        }
+    }
+
+    private func machinePicker(_ machines: [MachineInfo]) -> some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(machines) { machine in
+                    let selected = machine.id == machineId
+                    Button {
+                        machineId = machine.id
+                        focused = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            if let style = settings.machineStyles[machine.id] { MachineBadge(style: style, size: 10) }
+                            Text(store.thisMac == machine.id ? "This Mac" : machine.name).font(.system(size: 11, weight: .medium))
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(height: 24)
+                        .background(Capsule().fill(selected ? Theme.accent.opacity(0.28) : .white.opacity(0.07)))
+                        .overlay(Capsule().stroke(selected ? Theme.accent.opacity(0.6) : .clear))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canStart(machine))
+                    .opacity(canStart(machine) ? 1 : 0.4)
+                    .help(why(machine) ?? "Start claude on \(machine.name)")
+                }
+            }
+        }
+        .scrollIndicators(.never)
+        .padding(.bottom, 8)
+    }
+
+    private func folderField(_ machine: MachineInfo?) -> some View {
+        let startable = machine != nil && RecentFolders.isStartable(folder) && store.connection == .connected
+        return HStack(spacing: 8) {
+            Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(.secondary)
+            TextField("", text: $folder, prompt: Text("~/code/project").foregroundStyle(.white.opacity(0.35)))
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, design: .monospaced))
+                .focused($focused)
+                .onSubmit { if startable, let machine { start(machine) } }
+            Button {
+                if let machine { start(machine) }
+            } label: {
+                Text("Start").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).frame(height: 22)
+                    .background(Capsule().fill(startable ? Theme.accent : .white.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+            .disabled(!startable)
+            .help(startable ? "Start claude in this folder" : "A full path, or one that starts with ~/")
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.07)))
+    }
+
+    @ViewBuilder private func recentFolders(_ machine: MachineInfo) -> some View {
+        let folders = store.recentFolders(on: machine.id)
+        if !folders.isEmpty {
+            Text("RECENT").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.top, 10).padding(.bottom, 2)
+            ForEach(folders, id: \.self) { recent in
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 10)).foregroundStyle(.tertiary)
+                    Text(recent).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.head)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 6)
+                .frame(height: 22)
+                .background(RoundedRectangle(cornerRadius: 6).fill(recent == folder ? Color.white.opacity(0.1) : .clear))
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    folder = recent
+                    start(machine)
+                }
+                .onTapGesture { folder = recent }
+                .help("Click to pick, double-click to start")
+            }
+        }
+    }
+
+    private func start(_ machine: MachineInfo) {
+        store.startSession(on: machine, in: folder)
+        folder = ""
+    }
+
+    private func canStart(_ machine: MachineInfo) -> Bool { why(machine) == nil }
+
+    /// Why claude cannot start on the machine from here, if it cannot.
+    private func why(_ machine: MachineInfo) -> String? {
+        let platform = machine.platform ?? store.sessions.first { $0.machineId == machine.id }?.platform
+        if platform == "win32" { return "Starting sessions needs tmux, which Windows does not have" }
+        if !machine.online { return "\(machine.name) is offline" }
+        return nil
+    }
+}
+
+/// Where a start stands, and the question Claude Code asks, with its screen, until the user answers.
+private struct LaunchCard: View {
+    let launch: SessionLaunch
+    let machine: String
+    @EnvironmentObject var store: SessionStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                switch launch.state {
+                case .sending, .starting, .started: ProgressView().controlSize(.mini)
+                case .asking: Image(systemName: "questionmark.circle.fill").foregroundStyle(Theme.accent)
+                case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.danger)
+                }
+                Text("\(launch.cwd) on \(machine)").font(.system(size: 11, weight: .medium)).lineLimit(1).truncationMode(.head)
+                Spacer(minLength: 0)
+                if launch.state == .failed {
+                    Button {
+                        store.dismissLaunch(launch.id)
+                    } label: {
+                        Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Dismiss")
+                }
+            }
+            switch launch.state {
+            case .sending: caption("Sending the order…")
+            case .starting, .started: caption("Starting claude…")
+            case .asking, .failed:
+                if let headline = launch.headline {
+                    Text(headline).font(.system(size: 12)).foregroundStyle(launch.state == .failed ? Theme.danger : .primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let screen = launch.screen, launch.state == .asking || launch.state == .failed {
+                // As tall as the screen up to a point, then scrolled to its last lines, where the choices are.
+                HeightLimit(limit: 110) {
+                    ViewThatFits(in: .vertical) {
+                        screenText(screen)
+                        ScrollView { screenText(screen) }.defaultScrollAnchor(.bottom)
+                    }
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.45)))
+            }
+            if launch.state == .asking {
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button("Cancel") { store.answerStart(launch, confirm: false) }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 12)
+                        .frame(height: 24)
+                        .background(Capsule().fill(.white.opacity(0.1)))
+                    Button("Confirm") { store.answerStart(launch, confirm: true) }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 12)
+                        .frame(height: 24)
+                        .background(Capsule().fill(Theme.accent))
+                }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 9).fill(.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(launch.state == .asking ? Theme.accent.opacity(0.5) : Theme.border))
+    }
+
+    private func screenText(_ screen: String) -> some View {
+        Text(screen).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text).font(.system(size: 11)).foregroundStyle(.secondary)
+    }
+}
+
+/// Offers its content at most `limit` points of height and takes only the height the content uses, where
+/// `.frame(maxHeight:)` would take all of it.
+private struct HeightLimit: Layout {
+    let limit: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.first?.sizeThatFits(ProposedViewSize(width: proposal.width, height: min(proposal.height ?? limit, limit))) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}

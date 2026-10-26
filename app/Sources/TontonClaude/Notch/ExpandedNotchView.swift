@@ -42,7 +42,11 @@ struct ExpandedView: View {
         }
         .padding(.horizontal, 6)
         .overlay(alignment: .top) {
-            if state.showPalette { CommandPalette().padding(.top, max(state.notchSize.height, 30) + 24) }
+            if state.showPalette {
+                CommandPalette().padding(.top, max(state.notchSize.height, 30) + 24)
+            } else if state.showNewSession {
+                NewSessionPanel().padding(.top, max(state.notchSize.height, 30) + 24)
+            }
         }
     }
 
@@ -53,6 +57,16 @@ struct ExpandedView: View {
             connectionBadge.padding(.leading, 4)
             Spacer(minLength: 12)
             if settings.showCosts { TodayCost(usage: store.usage) }
+            if settings.isConfigured {
+                Button {
+                    state.showNewSession.toggle()
+                } label: {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(state.showNewSession ? Theme.accent : .white.opacity(0.7))
+                .help("Start a session on a machine (⌘N)")
+            }
             Button {
                 state.pinned.toggle()
             } label: {

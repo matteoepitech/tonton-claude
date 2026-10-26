@@ -85,13 +85,16 @@ struct CommandPalette: View {
                 AppDelegate.shared?.showSettings(pane: pane)
             }
         }
+        let start = Item(id: "new-session", icon: "plus", title: "New session", detail: "Start claude on a machine") {
+            state.showNewSession = true
+        }
         let pin = Item(
             id: "pin", icon: state.pinned ? "pin.slash" : "pin", title: state.pinned ? "Unpin the notch" : "Pin the notch open",
             detail: "Notch"
         ) {
             state.pinned.toggle()
         }
-        return sessions + machines + [pin] + panes
+        return sessions + machines + (AppSettings.shared.isConfigured ? [start] : []) + [pin] + panes
     }
 
     private func activate(_ items: [Item]) {

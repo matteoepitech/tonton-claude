@@ -77,6 +77,9 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Updating agents.** When a machine runs an older agent than your app, **Update agent** shows up next to it in the notch
   and in **Settings › Machines**: one click and it installs the matching release. Agents installed before 0.4.0 need the
   install command once more, which the app copies for you.
+- **Starting a session.** <kbd>+</kbd> in the open notch, or <kbd>⌘</kbd> <kbd>N</kbd>, starts claude in a folder of any
+  machine, in a tmux session you can attach to later. The machine needs tmux, so not Windows. The questions Claude Code
+  asks on the way, like trusting the folder, show up in the notch: nothing is confirmed for you.
 - **Changing relay or account.** Click the Tonton Claude icon next to the clock on that machine › **Set token…** and paste
   the token from the app. **Regenerate** in Settings › Machines makes a new one: every machine is signed out until it gets it.
 - **AppleScript and Shortcuts.** Scripts can read the sessions (`session list`, `session status "api"`) and, once

@@ -10,6 +10,8 @@ final class NotchState: ObservableObject {
     @Published var pinned = false
     /// The ⌘K command palette is open over the notch.
     @Published var showPalette = false
+    /// ⌘N: the panel that starts a session on a machine.
+    @Published var showNewSession = false
     @Published var peekSession: SessionSummary?
     /// Shown in the banner instead of the session's status.
     @Published var peekText: String?

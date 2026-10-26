@@ -367,6 +367,21 @@ esac
     expect(await ask('npm test && rm -rf ~')).toBe('')
   })
 
+  test('a start order reaches the machine and its answer comes back sealed; another account starts nothing', async () => {
+    // A folder that does not exist: the agent answers without starting anything on the developer's machine.
+    const missing = join(dir, 'missing')
+    const launchId = 'e2elaunch01'
+    const order = await seal(key, { launchId, cwd: missing, issuedAt: new Date().toISOString() })
+    stranger.socket.send(JSON.stringify({ t: 'start_session', machineId: machine.machineId, launchId, order }))
+    app.socket.send(JSON.stringify({ t: 'start_session', machineId: machine.machineId, launchId, order }))
+    const result = await eventually(() => app.messages.find(m => m.t === 'session_start' && m.launchId === launchId), 'the answer')
+    if (result.t !== 'session_start') throw new Error('unexpected message')
+    expect(result).toMatchObject({ machineId: machine.machineId, state: 'failed' })
+    expect(await open<{ text: string }>(key, result.detail as string)).toEqual({ text: `${missing} is not a folder on this machine.` })
+    expect(stranger.messages.some(m => m.t === 'session_start')).toBe(false)
+    expect(app.raw.filter(raw => raw.includes('session_start')).join()).not.toContain('missing')
+  })
+
   test('revoking the machine signs it out and removes its sessions', async () => {
     expect((await api(`/api/machines/${machine.machineId}`, { method: 'DELETE', token: otherAccountToken })).status).toBe(404)
     expect((await api(`/api/machines/${machine.machineId}`, { method: 'DELETE', token: accountToken })).ok).toBe(true)

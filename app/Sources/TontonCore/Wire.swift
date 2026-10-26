@@ -50,10 +50,13 @@ public enum RelayMessage: Decodable, Sendable {
     case error(String)
     /// `reason` when the relay could not reach the agent, `detail` (sealed) when the agent tried and failed.
     case agentUpdate(machineId: String, ok: Bool, reason: String?, detail: String?)
+    /// Where a start from the notch stands. `detail` is a sealed `StartDetail`, `reason` set when the relay could not
+    /// reach the machine.
+    case sessionStart(machineId: String, launchId: String, state: String, reason: String?, detail: String?, sessionId: String?)
     case unknown
 
     private enum Keys: String, CodingKey {
-        case t, sessions, machines, session, sessionId, entries, message, machineId, ok, reason, detail
+        case t, sessions, machines, session, sessionId, entries, message, machineId, ok, reason, detail, launchId, state
     }
 
     public init(from decoder: Decoder) throws {
@@ -72,6 +75,11 @@ public enum RelayMessage: Decodable, Sendable {
         case "agent_update":
             let (reason, detail) = (try optional(.reason), try optional(.detail))
             self = .agentUpdate(machineId: try value(.machineId), ok: try value(.ok), reason: reason, detail: detail)
+        case "session_start":
+            let (reason, detail, sessionId) = (try optional(.reason), try optional(.detail), try optional(.sessionId))
+            self = .sessionStart(
+                machineId: try value(.machineId), launchId: try value(.launchId), state: try value(.state), reason: reason,
+                detail: detail, sessionId: sessionId)
         default: self = .unknown
         }
     }
@@ -109,6 +117,18 @@ public struct OutgoingImage: Codable, Sendable {
 
 struct PromptPayload: Codable { let text: String; let images: [OutgoingImage] }
 struct UpdateOrder: Codable { let version: String; let issuedAt: String }
+struct StartOrder: Codable { let launchId: String; let cwd: String; let issuedAt: String }
+struct StartAnswer: Codable { let launchId: String; let step: Int; let confirm: Bool; let issuedAt: String }
+
+public struct StartDetail: Codable, Equatable, Sendable {
+    public let text: String
+    public let step: Int?
+
+    public init(text: String, step: Int? = nil) {
+        self.text = text
+        self.step = step
+    }
+}
 
 enum ISO8601 {
     private static let withFraction: ISO8601DateFormatter = {
