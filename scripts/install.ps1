@@ -23,11 +23,16 @@ New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $exe = Join-Path $dir 'tonton.exe'
 $download = "$exe.download"
 
+# Windows PowerShell 5.1 ignores HTTPS_PROXY, which curl, PowerShell 7 and the agent all read.
+$web = @{ UseBasicParsing = $true }
+$proxy = @($env:HTTPS_PROXY, $env:ALL_PROXY) | Where-Object { $_ } | Select-Object -First 1
+if ($proxy) { $web.Proxy = $(if ($proxy -match '://') { $proxy } else { "http://$proxy" }) }
+
 Write-Host "Downloading Tonton Claude $Version (windows-x64)..."
-$sums = (Invoke-WebRequest -UseBasicParsing "$release/SHA256SUMS").Content
+$sums = (Invoke-WebRequest @web "$release/SHA256SUMS").Content
 if ($sums -is [byte[]]) { $sums = [Text.Encoding]::UTF8.GetString($sums) }
 $expected = ($sums -split "`n" | Where-Object { $_ -match "  $([regex]::Escape($name))\s*$" } | ForEach-Object { ($_ -split ' ')[0] })
-Invoke-WebRequest -UseBasicParsing "$release/$name" -OutFile $download
+Invoke-WebRequest @web "$release/$name" -OutFile $download
 if (-not $expected -or (Get-FileHash -Algorithm SHA256 $download).Hash -ne $expected.ToUpper()) {
   Remove-Item -Force $download
   throw "$name does not match its checksum, aborting."

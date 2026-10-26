@@ -76,6 +76,40 @@ the previous agent until claude restarts.
 
 On first launch, Claude Code asks you to confirm "I am using this for local development": channels are still a research preview.
 
+## Behind a proxy
+
+Machines on a company network often reach the internet through an HTTP proxy. The agent reads the same variables as curl:
+
+| Variable | Meaning |
+|---|---|
+| `HTTPS_PROXY` | Proxy for a relay on `https://` (the hosted one), and for updates from GitHub. `http://user:password@proxy:3128` if it wants a password. |
+| `HTTP_PROXY` | Proxy for a relay on `http://`, such as a self-hosted one on the local network. |
+| `ALL_PROXY` | Used when the one above is not set. |
+| `NO_PROXY` | Hosts that are reached directly, separated by commas: `relay.corp` (and its subdomains), `relay.corp:8443`, `10.0.0.0/8`, or `*`. |
+
+Lower case names work too (`https_proxy`), and win over upper case ones. The proxy must be an HTTP or HTTPS proxy; SOCKS
+proxies are not supported. Every connection of the agent goes through it: joining with the token, the WebSocket of the
+background service and of each session, hooks, and updates from GitHub.
+
+Set the variables before running the install line, in the same terminal:
+
+```sh
+export HTTPS_PROXY=http://proxy.corp:3128
+curl -fsSL https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.sh | TONTON_TOKEN='<token>' sh
+```
+
+- **macOS and Linux.** The background service does not start from a shell, so the installer writes the proxy variables it
+  sees into the LaunchAgent or the systemd unit. After changing proxy, run the install line again. Sessions get the
+  variables of the terminal claude starts from, so keep them in your shell profile.
+- **Windows.** The service gets your user environment variables, not those of a PowerShell window: set them with
+  `setx HTTPS_PROXY http://proxy.corp:3128`, then sign out and back in. Windows PowerShell does not read `HTTPS_PROXY`
+  itself, so download the install script through the proxy:
+  `$env:HTTPS_PROXY='http://proxy.corp:3128'; $env:TONTON_TOKEN='<token>'; irm -Proxy $env:HTTPS_PROXY https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.ps1 | iex`
+
+`tonton status` shows the proxy in use, without its password, and whether the relay answers through it.
+
+The Mac app connects with the system settings of the Mac (System Settings › Network › Proxies), like Safari.
+
 ## Running your own relay
 
 The relay is a single executable behind any HTTPS reverse proxy with WebSocket support. It only needs updating when its own

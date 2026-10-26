@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { paths } from '../config'
 import { binaryPath, IS_WINDOWS, windowlessBinaryPath } from '../install/system'
+import { proxyEnvironment } from '../proxy'
 
 // Starts the background service at login and restarts it on a new binary: a Run key on Windows, a LaunchAgent on
 // macOS, a user systemd unit on Linux.
@@ -27,15 +28,19 @@ function exec(command: string[]): boolean {
 
 const escapeXml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-/** Restarted after a crash, not after Quit in the menu bar (a clean exit). */
-export function launchAgentPlist(binary: string, home: string): string {
+/**
+ * Restarted after a crash, not after Quit in the menu bar (a clean exit). `proxy` comes from the shell that runs the
+ * install: launchd and systemd start the service without the shell's variables.
+ */
+export function launchAgentPlist(binary: string, home: string, proxy: [string, string][] = proxyEnvironment()): string {
+  const variables = [['TONTON_HOME', home], ...proxy].map(([name, value]) => `<key>${name}</key><string>${escapeXml(value)}</string>`)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key><string>${LABEL}</string>
   <key>ProgramArguments</key><array><string>${escapeXml(binary)}</string><string>service</string></array>
-  <key>EnvironmentVariables</key><dict><key>TONTON_HOME</key><string>${escapeXml(home)}</string></dict>
+  <key>EnvironmentVariables</key><dict>${variables.join('')}</dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ProcessType</key><string>Interactive</string>
@@ -44,14 +49,16 @@ export function launchAgentPlist(binary: string, home: string): string {
 `
 }
 
-export function systemdUnit(binary: string, home: string): string {
+export function systemdUnit(binary: string, home: string, proxy: [string, string][] = proxyEnvironment()): string {
+  // Quoted, with `%` doubled: systemd reads it as a specifier, and proxy passwords are often percent-encoded.
+  const variables = proxy.map(([name, value]) => `Environment="${name}=${value.replace(/[\\"]/g, '\\$&').replace(/%/g, '%%')}"\n`)
   return `[Unit]
 Description=Tonton Claude agent
 After=network-online.target
 
 [Service]
 Environment=TONTON_HOME=${home}
-ExecStart="${binary}" service
+${variables.join('')}ExecStart="${binary}" service
 Restart=on-failure
 RestartSec=5
 

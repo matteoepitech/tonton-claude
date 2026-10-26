@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { parseAccountToken } from '../../../shared/account-token'
 import { defaultMachineName, loadConfig, paths, saveConfig, VERSION } from '../config'
+import { proxyFor, shownProxy } from '../proxy'
 import { registerAutostart, restartService, runningServicePid, stopService } from '../service/control'
 import { installTrayFiles } from '../service/tray'
 import { useToken } from '../token'
@@ -134,11 +135,13 @@ export async function status() {
     return
   }
   console.log(`Tonton Claude ${VERSION}\n  machine: ${config.machine} (${config.machineId})\n  relay:   ${config.server}`)
+  const proxy = proxyFor(config.server)
+  if (proxy) console.log(`  proxy:   ${shownProxy(proxy.url)} (from ${proxy.from})`)
   const response = await fetch(`${config.server}/api/agent/ping`, { headers: { authorization: `Bearer ${config.token}` } }).catch(
     () => null,
   )
   if (response?.ok) done('relay reachable, machine token accepted')
-  else warn(response ? `relay answered ${response.status} (machine revoked?)` : 'relay not reachable')
+  else warn(response ? `relay answered ${response.status} (machine revoked?)` : `relay not reachable${proxy ? ' through the proxy' : ''}`)
   const launchers = shellProfiles().filter(({ file }) => existsSync(file) && readFileSync(file, 'utf8').includes('# >>> tonton >>>'))
   if (launchers.length) done(`claude launcher in ${launchers.map(p => p.file).join(', ')}`)
   else warn('no claude launcher found in your shell profiles: run the install again')
