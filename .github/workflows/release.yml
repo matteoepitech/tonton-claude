@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v0.4.0 to publish everything at that version: the macOS app (DMG), the agents and their install
-# scripts, the relay (executables, install script and Docker image) and a SHA256SUMS of the files.
+# Push a tag like v0.4.0 to publish everything at that version: the macOS app (DMG, and the appcast.xml it updates
+# itself from when the update keys are set), the agents and their install scripts, the relay (executables, install
+# script and Docker image) and a SHA256SUMS of the files.
 on:
   push:
     tags: ['v*']
@@ -43,6 +44,9 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      # Optional: with this variable and the SPARKLE_PRIVATE_KEY secret, the app updates itself from the appcast.xml
+      # published with each release (Sparkle). Without them it never checks.
+      SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,6 +55,20 @@ jobs:
       - name: Test
         working-directory: app
         run: swift test
+
+      # Half a setup would ship apps that wait for a feed that never comes, or a feed no app can check.
+      - name: Check the update keys
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -n "$SPARKLE_PUBLIC_KEY" ] && [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "UPDATES=on" >> "$GITHUB_ENV"
+          elif [ -n "$SPARKLE_PUBLIC_KEY$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::error::Set both the SPARKLE_PUBLIC_KEY variable and the SPARKLE_PRIVATE_KEY secret, or neither."
+            exit 1
+          else
+            echo "::notice::No update keys: this version of the app won't update itself."
+          fi
 
       - name: Import the signing certificate
         if: env.MACOS_CERTIFICATE != ''
@@ -69,8 +87,28 @@ jobs:
         working-directory: app
         run: |
           export VERSION=${GITHUB_REF_NAME#v}
+          export SPARKLE_FEED_URL=https://github.com/$GITHUB_REPOSITORY/releases/latest/download/appcast.xml
           ./scripts/build-app.sh --universal
           ./scripts/make-dmg.sh
+
+      # After notarization: the signature covers the image exactly as it is published.
+      - name: Write the update feed
+        if: env.UPDATES == 'on'
+        working-directory: app
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          DMG=build/TontonClaude-${GITHUB_REF_NAME#v}.dmg
+          GENERATE_APPCAST=$(find .build/artifacts -type f -name generate_appcast | head -n 1)
+          [ -n "$GENERATE_APPCAST" ] || { echo "generate_appcast not found in Sparkle's package" >&2; exit 1; }
+          mkdir -p build/updates
+          cp "$DMG" build/updates/
+          printf %s "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST" --ed-key-file - \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/" \
+            --full-release-notes-url "https://github.com/$GITHUB_REPOSITORY/releases" \
+            --link "https://github.com/$GITHUB_REPOSITORY" \
+            -o build/appcast.xml build/updates
+          swift scripts/check-appcast.swift build/appcast.xml "$DMG" build/TontonClaude.app
 
       - name: Build the agent's menu bar icon
         run: |
@@ -87,6 +125,7 @@ jobs:
           name: mac
           path: |
             app/build/TontonClaude-*.dmg
+            app/build/appcast.xml
             app/build/tonton-tray-darwin
 
   relay-image:

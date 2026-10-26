@@ -39,6 +39,9 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 - **Agent updates.** Only the app can ask a machine to update: the order is sealed with the account key and expires after
   10 minutes, so the relay can neither forge nor replay it. The agent downloads the release from GitHub, never from the
   relay, and checks the version it reports before swapping it in.
+- **App updates.** The app reads the `appcast.xml` of the latest GitHub release with Sparkle. The feed and the disk image
+  are signed with an EdDSA key whose public half is built into the app, and both are checked before anything is opened:
+  a changed release file or a network in the middle can't install anything.
 - **Abuse limits.** Per-IP rate limits on sign-ups, joins and failed authentications; caps on machines and sessions per account.
 
 **While your Mac is away.** The relay keeps each session's sealed history, so the notch catches up when the Mac wakes
@@ -231,8 +234,8 @@ The macOS tray icon is a separate Swift program: `swiftc -O agent/tray/macos/mai
 
 ## Releasing
 
-Pushing a version tag publishes everything at that version: the app (DMG), the agents, their install scripts, the relay
-(executables, install script, Docker image) and a `SHA256SUMS`:
+Pushing a version tag publishes everything at that version: the app (DMG, and its update feed once the keys below are
+set), the agents, their install scripts, the relay (executables, install script, Docker image) and a `SHA256SUMS`:
 
 ```sh
 git tag -s v0.4.0 -m "v0.4.0"
@@ -253,3 +256,15 @@ Developer ID and notarize it, add these repository secrets:
 | `MACOS_CERTIFICATE_PASSWORD` | Password of the .p12 |
 | `CODESIGN_IDENTITY` | e.g. `Developer ID Application: Your Name (TEAMID)` |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Apple account, team and app-specific password used by `notarytool` |
+
+For the app to update itself, make a pair of update keys once with Sparkle's `generate_keys`, which `swift build` puts
+in `app/.build/artifacts/sparkle/Sparkle/bin/`. It keeps the private key in your login keychain. Then add:
+
+| Kind | Name | Value |
+|---|---|---|
+| Variable | `SPARKLE_PUBLIC_KEY` | The public key, printed by `generate_keys -p` |
+| Secret | `SPARKLE_PRIVATE_KEY` | The content of the file written by `generate_keys -x private-key.txt` (delete the file afterwards) |
+
+Each release then publishes an `appcast.xml` signed with the private key, and the app checks it once a day (Settings ›
+General › Check for updates). Without the keys, the app never checks. Keep a copy of the private key somewhere safe:
+installed apps only accept updates signed with it.

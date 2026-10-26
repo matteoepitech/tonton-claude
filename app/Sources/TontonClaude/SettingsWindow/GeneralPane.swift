@@ -4,6 +4,7 @@ import TontonCore
 
 struct GeneralPane: View {
     @EnvironmentObject var settings: AppSettings
+    @ObservedObject private var updates = AppUpdater.shared
     @State private var newReply = ""
 
     private var shortcuts: [(String, [String])] {
@@ -29,6 +30,12 @@ struct GeneralPane: View {
                     ChoiceMenu(selection: settings.hotkey.rawValue, options: HotKeyPreset.allCases.map { ($0.rawValue, $0.label) }) {
                         settings.hotkey = HotKeyPreset(rawValue: $0) ?? .optionCommandN
                     }
+                }
+                if updates.isOn {
+                    Hairline()
+                    ToggleRow(
+                        title: "Check for updates", detail: "Looks for a new version of Tonton Claude once a day.",
+                        isOn: $updates.checksAutomatically)
                 }
             }
             GroupLabel(text: "Display")
@@ -175,6 +182,9 @@ struct GeneralPane: View {
                     Button("What's new") { AppDelegate.shared?.showWhatsNew() }.buttonStyle(.link).font(.system(size: 12))
                 }
                 Spacer()
+                if updates.isOn {
+                    Button("Check for Updates…") { updates.checkForUpdates() }.buttonStyle(ThemeButtonStyle()).disabled(!updates.canCheck)
+                }
                 Button("Quit Tonton Claude") { NSApp.terminate(nil) }.buttonStyle(ThemeButtonStyle())
             }
             .padding(.top, 28)

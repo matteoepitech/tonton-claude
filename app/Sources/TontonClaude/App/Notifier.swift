@@ -28,4 +28,13 @@ enum Notifier {
             identifier: "\(sessionId ?? "tonton")-\(Date().timeIntervalSince1970)", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
+
+    /// A new version found in the background. Clicking it shows the update instead of the notch.
+    @MainActor
+    static func postUpdate(version: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Tonton Claude \(version) is available"
+        content.body = "Click to see the update."
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: AppUpdater.notificationId, content: content, trigger: nil))
+    }
 }
