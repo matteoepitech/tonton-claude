@@ -204,8 +204,17 @@ final class NotchWindowController {
         if settings.haptics { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
     }
 
-    /// `text` replaces the session's status in the banner.
-    private func peek(_ session: SessionSummary, text: String? = nil) {
+    /// Today's spending went past the daily budget of Settings › General.
+    private func budgetExceeded(_ spent: Double) {
+        guard !settings.isQuietNow else { return }
+        signal()
+        let text = String(format: "Today's cost passed $%d: $%.2f so far", settings.dailyBudget, spent)
+        if settings.systemNotifications { Notifier.post(title: "Daily budget", body: text) }
+        peek(nil, text: text)
+    }
+
+    /// `text` replaces the session's status in the banner, or stands alone without a session.
+    private func peek(_ session: SessionSummary?, text: String? = nil) {
         guard settings.showAlerts, state.mode != .expanded else { return }
         state.peekSession = session
         state.peekText = text
@@ -243,6 +252,9 @@ final class NotchWindowController {
         store.finished
             .filter { [settings] _ in settings.alertOnFinish }
             .sink { [weak self] session in self?.alert(session, finished: true) }
+            .store(in: &subscriptions)
+        store.usage.budgetExceeded
+            .sink { [weak self] spent in self?.budgetExceeded(spent) }
             .store(in: &subscriptions)
         store.limitLifted
             .filter { [settings] _ in settings.alertOnLimitReset }

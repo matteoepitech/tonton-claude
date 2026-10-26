@@ -80,4 +80,17 @@ final class UsageHistoryTests: XCTestCase {
         XCTAssertEqual(history.entries.count, 1)
         XCTAssertEqual(try JSONDecoder().decode(UsageHistory.self, from: try JSONEncoder().encode(history)), history)
     }
+
+    func testTheDailyBudgetAlertsOnceADay() {
+        var history = UsageHistory()
+        history.record([session("s1", cost: 12), session("s2", machine: "Mac", cost: 9)], at: now, calendar: calendar)
+        XCTAssertEqual(history.spent(on: now, calendar: calendar), 21)
+        XCTAssertEqual(history.spent(on: now.addingTimeInterval(86400), calendar: calendar), 0)
+
+        let today = UsageHistory.day(now, calendar: calendar)
+        XCTAssertTrue(DailyBudget.shouldAlert(spent: 21, budget: 20, lastAlertDay: "2026-10-25", today: today))
+        XCTAssertFalse(DailyBudget.shouldAlert(spent: 21, budget: 20, lastAlertDay: today, today: today))
+        XCTAssertFalse(DailyBudget.shouldAlert(spent: 19.99, budget: 20, lastAlertDay: "", today: today))
+        XCTAssertFalse(DailyBudget.shouldAlert(spent: 500, budget: 0, lastAlertDay: "", today: today))
+    }
 }

@@ -49,6 +49,15 @@ struct GeneralPane: View {
                     title: "Show costs", detail: "Cost and tokens per session, and today's total in the notch bar.",
                     isOn: $settings.showCosts)
                 Hairline()
+                Row(title: "Daily budget", detail: "An alert the first time a day's cost goes past it.") {
+                    ChoiceMenu(
+                        selection: String(settings.dailyBudget),
+                        options: [("0", "None")] + [5, 10, 20, 50, 100, 200].map { (String($0), "$\($0)") }
+                    ) {
+                        settings.dailyBudget = Int($0) ?? 0
+                    }
+                }
+                Hairline()
                 Row(title: "Hide finished sessions", detail: "Closed and offline sessions leave the list after a while.") {
                     ChoiceMenu(
                         selection: String(settings.hideFinishedAfterHours),

@@ -62,7 +62,7 @@ final class SessionStore: ObservableObject {
     private var vault: SessionVault?
     private let localWatcher = LocalSessionWatcher()
     /// Cost and tokens per day, for Settings › Usage.
-    private(set) lazy var usage = UsageRecorder(sessions: sessionsPublisher)
+    private(set) lazy var usage = UsageRecorder(sessions: sessionsPublisher, settings: settings)
     /// One per reset time of the sessions a usage limit stopped.
     private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()
@@ -161,11 +161,6 @@ final class SessionStore: ObservableObject {
     }
 
     var attentionCount: Int { visibleSessions.filter(\.status.needsAttention).count }
-
-    var todayCost: Double {
-        let startOfDay = Calendar.current.startOfDay(for: Date())
-        return sessions.filter { $0.startedAt >= startOfDay }.compactMap(\.costUSD).reduce(0, +)
-    }
 
     // MARK: Connection
 
