@@ -171,7 +171,7 @@ struct ChatHeader: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
-        .help("Interrupt, like Escape in the terminal")
+        .help("Interrupt, like Escape in the terminal (⌘.)")
     }
 
     var body: some View {

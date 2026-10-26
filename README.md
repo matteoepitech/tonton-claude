@@ -97,7 +97,7 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
   **Settings › General › Scripts can send messages** is on, message Claude: `send message "run the tests" to "api"`. In
   Shortcuts, use the Run AppleScript action. The [Raycast extension](raycast/README.md) uses the same commands.
 - **Shortcuts.** <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>N</kbd> opens the notch, <kbd>⌘</kbd> <kbd>1</kbd>…<kbd>9</kbd> jumps between sessions,
-  <kbd>esc</kbd> closes it.
+  <kbd>⌘</kbd> <kbd>.</kbd> interrupts the session at work, <kbd>esc</kbd> closes it.
 
 ## How it compares
 

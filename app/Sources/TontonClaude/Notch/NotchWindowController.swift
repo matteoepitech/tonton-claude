@@ -441,7 +441,8 @@ final class NotchWindowController {
         collapse()
     }
 
-    /// Escape closes; ⌘1…⌘9 jump to a session in list order, pinned ones first; ⌘↑ and ⌘↓ move through the list.
+    /// Escape closes; ⌘1…⌘9 jump to a session in list order, pinned ones first; ⌘↑ and ⌘↓ move through the list; ⌘. stops
+    /// the selected session while it works, like Escape in its terminal.
     private func handleKey(_ event: NSEvent) -> Bool {
         if event.keyCode == UInt16(kVK_Escape) {
             // Escape closes the palette or the new session panel first, then the notch.
@@ -467,6 +468,11 @@ final class NotchWindowController {
         }
         // The palette's own arrows move its selection, and the panel's field its cursor.
         if state.showPalette || state.showNewSession { return false }
+        if event.charactersIgnoringModifiers == "." {
+            guard let session = store.selected, session.accepts(.interrupt) else { return false }
+            store.sendCommand(.interrupt, to: session.id)
+            return true
+        }
         let sessions = store.orderedSessions
         guard !sessions.isEmpty else { return false }
         if let digit = event.charactersIgnoringModifiers.flatMap(Int.init), (1...9).contains(digit) {
