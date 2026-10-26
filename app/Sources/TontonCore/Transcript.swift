@@ -14,6 +14,10 @@ public enum Transcript {
         /// Claude Code writes one line per content block, each with the whole response's usage: they only count once per
         /// request.
         public var usage: ResponseUsage?
+        /// The model's context window, read from the model the request asked for (`[1m]` for a million tokens).
+        public var contextWindow: Int?
+        /// Claude Code compacted the conversation: the context starts over.
+        public var compacted = false
     }
 
     public struct ResponseUsage: Equatable, Sendable {
@@ -52,10 +56,14 @@ public enum Transcript {
             if type == "five_hour" { result.fiveHourLimit = limit } else if type.hasPrefix("seven_day") { result.sevenDayLimit = limit }
         }
         if type == "assistant" { result.usage = responseUsage(line) }
+        if type == "assistant", let model = line["requestedModel"] as? String {
+            result.contextWindow = model.lowercased().hasSuffix("[1m]") ? 1_000_000 : 200_000
+        }
 
         let ts = line["timestamp"] as? String ?? ISO8601DateFormatter().string(from: Date())
         let id = line["uuid"] as? String ?? "\(type ?? "line")-\(ts)"
         if type == "system", line["subtype"] as? String == "compact_boundary" {
+            result.compacted = true
             result.entries.append(Entry(id: id, ts: ts, kind: .system, text: "Conversation compacted"))
         }
 

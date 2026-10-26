@@ -55,6 +55,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let costUSD: Double?
     /// Nil with older agents.
     public let tokens: TokenCounts?
+    /// Nil with older agents, and before the first answer.
+    public let context: ContextUsage?
     public let startedAt: Date
     public let lastActivity: Date
     public let lastMessage: String?
@@ -68,7 +70,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         status: SessionStatus,
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
         startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
-        sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil
+        sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil, context: ContextUsage? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -89,6 +91,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.fiveHourLimit = fiveHourLimit
         self.sevenDayLimit = sevenDayLimit
         self.tokens = tokens
+        self.context = context
     }
 
     /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the
@@ -149,6 +152,27 @@ public struct TokenCounts: Codable, Equatable, Sendable {
         if count < 1_000_000 { return "\(count / 1000)k" }
         return "\(trimmed(Double(count) / 1_000_000))M"
     }
+}
+
+/// How full a session's context is: the input of its last API response, against the model's context window.
+public struct ContextUsage: Equatable, Sendable {
+    public let usedTokens: Int
+    public let windowTokens: Int
+
+    /// Without the window, Claude Code's default: 200K, unless the context is already past it, which only a 1M window allows.
+    public init(usedTokens: Int, windowTokens: Int? = nil) {
+        self.usedTokens = usedTokens
+        self.windowTokens = windowTokens ?? (usedTokens > 200_000 ? 1_000_000 : 200_000)
+    }
+
+    /// 0 to 1.
+    public var fraction: Double { min(1, Double(usedTokens) / Double(max(1, windowTokens))) }
+
+    /// Where Claude Code compacts on its own: the window, less room for the answer (up to 20K) and a 13K buffer.
+    public var autoCompactAt: Int { windowTokens - 33_000 }
+
+    /// Claude Code starts warning 20K before it compacts.
+    public var isNearCompaction: Bool { usedTokens >= autoCompactAt - 20_000 }
 }
 
 /// How much of a Claude plan's usage window is spent.

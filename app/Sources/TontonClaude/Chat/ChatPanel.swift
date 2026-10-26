@@ -115,6 +115,7 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
+                if let context = session.context { ContextGauge(context: context) }
                 if settings.showCosts, let tokens = session.tokens {
                     Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")
                         .font(.system(size: 10, design: .monospaced))
@@ -134,5 +135,29 @@ struct ChatHeader: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.white.opacity(0.04))
+    }
+}
+
+/// How full the session's context is, and a warning before Claude Code compacts it on its own.
+struct ContextGauge: View {
+    let context: ContextUsage
+
+    var body: some View {
+        let near = context.isNearCompaction
+        let percent = "\(Int((context.fraction * 100).rounded()))%"
+        HStack(spacing: 5) {
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.12))
+                Capsule().fill(near ? Color(nsColor: .systemOrange) : .white.opacity(0.5)).frame(width: 32 * context.fraction)
+            }
+            .frame(width: 32, height: 4)
+            Text(near ? "\(percent) · compacts soon" : "\(percent) context")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(near ? Color(nsColor: .systemOrange) : .secondary)
+        }
+        .fixedSize()
+        .help(
+            "Context: \(TokenCounts.short(context.usedTokens)) of \(TokenCounts.short(context.windowTokens)) tokens. "
+                + "Claude Code compacts it at about \(TokenCounts.short(context.autoCompactAt)).")
     }
 }
