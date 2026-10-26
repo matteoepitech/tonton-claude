@@ -65,8 +65,12 @@ final class SessionStore: ObservableObject {
     private let api = RelayAPI()
     private var vault: SessionVault?
     private let localWatcher = LocalSessionWatcher()
-    /// Cost and tokens per day, for Settings › Usage.
-    private(set) lazy var usage = UsageRecorder(sessions: sessionsPublisher, settings: settings)
+    /// Cost and tokens per day and the monthly recap, for Settings › Usage.
+    private(set) lazy var usage = UsageRecorder(
+        sessions: sessionsPublisher, tasks: taskDone.eraseToAnyPublisher(),
+        entries: $localEntries.combineLatest($relayEntries).map { local, relay in local.merging(relay) { _, relay in relay } }
+            .eraseToAnyPublisher(),
+        settings: settings)
     /// One per reset time of the sessions a usage limit stopped.
     private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()

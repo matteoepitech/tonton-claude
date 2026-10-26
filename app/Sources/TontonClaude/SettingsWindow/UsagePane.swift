@@ -2,7 +2,8 @@ import Charts
 import SwiftUI
 import TontonCore
 
-/// The last 7 days of cost and tokens, as recorded on this Mac: per day, per machine and per project.
+/// The last 7 days of cost and tokens, as recorded on this Mac: per day, per machine and per project. Then the month's
+/// recap.
 struct UsagePane: View {
     @ObservedObject var usage: UsageRecorder
 
@@ -33,9 +34,11 @@ struct UsagePane: View {
                 GroupLabel(text: "By project")
                 Card { rows(Array(usage.history.totals(by: \.project, days: Self.days).prefix(Self.projects))) }
             }
+            WrappedSection(usage: usage)
             Text(
                 "Counted on this Mac from what sessions report while Tonton Claude runs. Costs are Claude Code's estimates at "
-                    + "list price; tokens include what was read from and written to the prompt cache."
+                    + "list price; tokens include what was read from and written to the prompt cache. Wrapped counts the time of the "
+                    + "tasks seen finishing and the tool calls of the conversations opened in the notch or kept on this Mac."
             )
             .font(.system(size: 12))
             .foregroundStyle(Theme.textFaint)
