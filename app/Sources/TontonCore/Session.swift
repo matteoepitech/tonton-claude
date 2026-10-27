@@ -243,8 +243,11 @@ public struct UsageLimit: Equatable, Sendable {
     }
 
     /// `1 h 42`, `42 min` or `2 d 5 h` until the reset, at least a minute.
-    public func timeLeft(at now: Date = Date()) -> String {
-        let minutes = max(1, Int((resetsAt.timeIntervalSince(now) / 60).rounded(.up)))
+    public func timeLeft(at now: Date = Date()) -> String { Self.duration(from: now, to: resetsAt) }
+
+    /// `1 h 42`, `42 min` or `2 d 5 h` from one time to another, at least a minute.
+    public static func duration(from now: Date, to end: Date) -> String {
+        let minutes = max(1, Int((end.timeIntervalSince(now) / 60).rounded(.up)))
         if minutes < 60 { return "\(minutes) min" }
         if minutes < 24 * 60 { return "\(minutes / 60) h \(String(format: "%02d", minutes % 60))" }
         let hours = minutes / 60
