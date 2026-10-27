@@ -68,7 +68,13 @@ WantedBy=default.target
 }
 
 /** Tests run agents in a temporary home: they must not touch the login items of the machine running them. */
-const disabled = () => process.env.TONTON_SERVICE === 'off'
+export const disabled = () => process.env.TONTON_SERVICE === 'off'
+
+/** Whether the service starts at login: its Run key, LaunchAgent or systemd unit is there. */
+export function autostartRegistered(): boolean {
+  if (IS_WINDOWS) return exec(['reg', 'query', RUN_KEY, '/v', RUN_VALUE])
+  return existsSync(process.platform === 'darwin' ? launchAgentPath() : systemdUnitPath())
+}
 
 /** Returns false when this system can't start it at login (Linux without a user systemd). */
 export function registerAutostart(): boolean {

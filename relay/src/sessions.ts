@@ -13,6 +13,8 @@ import { SESSION_STATUSES } from './metrics'
 export interface SessionListener {
   updated(accountId: string, session: SessionSummary): void
   removed(accountId: string, sessionId: string): void
+  /** A request that was not pending yet, after `updated`. */
+  permissionRequested?(accountId: string, session: SessionSummary, request: SealedPermission): void
 }
 
 interface Session extends SessionSummary {
@@ -138,6 +140,14 @@ export class SessionStore {
     return fresh
   }
 
+  /** The name a Mac gave the session. Not activity: the session keeps its place in the list. */
+  rename(accountId: string, sessionId: string, name: Sealed) {
+    const session = this.get(accountId, sessionId)
+    if (!session) return
+    session.name = name
+    this.saved(accountId, session)
+  }
+
   setMeta(accountId: string, sessionId: string, meta: Sealed) {
     const session = this.get(accountId, sessionId)
     if (!session) return
@@ -149,9 +159,11 @@ export class SessionStore {
     const session = this.get(accountId, sessionId)
     if (!session) return
     const others = session.pendingPermissions.filter(p => p.requestId !== request.requestId)
+    const isNew = others.length === session.pendingPermissions.length
     session.pendingPermissions = [...others, request].slice(-MAX_PENDING_PERMISSIONS)
     session.status = 'permission'
     this.changed(accountId, session)
+    if (isNew) this.listener.permissionRequested?.(accountId, toSummary(session), request)
   }
 
   closePermission(accountId: string, sessionId: string, requestId: string) {
@@ -219,6 +231,7 @@ export class SessionStore {
       pendingPermissions: [],
       startedAt: now,
       lastActivity: now,
+      name: null,
       history: [],
       historyIds: new Set(),
       historyBytes: 0,
@@ -229,6 +242,10 @@ export class SessionStore {
 
   private changed(accountId: string, session: Session) {
     session.lastActivity = new Date().toISOString()
+    this.saved(accountId, session)
+  }
+
+  private saved(accountId: string, session: Session) {
     this.archive?.saveSession(accountId, session)
     this.listener.updated(accountId, toSummary(session))
   }

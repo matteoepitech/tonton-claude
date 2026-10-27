@@ -1,5 +1,5 @@
 import type { Server } from 'bun'
-import type { HookPost } from '../../shared/protocol'
+import type { HookPost, PushDevice, PushStatus } from '../../shared/protocol'
 import { RELEASES_URL } from '../../shared/version'
 import type { RelayContext } from './context'
 import { BROWSER_PROTOCOL, bearerToken, browserToken, clientIp, fail, json, readJson } from './http'
@@ -7,12 +7,13 @@ import type { SocketData } from './hub'
 import { MAX_SHARE_HOURS } from './limits'
 import { renderMetrics } from './metrics'
 import { safeEqual, sha256 } from './tokens'
-import { isSealed, isSessionId, isText, isVersion } from './validate'
+import { isDeviceId, isPushToken, isSealed, isSessionId, isText, isVersion } from './validate'
 
 type RelayServer = Server<SocketData>
 
 const MACHINE_PATH = /^\/api\/machines\/([A-Za-z0-9_-]{12})$/
 const SHARE_PATH = /^\/api\/shares\/([A-Za-z0-9_-]{12})$/
+const DEVICE_PATH = /^\/api\/push\/devices\/([A-Za-z0-9-]{8,64})$/
 
 export function createFetchHandler(ctx: RelayContext) {
   return async (req: Request, server: RelayServer): Promise<Response | undefined> => {
@@ -149,6 +150,20 @@ async function createShare(ctx: RelayContext, req: Request, accountId: string): 
   return json({ id: created.share.id, token: created.token, expiresAt: new Date(created.share.expiresAt).toISOString() })
 }
 
+/** What an iPhone wants pushed. Without an APNs key the relay keeps nothing and says so. */
+async function registerDevice(ctx: RelayContext, req: Request, accountId: string): Promise<Response> {
+  const body = await readJson<Partial<Record<keyof PushDevice, unknown>>>(req, 4096)
+  const token = (value: unknown): string | null | undefined =>
+    value === null || value === undefined ? null : isPushToken(value) ? value : undefined
+  const [alert, activity, activityStart] = [token(body?.alert), token(body?.activity), token(body?.activityStart)]
+  const environment = body?.environment
+  if (!isDeviceId(body?.device) || (environment !== 'sandbox' && environment !== 'production')) return fail(400, 'Bad request.')
+  if (alert === undefined || activity === undefined || activityStart === undefined) return fail(400, 'Bad request.')
+  if (!ctx.push) return json({ enabled: false } satisfies PushStatus)
+  ctx.push.register(accountId, { device: body.device, environment, alert, activity, activityStart })
+  return json({ enabled: true } satisfies PushStatus)
+}
+
 async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, path: string, ip: string): Promise<Response | undefined> {
   const accountId = ctx.registry.authenticateAccount(bearerToken(req))
   if (!accountId) {
@@ -157,7 +172,9 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
   }
 
   if (path === '/ws/app') {
-    const data: SocketData = { role: 'app', accountId, machineId: null, sessionId: null, agentVersion: null, service: false }
+    const header = req.headers.get('x-tonton-device')
+    const device = isDeviceId(header) ? header : null
+    const data: SocketData = { role: 'app', accountId, machineId: null, sessionId: null, agentVersion: null, service: false, device }
     // The app shows the region next to the latency it measures with WebSocket pings.
     const headers: Record<string, string> = ctx.config.region ? { 'x-tonton-region': ctx.config.region } : {}
     // A browser must get one of the subprotocols it offered back: the one without the token.
@@ -169,6 +186,14 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
   if (path === '/api/machines' && req.method === 'GET') return json(ctx.machineList(accountId))
   if (path === '/api/shares' && req.method === 'POST') return createShare(ctx, req, accountId)
   if (path === '/api/shares' && req.method === 'GET') return json(ctx.shareList(accountId))
+  if (path === '/api/push' && req.method === 'GET') return json({ enabled: ctx.push !== null } satisfies PushStatus)
+  if (path === '/api/push/devices' && req.method === 'POST') return registerDevice(ctx, req, accountId)
+
+  const devicePath = DEVICE_PATH.exec(path)
+  if (devicePath && req.method === 'DELETE') {
+    ctx.push?.unregister(accountId, devicePath[1])
+    return json({ ok: true })
+  }
 
   const sharePath = SHARE_PATH.exec(path)
   if (sharePath && req.method === 'DELETE') {

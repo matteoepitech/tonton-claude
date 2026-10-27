@@ -93,6 +93,7 @@ final class WhatsNewModel: ObservableObject {
 struct WhatsNewView: View {
     @ObservedObject var model: WhatsNewModel
     let close: () -> Void
+    /// Observed so the window redraws when the theme or Increase Contrast changes.
     @EnvironmentObject var settings: AppSettings
 
     private var page: URL? {
@@ -132,7 +133,7 @@ struct WhatsNewView: View {
         }
         .foregroundStyle(Theme.text)
         .environment(\.colorScheme, Theme.palette.scheme)
-        .id(settings.theme)
+        .id(Theme.palette)
         .ignoresSafeArea()
     }
 
@@ -144,7 +145,7 @@ struct WhatsNewView: View {
                 Text("Loading the release notes…").font(.system(size: 13)).foregroundStyle(Theme.textDim)
             }
         case .loaded(let release):
-            MarkdownText(text: WhatsNew.readable(release.body))
+            MarkdownText(text: WhatsNew.readable(release.body), textSize: .standard)
         case .failed:
             Text("The release notes could not be loaded. They are on GitHub too.")
                 .font(.system(size: 13))

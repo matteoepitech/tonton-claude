@@ -97,6 +97,19 @@ struct NotchPane: View {
                             }
                         }
                     }
+                    // Picked from a session's menu in the notch: listed here to change or drop.
+                    ForEach(settings.projectSounds.keys.sorted(), id: \.self) { project in
+                        Hairline()
+                        Row(title: project, detail: "When this project finishes.") {
+                            ChoiceMenu(
+                                selection: settings.projectSounds[project] ?? "",
+                                options: [("", "Event sound")] + SoundPlayer.names.map { ($0, $0) }
+                            ) { name in
+                                settings.projectSounds[project] = name.isEmpty ? nil : name
+                                SoundPlayer.play(settings.sound(for: .finished, project: project))
+                            }
+                        }
+                    }
                 }
                 Hairline()
                 ToggleRow(title: "Haptic feedback", detail: "A light tap on the trackpad.", isOn: $settings.haptics)
@@ -115,6 +128,18 @@ struct NotchPane: View {
                     Row(title: "From") { TimeField(minutes: $settings.quietStart) }
                     Hairline()
                     Row(title: "To") { TimeField(minutes: $settings.quietEnd) }
+                }
+            }
+            GroupLabel(text: "Daily summary")
+            Card {
+                ToggleRow(
+                    title: "Sum up the day",
+                    detail: "A macOS notification in the evening: how long Claude worked, in how many sessions, and the cost when costs "
+                        + "are shown.",
+                    isOn: $settings.dailySummary)
+                if settings.dailySummary {
+                    Hairline()
+                    Row(title: "At") { TimeField(minutes: $settings.dailySummaryTime) }
                 }
             }
             GroupLabel(text: "Webhooks")

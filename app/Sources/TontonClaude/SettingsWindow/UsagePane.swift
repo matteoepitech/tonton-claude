@@ -6,6 +6,7 @@ import TontonCore
 /// Claude works and the month's recap.
 struct UsagePane: View {
     @ObservedObject var usage: UsageRecorder
+    @State private var exportFailure: String?
 
     private static let days = 7
     private static let projects = 8
@@ -44,6 +45,7 @@ struct UsagePane: View {
                 GroupLabel(text: "When Claude works")
                 Card(padding: 16) { BusyHoursMap(grid: grid) }
             }
+            if !usage.history.entries.isEmpty { export }
             WrappedSection(usage: usage)
             Text(
                 "Counted on this Mac from what sessions report while Tonton Claude runs. Costs are Claude Code's estimates at "
@@ -56,6 +58,31 @@ struct UsagePane: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 12)
         }
+    }
+
+    /// The history as a CSV, for a range picked here.
+    private var export: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Card {
+                Row(title: "Export", detail: "Cost and tokens per day, machine and project, as a CSV file.") {
+                    Menu("Export CSV…") {
+                        ForEach(UsageExport.Range.allCases) { range in Button(range.label) { save(range) } }
+                    }
+                    .menuStyle(.button)
+                    .fixedSize()
+                }
+            }
+            if let exportFailure { Text(exportFailure).font(.system(size: 12)).foregroundStyle(Theme.danger) }
+        }
+        .padding(.top, 16)
+    }
+
+    private func save(_ range: UsageExport.Range) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = range.fileName()
+        guard panel.runAboveNotch() == .OK, let url = panel.url else { return }
+        exportFailure = SaveFailure.write(Data(UsageExport.csv(usage.history, range: range).utf8), to: url)
     }
 
     private func summary(_ machines: [(name: String, costUSD: Double, tokens: TokenCounts)]) -> some View {

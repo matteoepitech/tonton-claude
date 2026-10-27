@@ -34,10 +34,12 @@ struct ActivityDots: View {
                             .foregroundStyle(level.color)
                             .lineLimit(1)
                             .help("A usage limit resets in \(countdown.timeLeft(at: context.date))")
+                            .accessibilityLabel("A usage limit resets in \(countdown.timeLeft(at: context.date))")
                     } else {
                         Text("\(live.count)")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundStyle(store.attentionCount > 0 ? Theme.warning : .white.opacity(0.6))
+                            .accessibilityLabel(Spoken.count(live.count, "live session"))
                     }
                 }
                 .frame(width: state.currentWingWidth)
@@ -57,7 +59,7 @@ struct LiveActivityWings: View {
     var body: some View {
         HStack(spacing: 6) {
             if mascot { MascotView(status: session.status, size: 16) } else { StatusDot(status: session.status, size: 7) }
-            Text(session.project).font(.system(size: 11, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+            Text(session.displayName).font(.system(size: 11, weight: .semibold)).lineLimit(1).truncationMode(.tail)
         }
         .padding(.horizontal, 10)
         .frame(width: width, alignment: .leading)
@@ -81,7 +83,7 @@ struct PeekView: View {
             if let s = state.peekSession {
                 HStack(spacing: 8) {
                     StatusDot(status: s.status, limit: s.fiveHourLimit)
-                    Text("\(s.machine) · \(s.project)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text("\(s.machine) · \(s.displayName)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
                     Text(state.peekText ?? s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .frame(height: NotchState.peekHeight)

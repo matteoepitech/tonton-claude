@@ -45,8 +45,29 @@ public struct SessionVault: Sendable {
             // Commands a newer agent knows and this app does not are left out.
             commands: meta?.commands.map { Set($0.compactMap(SessionCommandName.init(rawValue:))) },
             model: meta?.model,
-            tool: info?.tool
+            tool: info?.tool,
+            turns: meta?.turns.map { $0.compactMap { turn in ISO8601.parse(turn.end).map { Turn(end: $0, seconds: turn.seconds) } } },
+            name: sessionName(wire)
         )
+    }
+
+    /// A name sealed for another session is one the relay moved: ignored, like an empty one.
+    private func sessionName(_ wire: WireSession) -> String? {
+        guard let sealed = open(wire.name, as: SessionName.self), sealed.sessionId == wire.id else { return nil }
+        let name = sealed.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
+    }
+
+    /// Characters of a session name: a few words, well under what the relay keeps.
+    public static let maxSessionName = 80
+
+    /// The user's own name for a session, for every Mac of the account. An empty one brings the project back.
+    public func sealSessionName(_ name: String, for sessionId: String, issuedAt: Date = Date()) throws -> String {
+        let cut = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.maxSessionName))
+        let payload = SessionName(
+            sessionId: sessionId, name: cut.trimmingCharacters(in: .whitespacesAndNewlines),
+            issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+        return try E2E.seal(payload, with: key)
     }
 
     private func usageLimit(_ wire: WireUsageLimit) -> UsageLimit? {
@@ -116,6 +137,27 @@ public struct SessionVault: Sendable {
         open(blob, as: StartDetail.self)
     }
 
+    /// Asks a machine for the end of its agent log. It names the machine, and agents refuse old ones.
+    public func sealLogRequest(requestId: String, machineId: String, issuedAt: Date = Date()) throws -> String {
+        try E2E.seal(
+            LogRequest(requestId: requestId, machineId: machineId, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
+    }
+
+    public func agentLog(_ blob: String?) -> AgentLog? {
+        open(blob, as: AgentLog.self)
+    }
+
+    /// Asks a machine to check how it is set up, after the repair `fix` names. Like log requests, it names the machine.
+    public func sealDiagnoseRequest(requestId: String, machineId: String, fix: String? = nil, issuedAt: Date = Date()) throws -> String {
+        let request = DiagnoseRequest(
+            requestId: requestId, machineId: machineId, issuedAt: ISO8601DateFormatter().string(from: issuedAt), fix: fix)
+        return try E2E.seal(request, with: key)
+    }
+
+    public func diagnosis(_ blob: String?) -> Diagnosis? {
+        open(blob, as: Diagnosis.self)
+    }
+
     /// A machine's auto-approve rules. Agents keep a set only if it is newer than theirs.
     public func sealRules(_ rules: [PermissionRule], issuedAt: Date) throws -> String {
         try E2E.seal(RuleSet(rules: rules, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)
@@ -140,7 +182,7 @@ public struct SessionVault: Sendable {
         try E2E.seal(MachineName(name: name, platform: nil), with: key)
     }
 
-    private func open<T: Decodable>(_ blob: String?, as type: T.Type) -> T? {
+    func open<T: Decodable>(_ blob: String?, as type: T.Type) -> T? {
         guard let blob else { return nil }
         return try? E2E.open(blob, as: type, with: key)
     }

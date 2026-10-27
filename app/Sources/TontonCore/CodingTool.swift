@@ -36,7 +36,8 @@ extension SessionSummary {
 
     /// The session search: project, machine, title, or the tool, so "opencode" lists OpenCode's sessions.
     public func matches(_ query: String) -> Bool {
-        query.isEmpty || project.localizedCaseInsensitiveContains(query) || machine.localizedCaseInsensitiveContains(query)
+        query.isEmpty || project.localizedCaseInsensitiveContains(query) || (name?.localizedCaseInsensitiveContains(query) ?? false)
+            || machine.localizedCaseInsensitiveContains(query)
             || (title?.localizedCaseInsensitiveContains(query) ?? false) || codingTool.label.localizedCaseInsensitiveContains(query)
     }
 }

@@ -17,9 +17,26 @@ public struct HistoryCatchUp: Equatable, Sendable {
     /// Starts with the sessions not visited yet, other than the selected one, which the app already follows. Returns the
     /// session to subscribe to first, or nil when there is nothing to fetch.
     public mutating func start(sessions: [String], selected: String?) -> String? {
-        guard !isRunning else { return nil }
-        queue = sessions.filter { $0 != selected && !visited.contains($0) }
+        let missing = sessions.filter { $0 != selected && !visited.contains($0) }
+        // Already fetching, for the archive or another search: these join the queue.
+        guard !isRunning else {
+            queue += missing.filter { $0 != waitingFor && !queue.contains($0) }
+            return nil
+        }
+        queue = missing
         return next()
+    }
+
+    /// Fetches one session's history again, visited or not: to archive what it said in full. Returns the session to
+    /// subscribe to now, or nil when a catch-up is running and will get to it.
+    public mutating func fetch(_ sessionId: String, selected: String?) -> String? {
+        guard sessionId != selected else { return nil }
+        guard isRunning else {
+            queue = [sessionId]
+            return next()
+        }
+        if waitingFor != sessionId && !queue.contains(sessionId) { queue.append(sessionId) }
+        return nil
     }
 
     /// A history arrived. Returns the next session to subscribe to, or nil when the app should go back to the selected one.
