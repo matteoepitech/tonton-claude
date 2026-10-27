@@ -210,6 +210,7 @@ struct ChatHeader: View {
                         .help("Estimated by \(session.codingTool.label) at list price")
                 }
                 Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
+                NoteButton(session: session)
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
                 if session.accepts(.interrupt) { interrupt }
                 if session.canChat && !session.menuCommands.isEmpty { commands }

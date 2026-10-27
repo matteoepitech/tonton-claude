@@ -8,7 +8,7 @@ struct SessionListView: View {
     @State private var query = ""
 
     var body: some View {
-        let sessions = store.visibleSessions.filter { $0.matches(query) }
+        let sessions = store.visibleSessions.filter { $0.matches(query) || NotesStore.shared.notes.matches($0.id, query) }
         // The tool of each session only says something when both are listed.
         let mixed = store.visibleSessions.mixesTools
         let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions, thisMac: store.thisMachines)
@@ -214,6 +214,7 @@ struct SessionRow: View {
                 HStack(spacing: 5) {
                     if let tool { ToolMark(tool: tool, size: 9) }
                     Text(session.project).font(.system(size: 12, weight: .semibold)).lineLimit(1).layoutPriority(1)
+                    NoteMark(sessionId: session.id)
                     if let machine {
                         if let machineStyle { MachineBadge(style: machineStyle, size: 9) }
                         Text(machine).font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
