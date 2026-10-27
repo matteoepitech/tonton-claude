@@ -288,8 +288,8 @@ open ios/TontonClaude.xcodeproj                # the iPhone app: pick your team 
 
 The iPhone app also builds without signing, for the Simulator:
 `xcodebuild -project ios/TontonClaude.xcodeproj -scheme TontonClaude -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`.
-Without signing it has no app group, so the Live Activity and the notifications show placeholders instead of the
-sessions' names.
+A build without an app group keeps the account in the app's own Keychain: it works, but the Live Activity and the
+notifications show placeholders instead of the sessions' names.
 
 `TONTON_HOME` runs an agent with an isolated config directory, and `TONTON_SERVICE=off` keeps it away from your login items.
 The macOS tray icon is a separate Swift program: `swiftc -O agent/tray/macos/main.swift -o ~/.tonton/bin/tonton-tray`.
