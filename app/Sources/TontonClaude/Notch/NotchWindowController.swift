@@ -209,7 +209,7 @@ final class NotchWindowController {
 
     /// A session needs the user or just finished: sound, haptics, notification, then the banner or the open notch.
     private func alert(_ session: SessionSummary, finished: Bool) {
-        guard !settings.isQuietNow else { return }
+        guard !settings.isQuiet(.of(session.status, finished: finished)) else { return }
         signal(.of(session.status, finished: finished), project: session.project)
         if settings.systemNotifications {
             Notifier.post(session, body: finished ? String(localized: "Claude is done.") : session.displayStatusText)
@@ -231,7 +231,7 @@ final class NotchWindowController {
 
     /// Sessions a usage limit stopped can go again: the same sound and banner, once for all of them.
     private func limitLifted(_ sessions: [SessionSummary]) {
-        guard let session = sessions.first, !settings.isQuietNow else { return }
+        guard let session = sessions.first, !settings.isQuiet(.limitReset) else { return }
         signal(.finished)
         if settings.systemNotifications {
             let body =
@@ -243,9 +243,10 @@ final class NotchWindowController {
         peek(session, text: String(localized: "Usage limit reset"))
     }
 
-    /// Confetti from the notch for a long task done. None with Reduce Motion or during quiet hours.
+    /// Confetti from the notch for a long task done. None with Reduce Motion, during quiet hours or a Focus that silences
+    /// finished tasks.
     private func celebrate() {
-        guard !settings.isQuietNow, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        guard !settings.isQuiet(.finished), !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
         let seed = UInt64.random(in: 1...UInt64.max)
         state.confetti = seed
         Task { [weak self] in
@@ -262,7 +263,7 @@ final class NotchWindowController {
 
     /// Today's spending went past the daily budget of Settings › General.
     private func budgetExceeded(_ period: BudgetPeriod, _ spent: Double) {
-        guard !settings.isQuietNow else { return }
+        guard !settings.isQuiet(.other) else { return }
         signal(.question)
         let budget = Money.dollars(Double(period == .day ? settings.dailyBudget : settings.monthlyBudget), digits: 0)
         let text =
@@ -322,13 +323,13 @@ final class NotchWindowController {
             .sink { [weak self] session in self?.alert(session, finished: false) }
             .store(in: &subscriptions)
         store.permissionsAsked
-            .filter { [settings] _ in !settings.isQuietNow }
+            .filter { [settings] _ in !settings.isQuiet(.permission) }
             .sink { [weak self] asked in self?.announce(Spoken.permissions(asked.requests, session: asked.session.project)) }
             .store(in: &subscriptions)
         // The user started the session: its questions open the notch whatever the settings say.
         store.launchAsks
             .sink { [weak self] _ in
-                if self?.settings.isQuietNow == false { self?.signal(.question) }
+                if self?.settings.isQuiet(.needsYou) == false { self?.signal(.question) }
                 self?.state.showNewSession = true
                 self?.expand()
             }
