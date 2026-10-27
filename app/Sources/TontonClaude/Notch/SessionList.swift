@@ -14,7 +14,7 @@ struct SessionListView: View {
     @State private var draft = ""
 
     var body: some View {
-        let sessions = store.visibleSessions.filter { $0.matches(query) }
+        let sessions = store.visibleSessions.filter { $0.matches(query) || NotesStore.shared.notes.matches($0.id, query) }
         // The tool of each session only says something when both are listed.
         let mixed = store.visibleSessions.mixesTools
         let sections = SessionLayout.sections(
@@ -352,6 +352,7 @@ struct SessionRow: View {
                         Text(session.displayName).font(.notch(12, weight: .semibold)).lineLimit(1).layoutPriority(1)
                             .help(session.name == nil ? "" : "Renamed. Its project is \(session.project).")
                     }
+                    NoteMark(sessionId: session.id)
                     if let machine {
                         if let machineStyle { MachineBadge(style: machineStyle, size: 9).accessibilityHidden(true) }
                         Text(machine).font(.notch(10)).foregroundStyle(Theme.tertiary).lineLimit(1)
