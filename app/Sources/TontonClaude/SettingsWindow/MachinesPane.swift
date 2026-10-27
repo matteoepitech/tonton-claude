@@ -54,6 +54,7 @@ struct MachinesPane: View {
                 Text("Hidden machines keep running, they just stay out of the notch. Revoking a machine signs it out for good.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 AutoApproveRules()
             }
@@ -194,8 +195,10 @@ struct MachineRow: View {
                 Circle().fill(machine.online ? Theme.success : Theme.textFaint).frame(width: 6, height: 6)
                 Text(live > 0 ? "\(live) live" : (machine.online ? "Online" : "Offline")).font(.system(size: 12)).foregroundStyle(
                     Theme.textDim)
+                    .fixedSize()
             }
-            .frame(width: 70, alignment: .leading)
+            // Wider when a language needs it, rather than cut.
+            .frame(minWidth: 70, alignment: .leading)
             Toggle("", isOn: visible).toggleStyle(AccentToggleStyle()).labelsHidden().fixedSize()
                 .help(visible.wrappedValue ? "Shown in the notch" : "Hidden from the notch")
             Menu {

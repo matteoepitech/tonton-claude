@@ -422,9 +422,10 @@ struct SessionRow: View {
                 session.status.needsAttention ? Text(session.displayStatusText).foregroundColor(Color(nsColor: session.status.color)) : nil
             let parts = [attention, countdown, pace].compactMap { $0 }
             if let first = parts.first {
+                // Two lines rather than a cut countdown, with large text or a longer language.
                 parts.dropFirst().reduce(first) { line, part in line + Text(" · ").foregroundColor(.secondary) + part }
                     .font(.notch(10, weight: .medium))
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
         }
     }

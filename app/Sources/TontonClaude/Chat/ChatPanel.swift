@@ -218,6 +218,29 @@ struct ChatHeader: View {
         .accessibilityLabel("Interrupt")
     }
 
+    /// The model, the context and the tokens, on the right of the second line.
+    private func figures(branch: Bool, model: Bool, tokens: Bool) -> some View {
+        HStack {
+            if branch, let name = session.branch { BranchLabel(branch: name) }
+            if model, let name = session.modelName {
+                Text(name).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
+                    .help("The model Claude Code uses in this session")
+            }
+            if let context = session.context { ContextGauge(context: context) }
+            if tokens, settings.showCosts, let counts = session.tokens {
+                Text("\(TokenCounts.short(counts.allInput)) in · \(TokenCounts.short(counts.output)) out")
+                    .font(.notch(10, design: .monospaced))
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize()
+                    .help(
+                        """
+                        \(counts.input.formatted()) input, \(counts.cacheRead.formatted()) read from the cache, \
+                        \(counts.cacheWrite.formatted()) written to it, \(counts.output.formatted()) output
+                        """)
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
@@ -266,23 +289,15 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(1)
                 Spacer()
-                if let branch = session.branch { BranchLabel(branch: branch) }
-                if let model = session.modelName {
-                    Text(model).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
-                        .help("The model Claude Code uses in this session")
+                // The title gives way first. When the figures still don't fit (a narrow notch, large text, a longer
+                // language), the tokens go, then the branch, then the model: they would push the whole notch past its edges.
+                ViewThatFits(in: .horizontal) {
+                    figures(branch: true, model: true, tokens: true)
+                    figures(branch: true, model: true, tokens: false)
+                    figures(branch: false, model: true, tokens: false)
+                    figures(branch: false, model: false, tokens: false)
                 }
-                if let context = session.context { ContextGauge(context: context) }
-                if settings.showCosts, let tokens = session.tokens {
-                    Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")
-                        .font(.notch(10, design: .monospaced))
-                        .foregroundStyle(Theme.secondary)
-                        .fixedSize()
-                        .help(
-                            """
-                            \(tokens.input.formatted()) input, \(tokens.cacheRead.formatted()) read from the cache, \
-                            \(tokens.cacheWrite.formatted()) written to it, \(tokens.output.formatted()) output
-                            """)
-                }
+                .layoutPriority(1)
                 if session.canChat, let reset = session.stoppedUntil() { autoContinueToggle(until: reset) }
                 if let shareNote {
                     Text(shareNote).font(.notch(10)).foregroundStyle(Theme.accent).lineLimit(1)

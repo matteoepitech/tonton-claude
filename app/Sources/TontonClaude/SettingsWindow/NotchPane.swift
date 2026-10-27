@@ -50,11 +50,11 @@ struct NotchPane: View {
                     detail: "How much of the desktop shows through the open notch. Text stays readable at every value."
                 ) {
                     HStack(spacing: 8) {
-                        Text("Opaque").font(.system(size: 11)).foregroundStyle(Theme.textDim)
+                        Text("Opaque").font(.system(size: 11)).foregroundStyle(Theme.textDim).fixedSize()
                         Slider(value: $settings.notchTransparency, in: 0...1).tint(Theme.accent).frame(width: 150)
                         // Not the "Clear" of a button: another word in other languages.
                         Text(String(localized: "Clear (transparency)", defaultValue: "Clear"))
-                            .font(.system(size: 11)).foregroundStyle(Theme.textDim)
+                            .font(.system(size: 11)).foregroundStyle(Theme.textDim).fixedSize()
                     }
                 }
             }
