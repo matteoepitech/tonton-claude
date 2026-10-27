@@ -635,7 +635,17 @@ final class SessionStore: ObservableObject {
         signOut()
     }
 
+    /// Signs this Mac out of the connected account: it leaves the list too. The others stay, to switch to.
     func signOut() {
+        if let account = settings.account { settings.accounts.remove(account) }
         settings.account = nil
+    }
+
+    /// Connects to another account signed in on this Mac. The one connected now stays in the list.
+    func switchAccount(to account: Account) {
+        guard settings.accounts.entry(for: account) != nil, settings.account.map(AccountList.id(of:)) != AccountList.id(of: account)
+        else { return }
+        selectedId = nil
+        settings.account = account
     }
 }
