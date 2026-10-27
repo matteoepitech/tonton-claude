@@ -133,6 +133,8 @@ export class PoolWork {
   private readonly described = new Map<string, string>()
   private sent: number[] = []
   private active = false
+  /** Budgets and spending (agent/src/channel/pool-safety.ts): past a budget, the session takes no more tasks. */
+  private safety: { blocked(poolId: string): string | null; status(poolId: string): Record<string, unknown> | undefined } | null = null
   /** Whether the session is the orchestrator of one of its pools: it gets the orchestrator's tools then. */
   private leading = false
   /** Pools where it was given the orchestrator's guide. */
@@ -170,6 +172,10 @@ export class PoolWork {
     // A task that stops moving changes nothing in the pool: the orchestrator's agent looks every minute.
     this.stallTimer = setInterval(() => this.lookForStalls(), 60_000)
     this.stallTimer.unref?.()
+  }
+
+  useSafety(safety: NonNullable<PoolWork['safety']>) {
+    this.safety = safety
   }
 
   /** The tools, while the session is in a pool; the orchestrator's too while it is one. */
@@ -257,6 +263,7 @@ export class PoolWork {
         id: state.id,
         goal: state.info?.goal,
         paused: state.paused || undefined,
+        budget: this.safety?.status(state.id),
         tasks: counts,
         notesRevision: state.notes?.rev ?? 0,
         sessions,
@@ -294,6 +301,8 @@ export class PoolWork {
   // MARK: Changing
 
   private async claim(poolId: string, state: PoolState, me: PoolSession, args: Args): Promise<string> {
+    const blocked = this.safety?.blocked(poolId)
+    if (blocked) return `${blocked}: this session takes no more pool tasks.`
     const item = this.findTask(state, args.task)
     if (typeof item === 'string') return item
     const task = item.task as PoolTask
@@ -505,7 +514,7 @@ export class PoolWork {
       seen.tasks.set(item.id, mark)
       // A task that becomes this session's and is not started yet: delivered when it changes, and again after a restart.
       const assigned = task.assignee?.session === me.session && task.state === 'assigned'
-      if (assigned && before !== mark && !state.paused) {
+      if (assigned && before !== mark && !state.paused && !this.safety?.blocked(poolId)) {
         if (this.handedByTrusted(state, item, me)) this.deliver(this.taskEnvelope(state, item, this.pools.autoStart(poolId)))
         else log('pool task not delivered: assigned by a session that is not the orchestrator', { pool: poolId, task: item.id })
       }

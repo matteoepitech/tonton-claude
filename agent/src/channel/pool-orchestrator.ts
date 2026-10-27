@@ -4,7 +4,7 @@
 // Claude Code sessions, as each session's owner may override. Its agent also watches the pool and tells it when to
 // re-plan: a task blocked or finished, a session gone, a task that stopped moving. Claude Code and OpenCode alike.
 
-import { newPoolItemId, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
+import { newPoolItemId, overBudget, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
 import type { PoolArea, PoolNotes, PoolNotesSection, PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
 import type { PoolToolSpec, SessionDescription } from './pool-work'
 
@@ -162,8 +162,8 @@ export interface Candidate {
 }
 
 /**
- * The sessions that may take a task, best first: free (no task they hold), online and ready, never the orchestrator
- * itself. A simple task goes to the sessions that take simple tasks first, then to the others; a large one never goes to
+ * The sessions that may take a task, best first: free (no task they hold), online and ready, within their member's and
+ * the pool's budgets, never the orchestrator itself. A simple task goes to the sessions that take simple tasks first, then to the others; a large one never goes to
  * a session that only takes simple tasks. Within that, a session of the task's area comes first.
  */
 export function candidates(
@@ -177,6 +177,7 @@ export function candidates(
   const rank = (kind: SessionKind) => (size === 'simple' ? { simple: 0, large: 2 }[kind] : { large: 0, simple: 9 }[kind])
   return state.sessions
     .filter(s => s.online && s.ready && !busy.has(s.session) && !isOrchestrator(state, s) && !except.includes(s.session))
+    .filter(s => !overBudget(state, s.account))
     .map(session => {
       const kind = sessionKind(session, descriptions.get(`${session.account}/${session.session}`))
       return { session, kind, reason: `takes ${kind} tasks` }
@@ -431,6 +432,9 @@ export class PoolOrchestrator {
           : 'No free session now: keep it to do.'
       }
     }
+    // A budget is the members' own limit: force does not get past it (docs/pools.md, Control).
+    const spent = overBudget(state, target.account)
+    if (spent) return `${spent}: that session takes no more pool tasks. Give it to another one.`
     const who = this.ops.who(state, target.account, target.session)
     const overlap = overlapping(state, id, task.paths ?? [])
     const warning = overlap.length

@@ -50,8 +50,10 @@ export async function runChannel() {
       else if (conversation && message.sessionId === conversation.link.sessionId) {
         if (message.t === 'share') conversation.shares.receive(message.shareId, message.order)
         else if (message.t === 'unshare') conversation.shares.remove(message.shareId)
-        else if (message.t === 'pool_join') conversation.pools.receive(message.poolId, message.order)
+        else if (message.t === 'pool_join') conversation.pools.receive(message.poolId, message.order, message.acceptance)
         else if (message.t === 'pool_left') conversation.pools.remove(message.poolId)
+        else if (message.t === 'pool_stop') conversation.pools.stop(message.poolId)
+        else if (message.t === 'pool_accept') conversation.pools.accept(message.poolId, message.acceptance)
         else void onRelayMessage(message)
       }
     },

@@ -219,6 +219,7 @@ describe('the rules', () => {
     profile: { area: s.area, tool: s.tool as 'claude', ...(s.takes ? { takes: s.takes } : {}) },
     online: true,
     ready: true,
+    accepted: 0,
   })
   const state = (tasks: PoolState['tasks'] = []): PoolState => ({
     id: POOL,
@@ -234,8 +235,23 @@ describe('the rules', () => {
     events: [],
     own: { secret: null, wraps: [] },
     orchestrator: { account: 'acc_me', session: ME },
+    rules: null,
+    budgets: null,
+    audit: [],
   })
   const none = new Map()
+
+  test("a session past its member's or the pool's budget gets no task, even forced", () => {
+    // Ana's sessions spent $6 of a $5 cap; the pool has no cap.
+    const spent = {
+      ...state(),
+      budgets: { account: 'acc_me', session: null, rev: 1, updatedAt: 'now', value: { member: { costUSD: 5 } } },
+      events: [{ account: 'acc_ana', session: 'ses_cc', id: 'e1', seq: 1, ts: 'now', body: { kind: 'spend', costUSD: 6, seconds: 60 } }],
+    } as PoolState
+    expect(candidates(spent, { size: 'large' }, none)).toEqual([])
+    expect(candidates(spent, { size: 'simple' }, none).map(c => c.session.session)).toEqual(['ses_oc', 'ses_eve'])
+    expect(refusal(spent, { title: 'API', state: 'todo' }, spent.sessions[2], none)).toBeNull()
+  })
 
   test('a simple task goes to OpenCode first, a large one to Claude Code, never to the orchestrator', () => {
     expect(candidates(state(), { size: 'simple' }, none).map(c => c.session.session)).toEqual(['ses_oc', 'ses_eve', 'ses_cc'])

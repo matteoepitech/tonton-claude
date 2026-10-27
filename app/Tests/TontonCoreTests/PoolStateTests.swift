@@ -38,13 +38,13 @@ final class PoolStateTests: XCTestCase {
             sessions: [
                 PoolSessionWire(
                     account: "ana", session: "ses_ana", joinedAt: "x", profile: try pool.seal(PoolSessionProfile()),
-                    online: true, ready: true),
+                    online: true, ready: true, accepted: nil),
                 PoolSessionWire(
                     account: "me", session: "ses_me", joinedAt: "x", profile: try pool.seal(PoolSessionProfile(area: "front")),
                     online: true,
-                    ready: true),
+                    ready: true, accepted: nil),
             ],
-            tasks: tasks, notes: nil, messages: messages, events: [], own: own,
+            tasks: tasks, notes: nil, messages: messages, events: [], own: own, rules: nil, budgets: nil, audit: nil,
             orchestrator: PoolSessionRef(account: "ana", session: "ses_ana"))
     }
 
