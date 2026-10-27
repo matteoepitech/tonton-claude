@@ -12,6 +12,7 @@ import type {
   PermissionDetail,
   SessionInfo,
   SessionMeta,
+  SessionName,
   StartDetail,
   StatusDetail,
   TokenCounts,
@@ -95,6 +96,10 @@ const tokenCounts = (value: unknown): TokenCounts => {
   const f = fields(value)
   return { input: integer(f.input), output: integer(f.output), cacheRead: integer(f.cacheRead), cacheWrite: integer(f.cacheWrite) }
 }
+
+export const decodeSessionName = decoder(
+  (f): SessionName => ({ sessionId: text(f.sessionId), name: text(f.name), issuedAt: text(f.issuedAt) }),
+)
 
 export const decodeSessionInfo = decoder(
   (f): SessionInfo =>

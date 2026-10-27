@@ -124,7 +124,7 @@ struct ChatHeader: View {
     /// Saves the conversation as Markdown or as a standalone HTML page, images included (see ConversationExport).
     private func export(_ format: ConversationExport.Format) {
         let text = ConversationExport.render(
-            format, title: session.title ?? session.project, subtitle: "\(session.machine) · \(session.cwd)",
+            format, title: session.name ?? session.title ?? session.project, subtitle: "\(session.machine) · \(session.cwd)",
             entries: store.entries[session.id] ?? [])
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.init(filenameExtension: format.fileExtension)].compactMap { $0 }
@@ -201,7 +201,7 @@ struct ChatHeader: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 StatusDot(status: session.status, limit: session.fiveHourLimit)
-                Text(session.project).font(.notch(13, weight: .bold)).lineLimit(1)
+                Text(session.displayName).font(.notch(13, weight: .bold)).lineLimit(1)
                 Text("·").font(.notch(12)).foregroundStyle(Theme.secondary)
                 ToolMark(tool: session.codingTool, size: 10)
                 if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11) }

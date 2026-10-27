@@ -84,6 +84,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let tool: String?
     /// The last turns that ended, as the agent read them in the transcript. Nil with older agents and before a turn ends.
     public let turns: [Turn]?
+    /// The name the user gave the session on a Mac of the account, shown instead of the project.
+    public let name: String?
 
     public init(
         id: String, machineId: String, machine: String, platform: String?, cwd: String, project: String, title: String?,
@@ -91,7 +93,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
         startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
         sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil, context: ContextUsage? = nil, terminal: Bool = false,
-        commands: Set<SessionCommandName>? = nil, model: String? = nil, tool: String? = nil, turns: [Turn]? = nil
+        commands: Set<SessionCommandName>? = nil, model: String? = nil, tool: String? = nil, turns: [Turn]? = nil,
+        name: String? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -119,7 +122,11 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.model = model
         self.tool = tool
         self.turns = turns
+        self.name = name
     }
+
+    /// What the notch calls the session: the user's name for it, or else its project.
+    public var displayName: String { name ?? project }
 
     /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the
     /// fullest one past 80 %. Nil while there is room.

@@ -60,7 +60,8 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         sessions = ordered.prefix(Self.limit).map { summary in
             let kept = before[summary.id].flatMap { $0.status == summary.status ? $0.since : nil }
             return Session(
-                id: summary.id, project: summary.project, machine: summary.machine, status: summary.status,
+                // The name the user gave the session, as the notch shows it.
+                id: summary.id, project: summary.displayName, machine: summary.machine, status: summary.status,
                 since: kept ?? summary.lastActivity)
         }
         running = true

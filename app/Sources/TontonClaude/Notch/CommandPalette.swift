@@ -70,7 +70,7 @@ struct CommandPalette: View {
     private var allItems: [Item] {
         let sessions = store.orderedSessions.map { session in
             Item(
-                id: "session-\(session.id)", icon: "bubble.left", title: session.project,
+                id: "session-\(session.id)", icon: "bubble.left", title: session.displayName,
                 detail: "\(session.machine) · \(session.title ?? session.status.label)"
             ) { store.selectedId = session.id }
         }

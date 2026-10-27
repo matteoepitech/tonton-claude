@@ -275,12 +275,12 @@ function barContent(): (HTMLElement | string)[] {
   }
   if (peek) {
     // Like the notch's banner: where it runs, and its status.
-    title.append(element('strong', `${peek.machine} · ${peek.project}`), element('small', STATUS_LABELS[peek.status]))
+    title.append(element('strong', `${peek.machine} · ${peek.name ?? peek.project}`), element('small', STATUS_LABELS[peek.status]))
     return [dot(peek.status), title, count]
   }
   const activity = liveActivity(state.sessions)
   if (activity) {
-    title.append(element('strong', activity.project), element('small', liveActivityText(activity)))
+    title.append(element('strong', activity.name ?? activity.project), element('small', liveActivityText(activity)))
     return [dot(activity.status), title, count]
   }
   const quiet =

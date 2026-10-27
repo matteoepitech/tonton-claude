@@ -46,7 +46,7 @@ struct SessionView: View {
 
     private var title: some View {
         VStack(spacing: 1) {
-            Text(session?.project ?? "Session").font(.headline).lineLimit(1)
+            Text(session?.displayName ?? "Session").font(.headline).lineLimit(1)
             if let session {
                 Text("\(session.machine) · \(session.displayStatusText)")
                     .font(.caption)

@@ -550,6 +550,26 @@ esac
     expect(app.raw.filter(raw => raw.includes('"diagnosis"')).join()).not.toContain('.claude')
   })
 
+  test('a name given on one Mac reaches the others sealed, and only for its session', async () => {
+    const name = (sessionId: string, text: string) => seal(key, { sessionId, name: text, issuedAt: new Date().toISOString() })
+    stranger.socket.send(JSON.stringify({ t: 'rename', sessionId, name: await name(sessionId, 'Hijacked') }))
+    app.socket.send(JSON.stringify({ t: 'rename', sessionId, name: await name(sessionId, 'Billing rewrite') }))
+    const renamed = await eventually(() => latestSession(app)?.name && latestSession(app), 'the name')
+    expect(await open(key, renamed.name as string)).toMatchObject({ sessionId, name: 'Billing rewrite' })
+
+    const other = await connectApp(accountToken)
+    try {
+      const snapshot = await eventually(() => other.messages.find(m => m.t === 'snapshot'), 'the snapshot')
+      if (snapshot.t !== 'snapshot') throw new Error('unexpected message')
+      const session = snapshot.sessions.find(s => s.id === sessionId)
+      expect(await open(key, session?.name as string)).toMatchObject({ name: 'Billing rewrite' })
+    } finally {
+      other.socket.close()
+    }
+    expect(app.raw.join('')).not.toContain('Billing rewrite')
+    expect(stranger.messages.some(m => m.t === 'session')).toBe(false)
+  })
+
   test('revoking the machine signs it out and removes its sessions', async () => {
     expect((await api(`/api/machines/${machine.machineId}`, { method: 'DELETE', token: otherAccountToken })).status).toBe(404)
     expect((await api(`/api/machines/${machine.machineId}`, { method: 'DELETE', token: accountToken })).ok).toBe(true)

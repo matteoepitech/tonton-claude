@@ -74,6 +74,8 @@ export interface Session {
   platform: string | null
   cwd: string
   project: string
+  /** The name a Mac of the account gave the session, shown instead of the project. */
+  name: string | null
   title: string | null
   status: SessionStatus
   statusText: string | null

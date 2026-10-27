@@ -217,6 +217,15 @@ export interface ShareSummary {
   expiresAt: string
   viewers: number
 }
+/**
+ * Sealed by the app: the user's own name for a session, shown instead of its project on every Mac of the account. It names
+ * its session, so the relay can't move it to another. An empty name brings the project back.
+ */
+export interface SessionName {
+  sessionId: string
+  name: string
+  issuedAt: string
+}
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
   version: string
@@ -299,6 +308,8 @@ export interface SessionSummary {
   pendingPermissions: SealedPermission[]
   startedAt: string
   lastActivity: string
+  /** Sealed `SessionName`, once a Mac renamed the session. Older relays leave it out. */
+  name?: Sealed | null
 }
 
 export interface MachineSummary {
@@ -390,6 +401,8 @@ export type AppMessage =
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny'; rule?: Sealed }
   | { t: 'dismiss'; sessionId: string }
+  // A sealed `SessionName`: the relay keeps it with the session and sends it to every app of the account.
+  | { t: 'rename'; sessionId: string; name: Sealed }
   | { t: 'update_agent'; machineId: string; order: Sealed }
   | { t: 'rules'; machineId: string; rules: Sealed }
   | { t: 'start_session'; machineId: string; launchId: string; order: Sealed }

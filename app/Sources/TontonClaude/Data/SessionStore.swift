@@ -305,6 +305,7 @@ final class SessionStore: ObservableObject {
 
     private func update(_ session: SessionSummary) {
         let previous = sessions.first { $0.id == session.id }
+        if let pending = pendingNames[session.id], pending == session.name { pendingNames[session.id] = nil }
         if let index = relaySessions.firstIndex(where: { $0.id == session.id }) {
             relaySessions[index] = session
         } else {
@@ -428,6 +429,35 @@ final class SessionStore: ObservableObject {
             return
         }
         socket.send(["t": "dismiss", "sessionId": sessionId])
+    }
+
+    // MARK: Names
+
+    /// Names sent to the relay that have not come back with their session yet.
+    private var pendingNames: [String: String?] = [:]
+
+    /// Sessions the relay keeps: it holds the name for the other Macs. This Mac's sessions without an agent aren't there.
+    func canRename(_ session: SessionSummary) -> Bool {
+        connection == .connected && relaySessions.contains { $0.id == session.id }
+    }
+
+    /// Names the session on every Mac of the account, sealed like the rest. An empty name brings the project back.
+    func rename(_ session: SessionSummary, to name: String) {
+        let cut = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SessionVault.maxSessionName))
+        let trimmed = cut.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wanted: String? = trimmed.isEmpty || trimmed == session.project ? nil : trimmed
+        guard canRename(session), wanted != session.name, let sealed = try? vault?.sealSessionName(wanted ?? "", for: session.id) else {
+            return
+        }
+        pendingNames[session.id] = wanted
+        socket.send(["t": "rename", "sessionId": session.id, "name": sealed])
+        // A relay too old to keep names never sends the session back with it.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, let pending = self.pendingNames[session.id], pending == wanted else { return }
+            self.pendingNames[session.id] = nil
+            self.lastError = "The relay did not keep the name. It may be too old to rename sessions."
+        }
     }
 
     // MARK: Auto-approve rules

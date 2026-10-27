@@ -198,7 +198,7 @@ struct PillPreview: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
                 StatusDot(status: session.status, size: 6)
-                Text(session.project).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                Text(session.displayName).font(.system(size: 11, weight: .semibold)).lineLimit(1)
                 Text(session.machine).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 4)
                 Text(session.status.label).font(.system(size: 10)).foregroundStyle(Color(nsColor: session.status.color))
@@ -229,7 +229,7 @@ struct SessionPills: View {
             ForEach(row.sessions) { session in
                 pill {
                     StatusDot(status: session.status, size: 6)
-                    Text(session.project).font(.system(size: 10, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+                    Text(session.displayName).font(.system(size: 10, weight: .semibold)).lineLimit(1).truncationMode(.tail)
                 }
                 .overlay(Capsule().stroke(Color(nsColor: session.status.color).opacity(session.status.needsAttention ? 0.9 : 0.35)))
             }
