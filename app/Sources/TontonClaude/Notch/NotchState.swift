@@ -24,6 +24,8 @@ final class NotchState: ObservableObject {
     var drafts: [String: String] = [:]
     /// Opens the attachment or image under the pointer in Quick Look, for Space.
     var quickLookUnderPointer: (() -> Void)?
+    /// The files and images attached to each draft, kept the same way until the message goes.
+    var draftAttachments: [String: [Attachment]] = [:]
     /// Optional activity dots beside the camera (Settings › Notch); off means the notch is fully hidden at rest.
     @Published var showWings = false
     /// Set by the open session's composer: files dropped anywhere on the conversation go to it.
