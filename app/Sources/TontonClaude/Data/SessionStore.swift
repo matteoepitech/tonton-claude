@@ -208,9 +208,11 @@ final class SessionStore: ObservableObject {
     var thisMachines: Set<String> { Set([LocalSessions.machineId] + [thisMac].compactMap { $0 }) }
 
     /// The list as the notch shows it, pinned sessions first, then this Mac's.
-    var sections: [SessionSection] { SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines) }
+    var sections: [SessionSection] {
+        SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines, tags: settings.projectTags)
+    }
     var orderedSessions: [SessionSummary] {
-        SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines)
+        SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines, tags: settings.projectTags)
     }
 
     func togglePin(_ sessionId: String) {

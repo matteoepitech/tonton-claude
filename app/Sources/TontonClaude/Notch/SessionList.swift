@@ -6,12 +6,16 @@ struct SessionListView: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var state: NotchState
     @State private var query = ""
+    /// The project getting a new tag, typed in a row above the list: the notch can't show an alert.
+    @State private var tagging: String?
+    @State private var newTag = ""
 
     var body: some View {
         let sessions = store.visibleSessions.filter { $0.matches(query) }
         // The tool of each session only says something when both are listed.
         let mixed = store.visibleSessions.mixesTools
-        let sections = SessionLayout.sections(sessions, pinned: settings.pinnedSessions, thisMac: store.thisMachines)
+        let sections = SessionLayout.sections(
+            sessions, pinned: settings.pinnedSessions, thisMac: store.thisMachines, tags: settings.projectTags)
         VStack(spacing: 0) {
             if store.hasSessions {
                 HStack(spacing: 4) {
@@ -29,6 +33,7 @@ struct SessionListView: View {
                 .padding(.trailing, 6)
                 .padding(.bottom, 4)
             }
+            if let project = tagging { tagEditor(project) }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2, pinnedViews: []) {
                     ForEach(sections, id: \.kind) { section in
@@ -38,7 +43,7 @@ struct SessionListView: View {
                             SessionRow(
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
                                 continues: store.autoContinue.contains(s.id),
-                                machine: pinned ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
+                                machine: section.mixesMachines ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
                                 machineStyle: settings.machineStyles[s.machineId],
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
                                 shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil,
@@ -49,6 +54,7 @@ struct SessionListView: View {
                             .onTapGesture { store.selectedId = s.id }
                             .contextMenu {
                                 Button(pinned ? "Unpin" : "Pin to top") { store.togglePin(s.id) }
+                                tagMenu(s.project)
                                 if s.canChat {
                                     Toggle("Continue when the limit resets", isOn: autoContinue(s.id))
                                 }
@@ -120,6 +126,52 @@ struct SessionListView: View {
         }
     }
 
+    /// Groups the project's sessions under a tag, a client or a topic, whatever machine they run on.
+    @ViewBuilder private func tagMenu(_ project: String) -> some View {
+        Menu("Tag") {
+            ForEach(ProjectTags.names(settings.projectTags), id: \.self) { tag in
+                Toggle(
+                    tag,
+                    isOn: Binding(
+                        get: { settings.projectTags[project] == tag },
+                        set: { settings.projectTags[project] = $0 ? tag : nil }))
+            }
+            if !settings.projectTags.isEmpty { Divider() }
+            Button("New tag…") {
+                newTag = ""
+                tagging = project
+            }
+            if settings.projectTags[project] != nil {
+                Button("Remove tag") { settings.projectTags[project] = nil }
+            }
+        }
+    }
+
+    private func tagEditor(_ project: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "tag").font(.system(size: 10)).foregroundStyle(Theme.secondary)
+            TextField("", text: $newTag, prompt: Text("Tag for \(project)").foregroundStyle(Theme.textFaint))
+                .textFieldStyle(.plain)
+                .font(.system(size: 11))
+                .onSubmit { saveTag(project) }
+            Button("Cancel") { tagging = nil }.buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(Theme.secondary)
+            Button("Save") { saveTag(project) }.buttonStyle(.plain).font(.system(size: 10, weight: .semibold))
+                .disabled(ProjectTags.clean(newTag).isEmpty)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 26)
+        .background(RoundedRectangle(cornerRadius: 7).fill(Theme.ink.opacity(0.07)))
+        .padding(.trailing, 6)
+        .padding(.bottom, 4)
+    }
+
+    private func saveTag(_ project: String) {
+        let tag = ProjectTags.clean(newTag)
+        guard !tag.isEmpty else { return }
+        settings.projectTags[project] = tag
+        tagging = nil
+    }
+
     private func autoContinue(_ sessionId: String) -> Binding<Bool> {
         Binding(get: { store.autoContinue.contains(sessionId) }, set: { _ in store.toggleAutoContinue(sessionId) })
     }
@@ -130,6 +182,10 @@ struct SessionListView: View {
             case .pinned:
                 Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(Theme.secondary)
                 Text("PINNED").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
+                Spacer(minLength: 4)
+            case .tag(let tag):
+                Image(systemName: "tag.fill").font(.system(size: 8)).foregroundStyle(Theme.secondary)
+                Text(tag.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
                 Spacer(minLength: 4)
             case .thisMac:
                 if let style = store.thisMac.flatMap({ settings.machineStyles[$0] }), !style.isEmpty {
