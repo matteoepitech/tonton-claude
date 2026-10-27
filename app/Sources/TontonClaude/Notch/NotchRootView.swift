@@ -42,7 +42,7 @@ struct NotchRootView: View {
             }
             .frame(width: size.width, height: size.height)
             .clipShape(shape)
-            .overlay(shape.stroke(Theme.ink.opacity(expanded ? 0.09 : 0), lineWidth: 1))
+            .overlay(shape.stroke(Theme.line(expanded ? 0.09 : 0), lineWidth: 1))
             .overlay {
                 if let glow { NotchGlow(shape: shape, color: Color(nsColor: glow.color)).frame(width: size.width, height: size.height) }
             }
@@ -75,7 +75,7 @@ struct NotchRootView: View {
         }
         // The closed notch, its pills and the banner are part of the camera housing: always dark.
         .environment(\.colorScheme, expanded ? Theme.palette.scheme : .dark)
-        .id(settings.theme)
+        .id(Theme.palette)
     }
 }
 

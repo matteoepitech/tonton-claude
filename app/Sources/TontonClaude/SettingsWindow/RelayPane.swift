@@ -242,13 +242,15 @@ private struct SharesSection: View {
                 .foregroundStyle(Theme.textDim)
                 .fixedSize(horizontal: false, vertical: true)
                 if store.shares.isEmpty {
-                    Text("No shares. Make one from the share menu of a conversation.").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text("No shares. Make one from the share menu of a conversation.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.secondary)
                 }
                 ForEach(store.shares) { share in
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(project(of: share)).font(.system(size: 12, weight: .semibold))
-                            Text(details(of: share)).font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text(details(of: share)).font(.system(size: 11)).foregroundStyle(Theme.secondary)
                         }
                         Spacer()
                         Button("Revoke") {

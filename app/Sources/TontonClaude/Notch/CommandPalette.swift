@@ -23,8 +23,8 @@ struct CommandPalette: View {
         let items = Array(FuzzyMatch.rank(allItems, query: query) { "\($0.title) \($0.detail)" }.prefix(Self.shown))
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("", text: $query, prompt: Text("Sessions, machines, settings…").foregroundStyle(Theme.ink.opacity(0.35)))
+                Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondary)
+                TextField("", text: $query, prompt: Text("Sessions, machines, settings…").foregroundStyle(Theme.textFaint))
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
                     .focused($focused)
@@ -43,11 +43,11 @@ struct CommandPalette: View {
             if !items.isEmpty { Rectangle().fill(Theme.border).frame(height: 1) }
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 HStack(spacing: 10) {
-                    Image(systemName: item.icon).font(.system(size: 12)).frame(width: 18).foregroundStyle(.secondary)
+                    Image(systemName: item.icon).font(.system(size: 12)).frame(width: 18).foregroundStyle(Theme.secondary)
                     Text(item.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                    Text(item.detail).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(item.detail).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
                     Spacer(minLength: 0)
-                    if index == selection { Text("↩").font(.system(size: 11)).foregroundStyle(.secondary) }
+                    if index == selection { Text("↩").font(.system(size: 11)).foregroundStyle(Theme.secondary) }
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 34)
@@ -56,7 +56,7 @@ struct CommandPalette: View {
                 .onTapGesture { finish(item) }
             }
             if items.isEmpty && !query.isEmpty {
-                Text("Nothing matches").font(.system(size: 12)).foregroundStyle(.secondary).frame(height: 40)
+                Text("Nothing matches").font(.system(size: 12)).foregroundStyle(Theme.secondary).frame(height: 40)
             }
         }
         .frame(width: 440)

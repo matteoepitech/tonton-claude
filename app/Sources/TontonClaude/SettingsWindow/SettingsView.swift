@@ -83,7 +83,7 @@ struct SettingsView: View {
         }
         .foregroundStyle(Theme.text)
         .environment(\.colorScheme, Theme.palette.scheme)
-        .id(settings.theme)
+        .id(Theme.palette)
         .ignoresSafeArea()
     }
 }

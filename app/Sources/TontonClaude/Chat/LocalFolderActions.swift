@@ -37,7 +37,7 @@ struct LocalFolderActions: View {
                     Image(systemName: action.icon).font(.system(size: 11))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
                 .help(action.label)
             case .menu:
                 Button(action.label, action: action.run)

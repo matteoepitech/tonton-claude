@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import OSLog
@@ -77,7 +78,11 @@ final class AppSettings: ObservableObject {
     /// 0 is opaque, 0.5 the original glass, 1 the clearest (see GlassVeil).
     @Published var notchTransparency: Double
     @Published var theme: ThemeChoice {
-        didSet { Theme.palette = theme.palette }
+        didSet { Theme.palette = theme.palette(contrast: contrast) }
+    }
+    /// The system's Increase Contrast, followed live. Not a preference of the app, so not saved.
+    @Published private(set) var contrast: ContrastLevel {
+        didSet { Theme.palette = theme.palette(contrast: contrast) }
     }
     @Published var openOnPermission: Bool
     @Published var showAlerts: Bool
@@ -163,7 +168,9 @@ final class AppSettings: ObservableObject {
         notchTransparency = value("notchTransparency", 0.5)
         let theme = choice("theme", ThemeChoice.midnight)
         self.theme = theme
-        Theme.palette = theme.palette
+        let contrast = Self.systemContrast
+        self.contrast = contrast
+        Theme.palette = theme.palette(contrast: contrast)
         openOnPermission = value("openOnPermission", false)
         showAlerts = value("showAlerts", true)
         alertOnFinish = value("alertOnFinish", false)
@@ -233,6 +240,15 @@ final class AppSettings: ObservableObject {
 
         $account.dropFirst().sink { AccountStore.save($0) }.store(in: &subscriptions)
         $launchAtLogin.dropFirst().removeDuplicates().sink { Self.setLaunchAtLogin($0) }.store(in: &subscriptions)
+        // Posted on the workspace's own center when the user turns Increase Contrast on or off.
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.contrast = Self.systemContrast }
+            .store(in: &subscriptions)
+    }
+
+    private static var systemContrast: ContrastLevel {
+        NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? .increased : .standard
     }
 
     private func persist<P: Publisher>(_ publisher: P, _ key: String) where P.Failure == Never {
