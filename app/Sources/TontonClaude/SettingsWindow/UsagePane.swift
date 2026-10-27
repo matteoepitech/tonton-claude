@@ -39,6 +39,11 @@ struct UsagePane: View {
                     Card { rows(tools) }
                 }
             }
+            // The whole history, not only these 7 days: shown even when they are empty.
+            if !usage.history.entries.isEmpty {
+                GroupLabel(text: "Export")
+                Card { UsageExportRow(history: usage.history) }
+            }
             let grid = usage.hours.grid()
             if BusyHours.busiest(grid) != nil {
                 GroupLabel(text: "When Claude works")
