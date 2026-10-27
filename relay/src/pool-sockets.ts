@@ -14,6 +14,7 @@ import {
   MAX_POOL_TASK_BYTES,
   MAX_START_ORDER_BYTES,
 } from './limits'
+import { handleSafetyMessage, isSafetyMessage } from './pool-safety'
 import type { Author } from './pools'
 import { isPoolId, isPoolItemId, isRevision, isSealed, isSessionId } from './validate'
 
@@ -29,6 +30,11 @@ const POOL_APP_MESSAGES = new Set([
   'pool_member_key',
   'pool_join_session',
   'pool_leave_session',
+  'pool_pause',
+  'pool_stop',
+  'pool_rules',
+  'pool_budgets',
+  'pool_accept_rules',
 ])
 
 /** True when the message was a pool's: handled or dropped here. */
@@ -39,11 +45,15 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
   const { poolId } = message
   const role = ctx.pools.role(poolId, accountId)
   if (!role) return true
+  if (isSafetyMessage(message.t)) {
+    handleSafetyMessage(ctx, socket, poolId, role, message as Parameters<typeof handleSafetyMessage>[4])
+    return true
+  }
 
   switch (message.t) {
     case 'pool_subscribe': {
       ctx.hub.subscribePool(socket, poolId)
-      const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.hub.poolSessionState(poolId, account, session), accountId)
+      const pool = ctx.poolSnapshot(poolId, accountId)
       if (pool) ctx.hub.send(socket, { t: 'pool_snapshot', pool })
       break
     }
@@ -91,17 +101,20 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
       }
       ctx.hub.setPoolSessionReady(poolId, accountId, sessionId, false)
       const agent = ctx.hub.agentOf(accountId, sessionId)
-      if (agent) ctx.hub.send(agent, { t: 'pool_join', sessionId, poolId, order })
+      if (agent) ctx.hub.send(agent, ctx.poolJoin(poolId, accountId, sessionId, order))
+      ctx.auditPool(poolId, { accountId, sessionId: null }, 'session_joined', { account: accountId, session: sessionId })
       ctx.poolSessionChanged(poolId, accountId, sessionId)
       break
     }
     case 'pool_leave_session': {
       if (!isSessionId(message.sessionId) || !ctx.pools.removeSession(poolId, accountId, message.sessionId)) return true
       ctx.sessionLeftPool({ poolId, accountId, sessionId: message.sessionId }, true)
+      ctx.auditPool(poolId, { accountId, sessionId: null }, 'session_left', { account: accountId, session: message.sessionId })
       break
     }
     default:
-      if (role !== 'viewer') post(ctx, socket, poolId, { accountId, sessionId: null }, message)
+      // Safety messages were handled above: what is left is a post.
+      if (role !== 'viewer') post(ctx, socket, poolId, { accountId, sessionId: null }, message as PoolPost)
   }
   return true
 }
@@ -116,7 +129,7 @@ export function handleAgentPoolMessage(ctx: RelayContext, socket: Socket, messag
   const { poolId } = message
   if (message.t === 'pool_ack') {
     ctx.hub.setPoolSessionReady(poolId, accountId, sessionId, true)
-    const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.hub.poolSessionState(poolId, account, session), accountId)
+    const pool = ctx.poolSnapshot(poolId, accountId)
     if (pool) ctx.hub.send(socket, { t: 'pool_snapshot', pool })
     ctx.poolSessionChanged(poolId, accountId, sessionId)
     return true
@@ -127,7 +140,13 @@ export function handleAgentPoolMessage(ctx: RelayContext, socket: Socket, messag
     return true
   }
   const role = ctx.pools.role(poolId, accountId)
-  if (role && role !== 'viewer') post(ctx, socket, poolId, { accountId, sessionId }, message)
+  if (!role || role === 'viewer') return true
+  // A paused pool takes nothing from its sessions but events: the agents still say what they spend.
+  if (message.t !== 'pool_event' && ctx.poolSafety.isPaused(poolId)) {
+    ctx.hub.send(socket, { t: 'pool_error', poolId, message: 'The pool is paused.' })
+    return true
+  }
+  post(ctx, socket, poolId, { accountId, sessionId }, message)
   return true
 }
 
@@ -136,7 +155,7 @@ export function poolSessionConnected(ctx: RelayContext, socket: Socket, sessionI
   const { accountId } = socket.data
   for (const { poolId, order } of ctx.pools.ordersFor(accountId, sessionId)) {
     ctx.hub.setPoolSessionReady(poolId, accountId, sessionId, false)
-    ctx.hub.send(socket, { t: 'pool_join', sessionId, poolId, order })
+    ctx.hub.send(socket, ctx.poolJoin(poolId, accountId, sessionId, order))
     ctx.poolSessionChanged(poolId, accountId, sessionId)
   }
 }

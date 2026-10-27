@@ -6,13 +6,19 @@ import { bytesToBase64Url } from './base64'
 import { type AccountKey, newAccountKey, open, seal } from './crypto'
 import { PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
 import type {
+  PoolAuditWire,
   PoolAuthor,
+  PoolBudget,
+  PoolBudgets,
   PoolEventBody,
   PoolInfo,
   PoolKeyGrant,
   PoolMemberProfile,
   PoolMessageBody,
+  PoolPolicyWire,
   PoolRole,
+  PoolRules,
+  PoolRulesAcceptance,
   PoolSessionOrder,
   PoolSessionProfile,
   PoolSnapshot,
@@ -20,7 +26,7 @@ import type {
   PoolTaskState,
   PoolUpdate,
 } from './pool-protocol'
-import type { Sealed } from './protocol'
+import type { PermissionRule, Sealed } from './protocol'
 
 const KEY = /^[A-Za-z0-9_-]{43}$/
 const TASK_STATES: readonly PoolTaskState[] = ['todo', 'assigned', 'in_progress', 'review', 'done', 'blocked']
@@ -74,6 +80,39 @@ export async function openPoolSessionOrder(
   if (typeof order.key !== 'string' || !KEY.test(order.key) || !isVersion(order.version) || typeof order.issuedAt !== 'string') return null
   const autoStart = order.autoStart === true ? { autoStart: true } : {}
   return { poolId, sessionId, key: order.key, version: order.version, issuedAt: order.issuedAt, ...autoStart }
+}
+
+/** What a machine owner accepted of the pool rules, for one of its sessions: only its agent opens it. */
+export function sealPoolRulesAcceptance(accountKey: AccountKey, acceptance: Omit<PoolRulesAcceptance, 'issuedAt'>, issuedAt = new Date()) {
+  const sealed: PoolRulesAcceptance = { ...acceptance, issuedAt: issuedAt.toISOString() }
+  return seal(accountKey, sealed)
+}
+
+/** The acceptance, as the session's agent checks it: sealed with the account key, for this session and this pool. */
+export async function openPoolRulesAcceptance(
+  accountKey: AccountKey,
+  sealed: Sealed,
+  sessionId: string,
+  poolId: string,
+): Promise<PoolRulesAcceptance | null> {
+  const acceptance = await open<Partial<PoolRulesAcceptance>>(accountKey, sealed).catch(() => null)
+  if (!acceptance || acceptance.sessionId !== sessionId || acceptance.poolId !== poolId) return null
+  if (!isCount(acceptance.rev) || typeof acceptance.issuedAt !== 'string' || !Array.isArray(acceptance.rules)) return null
+  return { poolId, sessionId, rev: acceptance.rev, rules: permissionRules(acceptance.rules), issuedAt: acceptance.issuedAt }
+}
+
+const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0
+const MAX_POOL_RULES = 100
+
+/** The rules of a list another member sealed, as the agent's matcher takes them (agent/src/rules.ts). */
+function permissionRules(value: unknown[]): PermissionRule[] {
+  return value
+    .map(fields)
+    .filter((rule): rule is Fields => rule !== null)
+    .filter(rule => typeof rule.tool === 'string' && rule.tool.length > 0 && rule.tool.length <= 128)
+    .filter(rule => rule.pattern === undefined || (typeof rule.pattern === 'string' && rule.pattern.length <= 1000))
+    .slice(0, MAX_POOL_RULES)
+    .map(rule => (typeof rule.pattern === 'string' ? { tool: rule.tool as string, pattern: rule.pattern } : { tool: rule.tool as string }))
 }
 
 const isVersion = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1
@@ -150,7 +189,49 @@ export function decodePoolEventBody(value: unknown): PoolEventBody | null {
   const kind = text(f?.kind)
   if (!f || kind === undefined) return null
   const tool: PoolEventBody['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
-  return defined({ kind, text: text(f.text), taskId: text(f.taskId), tool, model: text(f.model) })
+  return defined({
+    kind,
+    text: text(f.text),
+    taskId: text(f.taskId),
+    tool,
+    model: text(f.model),
+    costUSD: amount(f.costUSD),
+    seconds: amount(f.seconds),
+  })
+}
+
+const amount = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+
+export function decodePoolRules(value: unknown): PoolRules | null {
+  const f = fields(value)
+  if (!f || !Array.isArray(f.rules)) return null
+  return defined({ rules: permissionRules(f.rules), note: text(f.note) })
+}
+
+function decodeBudget(value: unknown): PoolBudget | undefined {
+  const f = fields(value)
+  if (!f) return undefined
+  const budget = defined({ costUSD: amount(f.costUSD), hours: amount(f.hours) })
+  return budget.costUSD === undefined && budget.hours === undefined ? undefined : budget
+}
+
+export function decodePoolBudgets(value: unknown): PoolBudgets | null {
+  const f = fields(value)
+  if (!f) return null
+  const listed = fields(f.members)
+  const members = listed
+    ? Object.fromEntries(
+        Object.entries(listed)
+          .map(([account, budget]) => [account, decodeBudget(budget)] as const)
+          .filter((entry): entry is readonly [string, PoolBudget] => entry[1] !== undefined),
+      )
+    : undefined
+  return defined({
+    pool: decodeBudget(f.pool),
+    member: decodeBudget(f.member),
+    members: members && Object.keys(members).length ? members : undefined,
+  })
 }
 
 // MARK: The pool's state
@@ -171,6 +252,15 @@ export interface PoolSession {
   profile: PoolSessionProfile | null
   online: boolean
   ready: boolean
+  /** The revision of the pool rules its owner accepted for it, 0 for none. */
+  accepted: number
+}
+
+/** The pool's rules or budgets as last set, opened; `value` is null when the blob does not open. */
+export interface PoolPolicyItem<T> extends PoolAuthor {
+  rev: number
+  updatedAt: string
+  value: T | null
 }
 
 export interface PoolTaskItem extends PoolAuthor {
@@ -203,6 +293,11 @@ export interface PoolState {
   events: PoolPostItem<PoolEventBody>[]
   /** This member's private key for the pool (sealed with its account key) and the pool keys wrapped for it. */
   own: { secret: Sealed | null; wraps: PoolKeyWrapWire[] }
+  /** Auto-approve rules proposed to the sessions: they apply where a machine owner accepted them. */
+  rules: PoolPolicyItem<PoolRules> | null
+  budgets: PoolPolicyItem<PoolBudgets> | null
+  /** The latest lines of the audit log, oldest first. */
+  audit: PoolAuditWire[]
 }
 
 /** How many messages and events a client keeps in memory. */
@@ -220,7 +315,18 @@ export class PoolVault {
     this.keyring = typeof key === 'string' ? new PoolKeyring(key, 1) : key
   }
 
-  seal(value: PoolInfo | PoolMemberProfile | PoolSessionProfile | PoolTask | { text: string } | PoolMessageBody | PoolEventBody) {
+  seal(
+    value:
+      | PoolInfo
+      | PoolMemberProfile
+      | PoolSessionProfile
+      | PoolTask
+      | { text: string }
+      | PoolMessageBody
+      | PoolEventBody
+      | PoolRules
+      | PoolBudgets,
+  ) {
     return this.keyring.seal(value)
   }
 
@@ -255,6 +361,9 @@ export class PoolVault {
       messages,
       events,
       own: pool.own ?? { secret: null, wraps: [] },
+      rules: pool.rules ? await this.policy(pool.rules, decodePoolRules) : null,
+      budgets: pool.budgets ? await this.policy(pool.budgets, decodePoolBudgets) : null,
+      audit: (pool.audit ?? []).slice(-KEPT_POSTS),
     }
   }
 
@@ -298,6 +407,12 @@ export class PoolVault {
         const others = state.own.wraps.filter(wrap => wrap.version !== update.wrap.version)
         return { ...state, own: { ...state.own, wraps: [...others, update.wrap].sort((a, b) => a.version - b.version) } }
       }
+      case 'pool_rules':
+        return { ...state, rules: await this.policy(update.rules, decodePoolRules) }
+      case 'pool_budgets':
+        return { ...state, budgets: await this.policy(update.budgets, decodePoolBudgets) }
+      case 'pool_audit':
+        return { ...state, audit: [...state.audit, update.entry].slice(-KEPT_POSTS) }
       case 'pool_removed':
         return null
       case 'pool_conflict':
@@ -324,8 +439,14 @@ export class PoolVault {
       joinedAt,
       online,
       ready,
+      accepted: session.accepted ?? 0,
       profile: await this.read(session.profile, decodePoolSessionProfile),
     }
+  }
+
+  private async policy<T>(policy: PoolPolicyWire, decode: (value: unknown) => T | null): Promise<PoolPolicyItem<T>> {
+    const { rev, updatedAt, account, session } = policy
+    return { rev, updatedAt, account, session, value: await this.read(policy.blob, decode) }
   }
 
   private async task(task: PoolSnapshot['tasks'][number]): Promise<PoolTaskItem> {
@@ -343,4 +464,59 @@ export class PoolVault {
     const { id, seq, ts, account, session } = post
     return { id, seq, ts, account, session, body: await this.read(post.blob, decode) }
   }
+}
+
+// MARK: Budgets
+
+/** What a session spent in the pool, from the latest `spend` event its agent posted. */
+export interface PoolSpend {
+  costUSD: number
+  seconds: number
+}
+
+/** The latest spend of each session, by `account/session`. */
+export function poolSpend(state: Pick<PoolState, 'events'>): Map<string, PoolSpend & { account: string; session: string }> {
+  const spend = new Map<string, PoolSpend & { account: string; session: string }>()
+  for (const event of state.events) {
+    if (event.body?.kind !== 'spend' || !event.session) continue
+    spend.set(`${event.account}/${event.session}`, {
+      account: event.account,
+      session: event.session,
+      costUSD: event.body.costUSD ?? 0,
+      seconds: event.body.seconds ?? 0,
+    })
+  }
+  return spend
+}
+
+/** The cap that applies to one member: its own if the budgets name it, else the one for every member. */
+export function memberBudget(budgets: PoolBudgets | null | undefined, account: string): PoolBudget | undefined {
+  return budgets?.members?.[account] ?? budgets?.member
+}
+
+/**
+ * Why a member's sessions may take no more pool tasks, or null: past its own cap or past the pool's. `fresh` is what one
+ * session spent by now, newer than its last `spend` event: its own agent knows it before the pool does.
+ */
+export function overBudget(
+  state: Pick<PoolState, 'events' | 'budgets'>,
+  account: string,
+  fresh?: { session: string } & PoolSpend,
+): string | null {
+  const budgets = state.budgets?.value
+  if (!budgets) return null
+  const spend = poolSpend(state)
+  if (fresh) spend.set(`${account}/${fresh.session}`, { account, ...fresh })
+  const total = (list: PoolSpend[]) =>
+    list.reduce((sum, s) => ({ costUSD: sum.costUSD + s.costUSD, seconds: sum.seconds + s.seconds }), { costUSD: 0, seconds: 0 })
+  const past = (budget: PoolBudget | undefined, used: PoolSpend, whose: string): string | null => {
+    if (budget?.costUSD !== undefined && used.costUSD >= budget.costUSD) return `${whose} budget of $${budget.costUSD} is spent`
+    if (budget?.hours !== undefined && used.seconds >= budget.hours * 3600) return `${whose} budget of ${budget.hours} h is used up`
+    return null
+  }
+  const all = [...spend.values()]
+  return (
+    past(memberBudget(budgets, account), total(all.filter(s => s.account === account)), "This member's") ??
+    past(budgets.pool, total(all), "The pool's")
+  )
 }

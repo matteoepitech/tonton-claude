@@ -78,7 +78,29 @@ struct PoolSessionOrder: Codable, Equatable {
     var autoStart: Bool? = nil
 }
 
+/// From a machine owner's app to its session's agent: apply these pool rules, exactly these, in this session.
+struct PoolRulesAcceptance: Codable, Equatable {
+    let poolId: String
+    let sessionId: String
+    /// The revision of the proposal that was accepted.
+    let rev: Int
+    let rules: [PermissionRule]
+    let issuedAt: String
+}
+
 extension SessionVault {
+    /// The pool rules the machine owner accepts for one of its sessions: only that session's agent opens it, and it
+    /// applies these rules, not whatever the pool proposes later.
+    public func sealPoolRulesAcceptance(
+        poolId: String, sessionId: String, rev: Int, rules: [PermissionRule], issuedAt: Date = Date()
+    )
+        throws -> String
+    {
+        let acceptance = PoolRulesAcceptance(
+            poolId: poolId, sessionId: sessionId, rev: rev, rules: rules, issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+        return try E2E.seal(acceptance, with: key)
+    }
+
     /// The member's copy of the pool key, for the relay to keep.
     public func sealPoolKeyGrant(poolId: String, key poolKey: String, version: Int) throws -> String {
         try E2E.seal(PoolKeyGrant(poolId: poolId, key: poolKey, version: version), with: key)
@@ -187,6 +209,43 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
     /// `session` events: `claude` or `opencode`, and the model, as the session's agent last posted them.
     public var tool: String?
     public var model: String?
+    /// `spend` events: what the session spent since it joined the pool.
+    public var costUSD: Double?
+    public var seconds: Double?
+}
+
+/// Auto-approve rules proposed to the pool's sessions. They apply only where a machine owner accepted them.
+public struct PoolRules: Codable, Equatable, Sendable {
+    public var rules: [PermissionRule]
+    public var note: String?
+
+    public init(rules: [PermissionRule], note: String? = nil) {
+        self.rules = rules
+        self.note = note
+    }
+}
+
+/// A spending cap: cost at list price, time Claude worked. Nil: no cap.
+public struct PoolBudget: Codable, Equatable, Sendable {
+    public var costUSD: Double?
+    public var hours: Double?
+
+    public init(costUSD: Double? = nil, hours: Double? = nil) {
+        self.costUSD = costUSD
+        self.hours = hours
+    }
+}
+
+public struct PoolBudgets: Codable, Equatable, Sendable {
+    public var pool: PoolBudget?
+    /// Each member, all its sessions together, unless `members` names it.
+    public var member: PoolBudget?
+    /// One member, by account.
+    public var members: [String: PoolBudget]?
+
+    public init(pool: PoolBudget? = nil, member: PoolBudget? = nil, members: [String: PoolBudget]? = nil) {
+        (self.pool, self.member, self.members) = (pool, member, members)
+    }
 }
 
 /// Seals with the latest pool key it holds and opens with whichever version sealed a blob. What another member sealed
@@ -279,6 +338,8 @@ public struct PoolSessionWire: Codable, Equatable, Sendable {
     public let profile: String?
     public let online: Bool
     public let ready: Bool
+    /// The revision of the pool rules its owner accepted for it, 0 for none. Nil from older relays.
+    public let accepted: Int?
 }
 
 /// A task, the notes, a message or an event: who wrote it, when, and the sealed blob.
@@ -296,6 +357,22 @@ public struct PoolItemWire: Codable, Equatable, Sendable {
     public let blob: String
 }
 
+/// A line of the pool's audit log, which the relay writes in clear: who did what, to whom, when.
+public struct PoolAuditWire: Codable, Equatable, Sendable {
+    public struct Target: Codable, Equatable, Sendable {
+        public let account: String?
+        public let session: String?
+    }
+    public let seq: Int
+    public let ts: String
+    public let account: String
+    public let session: String?
+    /// `paused`, `stopped`, `kicked`, `rules_accepted`… (shared/pool-protocol.ts).
+    public let action: String
+    public let target: Target?
+    public let rev: Int?
+}
+
 public struct PoolSnapshot: Codable, Equatable, Sendable {
     public let id: String
     public let createdAt: String
@@ -310,6 +387,10 @@ public struct PoolSnapshot: Codable, Equatable, Sendable {
     public let events: [PoolItemWire]
     /// For the account it was sent to: its private key and the pool keys wrapped for it.
     public let own: PoolOwnKeys?
+    /// The proposed rules and the budgets, sealed `PoolRules` and `PoolBudgets`. Nil from older relays.
+    public let rules: PoolItemWire?
+    public let budgets: PoolItemWire?
+    public let audit: [PoolAuditWire]?
 }
 
 /// The pool messages of the relay, on the app's socket (`RelayMessage.pool`).
@@ -328,11 +409,15 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
     case key(poolId: String, PoolKeyWrapWire)
     /// A change sent over an older revision was refused: the current one, if any.
     case conflict(poolId: String, kind: String, id: String?, current: PoolItemWire?)
+    case rules(poolId: String, PoolItemWire)
+    case budgets(poolId: String, PoolItemWire)
+    case audit(poolId: String, PoolAuditWire)
     case removed(poolId: String)
     case error(poolId: String, message: String)
 
     private enum Keys: String, CodingKey {
         case t, pool, poolId, task, notes, message, event, info, paused, keyVersion, member, account, session, kind, id, current, wrap
+        case rules, budgets, entry
     }
 
     public init(from decoder: Decoder) throws {
@@ -361,6 +446,9 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
                 poolId: poolId, kind: try value(.kind), id: try container.decodeIfPresent(String.self, forKey: .id),
                 current: try container.decodeIfPresent(PoolItemWire.self, forKey: .current))
         case "pool_key": self = .key(poolId: poolId, try value(.wrap))
+        case "pool_rules": self = .rules(poolId: poolId, try value(.rules))
+        case "pool_budgets": self = .budgets(poolId: poolId, try value(.budgets))
+        case "pool_audit": self = .audit(poolId: poolId, try value(.entry))
         case "pool_removed": self = .removed(poolId: poolId)
         case "pool_error": self = .error(poolId: poolId, message: try value(.message))
         default: throw DecodingError.dataCorruptedError(forKey: .t, in: container, debugDescription: "unknown pool message \(t)")

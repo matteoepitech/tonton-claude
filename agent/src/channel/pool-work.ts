@@ -123,6 +123,8 @@ export class PoolWork {
   private readonly described = new Map<string, string>()
   private sent: number[] = []
   private active = false
+  /** Budgets and spending (agent/src/channel/pool-safety.ts): past a budget, the session takes no more tasks. */
+  private safety: { blocked(poolId: string): string | null; status(poolId: string): Record<string, unknown> | undefined } | null = null
 
   constructor(
     private readonly pools: SessionPools,
@@ -135,6 +137,10 @@ export class PoolWork {
     private readonly toolsChanged: () => void = () => {},
   ) {
     pools.onChange(poolId => this.changed(poolId))
+  }
+
+  useSafety(safety: NonNullable<PoolWork['safety']>) {
+    this.safety = safety
   }
 
   /** The tools, while the session is in a pool. */
@@ -215,6 +221,7 @@ export class PoolWork {
         id: state.id,
         goal: state.info?.goal,
         paused: state.paused || undefined,
+        budget: this.safety?.status(state.id),
         tasks: counts,
         notesRevision: state.notes?.rev ?? 0,
         sessions,
@@ -252,6 +259,8 @@ export class PoolWork {
   // MARK: Changing
 
   private async claim(poolId: string, state: PoolState, me: PoolSession, args: Args): Promise<string> {
+    const blocked = this.safety?.blocked(poolId)
+    if (blocked) return `${blocked}: this session takes no more pool tasks.`
     const item = this.findTask(state, args.task)
     if (typeof item === 'string') return item
     const task = item.task as PoolTask
@@ -410,7 +419,8 @@ export class PoolWork {
       seen.tasks.set(item.id, mark)
       // A task that becomes this session's and is not started yet: delivered when it changes, and again after a restart.
       const assigned = task.assignee?.session === me.session && task.state === 'assigned'
-      if (assigned && before !== mark && !state.paused) this.deliver(this.taskEnvelope(state, item, this.pools.autoStart(poolId)))
+      if (assigned && before !== mark && !state.paused && !this.safety?.blocked(poolId))
+        this.deliver(this.taskEnvelope(state, item, this.pools.autoStart(poolId)))
     }
     if (first) return
     for (const message of state.messages) {

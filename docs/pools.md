@@ -88,6 +88,11 @@ sessions' agents). After a rotation, each member left gets `pool_key` with its o
 with the new key version. The kicked member gets `pool_removed`: its apps stop following the pool and its sessions'
 agents get `pool_left`. Its app sockets stay open, since they carry its own sessions.
 
+The safety messages on the app socket (see Control): `pool_pause`, `pool_stop`, `pool_rules`, `pool_budgets` from the
+owner and admins, `pool_accept_rules` from a machine owner for its own session. Members get `pool_info` (paused or not),
+`pool_rules`, `pool_budgets` and `pool_audit`; a session's agent also gets `pool_stop` and `pool_accept`. A snapshot
+carries the rules, the budgets and the latest 300 lines of the audit log, and each session's accepted revision.
+
 ## Keys
 
 - The owner's app (or the website) makes the pool key. It never reaches the relay.
@@ -158,12 +163,35 @@ Details:
 
 ## Control
 
-- Pool tasks go through the session's permission prompts and auto-approve rules like anything else. A pool can propose
-  rules; each machine owner accepts them or not.
-- The owner and admins can pause the pool (the relay stops forwarding tasks and messages), stop a session's work
-  (its agent interrupts the turn and leaves the pool) or stop everything. Every machine owner can leave at any time.
-- A budget per member and per pool (cost, time), counted by each agent from its own usage.
-- Every start, stop, join, kick, rotation and rule change goes to the events, for the audit log.
+Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safety.ts`, for Claude Code and OpenCode alike.
+
+- **Permissions stay with each machine owner.** A pool task or message reaches Claude like a message from the notch and
+  goes through the session's permission prompts and auto-approve rules like anything else. Nothing a member writes can
+  carry a verdict or a rule: those only come from the machine owner's own app, sealed with its account key.
+- **Pool rules.** The owner and admins propose auto-approve rules (`pool_rules`, a `PoolRules` sealed with the pool key,
+  with a revision). A proposal applies nowhere by itself. A machine owner accepts it for one of its sessions
+  (`pool_accept_rules`): its app seals a `PoolRulesAcceptance` with the account key, the rules copied in, for that session
+  and that pool. Only the machine owner may send it for its session, and only its session's agent gets it, again with
+  each join order. The agent applies exactly the accepted rules, never a later proposal, and drops them when the session
+  leaves the pool. Claude Code's PermissionRequest hook reads them from `~/.tonton/session-rules/<session>.pool.json`;
+  the OpenCode bridge keeps them in memory. Members see in clear which revision each session accepted.
+- **Pause.** The owner and admins pause and resume the pool (`pool_pause`). While it is paused, the relay sends tasks
+  and messages to the apps only, and takes no tasks, notes or messages from the sessions; they still post their
+  spending. On resume, every session's agent gets the pool again, with what was held back.
+- **Stop.** The owner and admins stop a session's pool work, or every session's (`pool_stop`); a member stops its own.
+  The relay tells the agent (`pool_stop`), which interrupts the turn (Escape in tmux for Claude Code, OpenCode's own
+  interrupt), and takes the session out of the pool. Without tmux, Claude Code's turn cannot be interrupted: the user is
+  told. Every machine owner can also take a session out (`pool_leave_session`) or leave the pool at any time.
+- **Budgets.** The owner and admins set `PoolBudgets` (`pool_budgets`, sealed): a cap for the pool, one for every member,
+  or one for a named member, in cost at list price and hours Claude worked. Each agent counts what its session spent
+  since it joined the pool, from its own meta (kept in `~/.tonton/pool-spend.json`, so a restart does not reset it), and
+  posts it as a sealed `spend` event. A member's cap counts all its sessions. Past a cap the session posts
+  `budget_reached` once, refuses `task_claim` and gets no new tasks; `pool_status` shows the spending and the caps.
+- **Audit log.** The relay writes a line, in clear, for what it enforces: `created`, `joined`, `left`, `kicked`, `role`,
+  `owner`, `rotated`, `invite_created`, `invite_revoked`, `session_joined`, `session_left`, `paused`, `resumed`,
+  `stopped`, `rules_proposed`, `rules_accepted`, `budgets_set`. Each line has who, when, the member or session it was
+  about, and the revision. It says nothing about what a task, a rule or a budget holds: those stay sealed. The latest
+  lines come with the snapshot, new ones as `pool_audit`; 5000 per pool are kept.
 
 ## The website
 
@@ -183,6 +211,8 @@ tokens and cost), notes, settings. It decrypts in the browser and keeps the same
 | Prompt injection between Claudes | Pool messages are marked as such and never count as the user. Permission prompts and rules stay with each machine owner. |
 | A leaked invite | Single use or short-lived, revocable; after it, rotate the key. |
 | A runaway pool | Budgets, pause, stop all, and each owner can leave. |
+| A rule slipped into a session | A proposal applies nowhere until the machine owner accepts it; the acceptance is sealed with its account key, for one session and one pool, the rules copied in. The relay can neither make one nor move one to another session. |
+| A relay that ignores a pause or a stop | It could keep forwarding; the agents trust the relay for pauses and stops, as they trust it for roles. The audit log shows what it claims to have enforced. |
 
 ## Versions
 
