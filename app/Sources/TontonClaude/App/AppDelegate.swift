@@ -29,6 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingLinks: [DeepLink] = []
     private var subscriptions = Set<AnyCancellable>()
 
+    /// Messages still held for Undo send go before the app quits, with a moment for the socket to send them.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard HeldMessages.shared.flush() else { return .terminateNow }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { sender.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
         MainMenu.install()
@@ -36,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppUpdater.shared.start()
         notch = NotchWindowController(store: store, settings: settings)
         MessageQueues.shared.attach(store)
+        HeldMessages.shared.attach(store)
+        // Messages held for Undo send go once the notch closes: their Undo button is gone with it.
+        notch?.state.$mode.filter { $0 == .collapsed }.sink { _ in HeldMessages.shared.flush() }.store(in: &subscriptions)
         webhooks = WebhookNotifier(store: store, settings: settings)
         widgets = WidgetPublisher(store: store, settings: settings)
         dailySummary = DailySummaryNotifier(store: store, settings: settings)
@@ -132,17 +142,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
-    /// Clicking a notification opens the notch on its session, or shows the update it announces.
+    /// Clicking a notification opens the notch on its session, or shows the update it announces; the buttons of a
+    /// permission request answer it.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let isUpdate = response.notification.request.identifier == AppUpdater.notificationId
-        let sessionId = response.notification.request.content.userInfo["sessionId"] as? String
+        let userInfo = response.notification.request.content.userInfo.reduce(into: [String: String]()) { fields, field in
+            if let key = field.key as? String, let value = field.value as? String { fields[key] = value }
+        }
+        let action = response.actionIdentifier
         Task { @MainActor in
             guard !isUpdate else { return AppUpdater.shared.checkForUpdates() }
-            if let sessionId { self.store.selectedId = sessionId }
-            self.notch?.expand()
+            PermissionNotifications.shared.handle(actionIdentifier: action, userInfo: userInfo, store: self.store) { sessionId in
+                if let sessionId { self.store.selectedId = sessionId }
+                self.notch?.expand()
+            }
         }
         completionHandler()
     }
