@@ -24,6 +24,8 @@ final class AppSettings: ObservableObject {
     /// Relay
     @Published var serverURL: String
     @Published var account: Account?
+    /// Every account signed in on this Mac, the connected one included (Settings › Relay).
+    @Published var accounts: AccountList
     /// Off: the app stays disconnected from the relay.
     @Published var connectionEnabled: Bool
 
@@ -61,6 +63,8 @@ final class AppSettings: ObservableObject {
     @Published var terminal: TerminalChoice
     /// Session ids, in the order they were pinned.
     @Published var pinnedSessions: [String]
+    /// The pins of the accounts not connected, by `AccountList.id`, until the user switches back.
+    @Published var parkedPins: [String: [String]]
     /// Folders sessions were started in from the notch, most recent first, per machine id.
     @Published var startFolders: [String: [String]]
 
@@ -131,7 +135,12 @@ final class AppSettings: ObservableObject {
         }
 
         serverURL = value("serverURL", Self.defaultRelay)
-        account = AccountStore.load()
+        let account = AccountStore.load()
+        self.account = account
+        var accounts = AccountStore.loadAll()
+        // The account of a version that kept only one.
+        if let account { accounts.save(account) }
+        self.accounts = accounts
         connectionEnabled = value("connectionEnabled", true)
         launchAtLogin = SMAppService.mainApp.status == .enabled
         showMenuBarIcon = value("showMenuBarIcon", false)
@@ -158,6 +167,7 @@ final class AppSettings: ObservableObject {
         editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
         terminal = choice("terminal", .terminal)
         pinnedSessions = value("pinnedSessions", [String]())
+        parkedPins = value("parkedPins", [String: [String]]())
         startFolders = value("startFolders", [String: [String]]())
         openOnHover = value("openOnHover", true)
         showActivityDots = value("showActivityDots", false)
@@ -212,6 +222,7 @@ final class AppSettings: ObservableObject {
         persist($editor.map(\.rawValue), "editor")
         persist($terminal.map(\.rawValue), "terminal")
         persist($pinnedSessions, "pinnedSessions")
+        persist($parkedPins, "parkedPins")
         persist($startFolders, "startFolders")
         persist($openOnHover, "openOnHover")
         persist($showActivityDots, "showActivityDots")
@@ -238,7 +249,13 @@ final class AppSettings: ObservableObject {
         persist($webhookIncludeNames, "webhookIncludeNames")
         persist($webhookIncludeLastMessage, "webhookIncludeLastMessage")
 
-        $account.dropFirst().sink { AccountStore.save($0) }.store(in: &subscriptions)
+        $account.dropFirst().sink { [weak self] account in
+            AccountStore.save(account)
+            // New keys of the connected account, or a new account: the list keeps them for the next switch.
+            if let account { self?.accounts.save(account) }
+        }
+        .store(in: &subscriptions)
+        $accounts.removeDuplicates().sink { AccountStore.saveAll($0) }.store(in: &subscriptions)
         $launchAtLogin.dropFirst().removeDuplicates().sink { Self.setLaunchAtLogin($0) }.store(in: &subscriptions)
         // Posted on the workspace's own center when the user turns Increase Contrast on or off.
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
@@ -265,13 +282,23 @@ final class AppSettings: ObservableObject {
 }
 
 /// The account lives in a file readable by the user only: Keychain access breaks on every rebuild of an ad-hoc signed app.
+/// `account.json` is the connected one, as older versions expect; each account signed in on this Mac also has a file of
+/// its own in `Accounts/`, so their keys stay apart.
 enum AccountStore {
-    private static var url: URL {
+    private static var directory: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let directory = support.appendingPathComponent("Tonton Claude")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        return directory.appendingPathComponent("account.json")
+        return directory
     }
+
+    private static var url: URL { directory.appendingPathComponent("account.json") }
+
+    private static var files: AccountFiles { AccountFiles(directory: directory.appendingPathComponent("Accounts")) }
+
+    static func loadAll() -> AccountList { files.load() }
+
+    static func saveAll(_ list: AccountList) { files.save(list) }
 
     static func load() -> Account? {
         try? JSONDecoder().decode(Account.self, from: Data(contentsOf: url))

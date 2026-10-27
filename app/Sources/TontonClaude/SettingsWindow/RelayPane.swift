@@ -5,15 +5,28 @@ import TontonCore
 struct RelayPane: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var store: SessionStore
+    /// Setting up another account while one is connected.
+    @State private var adding = false
 
     var body: some View {
-        if let account = settings.account { AccountView(account: account) } else { SetupView() }
+        Group {
+            if let account = settings.account, !adding {
+                // A new view per account: a revealed recovery key, an error or the shares must not carry over to the next.
+                AccountView(account: account) { adding = true }.id(AccountList.id(of: account))
+            } else {
+                SetupView(cancel: settings.account == nil ? nil : { adding = false })
+            }
+        }
+        // Created, restored or switched to: show it.
+        .onChange(of: settings.account) { adding = false }
     }
 }
 
 struct SetupView: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var store: SessionStore
+    /// Back to the connected account, when there is one.
+    var cancel: (() -> Void)?
     @State private var selfHosted = false
     @State private var customURL = ""
     @State private var recovery = ""
@@ -68,6 +81,19 @@ struct SetupView: View {
             if let error {
                 Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger).padding(.top, 12)
             }
+            // Signed out, with other accounts still on this Mac: one click gets back to one.
+            if cancel == nil && !settings.accounts.entries.isEmpty {
+                GroupLabel(text: "Accounts on this Mac")
+                AccountsCard()
+            }
+            if let cancel {
+                HStack {
+                    Spacer()
+                    // Once a request is out, its account is coming: cancelling then would only hide it.
+                    Button("Cancel", action: cancel).buttonStyle(ThemeButtonStyle()).disabled(busy)
+                }
+                .padding(.top, 20)
+            }
         }
     }
 
@@ -75,7 +101,13 @@ struct SetupView: View {
         busy = true
         error = nil
         Task {
-            do { try await work() } catch { self.error = error.localizedDescription }
+            do {
+                try await work()
+                // Back to the account, also when it was the one already connected (restored again).
+                cancel?()
+            } catch {
+                self.error = error.localizedDescription
+            }
             busy = false
         }
     }
@@ -110,6 +142,7 @@ struct RelayChoice: View {
 
 struct AccountView: View {
     let account: Account
+    let addAccount: () -> Void
     @EnvironmentObject var store: SessionStore
     @State private var reveal = false
     @State private var copied = false
@@ -149,6 +182,8 @@ struct AccountView: View {
                     Image(systemName: "lock.fill").font(.system(size: 12)).foregroundStyle(Theme.success)
                 }
             }
+            GroupLabel(text: "Accounts")
+            AccountsCard(add: addAccount)
             GroupLabel(text: "Recovery key")
             Card {
                 VStack(alignment: .leading, spacing: 10) {
