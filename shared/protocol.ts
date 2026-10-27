@@ -76,6 +76,16 @@ export interface SessionMeta {
   /** The model that last answered or that the session switched to, as Claude Code names it (`claude-opus-4-5-20251101`).
    * Missing from older agents, and until Claude Code reports it. */
   model?: string
+  /**
+   * The last turns that ended, oldest first, as Claude Code writes them in the transcript: the app counts the ones it
+   * didn't see end, while the Mac was away. Missing from older agents, and until a turn ends.
+   */
+  turns?: TurnTime[]
+}
+/** A turn of Claude, from the prompt to the answer: when it ended and how long it took. */
+export interface TurnTime {
+  end: string
+  seconds: number
 }
 export interface StatusDetail {
   text: string

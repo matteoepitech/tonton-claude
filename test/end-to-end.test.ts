@@ -301,6 +301,20 @@ describe('end to end', () => {
     expect(after?.model).toBe('claude-sonnet-5-5')
   })
 
+  test('the turns that ended reach the app in the meta, once each', async () => {
+    const turns = async () => {
+      const blob = latestSession(app)?.meta
+      return blob ? (await open<{ turns?: { end: string; seconds: number }[] }>(key, blob)).turns : undefined
+    }
+    const ended = (uuid: string, end: string, durationMs: number) =>
+      line({ type: 'system', subtype: 'turn_duration', uuid, durationMs, timestamp: end })
+    appendFileSync(transcript, ended('d1', '2026-10-26T21:00:00.000Z', 754_300) + ended('d1', '2026-10-26T21:00:00.000Z', 754_300))
+    for (let i = 0; i < 80 && !(await turns())?.length; i++) await Bun.sleep(50)
+    expect(await turns()).toEqual([{ end: '2026-10-26T21:00:00.000Z', seconds: 754.3 }])
+    // Sealed: the relay never sees the duration.
+    expect(app.raw.join('')).not.toContain('754.3')
+  })
+
   test('a message sent from the notch while Claude is working reaches the app from the queue', async () => {
     const before = app.messages.length
     const prompt = '<channel source="tonton" sender="notch">\nAlso run the linter\n</channel>'

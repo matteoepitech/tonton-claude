@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { seal } from '../../../shared/crypto'
-import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts } from '../../../shared/protocol'
+import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
@@ -9,6 +9,8 @@ import { SessionShares } from './shares'
 import { COMMANDS } from './terminal'
 
 const BACKLOG_SIZE = 400
+/** Turns that ended while the Mac was away: more than this many before it comes back, and the oldest go uncounted. */
+const KEPT_TURNS = 20
 /** On reconnect only the latest entries keep their images, the rest is sent as text. */
 const BACKLOG_IMAGES = 40
 /** How often the usage left by the status line is checked. */
@@ -33,6 +35,7 @@ export class Conversation {
   private windowFromStatusLine = false
   private usage: SessionUsage = {}
   private model: string | undefined
+  private turns: TurnTime[] = []
   /** Only a change of the status line's model counts, so a reading it left earlier never hides a newer response. */
   private statusLineModel: string | undefined
   private lastUsage: string | null = null
@@ -128,6 +131,12 @@ export class Conversation {
         this.model = parsed.model
         metaChanged = true
       }
+      // A transcript read again (replaced, or after a reset) brings back turns already kept.
+      const turn = parsed.turn
+      if (turn && !this.turns.some(kept => kept.end === turn.end)) {
+        this.turns = [...this.turns, turn].slice(-KEPT_TURNS)
+        metaChanged = true
+      }
       if (parsed.usage && !this.countedRequests.has(parsed.usage.requestId)) {
         this.countedRequests.add(parsed.usage.requestId)
         this.tokens = addTokens(this.tokens, parsed.usage)
@@ -214,6 +223,7 @@ export class Conversation {
       // Without tmux nothing can be typed: the notch offers no command.
       commands: this.link.tmux ? [...COMMANDS] : [],
       model: this.model,
+      turns: this.turns.length ? this.turns : undefined,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd()), title: this.title })

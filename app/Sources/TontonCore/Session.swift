@@ -82,6 +82,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let model: String?
     /// The coding agent running the session, as the agent reports it: `opencode`, or nil for Claude Code and older agents.
     public let tool: String?
+    /// The last turns that ended, as the agent read them in the transcript. Nil with older agents and before a turn ends.
+    public let turns: [Turn]?
 
     public init(
         id: String, machineId: String, machine: String, platform: String?, cwd: String, project: String, title: String?,
@@ -89,7 +91,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         statusText: String?, agentOnline: Bool, canChat: Bool, pendingPermissions: [PermissionRequest], costUSD: Double?,
         startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
         sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil, context: ContextUsage? = nil, terminal: Bool = false,
-        commands: Set<SessionCommandName>? = nil, model: String? = nil, tool: String? = nil
+        commands: Set<SessionCommandName>? = nil, model: String? = nil, tool: String? = nil, turns: [Turn]? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -116,6 +118,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.commands = commands ?? (terminal ? SessionCommandName.original : [])
         self.model = model
         self.tool = tool
+        self.turns = turns
     }
 
     /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the

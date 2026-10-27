@@ -45,7 +45,8 @@ public struct SessionVault: Sendable {
             // Commands a newer agent knows and this app does not are left out.
             commands: meta?.commands.map { Set($0.compactMap(SessionCommandName.init(rawValue:))) },
             model: meta?.model,
-            tool: info?.tool
+            tool: info?.tool,
+            turns: meta?.turns.map { $0.compactMap { turn in ISO8601.parse(turn.end).map { Turn(end: $0, seconds: turn.seconds) } } }
         )
     }
 
