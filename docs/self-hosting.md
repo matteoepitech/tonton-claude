@@ -186,6 +186,11 @@ crypto and relay client.
   - a permission request is an alert whose text is the same for every request ("A Claude Code session is waiting for
     your approval"), with the sealed request and the sealed session next to it. The app's notification service
     extension opens them on the phone and writes the real text: the project, the machine, the tool and its command.
+  - the alert has **Allow** and **Deny**, on the Lock Screen and on an Apple Watch it is mirrored to, which hands the tap
+    back to the iPhone app. The app, woken in the background, connects to the relay, checks the request still waits,
+    sends the verdict like the Mac does and waits for the relay to drop the request. When it cannot, an alert says so.
+    Allowing asks for the phone or the watch to be unlocked; alerts of requests answered elsewhere are removed once the
+    app hears of it. There is no watch app: the watch shows what the phone's notification extension wrote.
   - the Live Activity is pushed while the app is closed: at most every 10 seconds, at once when a session starts
     needing you. The relay ends it once nothing has run for 15 minutes, and starts the next one (iOS 17.2 and later)
     when a session starts working again.

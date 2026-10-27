@@ -77,6 +77,8 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
   sessions at work on the Lock Screen and in the Dynamic Island. It signs in with the recovery key: scan the QR code of
   **Settings › Machines › Phone or browser**, or paste the key. On a relay with an APNs key, permission requests come
   as notifications that only the phone can read, and the Live Activity keeps up while the app is closed. See [the details](docs/self-hosting.md#the-iphone-app).
+- **From your wrist.** A permission alert has **Allow** and **Deny**: press it on the iPhone's Lock Screen, or on an
+  Apple Watch, which shows the alerts of a locked iPhone. Allowing asks for the phone or the watch to be unlocked.
 - **No Mac? Windows and Linux have an island.** `TontonClaude-Setup-….exe` on Windows, the `.deb` or the AppImage on
   Linux, in the latest release, put the sessions in a small island at the top of the screen, above your windows: it
   opens on the conversations and the permission requests. Sign in with the recovery key, or create your account there;
