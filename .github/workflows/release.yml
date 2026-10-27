@@ -1,8 +1,8 @@
 name: Release
 
 # Push a tag like v0.4.0 to publish everything at that version: the macOS app (DMG, and the appcast.xml it updates
-# itself from when the update keys are set), the Windows island (installer), the agents and their install scripts, the
-# relay (executables, install script and Docker image) and a SHA256SUMS of the files.
+# itself from when the update keys are set), the island for Windows (installer) and Linux (AppImage, .deb), the agents
+# and their install scripts, the relay (executables, install script and Docker image) and a SHA256SUMS of the files.
 on:
   push:
     tags: ['v*']
@@ -150,6 +150,28 @@ jobs:
           name: island-windows
           path: desktop/out/*.exe
 
+  island-linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Build the island's AppImage and .deb, unsigned
+        run: |
+          bun scripts/build.ts
+          bun x electron-builder --linux --x64 --publish never --config.extraMetadata.version="${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: island-linux
+          path: |
+            desktop/out/*.AppImage
+            desktop/out/*.deb
+
   relay-image:
     runs-on: ubuntu-latest
     steps:
@@ -169,7 +191,7 @@ jobs:
             --tag "$IMAGE:$VERSION" --tag "$IMAGE:latest" .
 
   publish:
-    needs: [agents-and-relay, mac, island-windows, relay-image]
+    needs: [agents-and-relay, mac, island-windows, island-linux, relay-image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

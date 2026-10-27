@@ -77,10 +77,11 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
   sessions at work on the Lock Screen and in the Dynamic Island. It signs in with the recovery key: scan the QR code of
   **Settings › Machines › Phone or browser**, or paste the key. On a relay with an APNs key, permission requests come
   as notifications that only the phone can read, and the Live Activity keeps up while the app is closed. See [the details](docs/self-hosting.md#the-iphone-app).
-- **No Mac? Windows has an island.** `TontonClaude-Setup-….exe`, in the latest release, puts the sessions in a small
-  island at the top of the screen, above your windows: it opens on the conversations and the permission requests. Sign
-  in with the recovery key, or create your account there; its tray icon copies the install command for your machines.
-  The installer is not signed yet, so SmartScreen asks you to confirm it.
+- **No Mac? Windows and Linux have an island.** `TontonClaude-Setup-….exe` on Windows, the `.deb` or the AppImage on
+  Linux, in the latest release, put the sessions in a small island at the top of the screen, above your windows: it
+  opens on the conversations and the permission requests. Sign in with the recovery key, or create your account there;
+  its tray icon copies the install command for your machines. It works on GNOME and KDE, X11 and Wayland. The Windows
+  installer is not signed yet, so SmartScreen asks you to confirm it. See [the details](docs/self-hosting.md#the-island-for-windows-and-linux).
 - **Allow for this session.** A permission card also offers to allow calls like the one it asks for until the session
   ends: a command's first words (`npm test`, never what is chained after it), a site for web pages, any call of the other
   tools. The agent keeps the rule and drops it when the session ends.

@@ -100,6 +100,44 @@ jobs:
             desktop/out/screens/
           retention-days: 7
 
+  island-linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun test
+      - run: bun scripts/build.ts
+      - name: Run the island on X11, and in a GNOME session on Wayland, against a relay
+        run: |
+          sudo apt-get update -q && sudo apt-get install -yq --no-install-recommends mutter xwayland x11-utils xvfb
+          # Chromium's sandbox needs user namespaces, which Ubuntu 24.04 keeps for apps with an AppArmor profile (the .deb has one).
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo mkdir -p /tmp/.X11-unix && sudo chmod 1777 /tmp/.X11-unix
+          (cd .. && PORT=7799 TONTON_DATA_DIR="$RUNNER_TEMP/relay" bun relay/src/main.ts > "$RUNNER_TEMP/relay.log" 2>&1 &)
+          for _ in $(seq 30); do curl -sf http://127.0.0.1:7799/health && break; sleep 1; done
+          mkdir -p "$RUNNER_TEMP/smoke" && cp test/smoke/main.cjs test/smoke/package.json "$RUNNER_TEMP/smoke/" && cp -r dist "$RUNNER_TEMP/smoke/dist"
+          bun x electron --version
+          export TONTON_SMOKE_RELAY=http://127.0.0.1:7799 TONTON_SMOKE_OUT="$PWD/out/screens"
+          xvfb-run -a -s "-screen 0 1600x1000x24" node_modules/electron/dist/electron "$RUNNER_TEMP/smoke"
+          sh test/smoke/gnome-wayland.sh "$PWD/node_modules/electron/dist/electron" "$RUNNER_TEMP/smoke"
+      - name: Build the AppImage and the .deb, unsigned
+        run: bun x electron-builder --linux --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: island-linux
+          path: |
+            desktop/out/*.AppImage
+            desktop/out/*.deb
+            desktop/out/screens/
+          retention-days: 7
+
   windows-scripts:
     runs-on: windows-latest
     steps:

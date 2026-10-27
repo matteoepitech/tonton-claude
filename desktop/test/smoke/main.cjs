@@ -1,6 +1,8 @@
 // The built island on a real desktop, for CI's Windows and Linux runners: it starts at the top of the screen above other
 // windows, creates an account on the relay of TONTON_SMOKE_RELAY, connects, closes to its bar, and saves a picture of each
-// step in TONTON_SMOKE_OUT. Copy this folder next to a built dist/ and run `electron <that folder>`.
+// step in TONTON_SMOKE_OUT, with its log and its result (`<name>-result`: ok, or what failed). Copy this folder next to
+// a built dist/ and run `electron <that folder>`. On Wayland the island starts itself again through XWayland, so the
+// result file, not the exit code, says how it went.
 const { app, BrowserWindow, safeStorage, screen } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -12,6 +14,14 @@ require('./dist/main.cjs')
 
 const out = process.env.TONTON_SMOKE_OUT
 const relay = process.env.TONTON_SMOKE_RELAY
+const name = process.env.TONTON_SMOKE_NAME || process.platform
+
+function say(line) {
+  console.log(line)
+  if (!out) return
+  fs.mkdirSync(out, { recursive: true })
+  fs.appendFileSync(path.join(out, `${name}-smoke.log`), `${line}\n`)
+}
 
 async function eventually(read, label, ms = 20_000) {
   const end = Date.now() + ms
@@ -25,13 +35,13 @@ async function eventually(read, label, ms = 20_000) {
 
 function check(ok, label) {
   if (!ok) throw new Error(`failed: ${label}`)
-  console.log(`smoke: ${label}`)
+  say(`smoke: ${label}`)
 }
 
-async function shot(win, name) {
+async function shot(win, step) {
   if (!out) return
   fs.mkdirSync(out, { recursive: true })
-  fs.writeFileSync(path.join(out, `${process.platform}-${name}.png`), (await win.webContents.capturePage()).toPNG())
+  fs.writeFileSync(path.join(out, `${name}-${step}.png`), (await win.webContents.capturePage()).toPNG())
 }
 
 async function run() {
@@ -44,7 +54,7 @@ async function run() {
   const centered = bounds.y === area.y && Math.abs(bounds.x + bounds.width / 2 - (area.x + area.width / 2)) <= 1
   check(centered, `at the top of the work area ${JSON.stringify(area)}: ${JSON.stringify(bounds)}`)
   const keyring = safeStorage.isEncryptionAvailable()
-  console.log(`smoke: keyring ${keyring ? 'available' : 'unavailable'}`)
+  say(`smoke: keyring ${keyring ? 'available' : 'unavailable'}`)
   await shot(win, 'sign-in')
   if (!relay) return
   await js(`
@@ -67,15 +77,20 @@ async function run() {
   await shot(win, 'closed')
 }
 
+function finish(result, code) {
+  if (out) fs.writeFileSync(path.join(out, `${name}-result`), result)
+  app.exit(code)
+}
+
 app.whenReady().then(() =>
   run().then(
     () => {
-      console.log('smoke: ok')
-      app.exit(0)
+      say('smoke: ok')
+      finish('ok', 0)
     },
     error => {
-      console.error(`smoke: ${error.stack ?? error}`)
-      app.exit(1)
+      say(`smoke: ${error.stack ?? error}`)
+      finish(String(error.message ?? error), 1)
     },
   ),
 )

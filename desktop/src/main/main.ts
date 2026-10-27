@@ -23,6 +23,7 @@ import { encodeRecoveryKey, parseRecoveryKey, type RecoveredAccount } from '../.
 import { CHANNELS, type IslandAccount, type SignInResult } from '../bridge'
 import { AccountStore, type Keyring } from './account-store'
 import { IslandWindow } from './island-window'
+import { relaunchesInXWayland } from './linux'
 import { loginItem } from './login-item'
 import { menuTemplate } from './menu'
 import { createAccount, installCommand, joinSecret, machineToken, RelayError, verifyAccount } from './relay-api'
@@ -31,6 +32,10 @@ import { authorizeRelaySocket } from './relay-auth'
 // Tests and development runs keep their account apart from the installed island's.
 if (process.env.TONTON_ISLAND_HOME) app.setPath('userData', process.env.TONTON_ISLAND_HOME)
 if (process.platform === 'win32') app.setAppUserModelId('tech.d3l.tontonclaude.island')
+// On GNOME and KDE Wayland, only an XWayland window can stay on top at the top of the screen. Chromium picks its platform
+// before this script runs, so the island starts again with the switch (from the AppImage file, which the first run's exit
+// unmounts).
+const toXWayland = process.platform === 'linux' && relaunchesInXWayland(process.env, app.commandLine.getSwitchValue('ozone-platform'))
 
 /** Long enough for any recovery key or relay address, short enough to refuse junk. */
 const MAX_INPUT = 8192
@@ -42,7 +47,10 @@ let account: RecoveredAccount | null = null
 let remembered = false
 let store: AccountStore
 
-if (app.requestSingleInstanceLock()) {
+if (toXWayland) {
+  app.relaunch({ execPath: process.env.APPIMAGE, args: [...process.argv.slice(1), '--ozone-platform=x11'] })
+  app.exit(0)
+} else if (app.requestSingleInstanceLock()) {
   // Opening the app again shows the island: the way back when there is no tray to click.
   app.on('second-instance', () => {
     if (island && !island.visible) island.toggle()

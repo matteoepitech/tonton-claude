@@ -20,7 +20,7 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 | `app/` | The macOS app living in the notch (SwiftUI), plus its settings window. |
 | `shared/` | The client core shared by the agent, the relay and the clients: wire protocol, AES-256-GCM sealing with WebCrypto, account token, session models. It runs in browsers. |
 | `web/` | The web app, one HTML file. Its views (`web/views.ts`) also make up the island. |
-| `desktop/` | The island for Windows: an Electron window at the top of the screen, a tray icon, the account in the system's keyring. |
+| `desktop/` | The island for Windows and Linux: an Electron window at the top of the screen, a tray icon, the account in the system's keyring. |
 | `scripts/` | Builds, and the install scripts published with each release. |
 
 ## Security model
@@ -195,26 +195,42 @@ crypto and relay client.
 - A relay without an APNs key answers `{ "enabled": false }` and keeps nothing; older relays answer 404. The app then
   works while it is open, and its Live Activity says it may be out of date after 15 minutes.
 
-## The Windows island
+## The island for Windows and Linux
 
-`TontonClaude-Setup-<version>.exe`, published with each release, puts the sessions in a small island at the top of the
-screen, above other windows: a bar that says what the sessions do, which opens on their list, a conversation and its
-permission requests. It is the web app's views in an Electron window (`desktop/`), with a tray icon.
+Each release publishes the island for Windows (`TontonClaude-Setup-<version>.exe`) and for Linux
+(`TontonClaude-<version>-x86_64.AppImage` and `TontonClaude-<version>-amd64.deb`). It puts the sessions in a small island
+at the top of the screen, above other windows: a bar that says what the sessions do, which opens on their list, a
+conversation and its permission requests. It is the web app's views in an Electron window (`desktop/`), with a tray icon.
 
 - **Signing in.** Paste the recovery key of an account (Settings › Relay in the Mac app), or create an account on the
   hosted relay or on yours: the island then makes the end-to-end key itself, and its menu (the tray icon, or ⋯ in the
   island) copies the install command for machines and the recovery key. No Mac needed.
-- **Where the account is kept.** With **Remember on this computer**, the recovery key is encrypted with Windows' DPAPI
-  (Electron's `safeStorage`) in `%APPDATA%\Tonton Claude\account`. Without it, nothing is written and the island
-  forgets the account when it quits.
+- **Where the account is kept.** With **Remember on this computer**, the recovery key is encrypted by the system's keyring
+  (Electron's `safeStorage`: DPAPI on Windows, the Secret Service of GNOME or KWallet on Linux) in the app's data folder
+  (`%APPDATA%\Tonton Claude\account`, `~/.config/Tonton Claude/account`). Without a keyring, or unticked, nothing is
+  written and the island forgets the account when it quits.
 - **The token stays out of the page.** The main process adds the account's token to the page's socket as an
   `Authorization` header, so it works with every relay, and refuses sockets to anything else. The page gets the relay's
   address and the end-to-end key, imports the key as a `CryptoKey` it cannot read back, and decrypts like the web app.
 - **The page** has the web app's Content-Security-Policy, runs sandboxed without Node, never navigates, and opens links
   in the browser. It asks for no permission (camera, notifications…).
-- **Start at login** is in the menu, off by default.
+- **Start at login** is in the menu, off by default: the Run key on Windows, `~/.config/autostart` on Linux.
 
-The installer is not signed: Windows SmartScreen warns about it until the project has a code-signing certificate.
+On Linux:
+
+- **GNOME and KDE on Wayland** let no app place its window or keep it above the others. The island starts itself again
+  through XWayland, which both run, and is an X11 window there: at the top center of the screen, above the other
+  windows, out of the taskbar and the window switcher. Where there is no XWayland, or with `TONTON_ISLAND_WAYLAND=1`, it
+  is a plain Wayland window that the compositor places. X11 sessions need nothing.
+- **The tray icon** is a StatusNotifierItem: KDE shows it, and GNOME with the AppIndicator extension (on by default in
+  Ubuntu). Its menu shows and hides the island. Without it, the island's ⋯ button has the same menu, and opening the app
+  again shows a hidden island.
+- **Ubuntu 24.04 and later** only let installed apps with an AppArmor profile use the sandbox Chromium needs: take the
+  `.deb`, which installs one. The AppImage there needs `--no-sandbox`, or the system setting
+  `kernel.apparmor_restrict_unprivileged_userns=0`.
+
+The packages are not signed: Windows SmartScreen warns about the installer until the project has a code-signing
+certificate.
 
 ## Running your own relay
 
@@ -309,6 +325,7 @@ cd app && ./scripts/build-app.sh --install    # the macOS app
 open ios/TontonClaude.xcodeproj                # the iPhone app: pick your team in Signing & Capabilities, then Run
 cd desktop && bun install && bun run start    # the island (TONTON_ISLAND_HOME=<dir> keeps its account apart)
 cd desktop && bun run package:windows         # its installer in desktop/out/, from any OS
+cd desktop && bun run package:linux           # its AppImage and .deb in desktop/out/
 ```
 
 The iPhone app also builds without signing, for the Simulator:
@@ -322,8 +339,8 @@ The macOS tray icon is a separate Swift program: `swiftc -O agent/tray/macos/mai
 ## Releasing
 
 Pushing a version tag publishes everything at that version: the app (DMG, and its update feed once the keys below are
-set), the Windows island (installer), the agents, their install scripts, the relay (executables, install script, Docker
-image) and a `SHA256SUMS`:
+set), the island for Windows (installer) and Linux (AppImage, .deb), the agents, their install scripts, the relay
+(executables, install script, Docker image) and a `SHA256SUMS`:
 
 ```sh
 git tag -s v0.4.0 -m "v0.4.0"

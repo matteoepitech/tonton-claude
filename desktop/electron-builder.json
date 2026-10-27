@@ -15,5 +15,14 @@
     "perMachine": false,
     "shortcutName": "Tonton Claude",
     "artifactName": "TontonClaude-Setup-${version}.${ext}"
+  },
+  "linux": {
+    "target": [{ "target": "AppImage", "arch": ["x64"] }, { "target": "deb", "arch": ["x64"] }],
+    "icon": "dist/icon.png",
+    "executableName": "tonton-claude",
+    "category": "Development",
+    "maintainer": "matteoepitech",
+    "synopsis": "Your Claude Code sessions at the top of the screen",
+    "artifactName": "TontonClaude-${version}-${arch}.${ext}"
   }
 }
