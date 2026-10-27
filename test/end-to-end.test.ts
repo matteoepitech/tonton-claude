@@ -321,6 +321,24 @@ describe('end to end', () => {
     expect(app.raw.join('')).not.toContain('754.3')
   })
 
+  test("a subagent's calls reach the app under its Task call, sealed", async () => {
+    const folder = join(transcript.replace(/\.jsonl$/, ''), 'subagents')
+    mkdirSync(folder, { recursive: true })
+    const before = app.messages.length
+    writeFileSync(join(folder, 'agent-e2e.meta.json'), JSON.stringify({ toolUseId: 'toolu_task_e2e' }))
+    const content = [{ type: 'tool_use', id: 'toolu_sub_e2e', name: 'Grep', input: { pattern: 'SECRET_PATTERN' } }]
+    writeFileSync(join(folder, 'agent-e2e.jsonl'), line({ type: 'assistant', uuid: 's1', isSidechain: true, message: { content } }))
+    const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'the subagent call')
+    if (live.t !== 'entries') throw new Error('unexpected message')
+    expect(await open(key, live.entries[0].blob)).toMatchObject({
+      kind: 'sub_tool',
+      parent: 'toolu_task_e2e',
+      name: 'Grep',
+      summary: 'SECRET_PATTERN',
+    })
+    expect(app.raw.join('')).not.toContain('SECRET_PATTERN')
+  })
+
   test('a message sent from the notch while Claude is working reaches the app from the queue', async () => {
     const before = app.messages.length
     const prompt = '<channel source="tonton" sender="notch">\nAlso run the linter\n</channel>'

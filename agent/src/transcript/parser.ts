@@ -10,7 +10,7 @@ const MAX_SUMMARY_CHARS = 300
 const MAX_EDIT_CHARS = 4000
 const MAX_EDITS = 20
 /** Internal tools that would only add noise to the conversation. */
-const HIDDEN_TOOLS = new Set(['ToolSearch'])
+const HIDDEN_TOOLS = new Set(['ToolSearch', 'SubagentHandback'])
 /** Wrapped user content that Claude Code adds and that should not appear as a message. */
 const INTERNAL_USER_TAGS = /^\s*<(local-command-stdout|local-command-caveat|command-message|system-reminder)/
 
@@ -75,7 +75,8 @@ interface TranscriptLine {
   attachment?: { type?: string; commandMode?: string; origin?: { kind?: string }; prompt?: string | Block[] }
 }
 
-export function parseLine(raw: string): ParsedLine {
+/** `sidechain` reads the lines of a subagent's transcript, which the session's own skips. */
+export function parseLine(raw: string, { sidechain = false }: { sidechain?: boolean } = {}): ParsedLine {
   const result: ParsedLine = { entries: [] }
   let line: TranscriptLine
   try {
@@ -83,7 +84,7 @@ export function parseLine(raw: string): ParsedLine {
   } catch {
     return result
   }
-  if (!line || typeof line !== 'object' || line.isSidechain) return result
+  if (!line || typeof line !== 'object' || (line.isSidechain && !sidechain)) return result
 
   if (line.type === 'ai-title' && typeof line.aiTitle === 'string') result.title = line.aiTitle
   if (line.type === 'cost-state' && typeof line.totalCostUSD === 'number') result.costUSD = line.totalCostUSD
