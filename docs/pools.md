@@ -167,11 +167,29 @@ Details:
 
 ## The website
 
-The relay serves a website at `/`, built on the client core like the web app: sign in with the recovery key, create a
-pool, invite with a link or a QR code, and watch it. Pages: pools, control center (members, machines, sessions, status,
-current task, limits, a graph of who talks to whom), task board, activity, leaderboard (tasks done, time, lines changed,
-tokens and cost), notes, settings. It decrypts in the browser and keeps the same Content-Security-Policy as
-`tonton-web.html`.
+The relay serves a website at `/`, built on the client core like the web app: sign in with the recovery key, then the
+**Pools** tab next to the sessions. It decrypts in the browser and keeps the relay's Content-Security-Policy.
+
+- Pools are on the relay's own website only: they take the relay's routes (`/api/pools…`) as well as its socket, and the
+  policy of `tonton-web.html` allows sockets only. Opened from disk, the page says where to go.
+- The list shows each pool's name, opened with the member's keys. **New pool** makes the pool and its key in the
+  browser; **Join** takes an invite pasted from a teammate (`tontonpool1.…`, for this relay only).
+- A pool's page has tabs, each a name and a function in `POOL_TABS` (`web/pools.ts`): **Tasks**, **Members**,
+  **Invites** (owner and admins) and **Settings**. The control center, the activity, the leaderboard and the notes come as
+  more tabs.
+- **Tasks** is the board: one column per state (to do, assigned, in progress, in review, done, blocked), live. A task
+  opens with its goal, criteria, area, assignee, dependencies, branch, summary and history (the `task_*` events each
+  change leaves). Members create, edit and move tasks; viewers read. A change over a revision someone else changed
+  meanwhile is refused by the relay: the board shows their version, marked "changed meanwhile".
+- **Members** lists the members and the pool's sessions (tool, machine, online or not). Roles change from a menu, by the
+  rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and says who could
+  not get the new one.
+- **Invites** makes an invite (uses, how long, which role) and shows its link and a QR code, drawn in the page
+  (`shared/qr.ts`, no dependency). Open invites are listed with **Revoke**.
+- Forms sit in a panel above the tab: live changes redraw the tab, never what is being typed.
+- What each role is offered comes from `shared/pool-board.ts`, and the page follows the pool through
+  `shared/pool-watch.ts`: the member's copy of the key, the wraps of later versions, a new snapshot after a rotation,
+  and its public key published again under the new version.
 
 ## Threats
 

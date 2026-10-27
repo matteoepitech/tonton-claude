@@ -158,6 +158,8 @@ builds them at the first visit.
   with nothing inline. The page opens sockets to that relay only, and no other site can show it in a frame.
 - The script and style have a hash in their names and are cached for good; the page itself is asked for again at each
   visit, so an updated relay serves its new version.
+- Here the page also has a **Pools** tab ([pools.md](pools.md)): pools take the relay's routes, which only a page from
+  the relay itself may call. `tonton-web.html` opened from disk shows the sessions and points to the relay for pools.
 - The key stays in the browser, as with `tonton-web.html`. But here the page's code comes from the relay: whoever runs
   the relay could serve a page that reads the key when you paste it. On your own relay that is you. On a relay you don't
   run, `tonton-web.html` from the release keeps its code away from the relay.
