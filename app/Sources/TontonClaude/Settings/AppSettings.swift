@@ -41,6 +41,8 @@ final class AppSettings: ObservableObject {
     @Published var showCosts: Bool
     /// AppleScript can always read the sessions; sending them messages needs this.
     @Published var scriptsCanSend: Bool
+    /// Conversations go to Settings › Archive when their session ends.
+    @Published var archiveFinished: Bool
     /// The release notes open once after each update.
     @Published var showWhatsNew: Bool
     /// The version whose notes were last shown, or that was installed fresh: "" before this setting existed.
@@ -173,6 +175,7 @@ final class AppSettings: ObservableObject {
         Theme.textSize = notchTextSize
         showCosts = value("showCosts", true)
         scriptsCanSend = value("scriptsCanSend", false)
+        archiveFinished = value("archiveFinished", false)
         showWhatsNew = value("showWhatsNew", true)
         whatsNewVersion = value("whatsNewVersion", "")
         dailyBudget = value("dailyBudget", 0)
@@ -240,6 +243,7 @@ final class AppSettings: ObservableObject {
         persist($notchTextSize.map(\.rawValue), "notchTextSize")
         persist($showCosts, "showCosts")
         persist($scriptsCanSend, "scriptsCanSend")
+        persist($archiveFinished, "archiveFinished")
         persist($showWhatsNew, "showWhatsNew")
         persist($whatsNewVersion, "whatsNewVersion")
         persist($dailyBudget, "dailyBudget")

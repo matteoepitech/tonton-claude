@@ -88,6 +88,10 @@ final class SessionStore: ObservableObject {
     private let openCodeWatcher = OpenCodeLocalWatcher()
     private var claudeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
     private var openCodeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
+    /// Finished conversations kept on this Mac (Settings › Archive).
+    let archive = ArchiveStore()
+    /// Relay sessions that ended while not followed: archived once their whole history has come.
+    private var archiveOnHistory: Set<String> = []
     /// Cost and tokens per day and the monthly recap, for Settings › Usage.
     private(set) lazy var usage = UsageRecorder(
         sessions: sessionsPublisher, tasks: taskDone.eraseToAnyPublisher(), entries: entriesPublisher, settings: settings)
@@ -110,6 +114,10 @@ final class SessionStore: ObservableObject {
         socket.onMessage = { [weak self] message in self?.handle(message) }
         socket.onLatency = { [weak self] latency in self?.latency = latency }
         // The join secret does not change the connection.
+        // Each account has its archive. `$account` sends the new account before `settings.account` holds it.
+        settings.$account.removeDuplicates { $0.map(AccountList.id(of:)) == $1.map(AccountList.id(of:)) }
+            .sink { [weak self] account in self?.archive.use(account: account) }
+            .store(in: &subscriptions)
         settings.$account.map { $0.map { [$0.relay, $0.token, $0.key] } }.removeDuplicates()
             .combineLatest(settings.$connectionEnabled)
             .dropFirst()
@@ -206,6 +214,9 @@ final class SessionStore: ObservableObject {
 
     func isOnThisMac(_ session: SessionSummary) -> Bool { thisMachines.contains(session.machineId) }
 
+    /// A session the relay reports, whose history it keeps.
+    func isRelaySession(_ sessionId: String) -> Bool { relaySessions.contains { $0.id == sessionId } }
+
     /// This Mac's sessions, whether they come from its agent or straight from its files.
     var thisMachines: Set<String> { Set([LocalSessions.machineId] + [thisMac].compactMap { $0 }) }
 
@@ -258,7 +269,13 @@ final class SessionStore: ObservableObject {
     private func socketStateChanged(_ state: ConnectionState) {
         connection = state
         if state != .connected { catchUp.cancel() }
-        if state == .connected { subscribe() }
+        if state == .connected {
+            subscribe()
+            // Histories asked for the archive before the connection dropped: asked again.
+            for sessionId in archiveOnHistory {
+                if let first = catchUp.fetch(sessionId, selected: selectedId) { subscribe(to: first) }
+            }
+        }
     }
 
     private func handle(_ message: RelayMessage) {
@@ -287,6 +304,9 @@ final class SessionStore: ObservableObject {
             if selectedId == sessionId { selectedId = preferredSelection() }
         case .history(let sessionId, let wireEntries):
             relayEntries[sessionId] = vault.entries(wireEntries)
+            if archiveOnHistory.remove(sessionId) != nil, let session = relaySessions.first(where: { $0.id == sessionId }) {
+                archive.add(session, entries: entries[sessionId] ?? [])
+            }
             if catchUp.isRunning { subscribe(to: catchUp.received(sessionId)) }
         case .entries(let sessionId, let wireEntries):
             relayEntries[sessionId, default: []].append(contentsOf: vault.entries(wireEntries))
@@ -335,6 +355,10 @@ final class SessionStore: ObservableObject {
 
     /// Alerts and sounds for a session that started needing the user, or finished working.
     private func notify(_ session: SessionSummary, previous: SessionSummary?) {
+        // Hidden machines have no alerts, but their conversations still go to the archive.
+        if session.status == .ended && previous != nil && previous?.status != .ended && settings.archiveFinished {
+            archiveConversation(session)
+        }
         guard !settings.hiddenMachines.contains(session.machine) else { return }
         let changed = previous?.status != session.status || previous?.pendingPermissions != session.pendingPermissions
         if session.status.needsAttention && changed { attention.send(session) }
@@ -342,6 +366,15 @@ final class SessionStore: ObservableObject {
         if !asked.isEmpty { permissionsAsked.send((session, asked)) }
         if previous?.status == .working && session.status == .idle { finished.send(session) }
         if let worked = workTimer.update(session, previous: previous?.status) { taskDone.send((session, worked)) }
+    }
+
+    /// Keeps the session's conversation in Settings › Archive. The app only follows the selected relay session: the
+    /// history of another one is fetched first, so the whole conversation is kept, not what was seen of it.
+    func archiveConversation(_ session: SessionSummary) {
+        let followed = session.id == selectedId || !relaySessions.contains { $0.id == session.id }
+        guard !followed, connection == .connected else { return archive.add(session, entries: entries[session.id] ?? []) }
+        archiveOnHistory.insert(session.id)
+        if let first = catchUp.fetch(session.id, selected: selectedId) { subscribe(to: first) }
     }
 
     private static func sorted(_ list: [SessionSummary]) -> [SessionSummary] {
@@ -730,6 +763,7 @@ final class SessionStore: ObservableObject {
     func deleteAccount() async throws {
         guard let account = settings.account else { return }
         try await api.deleteAccount(account)
+        archive.forget(account)
         // The one deleted, even if the user switched to another meanwhile.
         signOut(of: account)
     }
