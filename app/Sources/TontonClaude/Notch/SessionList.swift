@@ -58,6 +58,11 @@ struct SessionListView: View {
                                 if s.canChat {
                                     Toggle("Continue when the limit resets", isOn: autoContinue(s.id))
                                 }
+                                Menu("Sound when \(s.project) finishes") {
+                                    Toggle("Event sound", isOn: projectSound(s.project, nil))
+                                    Divider()
+                                    ForEach(SoundPlayer.names, id: \.self) { name in Toggle(name, isOn: projectSound(s.project, name)) }
+                                }
                                 if store.isOnThisMac(s) { LocalFolderActions(session: s, style: .menu) }
                                 Divider()
                                 Button("Remove from list") { store.dismiss(s.id) }
@@ -170,6 +175,16 @@ struct SessionListView: View {
         guard !tag.isEmpty else { return }
         settings.projectTags[project] = tag
         tagging = nil
+    }
+
+    /// Ticked for the project's sound, or for the event sound when it has none. Picking one plays it.
+    private func projectSound(_ project: String, _ name: String?) -> Binding<Bool> {
+        Binding(
+            get: { settings.projectSounds[project] == name },
+            set: { _ in
+                settings.projectSounds[project] = name
+                SoundPlayer.play(settings.sound(for: .finished, project: project))
+            })
     }
 
     private func autoContinue(_ sessionId: String) -> Binding<Bool> {
