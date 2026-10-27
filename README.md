@@ -72,7 +72,8 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **From a browser or a phone.** `tonton-web.html`, published with each release, shows your sessions in any browser:
   open it, paste the recovery key from **Settings › Relay** or scan the QR code of **Settings › Machines** with the
   phone's camera, and chat, answer requests and stop sessions from there.
-  It decrypts in the page, so the key never reaches the relay. It needs a relay from 0.8.0 or later.
+  It decrypts in the page, so the key never reaches the relay. It needs a relay from 0.8.0 or later, which also serves
+  it at its own address: open the relay's URL in a browser. See [the details](docs/self-hosting.md#the-web-app).
 - **On your iPhone.** The iPhone app in `ios/` shows the sessions, the conversations and the permission cards, with the
   sessions at work on the Lock Screen and in the Dynamic Island. It signs in with the recovery key: scan the QR code of
   **Settings › Machines › Phone or browser**, or paste the key. On a relay with an APNs key, permission requests come

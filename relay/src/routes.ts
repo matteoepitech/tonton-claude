@@ -7,6 +7,7 @@ import type { SocketData } from './hub'
 import { MAX_SHARE_HOURS } from './limits'
 import { renderMetrics } from './metrics'
 import { poolRoute } from './pool-routes'
+import { siteResponse } from './site'
 import { safeEqual, sha256 } from './tokens'
 import { isDeviceId, isPushToken, isSealed, isSessionId, isText, isVersion } from './validate'
 
@@ -27,7 +28,7 @@ export function createFetchHandler(ctx: RelayContext) {
     // update an enrolled machine (`irm <relay>/install.ps1 | iex`) keep working.
     if (path === '/install.sh' || path === '/install.ps1') return Response.redirect(`${RELEASES_URL}/latest/download${path}`, 302)
     if (path.startsWith('/dl/')) return Response.redirect(`${RELEASES_URL}/latest`, 302)
-    if (!path.startsWith('/api/') && !path.startsWith('/ws/')) return fail(404, 'not found')
+    if (!path.startsWith('/api/') && !path.startsWith('/ws/')) return (await siteResponse(req, path)) ?? fail(404, 'not found')
 
     const ip = clientIp(req, server, ctx.config.trustProxy)
     if (ctx.failedAuth.isBlocked(ip)) return fail(429, 'Too many failed attempts, try again later.')

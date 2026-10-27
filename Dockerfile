@@ -7,6 +7,8 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY shared shared
 COPY relay relay
+# The website it serves.
+COPY web web
 RUN arch=$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64) && \
     bun build --compile --minify --target=bun-linux-$arch --define=process.env.TONTON_VERSION=\"$VERSION\" \
       relay/src/main.ts --outfile /tonton-relay && \
