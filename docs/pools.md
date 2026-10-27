@@ -32,7 +32,8 @@ minutes costs more than one session doing everything. The orchestrator:
 A pool mixes Claude Code and OpenCode sessions, with nothing to change on either side. They are not equally capable:
 OpenCode sessions take the simpler, well-bounded tasks (tests, docs, small fixes, boilerplate, a page following an
 existing pattern), and Claude Code sessions take the features that need broad context. `pool_status` shows each
-session's coding tool and model for that. The machine owner can override it per session in its profile.
+session's coding tool and model for that, and the kind of task it takes (`takes`: `simple` or `large`). The machine owner
+picks it when the session joins; without a choice it follows the tool.
 
 ## What the relay keeps
 
@@ -43,7 +44,7 @@ session's coding tool and model for that. The machine owner can override it per 
 | Member keys | account id, key version | the pool key it joined with, and its P-256 private key, both sealed with that member's account key; its public key, sealed with each version of the pool key it saw |
 | Key wraps | account id, version, who made it | a later version of the pool key, wrapped for that member (see Keys) |
 | Invites | id, role, token hash, uses left, expiry | — |
-| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, orchestrator); the order, sealed with the account key |
+| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, tool, kind of task, orchestrator); the order, sealed with the account key |
 | Tasks | id, revision, updated at, who changed it last | goal, criteria, area, state, assignee, dependencies, branch, summary |
 | Notes | revision, updated at, who changed them last | the notes |
 | Messages | id, order, sender account and session, time | text, and who it is for (a session, an area or everyone) |
@@ -140,8 +141,10 @@ other members wrote cannot close that envelope or forge its attributes. The chan
 secrets outside the project, or acting on another repository.
 
 The machine owner chooses per session, in the join order sealed with the account key (`autoStart`): start pool tasks
-right away, or (the default) tell the user and wait until they agree. Until the notch has a button for it (#234), the
-user answers in the terminal or with a message from the notch.
+right away, or (the default) tell the user and wait until they agree. The notch shows such a task as a card in the
+session's conversation: **Accept** sends the session a message from its owner to claim it; **Refuse** puts the task back
+on the board (state `todo`, no assignee, a `refused` event) and tells the session to leave it. The user can also answer
+in the terminal.
 
 Details:
 
@@ -164,6 +167,15 @@ Details:
   (its agent interrupts the turn and leaves the pool) or stop everything. Every machine owner can leave at any time.
 - A budget per member and per pool (cost, time), counted by each agent from its own usage.
 - Every start, stop, join, kick, rotation and rule change goes to the events, for the audit log.
+
+## The notch
+
+The Mac app lists the account's pools when it connects and follows each one on its socket (`app/Sources/TontonClaude/Data/PoolStore.swift`,
+the logic in `TontonCore/PoolState.swift` and `PoolJoin.swift`). A session joins from its context menu or the pool
+button of its chat header: the pool, its area, what it knows, its repository folder, the kind of task it takes, and
+whether it starts pool tasks right away. Only sessions an agent serves join, from an agent of 0.8.0 or later. The row and
+the header show its role, and the pool button its task, its agent's state and the pool's latest messages for it, with a
+link to the pool on the website (`<relay>/#pool=<id>`) and a way to leave. Pools are made and joined on the website.
 
 ## The website
 

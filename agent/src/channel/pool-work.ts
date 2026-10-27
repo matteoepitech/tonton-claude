@@ -4,7 +4,7 @@
 // Claude like a message from the notch, marked as coming from the pool: other Claudes inform, they never stand for the
 // user. Planning and assigning (`plan_create`, `task_create`, `task_assign`) are the orchestrator's, in #221.
 
-import { newPoolItemId, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
+import { newPoolItemId, type PoolSession, type PoolState, type PoolTaskItem, poolTaskSize } from '../../../shared/pool'
 import type { PoolMessageBody, PoolTask, PoolTaskState, PoolUpdate } from '../../../shared/pool-protocol'
 import type { AgentMessage } from '../../../shared/protocol'
 import { log } from '../log'
@@ -26,7 +26,7 @@ export const POOL_TOOLS: PoolToolSpec[] = [
   {
     name: 'pool_status',
     description:
-      'The Tonton pool this session works in: its goal, every session with its member, area, coding tool and model, whether it is online, and what it works on.',
+      'The Tonton pool this session works in: its goal, every session with its member, area, coding tool and model, the kind of task it takes (simple or large), whether it is online, and what it works on.',
     params: { pool: POOL },
   },
   {
@@ -194,13 +194,16 @@ export class PoolWork {
       const task = state.tasks.find(
         item => item.task?.assignee?.session === session.session && item.task.state !== 'done' && item.task.state !== 'todo',
       )
+      const tool = described.get(key)?.tool ?? session.profile?.tool ?? 'claude'
       return {
         session: session.session,
         member: this.memberName(state, session.account),
         area: session.profile?.area,
         skills: session.profile?.skills,
-        tool: described.get(key)?.tool ?? session.profile?.tool ?? 'claude',
+        tool,
         model: described.get(key)?.model,
+        // What kind of task to give it, as its owner chose or by its tool.
+        takes: poolTaskSize(session.profile, tool),
         orchestrator: session.profile?.orchestrator === true || undefined,
         online: session.online,
         ready: session.ready,

@@ -72,6 +72,11 @@ struct SessionListView: View {
                                     Toggle("Continue when the limit resets", isOn: autoContinue(s.id))
                                 }
                                 SnoozeMenu(sessionId: s.id)
+                                // Opens the pool popover in the chat header, on this session.
+                                Button(PoolStore.shared.membership(of: s.id) == nil ? "Join pool…" : "Pool…") {
+                                    store.selectedId = s.id
+                                    state.poolOf = s.id
+                                }
                                 Menu("Sound when \(s.project) finishes") {
                                     Toggle("Event sound", isOn: projectSound(s.project, nil))
                                     Divider()
@@ -426,6 +431,7 @@ struct SessionRow: View {
                             .help(session.name == nil ? "" : "Renamed. Its project is \(session.project).")
                     }
                     NoteMark(sessionId: session.id)
+                    PoolMark(sessionId: session.id)
                     if let machine {
                         if let machineStyle { MachineBadge(style: machineStyle, size: 9).accessibilityHidden(true) }
                         Text(machine).font(.notch(10)).foregroundStyle(Theme.tertiary).lineLimit(1)
