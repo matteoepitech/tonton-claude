@@ -101,7 +101,9 @@ export function renderChat(chat: HTMLElement, current: ClientState, client: Rela
   }
   const messages = element('div')
   messages.className = 'messages'
-  if (!current.entries) messages.append(element('p', 'Loading the conversation…'))
+  if (!current.entries) messages.append(loading('Loading the conversation…'))
+  // The end of a long conversation shows first, the rest of it right after.
+  else if (current.loadingEarlier) messages.append(loading('Loading earlier messages…'))
   for (const item of chatItems(current.entries ?? [])) messages.append(message(item))
   const machine = current.machines.find(m => m.id === session.machineId)
   for (const request of session.pendingPermissions) messages.append(permission(session, request, machine, client))
@@ -281,7 +283,7 @@ export function renderShared(view: SharedView, status: HTMLElement, chat: HTMLEl
   header.className = 'chat-header'
   const messages = element('div')
   messages.className = 'messages'
-  if (!view.entries) messages.append(element('p', 'Loading the conversation…'))
+  if (!view.entries) messages.append(loading('Loading the conversation…'))
   for (const item of chatItems(view.entries ?? [])) messages.append(message(item))
   const children: HTMLElement[] = [header, messages]
   if (view.connection === 'ended') {
@@ -291,4 +293,11 @@ export function renderShared(view: SharedView, status: HTMLElement, chat: HTMLEl
   }
   chat.replaceChildren(...children)
   if (stickToBottom) messages.scrollTop = messages.scrollHeight
+}
+
+/** Says the conversation is on its way, with a spinner. */
+function loading(text: string): HTMLElement {
+  const note = element('p', element('i'), text)
+  note.className = 'loading'
+  return note
 }

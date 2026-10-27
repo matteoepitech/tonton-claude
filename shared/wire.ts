@@ -83,7 +83,7 @@ export function parseRelayMessage(raw: string): RelayToApp | null {
       const list = entries(m.entries)
       if (!isText(m.sessionId) || !list) return null
       return m.t === 'history'
-        ? { t: 'history', sessionId: m.sessionId, entries: list }
+        ? { t: 'history', sessionId: m.sessionId, entries: list, ...(m.partial === true ? { partial: true } : {}) }
         : { t: 'entries', sessionId: m.sessionId, entries: list, reset: m.reset === true }
     }
     case 'error':

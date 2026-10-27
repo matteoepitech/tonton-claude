@@ -378,7 +378,9 @@ export type RelayToApp =
   | { t: 'session'; session: SessionSummary }
   | { t: 'removed'; sessionId: string }
   | { t: 'machines'; machines: MachineSummary[] }
-  | { t: 'history'; sessionId: string; entries: SealedEntry[] }
+  // With `partial`, the latest entries only, sent first to an app that subscribed with `latestFirst`: the whole history
+  // follows in a second `history`.
+  | { t: 'history'; sessionId: string; entries: SealedEntry[]; partial?: boolean }
   | { t: 'entries'; sessionId: string; entries: SealedEntry[]; reset: boolean }
   | { t: 'error'; message: string }
   // `reason` when the relay could not ask the machine, `detail` when the agent tried and failed.
@@ -399,7 +401,8 @@ export type RelayToApp =
 
 // app -> relay
 export type AppMessage =
-  | { t: 'subscribe'; sessionId: string | null }
+  // `latestFirst`: send the latest entries at once, then the whole history (relays before it send the whole one only).
+  | { t: 'subscribe'; sessionId: string | null; latestFirst?: boolean }
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny'; rule?: Sealed }
   | { t: 'dismiss'; sessionId: string }

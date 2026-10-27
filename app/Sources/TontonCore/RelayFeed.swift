@@ -10,6 +10,8 @@ public struct RelayFeed: Sendable {
     public private(set) var lastError: String?
     /// Snapshots received so far: one comes with each new connection, so a count that grew means the feed is current.
     public private(set) var snapshots = 0
+    /// Sessions of which only the latest entries came yet: the rest of their history is on its way.
+    public private(set) var partial: Set<String> = []
     /// The sessions as the relay sent them, still sealed: the Live Activity carries them that way.
     private var wire: [String: WireSession] = [:]
 
@@ -38,6 +40,11 @@ public struct RelayFeed: Sendable {
             machines = vault.machines(wireMachines)
         case .history(let sessionId, let wireEntries):
             entries[sessionId] = vault.entries(wireEntries)
+            partial.remove(sessionId)
+        case .recentHistory(let sessionId, let wireEntries):
+            guard ConversationLoad.takesRecent(current: entries[sessionId], partial: partial.contains(sessionId)) else { return }
+            entries[sessionId] = vault.entries(wireEntries)
+            partial.insert(sessionId)
         case .entries(let sessionId, let wireEntries):
             let known = Set(entries[sessionId, default: []].map(\.id))
             entries[sessionId, default: []] += vault.entries(wireEntries).filter { !known.contains($0.id) }

@@ -1,8 +1,9 @@
 import Foundation
 
-/// The relay sends the history of the session the app subscribes to, one at a time. A search needs every conversation, so
-/// the app subscribes to each relay session it has no history for, one after the other, then back to the selected one.
-/// It works with every relay: it sends nothing new, and coming back brings the selected session's whole history again.
+/// The relay sends the history of the session a socket subscribes to, one at a time. A search needs every conversation,
+/// so the app subscribes to each relay session it has no history for, one after the other, on a socket of its own: the
+/// main one stays on the selected session and keeps getting its live entries. It works with every relay: it sends
+/// nothing new.
 public struct HistoryCatchUp: Equatable, Sendable {
     private var queue: [String] = []
     /// The session whose history is on its way.
@@ -39,7 +40,7 @@ public struct HistoryCatchUp: Equatable, Sendable {
         return nil
     }
 
-    /// A history arrived. Returns the next session to subscribe to, or nil when the app should go back to the selected one.
+    /// A history arrived. Returns the next session to subscribe to, or nil when the catch-up is done.
     public mutating func received(_ sessionId: String) -> String? {
         guard sessionId == waitingFor else { return waitingFor }
         return next()

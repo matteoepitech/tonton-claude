@@ -1,5 +1,5 @@
 import type { WebSocketHandler } from 'bun'
-import type { AgentMessage, AppMessage } from '../../shared/protocol'
+import type { AgentMessage, AppMessage, SealedEntry } from '../../shared/protocol'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
 import {
@@ -15,6 +15,8 @@ import {
   MAX_START_ORDER_BYTES,
   MAX_VIEWERS_PER_SHARE,
   MAX_WS_MESSAGE_BYTES,
+  RECENT_HISTORY_BYTES,
+  RECENT_HISTORY_ENTRIES,
 } from './limits'
 import { isLaunchId, isRequestId, isRequestToken, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
 
@@ -167,7 +169,11 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     case 'subscribe': {
       socket.data.sessionId = isSessionId(message.sessionId) ? message.sessionId : null
       const sessionId = socket.data.sessionId
-      if (sessionId) ctx.hub.send(socket, { t: 'history', sessionId, entries: ctx.sessions.history(accountId, sessionId) })
+      if (!sessionId) break
+      const history = ctx.sessions.history(accountId, sessionId)
+      const recent = message.latestFirst === true ? latestEntries(history) : null
+      if (recent) ctx.hub.send(socket, { t: 'history', sessionId, entries: recent, partial: true })
+      ctx.hub.send(socket, { t: 'history', sessionId, entries: history })
       break
     }
     case 'prompt':
@@ -292,6 +298,22 @@ const isShareOf = (ctx: RelayContext, accountId: string, sessionId: string, shar
 function onMachinePresence(ctx: RelayContext, socket: Socket) {
   if (socket.data.machineId) ctx.registry.touchMachine(socket.data.machineId)
   ctx.pushMachines(socket.data.accountId)
+}
+
+/**
+ * The end of a history, as much as fits in RECENT_HISTORY_ENTRIES and RECENT_HISTORY_BYTES. Null when the whole history
+ * fits anyway, or when not even its last entry does: then it goes in one message, as before.
+ */
+export function latestEntries(history: readonly SealedEntry[]): SealedEntry[] | null {
+  let bytes = 0
+  let start = history.length
+  while (start > 0 && history.length - start < RECENT_HISTORY_ENTRIES) {
+    const size = history[start - 1].blob.length
+    if (bytes + size > RECENT_HISTORY_BYTES) break
+    bytes += size
+    start--
+  }
+  return start === 0 || start === history.length ? null : history.slice(start)
 }
 
 function parse(raw: string | Buffer): unknown {

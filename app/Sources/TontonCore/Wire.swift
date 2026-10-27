@@ -48,6 +48,8 @@ public enum RelayMessage: Decodable, Sendable {
     case removed(sessionId: String)
     case machines([WireMachine])
     case history(sessionId: String, entries: [WireEntry])
+    /// The latest entries only, sent first to an app that subscribed with `latestFirst`: the whole `history` follows.
+    case recentHistory(sessionId: String, entries: [WireEntry])
     case entries(sessionId: String, entries: [WireEntry])
     case error(String)
     /// `reason` when the relay could not reach the agent, `detail` (sealed) when the agent tried and failed.
@@ -65,7 +67,7 @@ public enum RelayMessage: Decodable, Sendable {
 
     private enum Keys: String, CodingKey {
         case t, sessions, machines, session, sessionId, entries, message, machineId, ok, reason, detail, launchId, state
-        case requestId, logs, diagnosis
+        case requestId, logs, diagnosis, partial
     }
 
     public init(from decoder: Decoder) throws {
@@ -78,7 +80,10 @@ public enum RelayMessage: Decodable, Sendable {
         case "session": self = .session(try value(.session))
         case "removed": self = .removed(sessionId: try value(.sessionId))
         case "machines": self = .machines(try value(.machines))
-        case "history": self = .history(sessionId: try value(.sessionId), entries: try value(.entries))
+        case "history":
+            let (sessionId, entries): (String, [WireEntry]) = (try value(.sessionId), try value(.entries))
+            let partial = try container.decodeIfPresent(Bool.self, forKey: .partial) == true
+            self = partial ? .recentHistory(sessionId: sessionId, entries: entries) : .history(sessionId: sessionId, entries: entries)
         case "entries": self = .entries(sessionId: try value(.sessionId), entries: try value(.entries))
         case "error": self = .error(try value(.message))
         case "agent_update":

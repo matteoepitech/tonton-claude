@@ -29,6 +29,8 @@ export interface ClientState {
   selectedId: string | null
   /** The conversation of the selected session, null until its history arrives. */
   entries: Entry[] | null
+  /** Only its latest entries came yet: the rest of the history is on its way. */
+  loadingEarlier: boolean
   /** The last error the relay reported, such as a message a session could not take. */
   error: string | null
 }
@@ -39,7 +41,7 @@ export type ClientEvent =
   | { t: 'session'; session: Session }
   | { t: 'removed'; sessionId: string }
   | { t: 'machines'; machines: Machine[] }
-  | { t: 'history'; sessionId: string; entries: Entry[] }
+  | { t: 'history'; sessionId: string; entries: Entry[]; partial?: boolean }
   | { t: 'entries'; sessionId: string; entries: Entry[] }
   | { t: 'error'; message: string }
   | { t: 'agent_update'; machineId: string; ok: boolean; reason?: 'offline' | 'unsupported'; detail: string | null }
@@ -55,6 +57,7 @@ export const initialState: ClientState = {
   machines: [],
   selectedId: null,
   entries: null,
+  loadingEarlier: false,
   error: null,
 }
 
@@ -70,7 +73,12 @@ export async function openMessage(vault: Vault, message: RelayToApp, machines: r
     case 'machines':
       return { t: 'machines', machines: await vault.machines(message.machines) }
     case 'history':
-      return { t: 'history', sessionId: message.sessionId, entries: await vault.entries(message.entries) }
+      return {
+        t: 'history',
+        sessionId: message.sessionId,
+        entries: await vault.entries(message.entries),
+        ...(message.partial ? { partial: true } : {}),
+      }
     case 'entries':
       return { t: 'entries', sessionId: message.sessionId, entries: await vault.entries(message.entries) }
     case 'agent_update':
@@ -114,7 +122,10 @@ export function reduce(state: ClientState, event: ClientEvent): ClientState {
     case 'machines':
       return { ...state, machines: event.machines }
     case 'history':
-      return event.sessionId === state.selectedId ? { ...state, entries: event.entries } : state
+      if (event.sessionId !== state.selectedId) return state
+      // The end first, then the whole history: a late partial one never hides what already came.
+      if (event.partial && state.entries && !state.loadingEarlier) return state
+      return { ...state, entries: event.entries, loadingEarlier: event.partial === true }
     case 'entries':
       // Entries that come before the history are in it.
       if (event.sessionId !== state.selectedId || !state.entries) return state
@@ -191,8 +202,8 @@ export class RelayClient {
   /** Asks the relay for the session's conversation, and its new entries from then on. */
   select(sessionId: string | null) {
     if (sessionId === this.current.selectedId) return
-    this.set({ ...this.current, selectedId: sessionId, entries: null })
-    this.send({ t: 'subscribe', sessionId })
+    this.set({ ...this.current, selectedId: sessionId, entries: null, loadingEarlier: false })
+    this.send({ t: 'subscribe', sessionId, latestFirst: true })
   }
 
   /** False when the client is not connected: nothing was sent. */
@@ -296,7 +307,7 @@ export class RelayClient {
       // The snapshot comes first on every connection: the relay forgot what this socket watched.
       this.backoff = this.firstDelay
       this.set({ ...this.current, connection: 'connected' })
-      if (this.current.selectedId) this.send({ t: 'subscribe', sessionId: this.current.selectedId })
+      if (this.current.selectedId) this.send({ t: 'subscribe', sessionId: this.current.selectedId, latestFirst: true })
     }
     this.set(reduce(this.current, event))
     this.options.onEvent?.(event)
