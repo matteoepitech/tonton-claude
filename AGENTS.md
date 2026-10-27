@@ -105,8 +105,8 @@ repository's secrets.
   goes in `TontonCore`; views stay thin.
 - Writing (docs, UI strings, PRs): plain, short English sentences. User-facing names follow the app: Settings › Machines,
   **Update agent**, the notch.
-- No new dependency without a reason in the PR. The TypeScript side has two runtime dependencies; the app has one,
-  Sparkle, for its own updates, and `TontonCore` has none.
+- No new dependency without a reason in the PR. The agent has two runtime dependencies and the web app bundles one, jsQR,
+  its QR scanner. The app has one, Sparkle, for its own updates, and `TontonCore` has none.
 
 ## Tests
 

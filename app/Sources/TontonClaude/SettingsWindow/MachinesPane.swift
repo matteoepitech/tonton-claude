@@ -21,6 +21,8 @@ struct MachinesPane: View {
             }
         } else {
             TokenCard()
+            GroupLabel(text: "Phone or browser")
+            BrowserPairingCard()
             GroupLabel(text: "Machines")
             if store.machines.isEmpty {
                 Card {

@@ -130,6 +130,11 @@ Open it from disk, or put it on any static host: it has no server side.
 - It signs in with the account's recovery key (Settings › Relay in the Mac app). Its JSON holds the relay, the app's
   token and the end-to-end key. **Remember on this device** keeps the key in IndexedDB as a `CryptoKey` that cannot be
   exported, so no script can read it back.
+- **Scan the QR code** reads the same key with the camera: Settings › Machines › Phone or browser shows it as a QR code,
+  without the join secret, which the page does not use. The Mac shows it only when asked, for a minute at most, and
+  hides it as soon as its window is left. The page decodes the frames itself with [jsQR](https://github.com/cozmo/jsQR),
+  since Safari and Firefox have no `BarcodeDetector`: no frame leaves the page, and the camera stops once a code is read.
+  Browsers give the camera to pages on https, on localhost or opened from a file.
 - It decrypts and encrypts in the page with WebCrypto, like the Mac app with CryptoKit. The relay sees what it sees from
   the Mac app: ids, states, sizes and sealed blobs.
 - Browsers cannot set the `Authorization` header of a WebSocket. The page opens `/ws/app` with the subprotocols
