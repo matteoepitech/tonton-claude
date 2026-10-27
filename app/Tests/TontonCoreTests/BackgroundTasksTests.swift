@@ -6,6 +6,9 @@ import XCTest
 final class BackgroundTasksTests: XCTestCase {
     private let now = Date()
 
+    override func setUpWithError() throws { try Catalog.use("en") }
+    override func tearDown() { Catalog.reset() }
+
     private func line(_ content: Any, minutesAgo: Double = 1) throws -> String {
         let timestamp = ISO8601DateFormatter().string(from: now.addingTimeInterval(-minutesAgo * 60))
         let object: [String: Any] = ["type": "user", "timestamp": timestamp, "message": ["role": "user", "content": content]]
@@ -63,6 +66,7 @@ final class BackgroundTasksTests: XCTestCase {
         XCTAssertEqual(tasks.count(at: now), 2)
         XCTAssertEqual(tasks.waiting(at: now), "Waiting for 2 background tasks")
         try tasks.read(notification("bi8o5pw7k", "completed"), now: now)
+        XCTAssertEqual(tasks.waiting(at: now), "Waiting for 1 background task")
         try tasks.read(
             line([["type": "tool_result", "tool_use_id": "t", "content": "Successfully stopped task: ab249dac865b63e60"]]), now: now)
         XCTAssertEqual(tasks.count(at: now), 0)

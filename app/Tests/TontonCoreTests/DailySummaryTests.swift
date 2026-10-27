@@ -3,6 +3,9 @@ import XCTest
 @testable import TontonCore
 
 final class DailySummaryTests: XCTestCase {
+    override func setUpWithError() throws { try Catalog.use("en") }
+    override func tearDown() { Catalog.reset() }
+
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Europe/Paris") ?? .current
