@@ -16,6 +16,7 @@ struct ChatPanel: View {
     var body: some View {
         let entries = store.entries[session.id] ?? []
         let items = ChatItem.build(from: entries)
+        let steps = ChatItem.subagentSteps(in: entries)
         let delivered = entries.filter { $0.viaNotch == true }.count
         VStack(spacing: 0) {
             ChatHeader(session: session)
@@ -23,7 +24,7 @@ struct ChatPanel: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(items) { item in
-                            ChatItemView(item: item, sessionWorking: session.status == .working)
+                            ChatItemView(item: item, sessionWorking: session.status == .working, steps: steps)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.accent.opacity(item.id == highlighted ? 0.18 : 0)))
                         }
                         ForEach(Array(pendingTexts.enumerated()), id: \.offset) { _, text in

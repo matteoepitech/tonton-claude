@@ -26,6 +26,12 @@ export type Entry =
   | { id: string; ts: string; kind: 'tool'; toolUseId: string; name: string; summary: string; edits?: FileEdit[] }
   | { id: string; ts: string; kind: 'tool_result'; toolUseId: string; text: string; isError: boolean; images?: ImageData[] }
   | { id: string; ts: string; kind: 'system'; text: string }
+  /**
+   * A call made by a subagent, and its result: `parent` is the Task (Agent) call that started the subagent. New kinds
+   * rather than `tool` with a parent, so apps from before them drop these instead of showing them as the session's own.
+   */
+  | { id: string; ts: string; kind: 'sub_tool'; parent: string; toolUseId: string; name: string; summary: string }
+  | { id: string; ts: string; kind: 'sub_result'; parent: string; toolUseId: string; text: string; isError: boolean }
 
 // Plaintext payloads, sealed before leaving the machine.
 export interface SessionInfo {

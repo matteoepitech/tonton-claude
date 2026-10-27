@@ -5,6 +5,8 @@ import TontonCore
 struct ChatItemView: View {
     let item: ChatItem
     let sessionWorking: Bool
+    /// The calls of the subagents, by the Task call that started them.
+    var steps: [String: [(call: Entry, result: Entry?)]] = [:]
 
     var body: some View {
         switch item {
@@ -13,7 +15,9 @@ struct ChatItemView: View {
         case .assistant(let e):
             MarkdownText(text: e.text ?? "").frame(maxWidth: .infinity, alignment: .leading)
         case .tool(let call, let result):
-            ToolRow(call: call, result: result, running: result == nil && sessionWorking)
+            ToolRow(
+                call: call, result: result, running: result == nil && sessionWorking,
+                steps: call.toolUseId.flatMap { steps[$0] } ?? [])
         case .system(let e):
             Text(e.text ?? "")
                 .font(.notch(10))
@@ -85,8 +89,11 @@ struct ToolRow: View {
     let call: Entry
     let result: Entry?
     let running: Bool
+    /// What a Task call's subagent did, folded under it until opened.
+    var steps: [(call: Entry, result: Entry?)] = []
     @EnvironmentObject var settings: AppSettings
     @State private var open = false
+    @State private var showSteps = false
 
     private var icon: String {
         switch call.name ?? "" {
@@ -130,6 +137,7 @@ struct ToolRow: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { if result != nil { open.toggle() } }
+            if !steps.isEmpty { subagentSteps }
             if let edits = call.edits, !edits.isEmpty { EditDiff(edits: edits, path: call.summary) }
             if open, let result {
                 if let imgs = result.images, !imgs.isEmpty { ImageStrip(images: imgs) }
@@ -148,5 +156,42 @@ struct ToolRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
+    }
+}
+
+extension ToolRow {
+    /// The subagent's calls: a count to open, then one line each, the last one still running while the task does.
+    var subagentSteps: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) { showSteps.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: showSteps ? "chevron.down" : "chevron.right").font(.system(size: 8, weight: .bold))
+                    Text("\(steps.count) call\(steps.count == 1 ? "" : "s") by the subagent").font(.system(size: 10))
+                }
+                .foregroundStyle(Theme.secondary)
+            }
+            .buttonStyle(.plain)
+            if showSteps {
+                ForEach(steps, id: \.call.id) { step in
+                    HStack(spacing: 6) {
+                        Text(step.call.name ?? "?").font(.system(size: 10, weight: .semibold))
+                        Text(step.call.summary ?? "")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(Theme.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 4)
+                        if step.result?.isError == true {
+                            Image(systemName: "xmark.circle.fill").font(.system(size: 9)).foregroundStyle(.red)
+                        } else if step.result == nil && running {
+                            ProgressView().controlSize(.mini)
+                        }
+                    }
+                    .padding(.leading, 12)
+                }
+            }
+        }
     }
 }

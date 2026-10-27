@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 import { seal } from '../../../shared/crypto'
 import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
 import { type ParsedLine, parseLine } from '../transcript/parser'
+import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import type { SessionLink } from './session-link'
@@ -9,6 +10,8 @@ import { SessionShares } from './shares'
 import { COMMANDS } from './terminal'
 
 const BACKLOG_SIZE = 400
+/** Subagents' calls are kept apart, so a busy one can't push the conversation itself out of the backlog. */
+const SUBAGENT_BACKLOG_SIZE = 300
 /** Turns that ended while the Mac was away: more than this many before it comes back, and the oldest go uncounted. */
 const KEPT_TURNS = 20
 /** On reconnect only the latest entries keep their images, the rest is sent as text. */
@@ -42,6 +45,8 @@ export class Conversation {
   private usageTimer: Timer | null = null
   private readonly pending = new Map<string, PendingPermission>()
   private readonly tailer: Tailer | null
+  private readonly subagents: Subagents | null
+  private subEntries: Entry[] = []
   /** Read-only shares of this session: each gets its own sealed copy. */
   readonly shares: SessionShares
 
@@ -69,16 +74,19 @@ export class Conversation {
           },
         })
       : null
+    this.subagents = link.transcriptPath ? new Subagents(link.transcriptPath, entries => this.onSubEntries(entries)) : null
   }
 
   start() {
     if (this.tailer) this.tailer.start()
     else this.announce()
+    this.subagents?.start()
     this.usageTimer = setInterval(() => this.readUsage(), USAGE_POLL_MS)
   }
 
   stop() {
     this.tailer?.stop()
+    this.subagents?.stop()
     if (this.usageTimer) clearInterval(this.usageTimer)
   }
 
@@ -86,12 +94,21 @@ export class Conversation {
   announce() {
     const { sessionId } = this.link
     const cwd = this.cwd()
-    const backlog = withoutOldImages(this.entries)
+    const backlog = [...withoutOldImages(this.entries), ...this.subEntries]
     const info = { machine: this.machine, platform: process.platform, cwd, project: projectOf(cwd) }
     this.post(async () => ({ t: 'hello', sessionId, info: await seal(this.key, info), channel: this.canChat }))
     this.post(async () => ({ t: 'entries', sessionId, entries: await this.sealEntries(backlog), reset: true }))
     this.postMeta()
     for (const requestId of this.pending.keys()) this.postPermission(requestId)
+  }
+
+  /** Calls of a subagent, under the Task call that started it. A transcript read again brings them back: once each. */
+  private onSubEntries(entries: Entry[]) {
+    const known = new Set(this.subEntries.map(entry => entry.id))
+    const fresh = entries.filter(entry => !known.has(entry.id))
+    if (!fresh.length) return
+    this.subEntries = [...this.subEntries, ...fresh].slice(-SUBAGENT_BACKLOG_SIZE)
+    this.post(async () => ({ t: 'entries', sessionId: this.link.sessionId, entries: await this.sealEntries(fresh), reset: false }))
   }
 
   /** A line from the agent in the conversation, such as why a command from the notch was not typed. */
