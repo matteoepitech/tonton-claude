@@ -43,6 +43,8 @@ let machine: { machineId: string; token: string }
 let claude: Client
 const notifications: { method: string; params?: Record<string, unknown> }[] = []
 let app: App
+/** What the channel and the hooks run with. */
+let agentEnv: Record<string, string>
 let stranger: App
 
 const api = (path: string, init: RequestInit & { token?: string } = {}) =>
@@ -118,6 +120,7 @@ beforeAll(async () => {
   claude.fallbackNotificationHandler = async notification => {
     notifications.push(notification)
   }
+  agentEnv = env
   await claude.connect(new StdioClientTransport({ command: 'bun', args: [AGENT, 'channel'], env }))
   const hook = {
     hook_event_name: 'Notification',
@@ -210,6 +213,24 @@ describe('end to end', () => {
     const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'live entries')
     if (live.t !== 'entries') throw new Error('unexpected message')
     expect(await open<{ text: string }>(key, live.entries[0].blob)).toMatchObject({ text: 'done' })
+  })
+
+  test('the last answer of a turn, landing after its Stop, leaves the session done', async () => {
+    const hook = (hook_event_name: string) =>
+      Bun.spawn(['bun', AGENT, 'hook'], {
+        env: agentEnv,
+        stdin: new Blob([JSON.stringify({ hook_event_name, session_id: sessionId, transcript_path: transcript })]),
+      }).exited
+    await hook('UserPromptSubmit')
+    await eventually(() => latestSession(app)?.status === 'working', 'the turn to start')
+    // The Stop hook goes over HTTP, the transcript over the channel's socket: here the answer comes last.
+    await hook('Stop')
+    await eventually(() => latestSession(app)?.status === 'idle', 'the turn to end')
+    const before = app.messages.length
+    appendFileSync(transcript, line({ type: 'assistant', uuid: 'late', message: { content: [{ type: 'text', text: 'All done.' }] } }))
+    await eventually(() => app.messages.slice(before).some(m => m.t === 'entries'), 'the late answer')
+    await eventually(() => app.messages.slice(before).some(m => m.t === 'session'), 'the session update')
+    expect(latestSession(app)?.status).toBe('idle')
   })
 
   test('what Claude wrote while the Mac was away is waiting when it comes back', async () => {
