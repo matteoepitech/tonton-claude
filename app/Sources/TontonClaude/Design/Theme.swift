@@ -56,6 +56,8 @@ enum ThemeChoice: String, CaseIterable, Identifiable {
 enum Theme {
     /// Set from AppSettings when the theme or Increase Contrast changes; read by every view.
     static var palette = ThemeChoice.midnight.palette
+    /// The text size of the open notch, set from AppSettings. The open notch is keyed on it, see `Font.notch`.
+    static var textSize = NotchTextSize.standard
 
     static var bg: Color { Color(hex: palette.colors.bg) }
     static var surface: Color { Color(hex: palette.colors.surface) }
@@ -88,6 +90,13 @@ enum Theme {
     static let mono = Font.system(size: 12, design: .monospaced)
 
     static func title(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font { .system(size: size, weight: weight) }
+}
+
+extension Font {
+    /// Text in the open notch: `size` is the size at the Default text size, scaled to the one picked in Settings › General.
+    @MainActor static func notch(_ size: CGFloat, weight: Font.Weight? = nil, design: Font.Design? = nil) -> Font {
+        .system(size: Theme.textSize.points(size), weight: weight, design: design)
+    }
 }
 
 extension Color {

@@ -43,14 +43,14 @@ struct Composer: View {
             field
             if !queues.items(for: session.id).isEmpty { queueList }
             if let problem = dictation.problem {
-                Text(problem).font(.system(size: 10)).foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
+                Text(problem).font(.notch(10)).foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
             }
             if !session.canChat {
                 Text(readOnlyReason)
-                    .font(.system(size: 10))
+                    .font(.notch(10))
                     .foregroundStyle(Theme.secondary)
             } else if let attachError {
-                Text(attachError).font(.system(size: 10)).foregroundStyle(Theme.danger)
+                Text(attachError).font(.notch(10)).foregroundStyle(Theme.danger)
             }
         }
         .padding(.horizontal, 10)
@@ -97,7 +97,7 @@ struct Composer: View {
                     Button {
                         onSend(reply, [])
                     } label: {
-                        Text(reply).font(.system(size: 11)).lineLimit(1).padding(.horizontal, 10).frame(height: 24)
+                        Text(reply).font(.notch(11)).lineLimit(1).padding(.horizontal, 10).frame(height: 24)
                     }
                     .buttonStyle(.plain)
                     .background(Capsule().fill(Theme.ink.opacity(0.08)))
@@ -133,7 +133,7 @@ struct Composer: View {
                                 attachments.removeAll { $0.id == attachment.id }
                                 attachError = nil
                             } label: {
-                                Image(systemName: "xmark.circle.fill").font(.system(size: 12))
+                                Image(systemName: "xmark.circle.fill").font(.notch(12))
                             }
                             .buttonStyle(.plain)
                             .offset(x: 4, y: -4)
@@ -147,7 +147,7 @@ struct Composer: View {
             Text(
                 "\(attachments.count) attachment\(attachments.count == 1 ? "" : "s") · \(AttachmentBudget.describe(total)) of \(AttachmentBudget.describe(AttachmentBudget.maxTotalBytes))"
             )
-            .font(.system(size: 9))
+            .font(.notch(9))
             .foregroundStyle(Theme.tertiary)
         }
     }
@@ -162,8 +162,8 @@ struct Composer: View {
         HStack(spacing: 6) {
             Image(nsImage: attachment.thumbnail).resizable().frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: 1) {
-                Text(attachment.name).font(.system(size: 11, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                Text(AttachmentBudget.describe(attachment.data.count)).font(.system(size: 9)).foregroundStyle(Theme.secondary)
+                Text(attachment.name).font(.notch(11, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                Text(AttachmentBudget.describe(attachment.data.count)).font(.notch(9)).foregroundStyle(Theme.secondary)
             }
         }
         .padding(.horizontal, 8)
@@ -209,17 +209,17 @@ struct Composer: View {
             micButton
             TextField(placeholder, text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(.notch(12))
                 .lineLimit(1...6)
                 .focused($focused)
                 .onSubmit(send)
-            Button(action: enqueue) { Image(systemName: "text.line.last.and.arrowtriangle.forward").font(.system(size: 13)) }
+            Button(action: enqueue) { Image(systemName: "text.line.last.and.arrowtriangle.forward").font(.notch(13)) }
                 .buttonStyle(.plain)
                 .foregroundStyle(canSend ? AnyShapeStyle(.primary) : Theme.secondary)
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
                 .help("Send after Claude's current turn (⌘⇧↩)")
-            Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.system(size: 18)) }
+            Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.notch(18)) }
                 .buttonStyle(.plain)
                 .foregroundStyle(canSend ? Theme.accent : .secondary)
                 .disabled(!canSend)
@@ -256,12 +256,12 @@ struct Composer: View {
     private func fillBar(_ template: PromptTemplate) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(template.name).font(.system(size: 11, weight: .semibold))
+                Text(template.name).font(.notch(11, weight: .semibold))
                 Spacer()
                 Button {
                     filling = nil
                 } label: {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                    Image(systemName: "xmark").font(.notch(9, weight: .bold))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.secondary)
@@ -269,10 +269,10 @@ struct Composer: View {
             }
             ForEach(template.variables, id: \.self) { name in
                 HStack(spacing: 8) {
-                    Text(name).font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(1).frame(width: 90, alignment: .leading)
+                    Text(name).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(1).frame(width: 90, alignment: .leading)
                     TextField("", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }))
                         .textFieldStyle(.plain)
-                        .font(.system(size: 12))
+                        .font(.notch(12))
                         .focused($focusedVariable, equals: name)
                         .padding(.horizontal, 8)
                         .frame(height: 24)
@@ -282,11 +282,11 @@ struct Composer: View {
             }
             HStack(alignment: .bottom) {
                 Text(template.filled(values.filter { !$0.value.isEmpty }))
-                    .font(.system(size: 10))
+                    .font(.notch(10))
                     .foregroundStyle(Theme.tertiary)
                     .lineLimit(2)
                 Spacer(minLength: 8)
-                Button("Insert") { insertFilled(template) }.buttonStyle(.plain).font(.system(size: 11, weight: .semibold))
+                Button("Insert") { insertFilled(template) }.buttonStyle(.plain).font(.notch(11, weight: .semibold))
                     .foregroundStyle(Theme.accent)
             }
         }
@@ -330,14 +330,14 @@ struct Composer: View {
     private var queueList: some View {
         let items = queues.items(for: session.id)
         return VStack(alignment: .leading, spacing: 4) {
-            Text("QUEUED · sent one per turn").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.tertiary)
+            Text("QUEUED · sent one per turn").font(.notch(9, weight: .semibold)).foregroundStyle(Theme.tertiary)
             ForEach(Array(items.enumerated()), id: \.element.id) { index, message in
                 HStack(spacing: 6) {
-                    Text("\(index + 1)").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.secondary)
+                    Text("\(index + 1)").font(.notch(10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.secondary)
                         .frame(
                             width: 12)
                     Text(message.text.isEmpty ? "\(message.images.count) image(s)" : message.text)
-                        .font(.system(size: 11)).lineLimit(1).truncationMode(.tail)
+                        .font(.notch(11)).lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: 4)
                     queueButton("chevron.up", "Earlier", disabled: index == 0) { queues.move(message.id, by: -1, in: session.id) }
                     queueButton("chevron.down", "Later", disabled: index == items.count - 1) {
@@ -353,7 +353,7 @@ struct Composer: View {
     }
 
     private func queueButton(_ symbol: String, _ help: String, disabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).font(.system(size: 9, weight: .bold)) }
+        Button(action: action) { Image(systemName: symbol).font(.notch(9, weight: .bold)) }
             .buttonStyle(.plain)
             .foregroundStyle(disabled ? Theme.tertiary : Theme.secondary)
             .disabled(disabled)

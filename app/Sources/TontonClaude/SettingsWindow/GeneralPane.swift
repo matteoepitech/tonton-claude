@@ -45,6 +45,12 @@ struct GeneralPane: View {
                         settings.notchSize = NotchSizeChoice(rawValue: $0) ?? .standard
                     }
                 }
+                Hairline()
+                Row(title: "Text size", detail: "Size of the text in the open notch.") {
+                    Segmented(selection: settings.notchTextSize.rawValue, options: NotchTextSize.allCases.map { ($0.rawValue, $0.label) }) {
+                        settings.notchTextSize = NotchTextSize(rawValue: $0) ?? .standard
+                    }
+                }
             }
             GroupLabel(text: "Sessions")
             Card {
