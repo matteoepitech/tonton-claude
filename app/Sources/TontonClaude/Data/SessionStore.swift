@@ -54,6 +54,8 @@ final class SessionStore: ObservableObject {
     let finished = PassthroughSubject<SessionSummary, Never>()
     /// A session finished a task, with how long it worked on it.
     let taskDone = PassthroughSubject<(session: SessionSummary, worked: TimeInterval), Never>()
+    /// When the 5-hour windows run out at the current pace. Not published: the rows read it with their countdown.
+    private(set) var forecast = LimitForecast()
     private var workTimer = WorkTimer()
     /// Sessions a usage limit stopped, the moment it resets.
     let limitLifted = PassthroughSubject<[SessionSummary], Never>()
@@ -126,6 +128,9 @@ final class SessionStore: ObservableObject {
             .store(in: &subscriptions)
         sessionsPublisher.combineLatest(settings.$hiddenMachines)
             .sink { [weak self] sessions, hidden in self?.scheduleLimitResets(sessions.filter { !hidden.contains($0.machine) }) }
+            .store(in: &subscriptions)
+        sessionsPublisher
+            .sink { [weak self] sessions in self?.forecast.record(sessions.filter(\.status.isLive).map(\.fiveHourLimit)) }
             .store(in: &subscriptions)
         limitLifted.sink { [weak self] sessions in self?.continueAfterLimit(sessions) }.store(in: &subscriptions)
         _ = usage

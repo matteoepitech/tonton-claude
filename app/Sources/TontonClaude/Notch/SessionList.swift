@@ -42,7 +42,8 @@ struct SessionListView: View {
                                 machineStyle: settings.machineStyles[s.machineId],
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
                                 shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil,
-                                tool: mixed ? s.codingTool : nil
+                                tool: mixed ? s.codingTool : nil,
+                                forecast: store.forecast
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { store.selectedId = s.id }
@@ -207,6 +208,13 @@ struct SessionRow: View {
     var shortcut: Int?
     /// Shown when the list has sessions of both tools.
     var tool: CodingTool?
+    var forecast = LimitForecast()
+
+    /// When the session's 5-hour window runs out at the current pace, if before it resets.
+    private func runsOut(at now: Date) -> Date? {
+        guard session.status.isLive, let limit = session.fiveHourLimit else { return nil }
+        return forecast.runsOut(limit, at: now)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -242,7 +250,7 @@ struct SessionRow: View {
                         Text(String(format: "$%.2f", cost)).font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.tertiary)
                     }
                 }
-                if session.status.needsAttention || session.status.isLive && session.limitToWatch() != nil {
+                if session.status.needsAttention || session.status.isLive && (session.limitToWatch() != nil || runsOut(at: .now) != nil) {
                     // Re-read twice a minute: the countdown runs, and the limit disappears once it resets.
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         statusLine(at: context.date)
@@ -256,23 +264,29 @@ struct SessionRow: View {
         .opacity(session.status.isLive ? 1 : 0.55)
     }
 
-    /// What needs the user, then when a limit that stopped the session, or is about to, resets.
+    /// What needs the user, then when a limit that stopped the session, or is about to, resets, and when it runs out at
+    /// this pace.
     @ViewBuilder private func statusLine(at now: Date) -> some View {
         let limit = session.status.isLive ? session.limitToWatch(at: now) : nil
-        if session.status.needsAttention || limit != nil {
-            let attention =
-                session.status.needsAttention
-                ? Text(session.displayStatusText).foregroundColor(Color(nsColor: session.status.color)) : Text("")
-            let separator = session.status.needsAttention && limit != nil ? Text(" · ").foregroundColor(.secondary) : Text("")
+        let end = runsOut(at: now)
+        if session.status.needsAttention || limit != nil || end != nil {
             let countdown = limit.flatMap { limit in
                 limit.level(at: now).map { level in
                     let verb = continues && session.stoppedUntil(at: now) != nil ? "continues" : "resets"
                     return Text("\(verb) in \(limit.timeLeft(at: now))").foregroundColor(level.color)
                 }
             }
-            (attention + separator + (countdown ?? Text("")))
-                .font(.system(size: 10, weight: .medium))
-                .lineLimit(1)
+            let pace = end.map { end in
+                Text("runs out in ~\(UsageLimit.duration(from: now, to: end))").foregroundColor(UsageLimit.Level.high.color)
+            }
+            let attention =
+                session.status.needsAttention ? Text(session.displayStatusText).foregroundColor(Color(nsColor: session.status.color)) : nil
+            let parts = [attention, countdown, pace].compactMap { $0 }
+            if let first = parts.first {
+                parts.dropFirst().reduce(first) { line, part in line + Text(" · ").foregroundColor(.secondary) + part }
+                    .font(.system(size: 10, weight: .medium))
+                    .lineLimit(1)
+            }
         }
     }
 }
