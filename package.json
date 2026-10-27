@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
+    "jsqr": "^1.4.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {

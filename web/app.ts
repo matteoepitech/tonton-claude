@@ -1,7 +1,8 @@
 // Tonton Claude in a browser: the account's sessions, their conversations, messages and permission requests, from any
 // computer or phone. Built on the client core (shared/), which decrypts in the page: the account key never reaches the
-// relay. Signing in takes the recovery key of the Mac app (Settings › Relay); remembering it keeps the key as a CryptoKey
-// that no script can read back. A read-only share key, pasted or after the # of the address, shows one session instead.
+// relay. Signing in takes the recovery key of the Mac app (Settings › Relay), pasted or scanned from the QR code of
+// Settings › Machines; remembering it keeps the key as a CryptoKey that no script can read back. A read-only share key,
+// pasted or after the # of the address, shows one session instead.
 
 import {
   accepts,
@@ -15,6 +16,7 @@ import {
   menuCommands,
   modelName,
   needsAttention,
+  parseAccountToken,
   parseRecoveryKey,
   parseShareLink,
   RelayClient,
@@ -30,6 +32,7 @@ import {
 } from '../shared'
 import type { SessionCommand, SessionStatus } from '../shared/protocol'
 import { element, inline, renderMarkdown } from './markdown'
+import { cameraProblem, canScan, type Scan, startScan } from './scanner'
 
 interface Saved {
   relay: string
@@ -66,27 +69,40 @@ function signInScreen(problem?: string) {
   error.className = 'error'
   const button = element('button', 'Sign in')
   button.className = 'primary'
+  const actions = element('div', button)
+  actions.className = 'actions'
+  const camera = element('div')
+  camera.className = 'scanner'
+  camera.hidden = true
   const form = element(
     'form',
     element('h1', 'Tonton Claude'),
     element(
       'p',
-      'Paste the recovery key of your account, from the Mac app: Settings › Relay › Recovery key. Or the read-only share key a teammate sent you.',
+      'Paste the recovery key of your account, from the Mac app: Settings › Relay › Recovery key, or scan its QR code in Settings › Machines. Or the read-only share key a teammate sent you.',
     ),
     field,
+    camera,
     element('label', remember, ' Remember on this device'),
     error,
-    button,
+    actions,
     element('p', 'Whoever has this key can read and drive your sessions. It stays in this browser and never goes to the relay.'),
   )
   form.className = 'sign-in'
+
+  const scanner = qrScanner(camera, field, error, () => form.requestSubmit())
+  if (scanner.button) actions.append(scanner.button)
+
   form.onsubmit = async event => {
     event.preventDefault()
+    scanner.stop()
     const shared = parseShareLink(field.value)
     if (shared) return watch(shared)
     const account = parseRecoveryKey(field.value)
     if (!account) {
-      error.textContent = 'This is not a Tonton Claude recovery key nor a share key.'
+      error.textContent = parseAccountToken(field.value)
+        ? 'This is the token machines join with, not the recovery key: Settings › Relay › Recovery key.'
+        : 'This is not a Tonton Claude recovery key nor a share key.'
       return
     }
     const key = await importAccountKey(account.key)
@@ -96,6 +112,65 @@ function signInScreen(problem?: string) {
   }
   app.replaceChildren(form)
   field.focus()
+}
+
+/**
+ * The Scan button, and the camera in place of the field while it looks for the QR code of Settings › Machines. A code
+ * that holds a key goes into the field and signs in like a pasted one. Each scan or stop is a new attempt, so a camera
+ * that starts after it was cancelled stops at once.
+ */
+function qrScanner(camera: HTMLElement, field: HTMLTextAreaElement, error: HTMLElement, signIn: () => void) {
+  let scan: Scan | null = null
+  let attempt = 0
+  const button = canScan() ? element('button', 'Scan the QR code') : null
+  const stop = () => {
+    attempt++
+    scan?.stop()
+    scan = null
+    camera.replaceChildren()
+    camera.hidden = true
+    field.hidden = false
+    if (button) button.hidden = false
+  }
+  const start = async () => {
+    stop()
+    const current = attempt
+    error.textContent = ''
+    const video = element('video')
+    const hint = element('p', 'Point the camera at the QR code in the Mac app: Settings › Machines › Phone or browser.')
+    const cancel = element('button', 'Cancel')
+    cancel.type = 'button'
+    cancel.onclick = stop
+    camera.replaceChildren(video, hint, cancel)
+    camera.hidden = false
+    field.hidden = true
+    if (button) button.hidden = true
+    try {
+      const started = await startScan(video, text => {
+        if (!parseRecoveryKey(text) && !parseShareLink(text)) {
+          hint.textContent = parseAccountToken(text)
+            ? 'This is the token machines join with. Scan the code under Settings › Machines › Phone or browser.'
+            : 'This QR code is not a Tonton Claude key.'
+          return false
+        }
+        stop()
+        field.value = text
+        signIn()
+        return true
+      })
+      if (current === attempt) scan = started
+      else started.stop()
+    } catch (problem) {
+      if (current !== attempt) return
+      stop()
+      error.textContent = cameraProblem(problem)
+    }
+  }
+  if (button) {
+    button.type = 'button'
+    button.onclick = () => void start()
+  }
+  return { button, stop }
 }
 
 function connect(saved: Saved) {

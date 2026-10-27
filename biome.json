@@ -13,7 +13,8 @@
       "!**/node_modules",
       "!**/dist",
       "!**/data",
-      "!shared/test/swift-vectors.json"
+      "!shared/test/swift-vectors.json",
+      "!web/test/swift-qr.json"
     ]
   },
   "formatter": {
