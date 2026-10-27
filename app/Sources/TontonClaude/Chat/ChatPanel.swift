@@ -243,6 +243,7 @@ struct ChatHeader: View {
                         .help("The model Claude Code uses in this session")
                 }
                 if let context = session.context { ContextGauge(context: context) }
+                LimitForecastLabel(limit: session.fiveHourLimit)
                 if settings.showCosts, let tokens = session.tokens {
                     Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")
                         .font(.system(size: 10, design: .monospaced))

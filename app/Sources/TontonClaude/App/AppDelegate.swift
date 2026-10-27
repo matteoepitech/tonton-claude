@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         webhooks = WebhookNotifier(store: store, settings: settings)
         if let notch { achievements = AchievementTracker(store: store, notch: notch.state, settings: settings) }
         UNUserNotificationCenter.current().delegate = self
+        LimitForecasts.shared.attach(store)
 
         settings.$showMenuBarIcon.sink { [weak self] visible in self?.statusItem.setVisible(visible) }.store(in: &subscriptions)
         settings.$hotkey.sink { [weak self] preset in self?.registerHotKey(preset) }.store(in: &subscriptions)
