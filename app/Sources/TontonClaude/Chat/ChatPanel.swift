@@ -20,11 +20,17 @@ struct ChatPanel: View {
         let items = ChatItem.build(from: entries)
         let steps = ChatItem.subagentSteps(in: entries)
         let delivered = entries.filter { $0.viaNotch == true }.count
+        let load = store.load(of: session.id)
         VStack(spacing: 0) {
             ChatHeader(session: session)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
+                        // The end of a long conversation shows first, the rest of it right after.
+                        if load == .loadingEarlier { ConversationLoading(text: "Loading earlier messages…") }
+                        if load == .loading && items.isEmpty {
+                            ConversationLoading(text: "Loading the conversation…").padding(.top, 40)
+                        }
                         ForEach(items) { item in
                             ChatItemView(item: item, sessionWorking: session.status == .working, steps: steps)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.accent.opacity(item.id == highlighted ? 0.18 : 0)))
@@ -69,6 +75,9 @@ struct ChatPanel: View {
                 ) { allow in store.answer(req, allow: allow, in: session.id) }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 6)
+            }
+            if let todos = TodoList.latest(in: store.entries[session.id] ?? []), !todos.isEmpty {
+                TodoChecklist(todos: todos).padding(.horizontal, 10).padding(.bottom, 6)
             }
             Composer(session: session) { text, images in
                 // Held for Undo send, or gone right away and waiting for the transcript.
@@ -124,7 +133,7 @@ struct ChatHeader: View {
                 let link = try await store.share(session, for: duration)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(link.string, forType: .string)
-                shareNote = "Share key copied, valid for \(duration.label)"
+                shareNote = String(localized: "Share key copied, valid for \(duration.label)")
                 try? await Task.sleep(for: .seconds(5))
                 shareNote = nil
             } catch {
@@ -212,6 +221,29 @@ struct ChatHeader: View {
         .accessibilityLabel("Interrupt")
     }
 
+    /// The branch, the model, the context and the tokens, on the right of the second line.
+    private func figures(branch: Bool, model: Bool, tokens: Bool) -> some View {
+        HStack {
+            if branch, let name = session.branch { BranchLabel(branch: name) }
+            if model, let name = session.modelName {
+                Text(name).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
+                    .help("The model Claude Code uses in this session")
+            }
+            if let context = session.context { ContextGauge(context: context) }
+            if tokens, settings.showCosts, let counts = session.tokens {
+                Text("\(TokenCounts.short(counts.allInput)) in · \(TokenCounts.short(counts.output)) out")
+                    .font(.notch(10, design: .monospaced))
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize()
+                    .help(
+                        """
+                        \(counts.input.formatted()) input, \(counts.cacheRead.formatted()) read from the cache, \
+                        \(counts.cacheWrite.formatted()) written to it, \(counts.output.formatted()) output
+                        """)
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
@@ -220,11 +252,12 @@ struct ChatHeader: View {
                 Text("·").font(.notch(12)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
                 ToolMark(tool: session.codingTool, size: 10)
                 if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11).accessibilityHidden(true) }
-                Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.notch(12)).foregroundStyle(Theme.secondary)
+                Text(store.isOnThisMac(session) ? String(localized: "This Mac") : session.machine).font(.notch(12))
+                    .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
-                    Text(String(format: "$%.2f", cost)).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary)
+                    Text(Money.dollars(cost)).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).fixedSize()
                         .help("Estimated by \(session.codingTool.label) at list price")
                 }
                 Text(session.status.label).font(.notch(11)).foregroundStyle(Color(nsColor: session.status.color)).fixedSize()
@@ -259,21 +292,15 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(1)
                 Spacer()
-                if let branch = session.branch { BranchLabel(branch: branch) }
-                if let model = session.modelName {
-                    Text(model).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
-                        .help("The model Claude Code uses in this session")
+                // The title gives way first. When the figures still don't fit (a narrow notch, large text, a longer
+                // language), the tokens go, then the branch, then the model: they would push the whole notch past its edges.
+                ViewThatFits(in: .horizontal) {
+                    figures(branch: true, model: true, tokens: true)
+                    figures(branch: true, model: true, tokens: false)
+                    figures(branch: false, model: true, tokens: false)
+                    figures(branch: false, model: false, tokens: false)
                 }
-                if let context = session.context { ContextGauge(context: context) }
-                if settings.showCosts, let tokens = session.tokens {
-                    Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")
-                        .font(.notch(10, design: .monospaced))
-                        .foregroundStyle(Theme.secondary)
-                        .fixedSize()
-                        .help(
-                            "\(tokens.input.formatted()) input, \(tokens.cacheRead.formatted()) read from the cache, "
-                                + "\(tokens.cacheWrite.formatted()) written to it, \(tokens.output.formatted()) output")
-                }
+                .layoutPriority(1)
                 if session.canChat, let reset = session.stoppedUntil() { autoContinueToggle(until: reset) }
                 if let shareNote {
                     Text(shareNote).font(.notch(10)).foregroundStyle(Theme.accent).lineLimit(1)
@@ -331,22 +358,24 @@ struct ContextGauge: View {
 
     var body: some View {
         let near = context.isNearCompaction
-        let percent = "\(Int((context.fraction * 100).rounded()))%"
+        let percent = Int((context.fraction * 100).rounded())
         HStack(spacing: 5) {
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.ink.opacity(0.12))
                 Capsule().fill(near ? Color(nsColor: .systemOrange) : Theme.ink.opacity(0.5)).frame(width: 32 * context.fraction)
             }
             .frame(width: 32, height: 4)
-            Text(near ? "\(percent) · compacts soon" : "\(percent) context")
+            Text(near ? "\(percent)% · compacts soon" : "\(percent)% context")
                 .font(.notch(10, design: .monospaced))
                 .foregroundStyle(near ? Color(nsColor: .systemOrange) : .secondary)
         }
         .fixedSize()
         .accessibilityElement(children: .combine)
         .help(
-            "Context: \(TokenCounts.short(context.usedTokens)) of \(TokenCounts.short(context.windowTokens)) tokens. "
-                + "Claude Code compacts it at about \(TokenCounts.short(context.autoCompactAt)).")
+            """
+            Context: \(TokenCounts.short(context.usedTokens)) of \(TokenCounts.short(context.windowTokens)) tokens. \
+            Claude Code compacts it at about \(TokenCounts.short(context.autoCompactAt)).
+            """)
     }
 }
 
@@ -370,5 +399,20 @@ struct ThinkingWave: View {
         .padding(.leading, 2)
         .padding(.vertical, 2)
         .accessibilityLabel("Claude is working")
+    }
+}
+
+/// Says the conversation is on its way, rather than showing nothing while a long history arrives.
+struct ConversationLoading: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.small)
+            Text(text).font(.notch(11)).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }

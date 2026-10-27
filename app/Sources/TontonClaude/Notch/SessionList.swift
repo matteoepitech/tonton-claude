@@ -50,7 +50,7 @@ struct SessionListView: View {
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
                                 continues: store.autoContinue.contains(s.id),
                                 snoozed: store.isSnoozed(s.id),
-                                machine: section.mixesMachines ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
+                                machine: section.mixesMachines ? (store.isOnThisMac(s) ? String(localized: "This Mac") : s.machine) : nil,
                                 machineStyle: settings.machineStyles[s.machineId],
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
                                 shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil,
@@ -75,7 +75,9 @@ struct SessionListView: View {
                                 Menu("Sound when \(s.project) finishes") {
                                     Toggle("Event sound", isOn: projectSound(s.project, nil))
                                     Divider()
-                                    ForEach(SoundPlayer.names, id: \.self) { name in Toggle(name, isOn: projectSound(s.project, name)) }
+                                    ForEach(SoundPlayer.names, id: \.self) { name in
+                                        Toggle(SoundPlayer.label(name), isOn: projectSound(s.project, name))
+                                    }
                                 }
                                 if store.isOnThisMac(s) { LocalFolderActions(session: s, style: .menu) }
                                 if store.canRename(s) {
@@ -372,7 +374,7 @@ struct NotchAgentUpdate: View {
         }
     }
 
-    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+    private func pill(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 3) {
                 Image(systemName: "arrow.up.circle.fill").font(.notch(9))
@@ -453,8 +455,9 @@ struct SessionRow: View {
                         .foregroundStyle(Theme.secondary)
                         .lineLimit(2)
                     Spacer(minLength: 0)
+                    if let tasks = session.tasks { TaskProgressBadge(progress: tasks) }
                     if showCost, let cost = session.costUSD, cost > 0 {
-                        Text(String(format: "$%.2f", cost)).font(.notch(9, design: .monospaced)).foregroundStyle(Theme.tertiary)
+                        Text(Money.dollars(cost)).font(.notch(9, design: .monospaced)).foregroundStyle(Theme.tertiary)
                     }
                 }
                 if session.status.needsAttention || session.status.isLive && (session.limitToWatch() != nil || runsOut(at: .now) != nil) {
@@ -479,8 +482,9 @@ struct SessionRow: View {
         if session.status.needsAttention || limit != nil || end != nil {
             let countdown = limit.flatMap { limit in
                 limit.level(at: now).map { level in
-                    let verb = continues && session.stoppedUntil(at: now) != nil ? "continues" : "resets"
-                    return Text("\(verb) in \(limit.timeLeft(at: now))").foregroundColor(level.color)
+                    let left = limit.timeLeft(at: now)
+                    let text = continues && session.stoppedUntil(at: now) != nil ? Text("continues in \(left)") : Text("resets in \(left)")
+                    return text.foregroundColor(level.color)
                 }
             }
             let pace = end.map { end in
@@ -490,9 +494,10 @@ struct SessionRow: View {
                 session.status.needsAttention ? Text(session.displayStatusText).foregroundColor(Color(nsColor: session.status.color)) : nil
             let parts = [attention, countdown, pace].compactMap { $0 }
             if let first = parts.first {
+                // Two lines rather than a cut countdown, with large text or a longer language.
                 parts.dropFirst().reduce(first) { line, part in line + Text(" · ").foregroundColor(.secondary) + part }
                     .font(.notch(10, weight: .medium))
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
         }
     }

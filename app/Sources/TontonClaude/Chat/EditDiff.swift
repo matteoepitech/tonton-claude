@@ -52,7 +52,10 @@ struct EditDiff: View {
         .padding(.vertical, 0.5)
         // Read as words rather than as a minus or a plus sign.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(line.kind == .removed ? "Removed: \(line.text)" : line.kind == .added ? "Added: \(line.text)" : line.text)
+        .accessibilityLabel(
+            line.kind == .removed
+                ? String(localized: "Removed: \(line.text)") : line.kind == .added ? String(localized: "Added: \(line.text)") : line.text
+        )
         .background(tint.map { $0.opacity(0.14) } ?? .clear)
     }
 

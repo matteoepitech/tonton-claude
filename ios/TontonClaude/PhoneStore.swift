@@ -139,7 +139,8 @@ final class PhoneStore {
 
     private func subscribe() {
         guard connection == .connected else { return }
-        socket.send(["t": "subscribe", "sessionId": openSession ?? NSNull()])
+        // Relays that know `latestFirst` send the end of the conversation at once, then all of it.
+        socket.send(["t": "subscribe", "sessionId": openSession ?? NSNull(), "latestFirst": true])
     }
 
     // MARK: Commands

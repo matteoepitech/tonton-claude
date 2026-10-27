@@ -92,6 +92,26 @@ final class RelayFeedTests: XCTestCase {
         XCTAssertNil(feed.entries["a"])
     }
 
+    func testTheEndOfAConversationShowsFirstThenAllOfIt() throws {
+        let key = try E2E.key(fromBase64URL: E2E.newKey())
+        let vault = SessionVault(key: key)
+        func sealed(_ id: String) throws -> String {
+            let blob = try E2E.seal(Entry(id: id, ts: "t", kind: .assistant, text: id), with: key)
+            return #"{"id":"\#(id)","ts":"t","blob":"\#(blob)"}"#
+        }
+        var feed = RelayFeed()
+        try feed.apply(message(#"{"t":"snapshot","sessions":[\#(session("a", "working", at: 0))],"machines":[]}"#), vault: vault)
+        try feed.apply(message(#"{"t":"history","sessionId":"a","entries":[\#(try sealed("e9"))],"partial":true}"#), vault: vault)
+        XCTAssertEqual(feed.entries["a"]?.map(\.id), ["e9"])
+        XCTAssertEqual(feed.partial, ["a"])
+        try feed.apply(message(#"{"t":"history","sessionId":"a","entries":[\#(try sealed("e1")),\#(try sealed("e9"))]}"#), vault: vault)
+        XCTAssertEqual(feed.entries["a"]?.map(\.id), ["e1", "e9"])
+        XCTAssertEqual(feed.partial, [])
+        // After a reconnection, the whole conversation stays until the whole history comes again.
+        try feed.apply(message(#"{"t":"history","sessionId":"a","entries":[\#(try sealed("e9"))],"partial":true}"#), vault: vault)
+        XCTAssertEqual(feed.entries["a"]?.map(\.id), ["e1", "e9"])
+    }
+
     func testTheListGroupsWhatNeedsTheUserFirst() {
         func summary(_ id: String, _ status: SessionStatus) -> SessionSummary {
             SessionSummary(

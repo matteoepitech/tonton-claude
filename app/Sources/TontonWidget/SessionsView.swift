@@ -107,21 +107,22 @@ private struct Counts: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if snapshot.needYou > 0 { count(snapshot.needYou, snapshot.needYou == 1 ? "needs you" : "need you", .orange) }
-            if snapshot.working > 0 { count(snapshot.working, "working", .green) }
-            if snapshot.needYou == 0 && snapshot.working == 0 && snapshot.done > 0 { count(snapshot.done, "done", .blue) }
+            if snapshot.needYou > 0 { count(Text("\(snapshot.needYou) need you"), .orange) }
+            if snapshot.working > 0 { count(Text("\(snapshot.working) working"), .green) }
+            if snapshot.needYou == 0 && snapshot.working == 0 && snapshot.done > 0 { count(Text("\(snapshot.done) done"), .blue) }
         }
     }
 
-    private func count(_ value: Int, _ label: String, _ color: Color) -> some View {
-        Text("\(value) \(label)").font(.system(size: 11, weight: .semibold)).foregroundStyle(color).lineLimit(1)
+    private func count(_ text: Text, _ color: Color) -> some View {
+        text.font(.system(size: 11, weight: .semibold)).foregroundStyle(color).lineLimit(1)
     }
 }
 
 /// What the small widget puts first: the sessions that need the user, else the ones at work, else the finished ones.
 private struct Headline {
     let count: Int?
-    let text: String
+    /// Under the count, which it doesn't repeat: a category, like the lists of Reminders.
+    let text: LocalizedStringKey
     let color: Color
 
     init(_ snapshot: WidgetSnapshot) {
@@ -144,7 +145,7 @@ private struct WidgetTitle: View {
 }
 
 private struct WidgetMessage: View {
-    let text: String
+    let text: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

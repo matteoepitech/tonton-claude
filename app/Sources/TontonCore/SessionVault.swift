@@ -23,10 +23,10 @@ public struct SessionVault: Sendable {
         return SessionSummary(
             id: wire.id,
             machineId: wire.machineId,
-            machine: info?.machine ?? machines.first { $0.id == wire.machineId }?.name ?? "Unknown machine",
+            machine: info?.machine ?? machines.first { $0.id == wire.machineId }?.name ?? String(core: "Unknown machine"),
             platform: info?.platform,
             cwd: info?.cwd ?? "",
-            project: info?.project ?? "Encrypted session",
+            project: info?.project ?? String(core: "Encrypted session"),
             title: meta?.title,
             status: wire.status,
             statusText: open(wire.statusDetail, as: StatusDetail.self)?.text,
@@ -46,7 +46,7 @@ public struct SessionVault: Sendable {
             commands: meta?.commands.map { Set($0.compactMap(SessionCommandName.init(rawValue:))) },
             model: meta?.model,
             tool: info?.tool,
-            branch: meta?.branch,
+            branch: meta?.branch, tasks: meta?.tasks,
             turns: meta?.turns.map { $0.compactMap { turn in ISO8601.parse(turn.end).map { Turn(end: $0, seconds: turn.seconds) } } },
             name: sessionName(wire)
         )
@@ -84,7 +84,7 @@ public struct SessionVault: Sendable {
             let name = open($0.name, as: MachineName.self)
             return MachineInfo(
                 id: $0.id,
-                name: name?.name ?? "Unknown machine",
+                name: name?.name ?? String(core: "Unknown machine"),
                 platform: name?.platform,
                 createdAt: ISO8601.parse($0.createdAt) ?? .distantPast,
                 lastSeen: $0.lastSeen.flatMap(ISO8601.parse),

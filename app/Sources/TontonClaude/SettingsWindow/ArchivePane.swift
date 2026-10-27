@@ -12,8 +12,10 @@ struct ArchivePane: View {
             Card {
                 ToggleRow(
                     title: "Archive finished conversations",
-                    detail: "When a session ends, its whole conversation is kept here, sealed with a key of this Mac's. Any session can "
-                        + "also be archived from its menu in the notch, and the notch's search looks here too. Each account has its own.",
+                    detail: """
+                        When a session ends, its whole conversation is kept here, sealed with a key of this Mac's. Any session can \
+                        also be archived from its menu in the notch, and the notch's search looks here too. Each account has its own.
+                        """,
                     isOn: $settings.archiveFinished)
             }
             GroupLabel(text: "Conversations")
@@ -35,8 +37,10 @@ struct ArchivePane: View {
             }
             HStack {
                 Text(
-                    "Up to \(ConversationArchive.kept) conversations, the most recent ones, on this Mac only. The key sits next to them: "
-                        + "a copy of the archive folder alone can't be read, but anyone who can read your files can."
+                    """
+                    Up to \(ConversationArchive.kept) conversations, the most recent ones, on this Mac only. The key sits next to them: \
+                    a copy of the archive folder alone can't be read, but anyone who can read your files can.
+                    """
                 )
                 .fixedSize(horizontal: false, vertical: true)
                 .font(.system(size: 12))
@@ -59,13 +63,11 @@ struct ArchivePane: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(summary.title ?? summary.project).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Text(
-                    "\(summary.project) · \(summary.machine) · \(summary.archivedAt.formatted(date: .abbreviated, time: .shortened)) · "
-                        + "\(summary.messages) message\(summary.messages == 1 ? "" : "s")"
-                )
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textDim)
-                .lineLimit(1)
+                let date = summary.archivedAt.formatted(date: .abbreviated, time: .shortened)
+                Text("\(summary.project) · \(summary.machine) · \(date) · \(summary.messages) messages")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
             }
             Spacer(minLength: 12)
             Button("Open") { if let failure = archive.open(summary.id) { archive.failure = failure } }.buttonStyle(ThemeButtonStyle())

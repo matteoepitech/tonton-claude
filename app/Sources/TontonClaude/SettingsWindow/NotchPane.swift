@@ -50,9 +50,11 @@ struct NotchPane: View {
                     detail: "How much of the desktop shows through the open notch. Text stays readable at every value."
                 ) {
                     HStack(spacing: 8) {
-                        Text("Opaque").font(.system(size: 11)).foregroundStyle(Theme.textDim)
+                        Text("Opaque").font(.system(size: 11)).foregroundStyle(Theme.textDim).fixedSize()
                         Slider(value: $settings.notchTransparency, in: 0...1).tint(Theme.accent).frame(width: 150)
-                        Text("Clear").font(.system(size: 11)).foregroundStyle(Theme.textDim)
+                        // Not the "Clear" of a button: another word in other languages.
+                        Text(String(localized: "Clear (transparency)", defaultValue: "Clear"))
+                            .font(.system(size: 11)).foregroundStyle(Theme.textDim).fixedSize()
                     }
                 }
             }
@@ -68,7 +70,8 @@ struct NotchPane: View {
                 Row(title: "Confetti after long tasks", detail: "Celebrate a session that finishes after working this long.") {
                     ChoiceMenu(
                         selection: String(settings.confettiAfterMinutes),
-                        options: [("0", "Never")] + [5, 10, 20, 30, 60].map { (String($0), "\($0) minutes") }
+                        options: [("0", String(localized: "Never"))]
+                            + [5, 10, 20, 30, 60].map { (String($0), String(localized: "\($0) minutes")) }
                     ) {
                         settings.confettiAfterMinutes = Int($0) ?? 0
                     }
@@ -90,8 +93,8 @@ struct NotchPane: View {
                     }
                     ForEach(SoundEvent.allCases, id: \.self) { event in
                         Hairline()
-                        Row(title: Self.title(event)) {
-                            ChoiceMenu(selection: settings.sound(for: event), options: SoundPlayer.names.map { ($0, $0) }) { name in
+                        Row(verbatim: Self.title(event)) {
+                            ChoiceMenu(selection: settings.sound(for: event), options: Self.sounds) { name in
                                 settings.eventSounds[event.rawValue] = name
                                 SoundPlayer.play(name)
                             }
@@ -100,10 +103,10 @@ struct NotchPane: View {
                     // Picked from a session's menu in the notch: listed here to change or drop.
                     ForEach(settings.projectSounds.keys.sorted(), id: \.self) { project in
                         Hairline()
-                        Row(title: project, detail: "When this project finishes.") {
+                        Row(verbatim: project, detail: "When this project finishes.") {
                             ChoiceMenu(
                                 selection: settings.projectSounds[project] ?? "",
-                                options: [("", "Event sound")] + SoundPlayer.names.map { ($0, $0) }
+                                options: [("", String(localized: "Event sound"))] + Self.sounds
                             ) { name in
                                 settings.projectSounds[project] = name.isEmpty ? nil : name
                                 SoundPlayer.play(settings.sound(for: .finished, project: project))
@@ -134,8 +137,10 @@ struct NotchPane: View {
             Card {
                 ToggleRow(
                     title: "Sum up the day",
-                    detail: "A macOS notification in the evening: how long Claude worked, in how many sessions, and the cost when costs "
-                        + "are shown.",
+                    detail: """
+                        A macOS notification in the evening: how long Claude worked, in how many sessions, and the cost when costs \
+                        are shown.
+                        """,
                     isOn: $settings.dailySummary)
                 if settings.dailySummary {
                     Hairline()
@@ -170,21 +175,23 @@ struct NotchPane: View {
             .rawValue ?? "custom"
     }
 
-    private var mixed: [(id: String, label: String)] { currentPack == "custom" ? [("custom", "Custom")] : [] }
+    private var mixed: [(id: String, label: String)] { currentPack == "custom" ? [("custom", String(localized: "Custom"))] : [] }
+
+    private static var sounds: [(id: String, label: String)] { SoundPlayer.names.map { ($0, SoundPlayer.label($0)) } }
 
     private static func title(_ event: SoundEvent) -> String {
         switch event {
-        case .finished: "When Claude is done"
-        case .permission: "Approval requests"
-        case .question: "Questions"
-        case .error: "Errors"
+        case .finished: String(localized: "When Claude is done")
+        case .permission: String(localized: "Approval requests")
+        case .question: String(localized: "Questions")
+        case .error: String(localized: "Errors")
         }
     }
 }
 
 /// One webhook address, with a button that posts a test message to it.
 private struct WebhookField: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var address: String
     @State private var result: Bool?
     @State private var sending = false
@@ -193,7 +200,7 @@ private struct WebhookField: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.system(size: 13, weight: .medium))
             HStack(spacing: 6) {
-                ThemeField(placeholder: "https://discord.com/api/webhooks/…", text: $address)
+                ThemeField(verbatim: "https://discord.com/api/webhooks/…", text: $address)
                 Button(sending ? "Sending…" : "Test") { test() }
                     .buttonStyle(ThemeButtonStyle())
                     .disabled(sending || Webhook.url(address) == nil)
@@ -213,7 +220,7 @@ private struct WebhookField: View {
         guard let url = Webhook.url(address) else { return }
         sending = true
         Task {
-            result = await WebhookNotifier.send("Tonton Claude will post here.", to: url)
+            result = await WebhookNotifier.send(String(localized: "Tonton Claude will post here."), to: url)
             sending = false
         }
     }

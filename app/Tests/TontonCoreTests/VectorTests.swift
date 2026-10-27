@@ -48,7 +48,7 @@ final class VectorTests: XCTestCase {
             fiveHourLimit: WireUsageLimit(usedPercent: 83.5, resetsAt: "2026-10-25T12:00:00.000Z"),
             tokens: TokenCounts(input: 1200, output: 340, cacheRead: 250_000, cacheWrite: 9000),
             context: WireContext(usedTokens: 250_000, windowTokens: nil), terminal: true, commands: ["compact", "model", "future"],
-            model: "us.anthropic.claude-opus-4-5-20251101-v1:0", branch: "feat/rate-limit")
+            model: "us.anthropic.claude-opus-4-5-20251101-v1:0", branch: "feat/rate-limit", tasks: TaskProgress(done: 2, total: 5))
         let machines: [[String: Any]] = [
             [
                 "id": "m1", "name": try sealed(MachineName(name: "PC-Studio", platform: "win32")), "createdAt": "2026-10-25T10:00:00.000Z",
@@ -90,6 +90,13 @@ final class VectorTests: XCTestCase {
             Entry(id: "r1", ts: "2026-10-25T10:00:04.000Z", kind: .toolResult, text: "ok", toolUseId: "call-1", isError: false),
             Entry(id: "t2", ts: "2026-10-25T10:00:05.000Z", kind: .tool, toolUseId: "call-2", name: "Bash", summary: "make deploy"),
             Entry(id: "y1", ts: "2026-10-25T10:00:06.000Z", kind: .system, text: "Compacted"),
+            Entry(
+                id: "d1", ts: "2026-10-25T10:00:06.500Z", kind: .tool, toolUseId: "call-3", name: "TodoWrite",
+                summary: "Updated the task list",
+                todos: [
+                    TodoItem(content: "Déployer", status: .completed, activeForm: "Déploiement"),
+                    TodoItem(content: "Vérifier", status: .inProgress), TodoItem(content: "Annoncer", status: .cancelled),
+                ]),
         ]
         var history: [[String: Any]] = try entries.map { ["id": $0.id, "ts": $0.ts, "blob": try sealed($0)] }
         history.insert(
@@ -198,7 +205,7 @@ final class VectorTests: XCTestCase {
             startedAt: milliseconds(s.startedAt), lastActivity: milliseconds(s.lastActivity), lastMessage: s.lastMessage,
             fiveHourLimit: limit(s.fiveHourLimit), sevenDayLimit: limit(s.sevenDayLimit), terminal: s.terminal,
             commands: s.commands.map(\.rawValue).sorted(), model: s.model, modelName: s.modelName, modelFamily: s.modelFamily?.rawValue,
-            acceptsCommands: s.acceptsCommands, branch: s.branch, name: s.name)
+            acceptsCommands: s.acceptsCommands, branch: s.branch, tasks: s.tasks, name: s.name)
     }
 
     /// Dates the app could not read are `distantPast`; TypeScript has null for them.
@@ -265,6 +272,7 @@ private struct Vectors: Codable {
         let modelFamily: String?
         let acceptsCommands: Bool
         let branch: String?
+        let tasks: TaskProgress?
         let name: String?
     }
     struct ChatRow: Codable, Equatable { let kind: String; let id: String; let result: String? }

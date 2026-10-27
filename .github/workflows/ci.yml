@@ -33,6 +33,11 @@ jobs:
       - run: swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos ../ios
       - run: swift build
       - run: swift test
+      # Every string the code shows is in Resources/Localizable.xcstrings. With the maintainer's compiler: another one
+      # may list the strings a little differently.
+      - run: ./scripts/sync-strings.sh --check
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       # The bundle as releases build it, with Sparkle and the widget embedded and signed. Any key and group will do:
       # nothing is published.
       - name: Build the app bundle

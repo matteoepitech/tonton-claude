@@ -185,7 +185,8 @@ public enum Transcript {
                 let edits = fileEdits(name, block["input"])
                 return Entry(
                     id: entryId, ts: ts, kind: .tool, toolUseId: block["id"] as? String ?? "", name: name,
-                    summary: toolSummary(name, block["input"]), edits: edits.isEmpty ? nil : edits)
+                    summary: toolSummary(name, block["input"]), edits: edits.isEmpty ? nil : edits,
+                    todos: TodoList.items(name, block["input"]))
             }
             return nil
         }

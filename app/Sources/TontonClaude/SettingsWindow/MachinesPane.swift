@@ -54,6 +54,7 @@ struct MachinesPane: View {
                 Text("Hidden machines keep running, they just stay out of the notch. Revoking a machine signs it out for good.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 AutoApproveRules()
             }
@@ -132,8 +133,10 @@ struct TokenCard: View {
             Button("Regenerate", role: .destructive) { Task { await run { try await store.regenerateMachineToken() } } }
         } message: {
             Text(
-                "The current token stops working right away: every machine is signed out until you give it the new one. "
-                    + "Other Macs signed in to this account need the new recovery key.")
+                """
+                The current token stops working right away: every machine is signed out until you give it the new one. \
+                Other Macs signed in to this account need the new recovery key.
+                """)
         }
     }
 
@@ -190,10 +193,11 @@ struct MachineRow: View {
             AgentUpdateButton(machine: machine)
             HStack(spacing: 5) {
                 Circle().fill(machine.online ? Theme.success : Theme.textFaint).frame(width: 6, height: 6)
-                Text(live > 0 ? "\(live) live" : (machine.online ? "Online" : "Offline")).font(.system(size: 12)).foregroundStyle(
-                    Theme.textDim)
+                Text(live > 0 ? "\(live) live" : (machine.online ? "Online" : "Offline"))
+                    .font(.system(size: 12)).foregroundStyle(Theme.textDim).fixedSize()
             }
-            .frame(width: 70, alignment: .leading)
+            // Wider when a language needs it, rather than cut.
+            .frame(minWidth: 70, alignment: .leading)
             Toggle("", isOn: visible).toggleStyle(AccentToggleStyle()).labelsHidden().fixedSize()
                 .help(visible.wrappedValue ? "Shown in the notch" : "Hidden from the notch")
             Menu {
@@ -242,9 +246,10 @@ struct MachineRow: View {
     }
 
     private func subtitle(sessions: Int) -> String {
+        let count = String(localized: "\(sessions) sessions")
         let when = (machine.lastSeen ?? machine.createdAt).formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
-        let version = machine.agentVersion.map { " · agent \($0)" } ?? ""
-        return "\(sessions) session\(sessions == 1 ? "" : "s") · seen \(when)\(version)"
+        let seen = String(localized: "\(count) · seen \(when)", comment: "3 sessions · seen 2 hr. ago")
+        return machine.agentVersion.map { String(localized: "\(seen) · agent \($0)", comment: "The agent's version") } ?? seen
     }
 
     /// The reported platform, or for older agents the one of their sessions, or a guess from the name.

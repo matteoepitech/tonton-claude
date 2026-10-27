@@ -11,14 +11,21 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
     static let defaultRelay = "https://tonton.d3l.tech"
-    static let defaultQuickReplies = ["Continue", "Run the tests", "Explain what you just did", "Commit and push"]
+    /// In the language of the app, until the user changes them.
+    static let defaultQuickReplies = [
+        String(localized: "Continue"), String(localized: "Run the tests"), String(localized: "Explain what you just did"),
+        String(localized: "Commit and push"),
+    ]
     static let defaultTemplates = [
         PromptTemplate(
-            name: "Review a PR",
-            text: "Review PR #{number}: read the diff with gh pr diff {number} and list what should change before merging."),
+            name: String(localized: "Review a PR"),
+            text: String(
+                localized: "Review PR #{number}: read the diff with gh pr diff {number} and list what should change before merging.")),
         PromptTemplate(
-            name: "Fix an issue", text: "Fix issue #{number}: read it with gh issue view {number}, make the change and run the tests."),
+            name: String(localized: "Fix an issue"),
+            text: String(localized: "Fix issue #{number}: read it with gh issue view {number}, make the change and run the tests.")),
     ]
+    /// macOS sounds by file name, which is also what the settings keep.
     static let alertSounds = ["Glass", "Tink", "Ping", "Pop", "Purr", "Hero", "Submarine", "Funk", "Bottle", "Frog", "Basso"]
 
     /// Relay

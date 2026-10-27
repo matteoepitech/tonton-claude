@@ -16,10 +16,11 @@ public enum AttachmentBudget {
     /// Why a file cannot join the message, or nil when it can.
     public static func problem(adding name: String, bytes: Int, to sizes: [Int]) -> String? {
         if bytes > maxTotalBytes {
-            return "\(name) is \(describe(bytes)): a message carries up to \(describe(maxTotalBytes))."
+            return String(core: "\(name) is \(describe(bytes)): a message carries up to \(describe(maxTotalBytes)).")
         }
         if !fits(sizes + [bytes]) {
-            return "\(name) does not fit: this message already carries \(describe(sizes.reduce(0, +))) of \(describe(maxTotalBytes))."
+            let carried = describe(sizes.reduce(0, +))
+            return String(core: "\(name) does not fit: this message already carries \(carried) of \(describe(maxTotalBytes)).")
         }
         return nil
     }

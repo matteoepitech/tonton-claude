@@ -7,17 +7,17 @@ enum HotKeyPreset: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .optionCommandN: "⌥⌘N"
-        case .controlOptionSpace: "⌃⌥Space"
+        case .controlOptionSpace: String(localized: "⌃⌥Space", comment: "A keyboard shortcut with the space bar")
         case .optionCommandT: "⌥⌘T"
         case .controlOptionCommandC: "⌃⌥⌘C"
-        case .off: "Off"
+        case .off: String(localized: "Off", comment: "No keyboard shortcut")
         }
     }
 
     var keys: [String] {
         switch self {
         case .optionCommandN: ["⌥", "⌘", "N"]
-        case .controlOptionSpace: ["⌃", "⌥", "Space"]
+        case .controlOptionSpace: ["⌃", "⌥", String(localized: "Space", comment: "The space bar, on a keycap")]
         case .optionCommandT: ["⌥", "⌘", "T"]
         case .controlOptionCommandC: ["⌃", "⌥", "⌘", "C"]
         case .off: []
@@ -28,13 +28,20 @@ enum HotKeyPreset: String, CaseIterable, Identifiable {
 enum DisplayChoice: String, CaseIterable, Identifiable {
     case builtIn, main
     var id: String { rawValue }
-    var label: String { self == .builtIn ? "Built-in display" : "Main display" }
+    var label: String { self == .builtIn ? String(localized: "Built-in display") : String(localized: "Main display") }
 }
 
 enum NotchSizeChoice: String, CaseIterable, Identifiable {
     case compact, standard, large
     var id: String { rawValue }
-    var label: String { rawValue.capitalized }
+
+    var label: String {
+        switch self {
+        case .compact: String(localized: "Compact", comment: "A size of the open notch")
+        case .standard: String(localized: "Standard", comment: "A size of the open notch")
+        case .large: String(localized: "Large", comment: "A size of the open notch")
+        }
+    }
 
     var size: CGSize {
         switch self {
@@ -57,7 +64,7 @@ enum EditorChoice: String, CaseIterable, Identifiable {
         case .zed: "Zed"
         case .xcode: "Xcode"
         case .sublime: "Sublime Text"
-        case .defaultApp: "Default app"
+        case .defaultApp: String(localized: "Default app")
         }
     }
 

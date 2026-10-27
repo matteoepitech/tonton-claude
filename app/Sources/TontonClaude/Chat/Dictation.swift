@@ -21,7 +21,8 @@ final class Dictation: ObservableObject {
         problem = nil
         Task {
             guard await Self.authorized() else {
-                problem = "Allow Tonton Claude to use the microphone and speech recognition in System Settings › Privacy & Security."
+                problem = String(
+                    localized: "Allow Tonton Claude to use the microphone and speech recognition in System Settings › Privacy & Security.")
                 return
             }
             begin()
@@ -40,7 +41,7 @@ final class Dictation: ObservableObject {
 
     private func begin() {
         guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else {
-            problem = "Speech recognition isn't available for this language right now."
+            problem = String(localized: "Speech recognition isn't available for this language right now.")
             return
         }
         let request = SFSpeechAudioBufferRecognitionRequest()
@@ -54,7 +55,7 @@ final class Dictation: ObservableObject {
             try engine.start()
         } catch {
             input.removeTap(onBus: 0)
-            problem = "The microphone could not start: \(error.localizedDescription)"
+            problem = String(localized: "The microphone could not start: \(error.localizedDescription)")
             Logger.app.error("dictation: \(error.localizedDescription)")
             return
         }

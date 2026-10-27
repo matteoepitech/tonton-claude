@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { fileEdits, parseLine, toolSummary } from '../src/transcript/parser'
+import { fileEdits, parseLine, todoItems, toolSummary } from '../src/transcript/parser'
 
 const line = (fields: object) => JSON.stringify({ uuid: 'u1', timestamp: '2026-10-25T10:00:00Z', ...fields })
 
@@ -196,6 +196,45 @@ describe('fileEdits', () => {
     expect(fileEdits('Edit', { old_string: 'a'.repeat(5000), new_string: '' })[0].oldText).toHaveLength(4002)
     expect(fileEdits('Read', { file_path: '/a.ts' })).toEqual([])
     expect(fileEdits('Edit', null)).toEqual([])
+  })
+})
+
+describe('todoItems', () => {
+  test("a TodoWrite call carries its task list, from Claude Code's input and OpenCode's", () => {
+    const todos = [
+      { content: 'Read the code', status: 'completed', activeForm: 'Reading the code' },
+      { content: 'Fix the bug', status: 'in_progress', activeForm: 'Fixing the bug' },
+      { content: 'Run the tests', status: 'pending', activeForm: '' },
+    ]
+    const { entries } = parseLine(
+      line({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'TodoWrite', input: { todos } }] } }),
+    )
+    expect(entries[0]).toMatchObject({ kind: 'tool', name: 'TodoWrite', summary: 'Updated the task list' })
+    expect(entries[0].kind === 'tool' && entries[0].todos).toEqual([
+      { content: 'Read the code', status: 'completed', activeForm: 'Reading the code' },
+      { content: 'Fix the bug', status: 'in_progress', activeForm: 'Fixing the bug' },
+      { content: 'Run the tests', status: 'pending' },
+    ])
+    // OpenCode: a priority and an id, a status Claude Code does not have.
+    expect(
+      todoItems('TodoWrite', {
+        todos: [
+          { id: '1', content: ' Ship it ', status: 'cancelled', priority: 'high' },
+          { id: '2', content: 'Later', status: 'someday' },
+          { id: '3', content: '   ', status: 'pending' },
+          { id: '4', status: 'pending' },
+        ],
+      }),
+    ).toEqual([
+      { content: 'Ship it', status: 'cancelled' },
+      { content: 'Later', status: 'pending' },
+    ])
+    expect(todoItems('TodoWrite', { todos: Array.from({ length: 80 }, (_, i) => ({ content: `t${i}`, status: 'pending' })) })).toHaveLength(
+      50,
+    )
+    expect(todoItems('TodoWrite', { todos: [{ content: 'a'.repeat(400), status: 'pending' }] })?.[0].content).toHaveLength(301)
+    expect(todoItems('TodoWrite', {})).toBeNull()
+    expect(todoItems('Bash', { todos: [{ content: 'x', status: 'pending' }] })).toBeNull()
   })
 })
 

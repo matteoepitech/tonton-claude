@@ -18,12 +18,26 @@ export interface FileEdit {
   oldText: string
   newText: string
 }
+/** One task of the list Claude Code's TodoWrite (or OpenCode's todowrite) keeps. */
+export interface TodoItem {
+  content: string
+  /** `cancelled` comes from OpenCode only. Clients read any other value as `pending`. */
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+  /** What Claude Code shows while the task runs: "Running the tests". */
+  activeForm?: string
+}
+/** How far the session's latest task list is: tasks completed, out of those not cancelled. */
+export interface TaskProgress {
+  done: number
+  total: number
+}
 
 // A conversation entry, normalized from the Claude Code transcript (plaintext, before sealing).
 export type Entry =
   | { id: string; ts: string; kind: 'user'; text: string; images?: ImageData[]; viaNotch?: boolean }
   | { id: string; ts: string; kind: 'assistant'; text: string }
-  | { id: string; ts: string; kind: 'tool'; toolUseId: string; name: string; summary: string; edits?: FileEdit[] }
+  // `todos`: the task list a TodoWrite call sets, from agents that send it.
+  | { id: string; ts: string; kind: 'tool'; toolUseId: string; name: string; summary: string; edits?: FileEdit[]; todos?: TodoItem[] }
   | { id: string; ts: string; kind: 'tool_result'; toolUseId: string; text: string; isError: boolean; images?: ImageData[] }
   | { id: string; ts: string; kind: 'system'; text: string }
   /**
@@ -84,6 +98,8 @@ export interface SessionMeta {
   model?: string
   /** The git branch of its folder, or the short commit when detached. Missing outside git and from older agents. */
   branch?: string
+  /** Its latest task list, while it has one. Missing from older agents. */
+  tasks?: TaskProgress
   /**
    * The last turns that ended, oldest first, as Claude Code writes them in the transcript: the app counts the ones it
    * didn't see end, while the Mac was away. Missing from older agents, and until a turn ends.
@@ -378,7 +394,9 @@ export type RelayToApp =
   | { t: 'session'; session: SessionSummary }
   | { t: 'removed'; sessionId: string }
   | { t: 'machines'; machines: MachineSummary[] }
-  | { t: 'history'; sessionId: string; entries: SealedEntry[] }
+  // With `partial`, the latest entries only, sent first to an app that subscribed with `latestFirst`: the whole history
+  // follows in a second `history`.
+  | { t: 'history'; sessionId: string; entries: SealedEntry[]; partial?: boolean }
   | { t: 'entries'; sessionId: string; entries: SealedEntry[]; reset: boolean }
   | { t: 'error'; message: string }
   // `reason` when the relay could not ask the machine, `detail` when the agent tried and failed.
@@ -399,7 +417,8 @@ export type RelayToApp =
 
 // app -> relay
 export type AppMessage =
-  | { t: 'subscribe'; sessionId: string | null }
+  // `latestFirst`: send the latest entries at once, then the whole history (relays before it send the whole one only).
+  | { t: 'subscribe'; sessionId: string | null; latestFirst?: boolean }
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny'; rule?: Sealed }
   | { t: 'dismiss'; sessionId: string }

@@ -80,22 +80,28 @@ struct CommandPalette: View {
             ) { store.selectedId = session.id }
         }
         let machines = Dictionary(grouping: store.orderedSessions, by: \.machine).keys.sorted().map { machine in
-            Item(id: "machine-\(machine)", icon: "desktopcomputer", title: machine, detail: "Machine") {
+            Item(id: "machine-\(machine)", icon: "desktopcomputer", title: machine, detail: String(localized: "Machine")) {
                 // Its first session in the list, the one ⌘1…9 would pick among its own.
                 store.selectedId = store.orderedSessions.first { $0.machine == machine }?.id
             }
         }
         let panes = SettingsPane.allCases.map { pane in
-            Item(id: "settings-\(pane.rawValue)", icon: pane.icon, title: "Settings › \(pane.title)", detail: "Open") {
+            Item(
+                id: "settings-\(pane.rawValue)", icon: pane.icon, title: String(localized: "Settings › \(pane.title)"),
+                detail: String(localized: "Open")
+            ) {
                 AppDelegate.shared?.showSettings(pane: pane)
             }
         }
-        let start = Item(id: "new-session", icon: "plus", title: "New session", detail: "Start claude on a machine") {
+        let start = Item(
+            id: "new-session", icon: "plus", title: String(localized: "New session"), detail: String(localized: "Start claude on a machine")
+        ) {
             state.showNewSession = true
         }
         let pin = Item(
-            id: "pin", icon: state.pinned ? "pin.slash" : "pin", title: state.pinned ? "Unpin the notch" : "Pin the notch open",
-            detail: "Notch"
+            id: "pin", icon: state.pinned ? "pin.slash" : "pin",
+            title: state.pinned ? String(localized: "Unpin the notch") : String(localized: "Pin the notch open"),
+            detail: String(localized: "Notch")
         ) {
             state.pinned.toggle()
         }

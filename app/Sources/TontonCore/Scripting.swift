@@ -13,11 +13,13 @@ public enum ScriptSessions {
 
         public var message: String {
             switch self {
-            case .notFound(let name): "No session is called \(name)."
-            case .ambiguous(let name, let ids): "Several sessions are called \(name). Use one of these ids: \(ids.joined(separator: ", "))."
-            case .cannotChat(let name): "\(name) can't get messages: it needs a running agent, started with the chat channel."
-            case .sendingOff: "Scripts can't send messages. Turn it on in Tonton Claude › Settings › General."
-            case .emptyMessage: "The message is empty."
+            case .notFound(let name): String(core: "No session is called \(name).")
+            case .ambiguous(let name, let ids):
+                String(core: "Several sessions are called \(name). Use one of these ids: \(ids.joined(separator: ", ")).")
+            case .cannotChat(let name):
+                String(core: "\(name) can't get messages: it needs a running agent, started with the chat channel.")
+            case .sendingOff: String(core: "Scripts can't send messages. Turn it on in Tonton Claude › Settings › General.")
+            case .emptyMessage: String(core: "The message is empty.")
             }
         }
     }

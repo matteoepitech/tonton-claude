@@ -9,9 +9,9 @@ public struct AlertSnoozes: Equatable, Sendable {
 
         public var label: String {
             switch self {
-            case .quarterHour: "15 minutes"
-            case .hour: "1 hour"
-            case .untilFinished: "Until it finishes"
+            case .quarterHour: String(core: "15 minutes")
+            case .hour: String(core: "1 hour")
+            case .untilFinished: String(core: "Until it finishes")
             }
         }
     }

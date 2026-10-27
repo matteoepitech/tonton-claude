@@ -37,12 +37,13 @@ final class StatusItemController: NSObject {
         menu.addItem(entry("Settings…", #selector(settings), key: ","))
         if updater.isOn { menu.addItem(entry("Check for Updates…", #selector(checkForUpdates))) }
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Tonton Claude", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(
+            NSMenuItem(title: String(localized: "Quit Tonton Claude"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }
 
-    private func entry(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+    private func entry(_ title: String.LocalizationValue, _ action: Selector, key: String = "") -> NSMenuItem {
+        let item = NSMenuItem(title: String(localized: title), action: action, keyEquivalent: key)
         item.target = self
         return item
     }

@@ -11,6 +11,7 @@ import {
   foldSummary,
   isLive,
   keepsSessionRules,
+  latestTodos,
   type Machine,
   machineFoldKey,
   menuCommands,
@@ -23,7 +24,7 @@ import {
   sessionRuleFor,
   shownPath,
 } from '../shared'
-import type { SessionCommand, SessionStatus } from '../shared/protocol'
+import type { SessionCommand, SessionStatus, TaskProgress, TodoItem } from '../shared/protocol'
 import { element, inline, renderMarkdown } from './markdown'
 
 // MARK: Sessions
@@ -53,6 +54,7 @@ export function renderList(list: HTMLElement, current: ClientState, onPick: (ses
           element('strong', session.name ?? session.project),
           element('small', needsAttention(session.status) ? displayStatusText(session) : (session.title ?? STATUS_LABELS[session.status])),
         ),
+        ...(session.tasks ? [progress(session.tasks)] : []),
       )
       row.className = 'session'
       if (session.id === current.selectedId) row.classList.add('selected')
@@ -78,6 +80,13 @@ function machineHeader(machine: string, sessions: Session[], folded: boolean, fo
     toggle.append(badge)
   }
   return element('h2', toggle)
+}
+
+function progress(tasks: TaskProgress): HTMLElement {
+  const node = element('em', `${tasks.done}/${tasks.total}`)
+  node.className = 'tasks'
+  node.title = 'Tasks done in Claude’s list'
+  return node
 }
 
 export function dot(status: SessionStatus): HTMLElement {
@@ -127,7 +136,9 @@ export function renderChat(chat: HTMLElement, current: ClientState, client: Rela
   }
   const messages = element('div')
   messages.className = 'messages'
-  if (!current.entries) messages.append(element('p', 'Loading the conversation…'))
+  if (!current.entries) messages.append(loading('Loading the conversation…'))
+  // The end of a long conversation shows first, the rest of it right after.
+  else if (current.loadingEarlier) messages.append(loading('Loading earlier messages…'))
   for (const item of chatItems(current.entries ?? [])) messages.append(message(item))
   const machine = current.machines.find(m => m.id === session.machineId)
   for (const request of session.pendingPermissions) messages.append(permission(session, request, machine, client))
@@ -135,7 +146,8 @@ export function renderChat(chat: HTMLElement, current: ClientState, client: Rela
   const typing =
     document.activeElement instanceof HTMLTextAreaElement && chat.contains(document.activeElement) ? document.activeElement : null
   const field = composer(session, client)
-  chat.replaceChildren(header, messages, field)
+  const todos = latestTodos(current.entries ?? [])
+  chat.replaceChildren(header, messages, ...(todos?.length ? [checklist(todos)] : []), field)
   if (stickToBottom) messages.scrollTop = messages.scrollHeight
   const input = field.querySelector('textarea')
   if (typing && input && !input.disabled) {
@@ -212,6 +224,28 @@ function message(item: ReturnType<typeof chatItems>[number]): HTMLElement {
     tool.append(diff)
   }
   return tool
+}
+
+/** Claude's latest task list, above the composer, in place of a TodoWrite row per update. */
+function checklist(todos: TodoItem[]): HTMLElement {
+  const counted = todos.filter(todo => todo.status !== 'cancelled')
+  const done = counted.filter(todo => todo.status === 'completed').length
+  const marks: Record<TodoItem['status'], string> = { completed: '✓', in_progress: '◐', cancelled: '✕', pending: '○' }
+  const items = todos.map(todo => {
+    const item = element(
+      'li',
+      element('i', marks[todo.status]),
+      todo.status === 'in_progress' ? (todo.activeForm ?? todo.content) : todo.content,
+    )
+    item.className = todo.status
+    return item
+  })
+  const summary = element('summary', element('strong', 'Tasks'), ` ${done === counted.length ? 'All done' : `${done}/${counted.length}`}`)
+  const list = element('details', summary, element('ul', ...items))
+  list.className = 'todos'
+  // A finished list starts folded: there is nothing left to follow.
+  list.open = done < counted.length
+  return list
 }
 
 function permission(
@@ -307,7 +341,7 @@ export function renderShared(view: SharedView, status: HTMLElement, chat: HTMLEl
   header.className = 'chat-header'
   const messages = element('div')
   messages.className = 'messages'
-  if (!view.entries) messages.append(element('p', 'Loading the conversation…'))
+  if (!view.entries) messages.append(loading('Loading the conversation…'))
   for (const item of chatItems(view.entries ?? [])) messages.append(message(item))
   const children: HTMLElement[] = [header, messages]
   if (view.connection === 'ended') {
@@ -317,4 +351,11 @@ export function renderShared(view: SharedView, status: HTMLElement, chat: HTMLEl
   }
   chat.replaceChildren(...children)
   if (stickToBottom) messages.scrollTop = messages.scrollHeight
+}
+
+/** Says the conversation is on its way, with a spinner. */
+function loading(text: string): HTMLElement {
+  const note = element('p', element('i'), text)
+  note.className = 'loading'
+  return note
 }

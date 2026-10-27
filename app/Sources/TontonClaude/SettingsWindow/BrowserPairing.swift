@@ -20,8 +20,10 @@ struct BrowserPairingCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Your phone or another browser").font(.system(size: 13, weight: .medium))
                 Text(
-                    "Open the web app and scan this code to sign in there. It holds your recovery key: whoever scans it can read and "
-                        + "drive your sessions, so show it to your own devices only."
+                    """
+                    Open the web app and scan this code to sign in there. It holds your recovery key: whoever scans it can read and \
+                    drive your sessions, so show it to your own devices only.
+                    """
                 )
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textDim)

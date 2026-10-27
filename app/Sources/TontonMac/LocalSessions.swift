@@ -128,9 +128,11 @@ public enum LocalSessions {
 
     /// The conversations the app shows: the relay's copy of a session, which comes with an agent that can chat, or else this
     /// Mac's transcript. The relay answers a subscription to a session it does not know with an empty history, which must
-    /// not hide the transcript.
-    public static func entries(local: [String: [Entry]], relay: [String: [Entry]]) -> [String: [Entry]] {
-        local.merging(relay) { local, relay in relay.isEmpty ? local : relay }
+    /// not hide the transcript; nor must its latest entries (`partial`), sent before the rest of its history.
+    public static func entries(local: [String: [Entry]], relay: [String: [Entry]], partial: Set<String> = []) -> [String: [Entry]] {
+        local.merging(relay.filter { !partial.contains($0.key) || local[$0.key]?.isEmpty != false }) { local, relay in
+            relay.isEmpty ? local : relay
+        }
     }
 
     /// The session as the notch shows it. `endedAt` is set once its process is gone.
@@ -149,6 +151,6 @@ public enum LocalSessions {
             lastMessage: conversation.lastMessage, fiveHourLimit: conversation.fiveHourLimit,
             sevenDayLimit: conversation.sevenDayLimit, tokens: conversation.tokens,
             context: conversation.contextTokens.map { ContextUsage(usedTokens: $0, windowTokens: conversation.contextWindow) },
-            model: conversation.model)
+            model: conversation.model, tasks: TodoList.progress(TodoList.latest(in: conversation.entries)))
     }
 }

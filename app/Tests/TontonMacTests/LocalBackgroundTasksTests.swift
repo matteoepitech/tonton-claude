@@ -34,7 +34,9 @@ final class LocalBackgroundTasksTests: XCTestCase {
         let record = LocalSessions.Record(pid: 1, sessionId: "s1", cwd: "/x", status: "idle")
         let session = LocalSessions.summary(record, conversation)
         XCTAssertEqual(session.status, .working)
-        XCTAssertEqual(session.statusText, "Waiting for 1 background task")
+        // The text itself, a plural of the catalog, is BackgroundTasksTests's.
+        XCTAssertEqual(session.statusText, conversation.background.waiting())
+        XCTAssertNotNil(session.statusText)
         conversation.apply(TranscriptTail.Read(lines: [try notification("bi8o5pw7k", "completed")]))
         XCTAssertEqual(LocalSessions.summary(record, conversation).status, .idle)
         // A closed session is closed, whatever ran in its background.

@@ -59,7 +59,7 @@ public final class RelaySocket {
         components.scheme = components.scheme == "http" ? "ws" : "wss"
         components.path += "/ws/app"
         guard let url = components.url else {
-            state = .failed("Invalid relay URL")
+            state = .failed(String(core: "Invalid relay URL"))
             return
         }
         var request = URLRequest(url: url)
@@ -96,19 +96,22 @@ public final class RelaySocket {
 
     private func receive(_ task: URLSessionWebSocketTask, generation current: Int) {
         task.receive { [weak self] result in
+            // A history can be megabytes of JSON: it is decoded here, off the main actor. The next message is only asked
+            // for once this one was handled, so they stay in order.
+            let decoded = (try? result.get()).flatMap(Self.decode)
             Task { @MainActor in
                 guard let self, current == self.generation else { return }
                 switch result {
-                case .success(let message):
+                case .success:
                     self.backoff = 1
                     // The first message tells the connection is up: time it right away rather than in 20 seconds.
                     if self.state != .connected { self.ping(task, generation: current) }
                     self.state = .connected
-                    if let message = Self.decode(message) { self.onMessage(message) }
+                    if let decoded { self.onMessage(decoded) }
                     self.receive(task, generation: current)
                 case .failure(let error):
                     let unauthorized = (task.response as? HTTPURLResponse)?.statusCode == 401
-                    self.state = .failed(unauthorized ? "Account rejected by the relay" : error.localizedDescription)
+                    self.state = .failed(unauthorized ? String(core: "Account rejected by the relay") : error.localizedDescription)
                     self.scheduleReconnect(generation: current)
                 }
             }
@@ -125,7 +128,7 @@ public final class RelaySocket {
         }
     }
 
-    private static func decode(_ message: URLSessionWebSocketTask.Message) -> RelayMessage? {
+    nonisolated private static func decode(_ message: URLSessionWebSocketTask.Message) -> RelayMessage? {
         let data: Data
         switch message {
         case .string(let text): data = Data(text.utf8)

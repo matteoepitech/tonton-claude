@@ -10,11 +10,11 @@ public enum UsageExport {
 
         public var label: String {
             switch self {
-            case .week: "Last 7 days"
-            case .month: "Last 30 days"
-            case .thisMonth: "This month"
-            case .lastMonth: "Last month"
-            case .all: "Everything recorded"
+            case .week: String(core: "Last 7 days")
+            case .month: String(core: "Last 30 days")
+            case .thisMonth: String(core: "This month")
+            case .lastMonth: String(core: "Last month")
+            case .all: String(core: "Everything recorded")
             }
         }
 

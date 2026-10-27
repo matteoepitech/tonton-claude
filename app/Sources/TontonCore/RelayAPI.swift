@@ -97,7 +97,7 @@ public struct RelayAPI: Sendable {
     private func request<T: Decodable>(
         _ method: String, _ base: String, _ path: String, token: String?, body: Data? = nil, as type: T.Type
     ) async throws -> T {
-        guard let url = URL(string: base + path) else { throw RelayError(message: "Invalid relay URL.") }
+        guard let url = URL(string: base + path) else { throw RelayError(message: String(core: "Invalid relay URL.")) }
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.httpMethod = method
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }

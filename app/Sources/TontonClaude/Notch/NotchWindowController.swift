@@ -211,7 +211,9 @@ final class NotchWindowController {
     private func alert(_ session: SessionSummary, finished: Bool) {
         guard !settings.isQuietNow else { return }
         signal(.of(session.status, finished: finished), project: session.project)
-        if settings.systemNotifications { Notifier.post(session, body: finished ? "Claude is done." : session.displayStatusText) }
+        if settings.systemNotifications {
+            Notifier.post(session, body: finished ? String(localized: "Claude is done.") : session.displayStatusText)
+        }
         if settings.openOnPermission && session.status == .permission {
             store.selectedId = session.id
             expand()
@@ -232,10 +234,13 @@ final class NotchWindowController {
         guard let session = sessions.first, !settings.isQuietNow else { return }
         signal(.finished)
         if settings.systemNotifications {
-            let more = sessions.count > 1 ? " \(sessions.count) sessions can go again." : " Claude can go again."
-            Notifier.post(session, body: "The usage limit reset." + more)
+            let body =
+                sessions.count > 1
+                ? String(localized: "The usage limit reset. \(sessions.count) sessions can go again.")
+                : String(localized: "The usage limit reset. Claude can go again.")
+            Notifier.post(session, body: body)
         }
-        peek(session, text: "Usage limit reset")
+        peek(session, text: String(localized: "Usage limit reset"))
     }
 
     /// Confetti from the notch for a long task done. None with Reduce Motion or during quiet hours.
@@ -259,12 +264,14 @@ final class NotchWindowController {
     private func budgetExceeded(_ period: BudgetPeriod, _ spent: Double) {
         guard !settings.isQuietNow else { return }
         signal(.question)
+        let budget = Money.dollars(Double(period == .day ? settings.dailyBudget : settings.monthlyBudget), digits: 0)
         let text =
             switch period {
-            case .day: String(format: "Today's cost passed $%d: $%.2f so far", settings.dailyBudget, spent)
-            case .month: String(format: "This month's cost passed $%d: $%.2f so far", settings.monthlyBudget, spent)
+            case .day: String(localized: "Today's cost passed \(budget): \(Money.dollars(spent)) so far")
+            case .month: String(localized: "This month's cost passed \(budget): \(Money.dollars(spent)) so far")
             }
-        if settings.systemNotifications { Notifier.post(title: period == .day ? "Daily budget" : "Monthly budget", body: text) }
+        let title = period == .day ? String(localized: "Daily budget") : String(localized: "Monthly budget")
+        if settings.systemNotifications { Notifier.post(title: title, body: text) }
         peek(nil, text: text)
     }
 

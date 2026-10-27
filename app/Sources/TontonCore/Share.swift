@@ -58,9 +58,9 @@ public enum ShareDuration: Int, CaseIterable, Identifiable, Sendable {
     public var hours: Int { rawValue }
     public var label: String {
         switch self {
-        case .hour: "1 hour"
-        case .day: "1 day"
-        case .week: "1 week"
+        case .hour: String(core: "1 hour")
+        case .day: String(core: "1 day")
+        case .week: String(core: "1 week")
         }
     }
 }

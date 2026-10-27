@@ -45,6 +45,7 @@ const session = (fields: Partial<Session>): Session => ({
   model: null,
   tool: null,
   branch: null,
+  tasks: null,
   ...fields,
 })
 

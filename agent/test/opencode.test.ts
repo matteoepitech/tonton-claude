@@ -193,6 +193,52 @@ describe('OpenCode 2', () => {
   })
 })
 
+describe('task lists', () => {
+  const input = {
+    todos: [
+      { id: '1', content: 'Write the fix', status: 'completed', priority: 'high' },
+      { id: '2', content: 'Run the tests', status: 'in_progress', priority: 'medium' },
+    ],
+  }
+  const expected = [
+    { content: 'Write the fix', status: 'completed' },
+    { content: 'Run the tests', status: 'in_progress' },
+  ]
+
+  test("OpenCode 2's todowrite is a TodoWrite with its list", () => {
+    const { entries } = replay([
+      { type: 'session.created', data: { sessionID: 'ses_2', location: { directory: '/home/me/api' } } },
+      { type: 'session.tool.called', data: { sessionID: 'ses_2', callID: 'call_t', tool: 'todowrite', input, timestamp: 1 } },
+    ])
+    expect(entries).toMatchObject([{ kind: 'tool', name: 'TodoWrite', todos: expected }])
+  })
+
+  test("OpenCode 1's todowrite part too", () => {
+    const { entries } = replay([
+      { type: 'session.created', properties: { info: { id: 'ses_1', directory: '/home/me/api', version: '1', time: {} } } },
+      {
+        type: 'message.updated',
+        properties: { info: { id: 'm1', sessionID: 'ses_1', role: 'assistant', time: { created: 1_700_000_000_000 } } },
+      },
+      {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            sessionID: 'ses_1',
+            id: 'p1',
+            messageID: 'm1',
+            type: 'tool',
+            callID: 'c1',
+            tool: 'todowrite',
+            state: { status: 'running', input },
+          },
+        },
+      },
+    ])
+    expect(entries.find(entry => entry.kind === 'tool')).toMatchObject({ name: 'TodoWrite', todos: expected })
+  })
+})
+
 describe('OpenCode 1', () => {
   const session = { id: 'ses_1', directory: '/home/me/api', title: 'Fix the login', projectID: 'p', version: '1', time: {} }
   const message = (id: string, role: string, extra: object = {}) => ({

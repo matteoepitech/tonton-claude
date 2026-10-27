@@ -81,10 +81,10 @@ enum AttachmentReader {
     private static func fromFile(_ url: URL) -> Loaded {
         let name = url.lastPathComponent
         let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
-        if values?.isDirectory == true { return .refused("\(name) is a folder: drop the files inside it.") }
+        if values?.isDirectory == true { return .refused(String(localized: "\(name) is a folder: drop the files inside it.")) }
         let size = values?.fileSize ?? 0
         if let problem = AttachmentBudget.problem(adding: name, bytes: size, to: []) { return .refused(problem) }
-        guard let data = try? Data(contentsOf: url) else { return .refused("\(name) could not be read.") }
+        guard let data = try? Data(contentsOf: url) else { return .refused(String(localized: "\(name) could not be read.")) }
         if let image = attachment(from: data, name: name) { return .attachment(image) }
         let type = UTType(filenameExtension: url.pathExtension)
         return .attachment(

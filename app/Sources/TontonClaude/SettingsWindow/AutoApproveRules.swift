@@ -15,7 +15,7 @@ struct AutoApproveRules: View {
             ForEach(settings.autoApproveRules) { rule in
                 HStack(spacing: 10) {
                     Text(rule.tool).font(.system(size: 13, weight: .medium)).frame(width: 84, alignment: .leading)
-                    Text(rule.pattern.isEmpty ? "any call" : rule.pattern)
+                    Text(rule.pattern.isEmpty ? String(localized: "any call") : rule.pattern)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(rule.pattern.isEmpty ? Theme.warning : Theme.text)
                         .lineLimit(1)
@@ -41,16 +41,22 @@ struct AutoApproveRules: View {
                     placeholder: tool == "Bash" || tool == "PowerShell" ? "npm test *" : "pattern, empty for any call", text: $pattern
                 )
                 .onSubmit(add)
-                ChoiceMenu(selection: machineId, options: [("", "All machines")] + store.machines.map { ($0.id, $0.name) }) {
+                ChoiceMenu(
+                    selection: machineId, options: [("", String(localized: "All machines"))] + store.machines.map { ($0.id, $0.name) }
+                ) {
                     machineId = $0
                 }
                 Button("Add", action: add).buttonStyle(ThemeButtonStyle())
             }
             .padding(12)
         }
+        // As it is: no Markdown in the stars.
         Text(
-            "Matching calls are approved on those machines without asking, in the terminal or the notch. * stands for anything: "
-                + "npm run *. A command chained with ; && | or $( ) only passes a rule that spells it out in full."
+            String(
+                localized: """
+                    Matching calls are approved on those machines without asking, in the terminal or the notch. * stands for anything: \
+                    npm run *. A command chained with ; && | or $( ) only passes a rule that spells it out in full.
+                    """)
         )
         .font(.system(size: 12))
         .foregroundStyle(Theme.textFaint)
@@ -72,7 +78,7 @@ struct AutoApproveRules: View {
     }
 
     private func machineName(_ id: String?) -> String {
-        guard let id else { return "All machines" }
-        return store.machines.first { $0.id == id }?.name ?? "A removed machine"
+        guard let id else { return String(localized: "All machines") }
+        return store.machines.first { $0.id == id }?.name ?? String(localized: "A removed machine")
     }
 }

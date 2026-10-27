@@ -9,6 +9,10 @@ final class SessionVaultTests: XCTestCase {
 
     private func sealed<T: Encodable>(_ value: T) throws -> String { try E2E.seal(value, with: key) }
 
+    // Durations and token counts read the English catalog, whatever this Mac's language.
+    override func setUpWithError() throws { try Catalog.use("en") }
+    override func tearDown() { Catalog.reset() }
+
     func testDecodesARelaySnapshot() throws {
         let json = """
             {"t":"snapshot","machines":[{"id":"m1","name":"\(try sealed(MachineName(name: "PC-Studio", platform: "win32")))",

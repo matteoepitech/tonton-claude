@@ -121,7 +121,8 @@ public struct WrappedLog: Codable, Equatable, Sendable {
     /// `42 min`, `12 h 05`.
     public static func duration(_ seconds: TimeInterval) -> String {
         let minutes = Int((seconds / 60).rounded())
-        return minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(String(format: "%02d", minutes % 60))"
+        return minutes < 60
+            ? String(core: "\(minutes) min") : String(core: "\(minutes / 60) h \(String(format: "%02d", minutes % 60))")
     }
 }
 

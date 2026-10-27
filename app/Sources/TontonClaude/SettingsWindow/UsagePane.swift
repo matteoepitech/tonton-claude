@@ -48,10 +48,12 @@ struct UsagePane: View {
             if !usage.history.entries.isEmpty { export }
             WrappedSection(usage: usage)
             Text(
-                "Counted on this Mac from what sessions report while Tonton Claude runs. Costs are Claude Code's estimates at "
-                    + "list price; tokens include what was read from and written to the prompt cache. Wrapped and the hours count "
-                    + "the time of the tasks seen finishing, and Wrapped the tool calls of the conversations opened in the notch or "
-                    + "kept on this Mac."
+                """
+                Counted on this Mac from what sessions report while Tonton Claude runs. Costs are Claude Code's estimates at \
+                list price; tokens include what was read from and written to the prompt cache. Wrapped and the hours count \
+                the time of the tasks seen finishing, and Wrapped the tool calls of the conversations opened in the notch or \
+                kept on this Mac.
+                """
             )
             .font(.system(size: 12))
             .foregroundStyle(Theme.textFaint)
@@ -89,7 +91,7 @@ struct UsagePane: View {
         let cost = machines.map(\.costUSD).reduce(0, +)
         let tokens = machines.map(\.tokens).reduce(TokenCounts(), +)
         return HStack(alignment: .firstTextBaseline, spacing: 28) {
-            figure(String(format: "$%.2f", cost), "last 7 days")
+            figure(Money.dollars(cost), "last 7 days")
             figure(TokenCounts.short(tokens.allInput), "tokens in")
             figure(TokenCounts.short(tokens.output), "tokens out")
             Spacer()
@@ -97,7 +99,7 @@ struct UsagePane: View {
         .padding(.bottom, 16)
     }
 
-    private func figure(_ value: String, _ label: String) -> some View {
+    private func figure(_ value: String, _ label: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value).font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit()
             Text(label).font(.system(size: 11)).foregroundStyle(Theme.textDim)
@@ -123,7 +125,7 @@ struct UsagePane: View {
         .chartYAxis {
             AxisMarks { value in
                 AxisGridLine().foregroundStyle(Theme.border)
-                AxisValueLabel { Text(String(format: "$%.0f", value.as(Double.self) ?? 0)) }
+                AxisValueLabel { Text(Money.dollars(value.as(Double.self) ?? 0, digits: 0)) }
             }
         }
         .chartLegend(position: .bottom, alignment: .leading)
@@ -139,7 +141,7 @@ struct UsagePane: View {
                 Text("\(TokenCounts.short(total.tokens.allInput)) in · \(TokenCounts.short(total.tokens.output)) out")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(Theme.textDim)
-                Text(String(format: "$%.2f", total.costUSD))
+                Text(Money.dollars(total.costUSD))
                     .font(.system(size: 12, design: .monospaced))
                     .frame(minWidth: 64, alignment: .trailing)
             }

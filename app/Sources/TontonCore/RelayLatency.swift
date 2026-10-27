@@ -15,5 +15,7 @@ public struct RelayLatency: Equatable, Sendable {
     /// Past 400 ms, approvals and replies feel slow.
     public var level: Level { milliseconds < 150 ? .good : milliseconds < 400 ? .fair : .high }
 
-    public var label: String { [region, milliseconds < 1 ? "<1 ms" : "\(milliseconds) ms"].compactMap { $0 }.joined(separator: " · ") }
+    public var label: String {
+        [region, milliseconds < 1 ? String(core: "<1 ms") : String(core: "\(milliseconds) ms")].compactMap { $0 }.joined(separator: " · ")
+    }
 }

@@ -6,23 +6,23 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .machines: "Machines"
-        case .usage: "Usage"
-        case .notch: "Notch"
-        case .general: "General"
-        case .archive: "Archive"
-        case .server: "Relay"
+        case .machines: String(localized: "Machines")
+        case .usage: String(localized: "Usage")
+        case .notch: String(localized: "Notch")
+        case .general: String(localized: "General")
+        case .archive: String(localized: "Archive")
+        case .server: String(localized: "Relay")
         }
     }
 
     var subtitle: String {
         switch self {
-        case .machines: "Computers running Claude Code with the Tonton Claude agent."
-        case .usage: "What your sessions cost, per day, machine and project."
-        case .notch: "How the notch opens and lets you know when a session needs you."
-        case .general: "Startup, menu bar and keyboard shortcuts."
-        case .archive: "Finished conversations kept on this Mac, encrypted, to read later."
-        case .server: "The relay server that connects your machines to this Mac."
+        case .machines: String(localized: "Computers running Claude Code with the Tonton Claude agent.")
+        case .usage: String(localized: "What your sessions cost, per day, machine and project.")
+        case .notch: String(localized: "How the notch opens and lets you know when a session needs you.")
+        case .general: String(localized: "Startup, menu bar and keyboard shortcuts.")
+        case .archive: String(localized: "Finished conversations kept on this Mac, encrypted, to read later.")
+        case .server: String(localized: "The relay server that connects your machines to this Mac.")
         }
     }
 
@@ -180,11 +180,11 @@ struct ConnectionFooter: View {
 
     private var status: (String, Color) {
         switch store.connection {
-        case .connected: ("Connected", Theme.success)
-        case .connecting: ("Connecting", Theme.warning)
-        case .paused: ("Paused", Theme.textFaint)
-        case .notConfigured: ("Not set up", Theme.textFaint)
-        case .failed: ("Offline", Theme.danger)
+        case .connected: (String(localized: "Connected"), Theme.success)
+        case .connecting: (String(localized: "Connecting"), Theme.warning)
+        case .paused: (String(localized: "Paused"), Theme.textFaint)
+        case .notConfigured: (String(localized: "Not set up"), Theme.textFaint)
+        case .failed: (String(localized: "Offline"), Theme.danger)
         }
     }
 
@@ -195,7 +195,7 @@ struct ConnectionFooter: View {
                     Circle().fill(status.1).frame(width: 6, height: 6).shadow(color: status.1.opacity(0.7), radius: 3)
                     Text(status.0).font(.system(size: 12, weight: .medium))
                 }
-                Text(URL(string: settings.relayURL)?.host ?? "no relay")
+                Text(URL(string: settings.relayURL)?.host ?? String(localized: "no relay"))
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(Theme.textFaint)
                     .lineLimit(1)

@@ -96,6 +96,28 @@ describe('client state', () => {
   })
 })
 
+describe('latest entries first', () => {
+  const selected = { ...initialState, selectedId: 's1' }
+
+  test('the end of the conversation shows at once, the whole of it replaces it', () => {
+    const recent = reduce(selected, { t: 'history', sessionId: 's1', entries: [text('a9', 'last')], partial: true })
+    expect(recent.entries?.map(e => e.id)).toEqual(['a9'])
+    expect(recent.loadingEarlier).toBe(true)
+    // A live entry joins it meanwhile, and is in the whole history too.
+    const live = reduce(recent, { t: 'entries', sessionId: 's1', entries: [text('a10', 'live')] })
+    expect(live.entries?.map(e => e.id)).toEqual(['a9', 'a10'])
+    const whole = reduce(live, { t: 'history', sessionId: 's1', entries: [text('a1', 'first'), text('a9', 'last'), text('a10', 'live')] })
+    expect(whole.entries?.map(e => e.id)).toEqual(['a1', 'a9', 'a10'])
+    expect(whole.loadingEarlier).toBe(false)
+  })
+
+  test('after a reconnection, the conversation already shown stays until the whole history replaces it', () => {
+    const shown = reduce(selected, { t: 'history', sessionId: 's1', entries: [text('a1', 'first'), text('a2', 'second')] })
+    const recent = reduce(shown, { t: 'history', sessionId: 's1', entries: [text('a2', 'second')], partial: true })
+    expect(recent).toBe(shown)
+  })
+})
+
 describe('relay client', () => {
   test('opens the snapshot, then follows the selected session', async () => {
     const { relay, sockets } = client()
@@ -110,7 +132,7 @@ describe('relay client', () => {
     ])
 
     relay.select('api')
-    expect(socket.sent).toEqual([{ t: 'subscribe', sessionId: 'api' }])
+    expect(socket.sent).toEqual([{ t: 'subscribe', sessionId: 'api', latestFirst: true }])
     expect(relay.state.entries).toBeNull()
     // Entries sent before the history are part of it.
     socket.receive({ t: 'entries', sessionId: 'api', entries: [await sealedEntry(text('early', 'x'))], reset: false })
@@ -249,7 +271,7 @@ describe('relay client', () => {
     await eventually(() => sockets.length === 2, 'a new socket')
     sockets[1].receive({ t: 'snapshot', sessions: [await wireSession('api')], machines: [] })
     await eventually(() => relay.state.connection === 'connected', 'the new snapshot')
-    expect(sockets[1].sent).toEqual([{ t: 'subscribe', sessionId: 'api' }])
+    expect(sockets[1].sent).toEqual([{ t: 'subscribe', sessionId: 'api', latestFirst: true }])
 
     sockets[1].onclose?.({ code: 4001 })
     expect(relay.state.connection).toBe('stopped')

@@ -26,13 +26,15 @@ struct Composer: View {
     private var readOnlyReason: String {
         if session.tool == "opencode" {
             return session.agentOnline
-                ? "Read only: click Update agent for this machine to message its OpenCode sessions." : "Session offline: history only."
+                ? String(localized: "Read only: click Update agent for this machine to message its OpenCode sessions.")
+                : String(localized: "Session offline: history only.")
         }
         if session.machineId == LocalSessions.machineId {
-            return "Read only: install the agent on this Mac (Settings › Machines) to reply from the notch."
+            return String(localized: "Read only: install the agent on this Mac (Settings › Machines) to reply from the notch.")
         }
         return session.agentOnline
-            ? "Read only: start claude from a new terminal to message this session." : "Session offline: history only."
+            ? String(localized: "Read only: start claude from a new terminal to message this session.")
+            : String(localized: "Session offline: history only.")
     }
 
     var body: some View {
@@ -165,7 +167,7 @@ struct Composer: View {
             }
             .scrollIndicators(.never)
             Text(
-                "\(attachments.count) attachment\(attachments.count == 1 ? "" : "s") · \(AttachmentBudget.describe(total)) of \(AttachmentBudget.describe(AttachmentBudget.maxTotalBytes))"
+                "\(attachments.count) attachments · \(AttachmentBudget.describe(total)) of \(AttachmentBudget.describe(AttachmentBudget.maxTotalBytes))"
             )
             .font(.notch(9))
             .foregroundStyle(Theme.tertiary)
@@ -255,8 +257,8 @@ struct Composer: View {
     }
 
     private var placeholder: String {
-        if !session.canChat { return "Read only" }
-        return dictation.listening ? "Listening…" : "Message Claude…  (↩ send, ⌥↩ new line)"
+        if !session.canChat { return String(localized: "Read only") }
+        return dictation.listening ? String(localized: "Listening…") : String(localized: "Message Claude…  (↩ send, ⌥↩ new line)")
     }
 
     private var templatesMenu: some View {
@@ -363,7 +365,7 @@ struct Composer: View {
                     Text("\(index + 1)").font(.notch(10, weight: .semibold, design: .rounded))
                         .foregroundStyle(Theme.secondary)
                         .frame(width: 12)
-                    Text(message.text.isEmpty ? "\(message.images.count) image(s)" : message.text)
+                    Text(message.text.isEmpty ? String(localized: "\(message.images.count) image(s)") : message.text)
                         .font(.notch(11)).lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: 4)
                     queueButton("chevron.up", "Move earlier", disabled: index == 0) { queues.move(message.id, by: -1, in: session.id) }
@@ -379,7 +381,7 @@ struct Composer: View {
         }
     }
 
-    private func queueButton(_ symbol: String, _ help: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+    private func queueButton(_ symbol: String, _ help: LocalizedStringKey, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).font(.notch(9, weight: .bold)) }
             .buttonStyle(.plain)
             .foregroundStyle(disabled ? Theme.tertiary : Theme.secondary)

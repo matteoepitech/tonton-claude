@@ -68,3 +68,41 @@ test('subscribing to each session in turn, then back, brings each whole history'
   // Back to the session the app shows: all of it again.
   expect(await history('s1')).toEqual(['s1-1', 's1-2'])
 })
+
+test('with latestFirst, a long history comes in two: its end at once, then all of it', async () => {
+  const account = await post('/api/accounts', {})
+  const { secret } = await post('/api/account/token', {}, account.token)
+  const machine = await post('/api/machines/join', { account: account.accountId, secret, name: 'sealed-name' })
+  const agent = await connect('/ws/agent', machine.token)
+  agent.socket.send(JSON.stringify({ t: 'hello', sessionId: 'long', info: 'sealed-info', channel: true }))
+  const entries = Array.from({ length: 100 }, (_, n) => ({ id: `e${n}`, ts: '2026-01-01T00:00:00.000Z', blob: `sealed-${n}` }))
+  agent.socket.send(JSON.stringify({ t: 'entries', sessionId: 'long', entries, reset: true }))
+  agent.socket.send(JSON.stringify({ t: 'hello', sessionId: 'short', info: 'sealed-info', channel: true }))
+  const app = await connect('/ws/app', account.token)
+  await eventually(() => app.messages.find(m => m.t === 'snapshot' && m.sessions.length >= 1), 'the snapshot')
+
+  const histories = async (sessionId: string, latestFirst?: boolean) => {
+    const before = app.messages.length
+    app.socket.send(JSON.stringify({ t: 'subscribe', sessionId, ...(latestFirst ? { latestFirst } : {}) }))
+    await eventually(() => app.messages.slice(before).some(m => m.t === 'history' && m.sessionId === sessionId && !m.partial), 'a history')
+    return app.messages.slice(before).filter(m => m.t === 'history' && m.sessionId === sessionId) as Extract<RelayToApp, { t: 'history' }>[]
+  }
+  const [recent, whole] = await histories('long', true)
+  expect(recent.partial).toBe(true)
+  expect(recent.entries.map(e => e.id)).toEqual(entries.slice(-60).map(e => e.id))
+  expect(whole.partial).toBeUndefined()
+  expect(whole.entries).toHaveLength(100)
+  // Without the flag, as relays always did: one history.
+  expect((await histories('long')).map(h => h.entries.length)).toEqual([100])
+})
+
+test('the end of a history is cut by size, and skipped when the history is short or its last entry too big', async () => {
+  const { latestEntries } = await import('../src/sockets')
+  const { RECENT_HISTORY_BYTES } = await import('../src/limits')
+  const entry = (n: number, size: number) => ({ id: `e${n}`, ts: 't', blob: 'x'.repeat(size) })
+  expect(latestEntries([entry(1, 10), entry(2, 10)])).toBeNull()
+  expect(latestEntries([])).toBeNull()
+  const big = [entry(1, 10), entry(2, RECENT_HISTORY_BYTES / 2), entry(3, RECENT_HISTORY_BYTES / 2 - 5), entry(4, 10)]
+  expect(latestEntries(big)?.map(e => e.id)).toEqual(['e3', 'e4'])
+  expect(latestEntries([entry(1, 10), entry(2, RECENT_HISTORY_BYTES + 1)])).toBeNull()
+})

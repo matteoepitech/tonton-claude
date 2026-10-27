@@ -20,12 +20,12 @@ struct LocalFolderActions: View {
         guard folderExists else { return [] }
         let terminal = settings.terminal.available, editor = settings.editor.available, folder = session.cwd
         return [
-            ("Open in \(terminal.label)", "terminal", { terminal.open(folder) }),
+            (String(localized: "Open in \(terminal.label)"), "terminal", { terminal.open(folder) }),
             (
-                editor == .defaultApp ? "Open the folder" : "Open in \(editor.label)", "chevron.left.forwardslash.chevron.right",
-                { editor.open(folder) }
+                editor == .defaultApp ? String(localized: "Open the folder") : String(localized: "Open in \(editor.label)"),
+                "chevron.left.forwardslash.chevron.right", { editor.open(folder) }
             ),
-            ("Show in Finder", "folder", { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder) }),
+            (String(localized: "Show in Finder"), "folder", { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder) }),
         ]
     }
 

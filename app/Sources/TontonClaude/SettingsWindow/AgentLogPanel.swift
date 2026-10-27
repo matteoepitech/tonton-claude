@@ -41,11 +41,12 @@ struct AgentLogPanel: View {
     }
 
     private var caption: String {
-        guard let log = request.answer else { return request.isLoading ? "Asking \(machine.name)…" : "" }
-        let count = "Last \(log.lines.count) line\(log.lines.count == 1 ? "" : "s")"
+        guard let log = request.answer else { return request.isLoading ? String(localized: "Asking \(machine.name)…") : "" }
+        let count = String(localized: "Last \(log.lines.count) lines")
         let size = ByteCountFormatter.string(fromByteCount: Int64(log.size), countStyle: .file)
-        let when = log.readAt.map { " · read at \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
-        return "\(count) of \(size)\(when)"
+        let caption = String(localized: "\(count) of \(size)", comment: "Last 40 lines of 12 KB")
+        guard let read = log.readAt else { return caption }
+        return String(localized: "\(caption) · read at \(read.formatted(date: .omitted, time: .shortened))")
     }
 
     private var lines: [String] { request.answer?.lines ?? [] }
@@ -61,7 +62,7 @@ struct AgentLogPanel: View {
 /// The small square buttons in the header of the panels under a machine's row.
 struct PanelIconButton: View {
     let symbol: String
-    let help: String
+    let help: LocalizedStringKey
     let action: () -> Void
 
     var body: some View {

@@ -237,7 +237,7 @@ struct SessionPills: View {
             if row.more > 0 {
                 pill { Text("+\(row.more)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
                     .overlay(Capsule().stroke(.white.opacity(0.15)))
-                    .accessibilityLabel(Spoken.count(row.more, "more session"))
+                    .accessibilityLabel(Spoken.moreSessions(row.more))
             }
         }
         .allowsHitTesting(false)

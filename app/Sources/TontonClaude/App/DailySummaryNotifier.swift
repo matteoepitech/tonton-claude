@@ -29,6 +29,6 @@ final class DailySummaryNotifier {
         let sessions = store.sessions.filter { Calendar.current.isDate($0.lastActivity, inSameDayAs: now) }.count
         let cost = settings.showCosts ? usage.history.spent(on: now) : nil
         guard let text = DailySummary.text(worked: worked, sessions: sessions, cost: cost) else { return }
-        Notifier.post(title: "Today with Claude", body: text)
+        Notifier.post(title: String(localized: "Today with Claude"), body: text)
     }
 }
