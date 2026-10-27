@@ -6,17 +6,22 @@ import { bytesToBase64Url } from './base64'
 import { type AccountKey, newAccountKey, open, seal } from './crypto'
 import { PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
 import type {
+  PoolArea,
   PoolAuthor,
   PoolEventBody,
   PoolInfo,
   PoolKeyGrant,
   PoolMemberProfile,
   PoolMessageBody,
+  PoolNotes,
+  PoolNotesSection,
   PoolRole,
   PoolSessionOrder,
   PoolSessionProfile,
+  PoolSessionRef,
   PoolSnapshot,
   PoolTask,
+  PoolTaskSize,
   PoolTaskState,
   PoolUpdate,
 } from './pool-protocol'
@@ -25,6 +30,8 @@ import type { Sealed } from './protocol'
 const KEY = /^[A-Za-z0-9_-]{43}$/
 const TASK_STATES: readonly PoolTaskState[] = ['todo', 'assigned', 'in_progress', 'review', 'done', 'blocked']
 const ROLES: readonly PoolRole[] = ['owner', 'admin', 'member', 'viewer']
+export const POOL_NOTES_SECTIONS: readonly PoolNotesSection[] = ['goal', 'stack', 'contracts', 'decisions']
+const isSize = (value: unknown): value is PoolTaskSize => value === 'small' || value === 'large'
 /** The longest text kept from a field another member wrote. */
 const MAX_TEXT = 64 * 1024
 
@@ -116,6 +123,7 @@ export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | n
     machine: text(f.machine),
     tool,
     orchestrator: f.orchestrator === true ? true : undefined,
+    takes: isSize(f.takes) || f.takes === 'any' ? (f.takes as PoolTaskSize | 'any') : undefined,
   })
 }
 
@@ -133,7 +141,28 @@ export function decodePoolTask(value: unknown): PoolTask | null {
     dependsOn: texts(f.dependsOn),
     branch: text(f.branch),
     summary: text(f.summary),
+    size: isSize(f.size) ? f.size : undefined,
+    paths: texts(f.paths),
   })
+}
+
+/** The shared notes: free text, the sections, the areas with the paths they own. */
+export function decodePoolNotes(value: unknown): PoolNotes | null {
+  const f = fields(value)
+  const body = text(f?.text)
+  if (!f || body === undefined) return null
+  const raw = fields(f.sections)
+  const sections = raw
+    ? defined(Object.fromEntries(POOL_NOTES_SECTIONS.map(name => [name, text(raw[name])])) as Partial<Record<PoolNotesSection, string>>)
+    : undefined
+  const areas = Array.isArray(f.areas)
+    ? f.areas.flatMap((area): PoolArea[] => {
+        const a = fields(area)
+        const name = text(a?.name)
+        return a && name !== undefined ? [{ name, paths: texts(a.paths) ?? [] }] : []
+      })
+    : undefined
+  return defined({ text: body, sections: sections && Object.keys(sections).length ? sections : undefined, areas })
 }
 
 export function decodePoolMessageBody(value: unknown): PoolMessageBody | null {
@@ -198,11 +227,14 @@ export interface PoolState {
   sessions: PoolSession[]
   /** In the order the relay listed them, then the order they were made. */
   tasks: PoolTaskItem[]
-  notes: (PoolAuthor & { rev: number; updatedAt: string; text: string | null }) | null
+  /** `text` is null when the notes do not open with the pool key. */
+  notes: (PoolAuthor & { rev: number; updatedAt: string; text: string | null } & Pick<PoolNotes, 'sections' | 'areas'>) | null
   messages: PoolPostItem<PoolMessageBody>[]
   events: PoolPostItem<PoolEventBody>[]
   /** This member's private key for the pool (sealed with its account key) and the pool keys wrapped for it. */
   own: { secret: Sealed | null; wraps: PoolKeyWrapWire[] }
+  /** The session that plans and assigns, as an owner or an admin set it on the relay. */
+  orchestrator: PoolSessionRef | null
 }
 
 /** How many messages and events a client keeps in memory. */
@@ -220,7 +252,7 @@ export class PoolVault {
     this.keyring = typeof key === 'string' ? new PoolKeyring(key, 1) : key
   }
 
-  seal(value: PoolInfo | PoolMemberProfile | PoolSessionProfile | PoolTask | { text: string } | PoolMessageBody | PoolEventBody) {
+  seal(value: PoolInfo | PoolMemberProfile | PoolSessionProfile | PoolTask | PoolNotes | PoolMessageBody | PoolEventBody) {
     return this.keyring.seal(value)
   }
 
@@ -255,6 +287,7 @@ export class PoolVault {
       messages,
       events,
       own: pool.own ?? { secret: null, wraps: [] },
+      orchestrator: pool.orchestrator ?? null,
     }
   }
 
@@ -276,6 +309,8 @@ export class PoolVault {
         return { ...state, events: [...state.events, await this.post(update.event, decodePoolEventBody)].slice(-KEPT_POSTS) }
       case 'pool_info':
         return { ...state, info: await this.read(update.info, decodePoolInfo), paused: update.paused, keyVersion: update.keyVersion }
+      case 'pool_orchestrator':
+        return { ...state, orchestrator: update.orchestrator }
       case 'pool_member': {
         const member = await this.member(update.member)
         const others = state.members.filter(m => m.account !== member.account)
@@ -286,14 +321,23 @@ export class PoolVault {
           ...state,
           members: state.members.filter(m => m.account !== update.account),
           sessions: state.sessions.filter(s => s.account !== update.account),
+          // The relay drops an orchestrator whose session left: so does the client.
+          orchestrator: state.orchestrator?.account === update.account ? null : state.orchestrator,
         }
       case 'pool_session': {
         const session = await this.session(update.session)
         const others = state.sessions.filter(s => s.account !== session.account || s.session !== session.session)
         return { ...state, sessions: [...others, session] }
       }
-      case 'pool_session_left':
-        return { ...state, sessions: state.sessions.filter(s => s.account !== update.account || s.session !== update.session) }
+      case 'pool_session_left': {
+        const lead = state.orchestrator
+        const gone = lead?.account === update.account && lead.session === update.session
+        return {
+          ...state,
+          sessions: state.sessions.filter(s => s.account !== update.account || s.session !== update.session),
+          orchestrator: gone ? null : lead,
+        }
+      }
       case 'pool_key': {
         const others = state.own.wraps.filter(wrap => wrap.version !== update.wrap.version)
         return { ...state, own: { ...state.own, wraps: [...others, update.wrap].sort((a, b) => a.version - b.version) } }
@@ -335,8 +379,8 @@ export class PoolVault {
 
   private async notes(notes: NonNullable<PoolSnapshot['notes']>) {
     const { rev, updatedAt, account, session } = notes
-    const opened = await this.read(notes.blob, value => text(fields(value)?.text) ?? null)
-    return { rev, updatedAt, account, session, text: opened }
+    const opened = await this.read(notes.blob, decodePoolNotes)
+    return { rev, updatedAt, account, session, text: opened?.text ?? null, sections: opened?.sections, areas: opened?.areas }
   }
 
   private async post<T>(post: PoolSnapshot['messages'][number], decode: (value: unknown) => T | null): Promise<PoolPostItem<T>> {

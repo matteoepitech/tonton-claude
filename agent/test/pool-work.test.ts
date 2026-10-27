@@ -108,11 +108,13 @@ async function join(autoStart = false) {
         account: 'acc_ana',
         session: 'ses_ana',
         joinedAt: 'now',
-        profile: await vault.seal({ area: 'front', orchestrator: true }),
+        profile: await vault.seal({ area: 'front' }),
         online: true,
         ready: true,
       },
     ],
+    // The relay says who the orchestrator is: an owner or an admin chose it.
+    orchestrator: { account: 'acc_ana', session: 'ses_ana' },
     events: [
       {
         id: 'e0',

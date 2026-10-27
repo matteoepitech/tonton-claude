@@ -4,6 +4,7 @@ import { newAccountKey, seal } from '../crypto'
 import {
   decodePoolEventBody,
   decodePoolMessageBody,
+  decodePoolNotes,
   decodePoolSessionProfile,
   decodePoolTask,
   grantPoolKey,
@@ -244,4 +245,40 @@ test("the machine owner's choice to start pool tasks at once comes with the orde
   })
   // An unknown tool is dropped, the event stays.
   expect(decodePoolEventBody({ kind: 'session', tool: 'vim', model: 3 })).toEqual({ kind: 'session' })
+})
+
+describe('the orchestrator and the structured notes', () => {
+  test('the relay says who the orchestrator is; a wrong shape is dropped, none is allowed', () => {
+    const lead = { account: 'acct', session: 'ses_1' }
+    expect(parsePoolUpdate({ t: 'pool_orchestrator', poolId: 'p', orchestrator: lead })).toEqual({
+      t: 'pool_orchestrator',
+      poolId: 'p',
+      orchestrator: lead,
+    })
+    expect(parsePoolUpdate({ t: 'pool_orchestrator', poolId: 'p', orchestrator: null })).toEqual({
+      t: 'pool_orchestrator',
+      poolId: 'p',
+      orchestrator: null,
+    })
+    expect(parsePoolUpdate({ t: 'pool_orchestrator', poolId: 'p', orchestrator: { account: 3 } })).toBeNull()
+  })
+
+  test('notes, tasks and profiles keep the fields they should, and drop the wrong ones', () => {
+    expect(
+      decodePoolNotes({
+        text: 'x',
+        sections: { goal: 'A shop', contracts: 3, other: 'no' },
+        areas: [{ name: 'front', paths: ['web/', 4] }, { paths: [] }],
+      }),
+    ).toEqual({ text: 'x', sections: { goal: 'A shop' }, areas: [{ name: 'front', paths: ['web/'] }] })
+    expect(decodePoolNotes({ sections: {} })).toBeNull()
+    expect(decodePoolTask({ title: 'Page', state: 'todo', size: 'tiny', paths: ['web/'] })).toEqual({
+      title: 'Page',
+      state: 'todo',
+      paths: ['web/'],
+    })
+    expect(decodePoolTask({ title: 'Page', state: 'todo', size: 'small' })?.size).toBe('small')
+    expect(decodePoolSessionProfile({ takes: 'any' })).toEqual({ takes: 'any' })
+    expect(decodePoolSessionProfile({ takes: 'all' })).toEqual({})
+  })
 })

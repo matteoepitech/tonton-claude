@@ -15,7 +15,7 @@ import {
   MAX_START_ORDER_BYTES,
 } from './limits'
 import type { Author } from './pools'
-import { isPoolId, isPoolItemId, isRevision, isSealed, isSessionId } from './validate'
+import { isAccountId, isPoolId, isPoolItemId, isRevision, isSealed, isSessionId } from './validate'
 
 const POOL_APP_MESSAGES = new Set([
   'pool_subscribe',
@@ -29,6 +29,7 @@ const POOL_APP_MESSAGES = new Set([
   'pool_member_key',
   'pool_join_session',
   'pool_leave_session',
+  'pool_orchestrator',
 ])
 
 /** True when the message was a pool's: handled or dropped here. */
@@ -98,6 +99,18 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
     case 'pool_leave_session': {
       if (!isSessionId(message.sessionId) || !ctx.pools.removeSession(poolId, accountId, message.sessionId)) return true
       ctx.sessionLeftPool({ poolId, accountId, sessionId: message.sessionId }, true)
+      break
+    }
+    case 'pool_orchestrator': {
+      // Owners and admins only: no member makes its own session the one that hands out the work.
+      if (role !== 'owner' && role !== 'admin') return true
+      const lead = message.orchestrator
+      const valid = lead === null || (isAccountId(lead?.account) && isSessionId(lead?.session))
+      if (!valid || !ctx.pools.setOrchestrator(poolId, lead && { account: lead.account, session: lead.session })) {
+        ctx.hub.send(socket, { t: 'pool_error', poolId, message: 'Only a session of this pool can be its orchestrator.' })
+        return true
+      }
+      ctx.broadcastPool(poolId, { t: 'pool_orchestrator', poolId, orchestrator: ctx.pools.orchestrator(poolId) })
       break
     }
     default:

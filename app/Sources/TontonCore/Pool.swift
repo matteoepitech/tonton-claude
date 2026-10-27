@@ -133,15 +133,19 @@ public struct PoolSessionProfile: Codable, Equatable, Sendable {
     public var machine: String?
     /// `claude` or `opencode`.
     public var tool: String?
+    /// Older profiles only: the orchestrator is the pool's `orchestrator`, which only owners and admins set.
     public var orchestrator: Bool?
+    /// The owner's override of what the session takes: `small`, `large` or `any`. Nil: by its tool.
+    public var takes: String?
 
     public init(
         area: String? = nil, skills: String? = nil, repo: String? = nil, project: String? = nil, machine: String? = nil,
-        tool: String? = nil, orchestrator: Bool? = nil
+        tool: String? = nil, orchestrator: Bool? = nil, takes: String? = nil
     ) {
         (self.area, self.skills, self.repo, self.project, self.machine, self.tool, self.orchestrator) = (
             area, skills, repo, project, machine, tool, orchestrator
         )
+        self.takes = takes
     }
 }
 
@@ -162,12 +166,26 @@ public struct PoolTask: Codable, Equatable, Sendable {
     public var state: PoolTaskState
     public var assignee: PoolSessionRef?
     public var dependsOn: [String]?
+    /// `pool/<id>-<slug>`: one branch per task.
     public var branch: String?
     public var summary: String?
+    /// `small` or `large`; nil: large.
+    public var size: String?
+    /// The files and folders it works in.
+    public var paths: [String]?
+}
+
+/// An area of the code and the paths it owns.
+public struct PoolArea: Codable, Equatable, Sendable {
+    public var name: String
+    public var paths: [String]
 }
 
 public struct PoolNotes: Codable, Equatable, Sendable {
     public var text: String
+    /// `goal`, `stack`, `contracts`, `decisions`.
+    public var sections: [String: String]?
+    public var areas: [PoolArea]?
 }
 
 public struct PoolMessageBody: Codable, Equatable, Sendable {
@@ -310,6 +328,8 @@ public struct PoolSnapshot: Codable, Equatable, Sendable {
     public let events: [PoolItemWire]
     /// For the account it was sent to: its private key and the pool keys wrapped for it.
     public let own: PoolOwnKeys?
+    /// The session that plans and assigns, as an owner or an admin set it. Nil: none, or an older relay.
+    public let orchestrator: PoolSessionRef?
 }
 
 /// The pool messages of the relay, on the app's socket (`RelayMessage.pool`).
@@ -320,6 +340,8 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
     case message(poolId: String, PoolItemWire)
     case event(poolId: String, PoolItemWire)
     case info(poolId: String, info: String, paused: Bool, keyVersion: Int)
+    /// The pool's orchestrator changed; nil: none.
+    case orchestrator(poolId: String, PoolSessionRef?)
     case member(poolId: String, PoolMemberWire)
     case memberLeft(poolId: String, account: String)
     case session(poolId: String, PoolSessionWire)
@@ -333,6 +355,7 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
 
     private enum Keys: String, CodingKey {
         case t, pool, poolId, task, notes, message, event, info, paused, keyVersion, member, account, session, kind, id, current, wrap
+        case orchestrator
     }
 
     public init(from decoder: Decoder) throws {
@@ -351,6 +374,8 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
         case "pool_event": self = .event(poolId: poolId, try value(.event))
         case "pool_info":
             self = .info(poolId: poolId, info: try value(.info), paused: try value(.paused), keyVersion: try value(.keyVersion))
+        case "pool_orchestrator":
+            self = .orchestrator(poolId: poolId, try container.decodeIfPresent(PoolSessionRef.self, forKey: .orchestrator))
         case "pool_member": self = .member(poolId: poolId, try value(.member))
         case "pool_member_left": self = .memberLeft(poolId: poolId, account: try value(.account))
         case "pool_session": self = .session(poolId: poolId, try value(.session))
