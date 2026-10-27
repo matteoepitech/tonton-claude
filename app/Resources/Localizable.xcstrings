@@ -1423,6 +1423,16 @@
         }
       }
     },
+    "A Focus is on now." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un mode de concentration est activé."
+          }
+        }
+      }
+    },
     "A first session showed up in the notch." : {
       "localizations" : {
         "fr" : {
@@ -1649,6 +1659,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ajouter"
+          }
+        }
+      }
+    },
+    "Add Tonton Claude's filter to a Focus in System Settings › Focus, then pick the alerts it silences." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez le filtre de Tonton Claude à un mode de concentration dans Réglages Système › Concentration, puis choisissez les alertes qu’il coupe."
           }
         }
       }
@@ -2125,6 +2145,16 @@
         }
       }
     },
+    "Budgets, achievements and the daily summary" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Budgets, succès et résumé du jour"
+          }
+        }
+      }
+    },
     "Built-in display" : {
       "localizations" : {
         "fr" : {
@@ -2251,6 +2281,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rechercher les mises à jour"
+          }
+        }
+      }
+    },
+    "Choose which alerts stay quiet during this Focus. The notch still shows the sessions that wait for you." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez les alertes coupées pendant ce mode de concentration. L’encoche montre toujours les sessions qui vous attendent."
           }
         }
       }
@@ -3229,6 +3269,16 @@
         }
       }
     },
+    "During a Focus" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pendant un mode de concentration"
+          }
+        }
+      }
+    },
     "Each live session as a small pill under the notch. Click one to open it." : {
       "localizations" : {
         "fr" : {
@@ -3455,6 +3505,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les conversations terminées gardées sur ce Mac, chiffrées, à relire plus tard."
+          }
+        }
+      }
+    },
+    "Finished tasks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tâches terminées"
           }
         }
       }
@@ -4878,6 +4938,16 @@
         }
       }
     },
+    "Open Focus Settings" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir les réglages Concentration"
+          }
+        }
+      }
+    },
     "Open Relay settings" : {
       "localizations" : {
         "fr" : {
@@ -5099,6 +5169,16 @@
         }
       }
     },
+    "Permission requests" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demandes d’autorisation"
+          }
+        }
+      }
+    },
     "Phone or browser" : {
       "localizations" : {
         "fr" : {
@@ -5288,6 +5368,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Questions"
+          }
+        }
+      }
+    },
+    "Questions and errors" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questions et erreurs"
           }
         }
       }
@@ -6356,6 +6446,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Se déconnecter"
+          }
+        }
+      }
+    },
+    "Silence Tonton Claude" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre Tonton Claude en sourdine"
+          }
+        }
+      }
+    },
+    "Silences every alert" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coupe toutes les alertes"
+          }
+        }
+      }
+    },
+    "Silences nothing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne coupe rien"
+          }
+        }
+      }
+    },
+    "Silences: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coupe : %@"
           }
         }
       }
@@ -7572,6 +7702,16 @@
         }
       }
     },
+    "Usage limit resets" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialisations de la limite d’utilisation"
+          }
+        }
+      }
+    },
     "Use an https address." : {
       "localizations" : {
         "fr" : {
@@ -7952,6 +8092,16 @@
         }
       }
     },
+    "budgets, achievements and the daily summary" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "budgets, succès et résumé du jour"
+          }
+        }
+      }
+    },
     "connected" : {
       "localizations" : {
         "fr" : {
@@ -8008,6 +8158,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "se termine %@"
+          }
+        }
+      }
+    },
+    "finished tasks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tâches terminées"
           }
         }
       }
@@ -8124,6 +8284,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "motif, vide pour tout appel"
+          }
+        }
+      }
+    },
+    "permission requests" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "demandes d’autorisation"
+          }
+        }
+      }
+    },
+    "questions and errors" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "questions et erreurs"
           }
         }
       }
@@ -8254,6 +8434,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "erreur inconnue"
+          }
+        }
+      }
+    },
+    "usage limit resets" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "réinitialisations de la limite d’utilisation"
           }
         }
       }

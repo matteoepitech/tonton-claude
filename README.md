@@ -32,7 +32,7 @@ Tonton Claude puts all of them in your Mac's notch. Hover the camera and everyth
 - **The whole conversation.** Messages, tool calls, code and images, as they happen.
 - **Talk back.** Send a message or an image to any session, or one of your quick replies in a click.
 - **Approve from anywhere.** A session asks for permission, the notch taps you on the shoulder, <kbd>⌘</kbd> <kbd>↩</kbd> and it carries on.
-- **Stays out of the way.** At rest the notch looks untouched. Alerts, sounds and quiet hours are all up to you.
+- **Stays out of the way.** At rest the notch looks untouched. Alerts, sounds, quiet hours and Focus modes are all up to you.
 - **Private by design.** Everything is end-to-end encrypted. The relay can't read your conversations, and you can host your own.
 
 ## Get started

@@ -69,9 +69,19 @@ fi
 xcrun --find xcstringstool >/dev/null 2>&1 ||
   { echo "xcstringstool not found: install Xcode, or select it with xcode-select -s" >&2; exit 1; }
 
+# The Focus filter (Sources/TontonClaude/App/FocusFilter.swift) is an App Intent. macOS learns about intents from
+# Contents/Resources/Metadata.appintents, which Xcode makes from values the compiler writes out for them. SwiftPM does
+# neither: each build asks the compiler for those values, and Xcode's appintentsmetadataprocessor makes the metadata below.
+mkdir -p build
+printf '["AppIntent"]' > build/intent-protocols.json
+release() {
+  swift build -c release "$@" -Xswiftc -emit-const-values \
+    -Xswiftc -Xfrontend -Xswiftc -const-gather-protocols-file -Xswiftc -Xfrontend -Xswiftc "$PWD/build/intent-protocols.json"
+}
+
 # One build per architecture, merged with lipo: works with the Command Line Tools alone, unlike a multi-arch swift build.
 if [ $UNIVERSAL = 1 ]; then
-  for arch in arm64 x86_64; do swift build -c release --arch $arch; done
+  for arch in arm64 x86_64; do release --arch $arch; done
   BIN=build/TontonClaude-universal
   mkdir -p build
   lipo -create -output "$BIN" \
@@ -83,11 +93,16 @@ if [ $UNIVERSAL = 1 ]; then
     "$(swift build -c release --arch x86_64 --show-bin-path)/TontonWidget"
   # The framework comes from Sparkle's release with both architectures, whichever build copied it.
   SPARKLE=$(swift build -c release --arch arm64 --show-bin-path)/Sparkle.framework
+  # The intents are the same in both.
+  INTENTS_BUILD=$(swift build -c release --arch arm64 --show-bin-path)
+  INTENTS_ARCH=arm64
 else
-  swift build -c release
+  release
   BIN=$(swift build -c release --show-bin-path)/TontonClaude
   WIDGET_BIN=$(swift build -c release --show-bin-path)/TontonWidget
   SPARKLE=$(swift build -c release --show-bin-path)/Sparkle.framework
+  INTENTS_BUILD=$(swift build -c release --show-bin-path)
+  INTENTS_ARCH=$(uname -m)
 fi
 
 APP=build/TontonClaude.app
@@ -105,6 +120,17 @@ strings() {
   xcrun xcstringstool compile Resources/InfoPlist.xcstrings --output-directory "$1"
 }
 strings "$APP/Contents/Resources"
+find "$PWD/Sources/TontonClaude" -name '*.swift' > build/intent-sources
+find "$INTENTS_BUILD/TontonClaude.build" -name '*.swiftconstvalues' > build/intent-values
+SWIFT=$(xcrun --find swift)
+xcrun appintentsmetadataprocessor --quiet-warnings --output "$APP/Contents/Resources" \
+  --toolchain-dir "${SWIFT%/usr/bin/swift}" --sdk-root "$(xcrun --sdk macosx --show-sdk-path)" \
+  --xcode-version "$(xcodebuild -version | sed -n 's/^Build version //p')" --module-name TontonClaude \
+  --platform-family macOS --deployment-target 14.0 --target-triple "$INTENTS_ARCH-apple-macosx14.0" \
+  --source-file-list build/intent-sources --swift-const-vals-list build/intent-values
+# Without it, Settings › Focus would never offer the filter, and nothing else would say so.
+grep -q SilenceAlertsFilter "$APP/Contents/Resources/Metadata.appintents/extract.actionsdata" ||
+  { echo "the App Intents metadata has no Focus filter" >&2; exit 1; }
 LANGUAGES=$(cd "$APP/Contents/Resources" && for folder in *.lproj; do printf '<string>%s</string>' "${folder%.lproj}"; done)
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

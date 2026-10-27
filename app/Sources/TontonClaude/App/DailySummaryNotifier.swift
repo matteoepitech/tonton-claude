@@ -20,7 +20,7 @@ final class DailySummaryNotifier {
     }
 
     private func check(at now: Date = Date()) {
-        guard settings.dailySummary, !settings.isQuietNow,
+        guard settings.dailySummary, !settings.isQuiet(.other),
             DailySummary.isDue(at: now, minutes: settings.dailySummaryTime, lastDay: settings.dailySummaryDay)
         else { return }
         settings.dailySummaryDay = UsageHistory.day(now)
