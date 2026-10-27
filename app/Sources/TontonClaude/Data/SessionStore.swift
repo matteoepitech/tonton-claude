@@ -774,7 +774,11 @@ final class SessionStore: ObservableObject {
         guard let account = account ?? settings.account else { return }
         settings.accounts.remove(account)
         settings.parkedPins[AccountList.id(of: account)] = nil
-        if isConnected(account) { settings.account = nil }
+        if isConnected(account) {
+            // Messages held for Undo send go first, to the account they were written for.
+            HeldMessages.shared.flush()
+            settings.account = nil
+        }
     }
 
     /// Connects to another account signed in on this Mac. The one connected now stays in the list, and its pins wait for
@@ -788,6 +792,9 @@ final class SessionStore: ObservableObject {
         let parked = settings.parkedPins.removeValue(forKey: AccountList.id(of: account)) ?? []
         settings.pinnedSessions = settings.pinnedSessions.filter { here.contains($0) } + parked
         selectedId = nil
+        // Messages held for Undo send go first, to the account they were written for: the socket only moves to the next one
+        // a moment later.
+        HeldMessages.shared.flush()
         settings.account = account
     }
 }
