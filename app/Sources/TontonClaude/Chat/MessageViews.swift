@@ -176,16 +176,20 @@ extension ToolRow {
             if showSteps {
                 ForEach(steps, id: \.call.id) { step in
                     HStack(spacing: 6) {
-                        Text(step.call.name ?? "?").font(.system(size: 10, weight: .semibold))
+                        // The agent sends the first calls of a task, then a line without a tool saying there were more.
+                        if let name = step.call.name, !name.isEmpty {
+                            Text(name).font(.system(size: 10, weight: .semibold))
+                        }
                         Text(step.call.summary ?? "")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 10, design: step.call.name?.isEmpty == false ? .monospaced : .default))
                             .foregroundStyle(Theme.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer(minLength: 4)
+                        // Only failures come with a result: the latest call is the one still running.
                         if step.result?.isError == true {
                             Image(systemName: "xmark.circle.fill").font(.system(size: 9)).foregroundStyle(.red)
-                        } else if step.result == nil && running {
+                        } else if running && step.call.id == steps.last?.call.id {
                             ProgressView().controlSize(.mini)
                         }
                     }

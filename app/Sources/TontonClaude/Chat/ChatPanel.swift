@@ -37,7 +37,8 @@ struct ChatPanel: View {
                     .padding(.vertical, 8)
                 }
                 .onAppear { if !jump(proxy, items) { proxy.scrollTo("bottom", anchor: .bottom) } }
-                .onChange(of: entries.count) { _, _ in
+                // Subagent calls fold under their task: they neither move the view nor make the wave jump.
+                .onChange(of: entries.filter { !$0.kind.isSubagent }.count) { _, _ in
                     lastEntry = Date()
                     // The history of a session picked in the search may arrive after the panel opened.
                     if jump(proxy, items) { return }

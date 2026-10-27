@@ -27,6 +27,8 @@ public enum EntryKind: String, Codable, Sendable {
     /// A call of a subagent, and its result, under the Task call that started it (`parent`).
     case subagentTool = "sub_tool"
     case subagentResult = "sub_result"
+
+    public var isSubagent: Bool { self == .subagentTool || self == .subagentResult }
 }
 
 /// One element of a conversation, as produced by the agent's transcript parser.

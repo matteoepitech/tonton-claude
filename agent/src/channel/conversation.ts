@@ -47,6 +47,8 @@ export class Conversation {
   private readonly tailer: Tailer | null
   private readonly subagents: Subagents | null
   private subEntries: Entry[] = []
+  /** Every subagent entry sent, so a transcript read again doesn't send one twice, even after it left the backlog. */
+  private readonly sentSubIds = new Set<string>()
   /** Read-only shares of this session: each gets its own sealed copy. */
   readonly shares: SessionShares
 
@@ -74,13 +76,16 @@ export class Conversation {
           },
         })
       : null
-    this.subagents = link.transcriptPath ? new Subagents(link.transcriptPath, entries => this.onSubEntries(entries)) : null
+    this.subagents = link.transcriptPath
+      ? new Subagents(link.transcriptPath, (entries, backlog) => this.onSubEntries(entries, backlog))
+      : null
   }
 
   start() {
+    // Subagents first: what they wrote before goes out with the session's backlog, not as news.
+    this.subagents?.start()
     if (this.tailer) this.tailer.start()
     else this.announce()
-    this.subagents?.start()
     this.usageTimer = setInterval(() => this.readUsage(), USAGE_POLL_MS)
   }
 
@@ -102,12 +107,17 @@ export class Conversation {
     for (const requestId of this.pending.keys()) this.postPermission(requestId)
   }
 
-  /** Calls of a subagent, under the Task call that started it. A transcript read again brings them back: once each. */
-  private onSubEntries(entries: Entry[]) {
-    const known = new Set(this.subEntries.map(entry => entry.id))
-    const fresh = entries.filter(entry => !known.has(entry.id))
+  /**
+   * Calls of a subagent, under the Task call that started it. The backlog, written before the session was followed,
+   * waits for the announce: sent as news, it would evict the conversation from the relay and mark an idle session as
+   * working.
+   */
+  private onSubEntries(entries: Entry[], backlog: boolean) {
+    const fresh = entries.filter(entry => !this.sentSubIds.has(entry.id))
     if (!fresh.length) return
+    for (const entry of fresh) this.sentSubIds.add(entry.id)
     this.subEntries = [...this.subEntries, ...fresh].slice(-SUBAGENT_BACKLOG_SIZE)
+    if (backlog) return
     this.post(async () => ({ t: 'entries', sessionId: this.link.sessionId, entries: await this.sealEntries(fresh), reset: false }))
   }
 
