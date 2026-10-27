@@ -817,6 +817,16 @@
         }
       }
     },
+    "%lld more" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld de plus"
+          }
+        }
+      }
+    },
     "%lld more in the notch" : {
       "localizations" : {
         "fr" : {
@@ -941,6 +951,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld sur %2$lld appels"
+          }
+        }
+      }
+    },
+    "%lld of %lld tasks done" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld tasks done"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld tâches faites sur %2$lld"
           }
         }
       }
@@ -1101,6 +1127,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld %% · compactage proche"
+          }
+        }
+      }
+    },
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld"
           }
         }
       }
@@ -1747,6 +1789,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alertes suspendues : les demandes d’autorisation arrivent toujours"
+          }
+        }
+      }
+    },
+    "All done" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout est fait"
           }
         }
       }
@@ -3437,12 +3489,32 @@
         }
       }
     },
+    "Fold its sessions" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replier ses sessions"
+          }
+        }
+      }
+    },
     "Folder" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dossier"
+          }
+        }
+      }
+    },
+    "Folds its sessions" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replie ses sessions"
           }
         }
       }
@@ -6156,6 +6228,16 @@
         }
       }
     },
+    "Show its sessions" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher ses sessions"
+          }
+        }
+      }
+    },
     "Show less" : {
       "localizations" : {
         "fr" : {
@@ -6254,6 +6336,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Affichée dans l’encoche"
+          }
+        }
+      }
+    },
+    "Shows its sessions" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche ses sessions"
           }
         }
       }
@@ -6680,6 +6772,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remettre le message dans le champ de message"
+          }
+        }
+      }
+    },
+    "Tasks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tâches"
+          }
+        }
+      }
+    },
+    "Tasks done in Claude's list" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tâches faites dans la liste de Claude"
+          }
+        }
+      }
+    },
+    "Tasks, %lld of %lld done" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tasks, %1$lld of %2$lld done"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tâches, %1$lld faites sur %2$lld"
+          }
+        }
+      }
+    },
+    "Tasks, all done" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tâches, toutes faites"
           }
         }
       }
