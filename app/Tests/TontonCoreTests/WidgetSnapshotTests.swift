@@ -99,6 +99,7 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertEqual(WidgetSnapshot.sessionId(in: odd), "a/b c")
         XCTAssertNil(WidgetSnapshot.link(to: ""))
         XCTAssertNil(WidgetSnapshot.sessionId(in: try XCTUnwrap(URL(string: "tonton://session"))))
+        XCTAssertNil(WidgetSnapshot.sessionId(in: try XCTUnwrap(URL(string: "tonton://session/"))))
         XCTAssertNil(WidgetSnapshot.sessionId(in: try XCTUnwrap(URL(string: "tonton://open/abc"))))
         XCTAssertNil(WidgetSnapshot.sessionId(in: try XCTUnwrap(URL(string: "https://session/abc"))))
     }

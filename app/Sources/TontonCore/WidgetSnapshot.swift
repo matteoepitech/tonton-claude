@@ -89,8 +89,10 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// The session a tonton://session/<id> link names.
     public static func sessionId(in url: URL) -> String? {
         guard url.scheme == "tonton", url.host == "session" else { return nil }
-        let id = url.lastPathComponent
-        return id.isEmpty || id == "/" ? nil : id
+        // From the encoded path: lastPathComponent splits at an encoded slash on some macOS versions and not others.
+        let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath ?? ""
+        let id = String(path.drop { $0 == "/" }).removingPercentEncoding ?? ""
+        return id.isEmpty ? nil : id
     }
 
     private static func rank(_ status: SessionStatus) -> Int {
