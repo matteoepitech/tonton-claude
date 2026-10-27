@@ -5,6 +5,8 @@ import TontonCore
 struct NotchPane: View {
     @EnvironmentObject var settings: AppSettings
 
+    private static let focusSettings = URL(string: "x-apple.systempreferences:com.apple.Focus-Settings.extension")
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             GroupLabel(text: "Behavior").padding(.top, -26)
@@ -131,6 +133,18 @@ struct NotchPane: View {
                     Row(title: "From") { TimeField(minutes: $settings.quietStart) }
                     Hairline()
                     Row(title: "To") { TimeField(minutes: $settings.quietEnd) }
+                }
+                Hairline()
+                Row(
+                    title: "During a Focus",
+                    detail: "Add Tonton Claude's filter to a Focus in System Settings › Focus, then pick the alerts it silences."
+                ) {
+                    Button("Open Focus Settings") { if let url = Self.focusSettings { NSWorkspace.shared.open(url) } }
+                        .buttonStyle(ThemeButtonStyle())
+                }
+                if settings.focusSilence != .none {
+                    Hairline()
+                    Row(verbatim: settings.focusSilence.summary, detail: "A Focus is on now.") { EmptyView() }
                 }
             }
             GroupLabel(text: "Daily summary")

@@ -4,7 +4,7 @@ import OSLog
 import TontonCore
 
 /// Posts to the webhooks of Settings › Notch when a session finishes or needs the user, like the other alerts: never
-/// for hidden machines or during quiet hours. What the message says is set by `Webhook.Privacy`.
+/// for hidden machines, during quiet hours or a Focus that silences it. What the message says is set by `Webhook.Privacy`.
 @MainActor
 final class WebhookNotifier {
     private let settings: AppSettings
@@ -18,7 +18,9 @@ final class WebhookNotifier {
 
     private func post(_ event: Webhook.Event, _ session: SessionSummary) {
         let address = event == .finished ? settings.webhookFinished : settings.webhookNeedsYou
-        guard let url = Webhook.url(address), !settings.hiddenMachines.contains(session.machine), !settings.isQuietNow else { return }
+        guard let url = Webhook.url(address), !settings.hiddenMachines.contains(session.machine),
+            !settings.isQuiet(.of(session.status, finished: event == .finished))
+        else { return }
         let privacy = Webhook.Privacy(includeNames: settings.webhookIncludeNames, includeLastMessage: settings.webhookIncludeLastMessage)
         let message = Webhook.message(event, session, privacy: privacy)
         Task { await Self.send(message, to: url) }

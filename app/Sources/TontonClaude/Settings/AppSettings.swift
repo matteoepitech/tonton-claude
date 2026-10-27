@@ -126,6 +126,8 @@ final class AppSettings: ObservableObject {
     /// Minutes after midnight.
     @Published var quietStart: Int
     @Published var quietEnd: Int
+    /// What the Focus that is on silences (SilenceAlertsFilter), none without one. Not saved: macOS tells the app again.
+    @Published var focusSilence = FocusSilence.none
     /// A notification in the evening with the day's work (Settings › Notch).
     @Published var dailySummary: Bool
     /// Minutes after midnight.
@@ -159,6 +161,9 @@ final class AppSettings: ObservableObject {
         let now = (time.hour ?? 0) * 60 + (time.minute ?? 0)
         return quietStart < quietEnd ? (now >= quietStart && now < quietEnd) : (now >= quietStart || now < quietEnd)
     }
+
+    /// Quiet hours, or a Focus that silences this kind of alert.
+    func isQuiet(_ event: FocusSilence.Event) -> Bool { isQuietNow || focusSilence.silences(event) }
 
     private let defaults: UserDefaults
     private var subscriptions = Set<AnyCancellable>()

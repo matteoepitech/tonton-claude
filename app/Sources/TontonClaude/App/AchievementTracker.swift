@@ -30,11 +30,12 @@ final class AchievementTracker {
         if notch.achievement == nil { showNext() }
     }
 
-    /// One badge at a time, four seconds each; none during quiet hours, they are still unlocked.
+    /// One badge at a time, four seconds each; none during quiet hours or a Focus that silences them, they are still
+    /// unlocked.
     private func showNext() {
         guard !queue.isEmpty else { return }
         let next = queue.removeFirst()
-        guard !settings.isQuietNow else { return showNext() }
+        guard !settings.isQuiet(.other) else { return showNext() }
         notch.achievement = next
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
             self?.notch.achievement = nil

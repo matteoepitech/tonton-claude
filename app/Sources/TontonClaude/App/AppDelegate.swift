@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dailySummary = DailySummaryNotifier(store: store, settings: settings)
         if let notch { achievements = AchievementTracker(store: store, notch: notch.state, settings: settings) }
         UNUserNotificationCenter.current().delegate = self
+        SilenceAlertsFilter.readCurrent()
 
         settings.$showMenuBarIcon.sink { [weak self] visible in self?.statusItem.setVisible(visible) }.store(in: &subscriptions)
         settings.$hotkey.sink { [weak self] preset in self?.registerHotKey(preset) }.store(in: &subscriptions)
