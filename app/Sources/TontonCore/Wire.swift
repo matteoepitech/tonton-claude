@@ -116,7 +116,10 @@ struct SessionMeta: Codable {
     var commands: [String]?
     /// The model's API id. Missing from older agents.
     var model: String?
+    /// The last turns that ended, oldest first. Missing from older agents.
+    var turns: [WireTurn]?
 }
+struct WireTurn: Codable { let end: String; let seconds: Double }
 struct WireContext: Codable { let usedTokens: Int; let windowTokens: Int? }
 struct WireUsageLimit: Codable { let usedPercent: Double; let resetsAt: String }
 struct StatusDetail: Codable { let text: String }
