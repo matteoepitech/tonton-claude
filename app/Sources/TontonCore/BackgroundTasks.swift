@@ -15,7 +15,7 @@ public struct BackgroundTasks: Equatable, Sendable {
     public mutating func read(_ line: String, now: Date = Date()) {
         guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { return }
         let at = (object["timestamp"] as? String).flatMap(ISO8601.parse) ?? now
-        for text in Self.texts((object["message"] as? [String: Any])?["content"]) {
+        for text in Self.lineTexts(object) {
             if text.contains("You will be notified when"),
                 let started = text.firstMatch(of: #/(?i)\b(?:with ID|agentId|task ?id)[:\s]+([A-Za-z0-9_-]{5,64})/#)
             {
@@ -40,6 +40,15 @@ public struct BackgroundTasks: Equatable, Sendable {
     }
 
     private static let over: Set = ["completed", "failed", "killed", "stopped", "cancelled", "canceled", "error", "timeout"]
+
+    /// Where a line can say a task started or ended. A notification that arrives while Claude works is not a message:
+    /// Claude Code queues it as an attachment, and writes the queue's own line too.
+    private static func lineTexts(_ line: [String: Any]) -> [String] {
+        let attachment = line["attachment"] as? [String: Any]
+        return texts((line["message"] as? [String: Any])?["content"])
+            + (attachment?["type"] as? String == "queued_command" ? texts(attachment?["prompt"]) : [])
+            + (line["type"] as? String == "queue-operation" ? texts(line["content"]) : [])
+    }
 
     private static func texts(_ content: Any?) -> [String] {
         if let text = content as? String { return [text] }
