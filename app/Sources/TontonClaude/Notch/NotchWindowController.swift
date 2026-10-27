@@ -515,6 +515,13 @@ final class NotchWindowController {
             }
             return true
         }
+        // Space over an attachment previews it, unless it would go into a message being typed.
+        if event.keyCode == UInt16(kVK_Space), event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+            let preview = state.quickLookUnderPointer, (state.drafts[store.selectedId ?? ""] ?? "").isEmpty
+        {
+            preview()
+            return true
+        }
         guard event.modifierFlags.contains(.command) else { return false }
         if event.charactersIgnoringModifiers == "k" {
             state.showPalette.toggle()
