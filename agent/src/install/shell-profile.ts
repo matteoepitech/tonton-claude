@@ -1,7 +1,8 @@
 // The `claude` launcher written into shell profiles: it starts Claude Code with the Tonton Claude channel and settings
 // (its status line, see statusline.ts), except for subcommands and non-interactive runs.
 
-const BEGIN = '# >>> tonton >>>'
+/** Opens the launcher's block: a profile with it has a launcher, maybe from an older install. */
+export const BEGIN = '# >>> tonton >>>'
 const END = '# <<< tonton <<<'
 
 const SUBCOMMANDS = [

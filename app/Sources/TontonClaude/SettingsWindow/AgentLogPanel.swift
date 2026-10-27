@@ -17,14 +17,14 @@ struct AgentLogPanel: View {
                 Text(caption).font(.system(size: 11.5)).foregroundStyle(Theme.textFaint).lineLimit(1)
                 Spacer(minLength: 8)
                 if request.isLoading { ProgressView().controlSize(.small) }
-                iconButton("arrow.clockwise", help: "Read the log again", action: refresh).disabled(request.isLoading)
-                iconButton(copied ? "checkmark" : "doc.on.doc", help: "Copy the lines", action: copy).disabled(lines.isEmpty)
-                iconButton("xmark", help: "Close the log", action: close)
+                PanelIconButton(symbol: "arrow.clockwise", help: "Read the log again", action: refresh).disabled(request.isLoading)
+                PanelIconButton(symbol: copied ? "checkmark" : "doc.on.doc", help: "Copy the lines", action: copy).disabled(lines.isEmpty)
+                PanelIconButton(symbol: "xmark", help: "Close the log", action: close)
             }
             if case .failed(let text) = request.state {
                 Text(text).font(.system(size: 12)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
             }
-            if let log = request.log {
+            if let log = request.answer {
                 if log.lines.isEmpty {
                     Text("The log is empty.").font(.system(size: 12)).foregroundStyle(Theme.textDim)
                 } else {
@@ -41,14 +41,14 @@ struct AgentLogPanel: View {
     }
 
     private var caption: String {
-        guard let log = request.log else { return request.isLoading ? "Asking \(machine.name)…" : "" }
+        guard let log = request.answer else { return request.isLoading ? "Asking \(machine.name)…" : "" }
         let count = "Last \(log.lines.count) line\(log.lines.count == 1 ? "" : "s")"
         let size = ByteCountFormatter.string(fromByteCount: Int64(log.size), countStyle: .file)
         let when = log.readAt.map { " · read at \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
         return "\(count) of \(size)\(when)"
     }
 
-    private var lines: [String] { request.log?.lines ?? [] }
+    private var lines: [String] { request.answer?.lines ?? [] }
 
     private func copy() {
         NSPasteboard.general.clearContents()
@@ -56,8 +56,15 @@ struct AgentLogPanel: View {
         copied = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
     }
+}
 
-    private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+/// The small square buttons in the header of the panels under a machine's row.
+struct PanelIconButton: View {
+    let symbol: String
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11))

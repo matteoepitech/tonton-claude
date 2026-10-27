@@ -127,6 +127,17 @@ public struct SessionVault: Sendable {
         open(blob, as: AgentLog.self)
     }
 
+    /// Asks a machine to check how it is set up, after the repair `fix` names. Like log requests, it names the machine.
+    public func sealDiagnoseRequest(requestId: String, machineId: String, fix: String? = nil, issuedAt: Date = Date()) throws -> String {
+        let request = DiagnoseRequest(
+            requestId: requestId, machineId: machineId, issuedAt: ISO8601DateFormatter().string(from: issuedAt), fix: fix)
+        return try E2E.seal(request, with: key)
+    }
+
+    public func diagnosis(_ blob: String?) -> Diagnosis? {
+        open(blob, as: Diagnosis.self)
+    }
+
     /// A machine's auto-approve rules. Agents keep a set only if it is newer than theirs.
     public func sealRules(_ rules: [PermissionRule], issuedAt: Date) throws -> String {
         try E2E.seal(RuleSet(rules: rules, issuedAt: ISO8601DateFormatter().string(from: issuedAt)), with: key)

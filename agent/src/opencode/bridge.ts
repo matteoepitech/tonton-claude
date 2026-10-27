@@ -8,6 +8,7 @@ import { RelayConnection } from '../channel/relay-connection'
 import { SessionShares } from '../channel/shares'
 import { claimCommand, whyInvalid } from '../channel/terminal'
 import { type AgentConfig, loadConfig, paths } from '../config'
+import { receiveDiagnoseRequest } from '../diagnose'
 import { postHook } from '../hook'
 import { openCodeStarts } from '../launch'
 import { log } from '../log'
@@ -131,6 +132,7 @@ class Link {
     if (message.t === 'rules') void receiveRules(this.config.key, message.rules)
     // Without a background service, the relay may ask any connection of the machine for its log.
     if (message.t === 'agent_logs') void handleLogRequest(this.config, message.requestId, message.request, this.relay)
+    if (message.t === 'diagnose') void receiveDiagnoseRequest(this.config, message.requestId, message.request, this.relay, 'channel')
     if (!('sessionId' in message) || message.sessionId !== this.sessionId) return
     if (message.t === 'share') this.shares.receive(message.shareId, message.order)
     else if (message.t === 'unshare') this.shares.remove(message.shareId)

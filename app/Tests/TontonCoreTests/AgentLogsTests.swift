@@ -49,33 +49,33 @@ final class AgentLogsTests: XCTestCase {
     func testOnlyTheLogOfThisRequestAndMachineCounts() {
         let request = AgentLogRequest(id: "request0001", machineId: "m1")
         let log = AgentLog(requestId: "request0001", machineId: "m1", lines: ["a"], at: "2026-10-26T12:00:00Z")
-        XCTAssertEqual(request.received(reason: nil, log: log, machine: "PC").state, .loaded(log))
+        XCTAssertEqual(request.received(reason: nil, answer: log, machine: "PC").state, .loaded(log))
         // An older log, another machine's, or one that does not open.
         let older = AgentLog(requestId: "request0000", machineId: "m1", lines: ["old"], at: "x")
         let other = AgentLog(requestId: "request0001", machineId: "m2", lines: ["other"], at: "x")
-        for answer in [older, other, nil] { XCTAssertEqual(request.received(reason: nil, log: answer, machine: "PC"), request) }
+        for answer in [older, other, nil] { XCTAssertEqual(request.received(reason: nil, answer: answer, machine: "PC"), request) }
         // Once answered, a second answer changes nothing.
-        let loaded = request.received(reason: nil, log: log, machine: "PC")
-        XCTAssertEqual(loaded.received(reason: "offline", log: nil, machine: "PC"), loaded)
+        let loaded = request.received(reason: nil, answer: log, machine: "PC")
+        XCTAssertEqual(loaded.received(reason: "offline", answer: nil, machine: "PC"), loaded)
     }
 
     func testFailuresSayWhy() {
         let request = AgentLogRequest(id: "request0001", machineId: "m1")
         XCTAssertEqual(
-            request.received(reason: "offline", log: nil, machine: "PC").state,
+            request.received(reason: "offline", answer: nil, machine: "PC").state,
             .failed("PC is offline. Check that it is on and that the Tonton Claude agent runs there."))
         let expired = AgentLog(requestId: "request0001", machineId: "m1", lines: [], at: "x", error: "The request expired.")
-        XCTAssertEqual(request.received(reason: nil, log: expired, machine: "PC").state, .failed("The request expired."))
+        XCTAssertEqual(request.received(reason: nil, answer: expired, machine: "PC").state, .failed("The request expired."))
     }
 
     func testTheLogShownStaysWhileTheNextOneLoads() {
         let log = AgentLog(requestId: "request0001", machineId: "m1", lines: ["a"], at: "x")
         let next = AgentLogRequest(id: "request0002", machineId: "m1", previous: log)
         XCTAssertTrue(next.isLoading)
-        XCTAssertEqual(next.log, log)
-        XCTAssertEqual(next.failed("No answer").log, log)
+        XCTAssertEqual(next.answer, log)
+        XCTAssertEqual(next.failed("No answer").answer, log)
         let newer = AgentLog(requestId: "request0002", machineId: "m1", lines: ["b"], at: "x")
-        XCTAssertEqual(next.received(reason: nil, log: newer, machine: "PC").log, newer)
+        XCTAssertEqual(next.received(reason: nil, answer: newer, machine: "PC").answer, newer)
     }
 
     func testLinesSplitIntoTimeAndMessage() {

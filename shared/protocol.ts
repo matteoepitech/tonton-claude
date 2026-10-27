@@ -236,6 +236,39 @@ export interface AgentLog {
   /** Why the agent sent no lines. */
   error?: string
 }
+/** What the app can ask a machine to repair, from Settings › Machines: each one redoes a part of the install step. */
+export type SetupFix = 'service' | 'hooks' | 'mcp' | 'launcher' | 'statusline' | 'opencode'
+/** Sealed by the app: check how this machine is set up, after one repair if `fix` names it. Recent, and names its machine. */
+export interface DiagnoseRequest {
+  requestId: string
+  machineId: string
+  issuedAt: string
+  fix?: SetupFix
+}
+/** One line of a diagnosis. */
+export interface SetupCheck {
+  /** `agent`, `service`, `relay`, `hooks`, `mcp`, `launcher`, `statusline` or `opencode`. Newer agents may add others. */
+  id: string
+  /** Shown as is, so an app can show a check it does not know. */
+  label: string
+  ok: boolean
+  detail: string
+  /** A repair the app can ask for. */
+  fix?: SetupFix
+}
+/** Sealed by the agent: how the machine is set up, for the request it names. */
+export interface Diagnosis {
+  requestId: string
+  machineId: string
+  at: string
+  /** The agent installed on the machine. */
+  version: string
+  checks: SetupCheck[]
+  /** What the repair the request asked for did. */
+  fixed?: { fix: SetupFix; ok: boolean; text: string }
+  /** Why the agent ran no check. */
+  error?: string
+}
 
 export interface SealedEntry {
   id: string
@@ -292,6 +325,8 @@ export type AgentMessage =
   | { t: 'share_entries'; sessionId: string; shareId: string; entries: SealedEntry[]; reset: boolean }
   // The answer to a `LogRequest`: a sealed `AgentLog`.
   | { t: 'agent_logs'; requestId: string; logs: Sealed }
+  // The answer to a `DiagnoseRequest`: a sealed `Diagnosis`.
+  | { t: 'diagnosis'; requestId: string; diagnosis: Sealed }
 
 // relay -> agent
 export type RelayToAgent =
@@ -309,6 +344,8 @@ export type RelayToAgent =
   | { t: 'unshare'; sessionId: string; shareId: string }
   // A sealed `LogRequest`.
   | { t: 'agent_logs'; requestId: string; request: Sealed }
+  // A sealed `DiagnoseRequest`.
+  | { t: 'diagnose'; requestId: string; request: Sealed }
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -338,6 +375,8 @@ export type RelayToApp =
     }
   // The sealed `AgentLog` of a machine, or `reason` when the relay could not reach it.
   | { t: 'agent_logs'; machineId: string; requestId: string; reason?: 'offline'; logs?: Sealed | null }
+  // The sealed `Diagnosis` of a machine, or `reason` when the relay could not reach it.
+  | { t: 'diagnosis'; machineId: string; requestId: string; reason?: 'offline'; diagnosis?: Sealed | null }
 
 // app -> relay
 export type AppMessage =
@@ -352,6 +391,7 @@ export type AppMessage =
   // After `POST /api/shares` made the share: its order, for the session's agent.
   | { t: 'share'; sessionId: string; shareId: string; order: Sealed }
   | { t: 'agent_logs'; machineId: string; requestId: string; request: Sealed }
+  | { t: 'diagnose'; machineId: string; requestId: string; request: Sealed }
 
 // relay -> viewer (/ws/share, with a share token): one session, read only.
 export type RelayToViewer =

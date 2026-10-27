@@ -35,6 +35,13 @@ struct MachinesPane: View {
                     ForEach(Array(store.machines.enumerated()), id: \.element.id) { index, m in
                         if index > 0 { Hairline() }
                         MachineRow(machine: m)
+                        if let request = store.diagnoses[m.id] {
+                            Hairline()
+                            DiagnosisPanel(
+                                machine: m, request: request, repairing: store.repairing[m.id], run: { store.diagnose(m, fix: $0) },
+                                close: { store.closeDiagnosis(of: m.id) }
+                            ) { AgentUpdateButton(machine: m) }
+                        }
                         if let request = store.agentLogs[m.id] {
                             Hairline()
                             AgentLogPanel(
@@ -188,6 +195,7 @@ struct MachineRow: View {
             Toggle("", isOn: visible).toggleStyle(AccentToggleStyle()).labelsHidden().fixedSize()
                 .help(visible.wrappedValue ? "Shown in the notch" : "Hidden from the notch")
             Menu {
+                Button("Diagnose") { store.diagnose(machine) }.disabled(!machine.online)
                 Button("Show agent log") { store.requestLog(of: machine) }.disabled(!machine.online)
                 Divider()
                 Button("Revoke access…", role: .destructive) { confirmRevoke = true }

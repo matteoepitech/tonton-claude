@@ -25,6 +25,10 @@ export const MAX_SHARE_BYTES = 4 * 1024 * 1024
 export const MAX_LOG_REQUEST_BYTES = 4096
 /** The end of an agent log, sealed. The agent keeps it under this. */
 export const MAX_AGENT_LOG_BYTES = 256 * 1024
+/** A sealed request to check a machine's setup, with the repair it may ask for. */
+export const MAX_DIAGNOSE_REQUEST_BYTES = 4096
+/** A sealed diagnosis: a few lines of checks. */
+export const MAX_DIAGNOSIS_BYTES = 64 * 1024
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
 export const FINISHED_SESSION_TTL_MS = 6 * 60 * 60_000

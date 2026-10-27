@@ -64,7 +64,10 @@ and timing.
 - When OpenCode is set up, adds `tonton-claude.js` to its plugins folder (`~/.config/opencode/plugins`). OpenCode loads it
   on its next start (`opencode service restart` with OpenCode 2), and its sessions show up next to Claude Code's.
 
-`tonton status` checks the connection, `tonton uninstall` removes everything. The agent logs what it does to
+`tonton status` checks the connection, `tonton uninstall` removes everything. From the Mac, Settings › Machines ›
+**Diagnose** runs the same kind of checks on a machine and offers a **Repair** for each step of the install that is off:
+the background service, the hooks, the MCP server, the launcher, the status line and the OpenCode plugin. A repair never
+rewrites a `settings.json` that is not valid JSON, nor hooks the user turned off. The agent logs what it does to
 `~/.tonton/tonton.log`, never what Claude writes: Settings › Machines › **Show agent log** reads its last 300 lines from the
 Mac, sealed on the way, with the account key, the machine's credential, tokens and proxy passwords taken out.
 

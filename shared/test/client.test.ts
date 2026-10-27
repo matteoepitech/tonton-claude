@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { type ClientEvent, type ClientState, initialState, RelayClient, reduce, type SocketLike } from '../client'
 import { newAccountKey, open, seal } from '../crypto'
-import type { AgentLog, Entry, LogRequest, PromptPayload, RelayToApp, SessionSummary } from '../protocol'
+import type { AgentLog, DiagnoseRequest, Diagnosis, Entry, LogRequest, PromptPayload, RelayToApp, SessionSummary } from '../protocol'
 import { Vault } from '../vault'
 
 const key = newAccountKey()
@@ -168,6 +168,38 @@ describe('relay client', () => {
     const answers = events.filter(event => event.t === 'agent_logs')
     expect(answers.map(event => event.log?.lines ?? null)).toEqual([null, ['service started'], null])
     expect(answers[2]).toEqual({ t: 'agent_logs', machineId: 'm1', requestId, reason: 'offline', log: null })
+  })
+
+  test('asks a machine for a diagnosis, with a repair, and reads checks this client does not know', async () => {
+    const { relay, sockets, events } = client()
+    relay.start()
+    const socket = sockets[0]
+    socket.receive({ t: 'snapshot', sessions: [], machines: [] })
+    await eventually(() => relay.state.connection === 'connected', 'the snapshot')
+
+    const requestId = await relay.requestDiagnosis('m1', 'hooks')
+    if (!requestId) throw new Error('not sent')
+    const sent = socket.sent[0] as { t: string; machineId: string; requestId: string; request: string }
+    expect(sent).toMatchObject({ t: 'diagnose', machineId: 'm1', requestId })
+    expect(await open<DiagnoseRequest>(key, sent.request)).toMatchObject({ requestId, machineId: 'm1', fix: 'hooks' })
+
+    const diagnosis = {
+      requestId,
+      machineId: 'm1',
+      at: '2026-10-27T10:00:00.000Z',
+      version: '0.9.1',
+      checks: [
+        { id: 'hooks', label: 'Claude Code hooks', ok: true, detail: 'All 7.' },
+        { id: 'future', label: 'Something new', ok: false, detail: 'Later.', fix: 'future' },
+      ],
+      fixed: { fix: 'hooks', ok: true, text: 'Hooks added.' },
+    }
+    socket.receive({ t: 'diagnosis', machineId: 'm1', requestId, diagnosis: await seal(key, { ...diagnosis, machineId: 'm2' }) })
+    socket.receive({ t: 'diagnosis', machineId: 'm1', requestId, diagnosis: await seal(key, diagnosis) })
+    socket.receive({ t: 'diagnosis', machineId: 'm1', requestId, diagnosis: await seal(key, { ...diagnosis, checks: [{ id: 1 }] }) })
+    await eventually(() => events.filter(event => event.t === 'diagnosis').length === 3, 'the answers')
+    const answers = events.filter(event => event.t === 'diagnosis').map(event => (event.t === 'diagnosis' ? event.diagnosis : null))
+    expect(answers).toEqual([null, diagnosis as Diagnosis, null])
   })
 
   test('reconnects with backoff, subscribes again, and stops for good when signed out', async () => {

@@ -56,11 +56,14 @@ public enum RelayMessage: Decodable, Sendable {
     /// A machine's answer to a request for its log: `logs` is a sealed `AgentLog`, `reason` set when the relay could not
     /// reach the machine.
     case agentLogs(machineId: String, requestId: String, reason: String?, logs: String?)
+    /// A machine's answer to a request for a diagnosis: `diagnosis` is a sealed `Diagnosis`, `reason` set when the relay
+    /// could not reach the machine.
+    case diagnosis(machineId: String, requestId: String, reason: String?, diagnosis: String?)
     case unknown
 
     private enum Keys: String, CodingKey {
         case t, sessions, machines, session, sessionId, entries, message, machineId, ok, reason, detail, launchId, state
-        case requestId, logs
+        case requestId, logs, diagnosis
     }
 
     public init(from decoder: Decoder) throws {
@@ -87,6 +90,9 @@ public enum RelayMessage: Decodable, Sendable {
         case "agent_logs":
             let (reason, logs) = (try optional(.reason), try optional(.logs))
             self = .agentLogs(machineId: try value(.machineId), requestId: try value(.requestId), reason: reason, logs: logs)
+        case "diagnosis":
+            let (reason, diagnosis) = (try optional(.reason), try optional(.diagnosis))
+            self = .diagnosis(machineId: try value(.machineId), requestId: try value(.requestId), reason: reason, diagnosis: diagnosis)
         default: self = .unknown
         }
     }
@@ -145,6 +151,12 @@ struct PromptPayload: Codable {
 }
 struct UpdateOrder: Codable { let version: String; let issuedAt: String }
 struct LogRequest: Codable { let requestId: String; let machineId: String; let issuedAt: String }
+struct DiagnoseRequest: Codable {
+    let requestId: String
+    let machineId: String
+    let issuedAt: String
+    var fix: String?
+}
 struct StartOrder: Codable {
     let launchId: String
     let machineId: String
