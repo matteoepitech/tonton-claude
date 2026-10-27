@@ -93,6 +93,15 @@ final class LocalizationTests: XCTestCase {
         check(problems, "English forms")
     }
 
+    /// The Info.plist's own English, which the English of InfoPlist.xcstrings replaces.
+    func testTheInfoPlistStringsHaveItsEnglish() throws {
+        let app = Catalog.source.deletingLastPathComponent().deletingLastPathComponent()
+        let script = try String(contentsOf: app.appendingPathComponent("scripts/build-app.sh"), encoding: .utf8)
+        for entry in try entries("InfoPlist") {
+            XCTAssert(script.contains("<key>\(entry.key)</key><string>\(entry.english[""] ?? "")</string>"), entry.key)
+        }
+    }
+
     /// As macOS writes French: a no-break space before : ; ? ! and inside « », typographic apostrophes, an ellipsis.
     func testFrenchPunctuation() throws {
         let rules: [(Regex<Substring>, String)] = [

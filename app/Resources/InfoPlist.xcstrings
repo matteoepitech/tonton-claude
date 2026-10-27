@@ -2,7 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "NSMicrophoneUsageDescription" : {
-      "comment" : "Asked before the first dictation. The English is in scripts/build-app.sh.",
+      "comment" : "Asked before the first dictation. The same English as in scripts/build-app.sh.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -20,7 +20,7 @@
       }
     },
     "NSSpeechRecognitionUsageDescription" : {
-      "comment" : "Asked before the first dictation. The English is in scripts/build-app.sh.",
+      "comment" : "Asked before the first dictation. The same English as in scripts/build-app.sh.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
