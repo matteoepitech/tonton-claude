@@ -254,7 +254,7 @@ struct ChatHeader: View {
                     .lineLimit(1)
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
-                    Text(Money.dollars(cost)).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary)
+                    Text(Money.dollars(cost)).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).fixedSize()
                         .help("Estimated by \(session.codingTool.label) at list price")
                 }
                 Text(session.status.label).font(.notch(11)).foregroundStyle(Color(nsColor: session.status.color)).fixedSize()
