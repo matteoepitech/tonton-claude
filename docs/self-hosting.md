@@ -251,6 +251,11 @@ On Linux:
 The packages are not signed: Windows SmartScreen warns about the installer until the project has a code-signing
 certificate.
 
+## Pools
+
+Pools let the sessions of several people work on one project together, with an orchestrator Claude that hands out the work.
+They are being built: [pools.md](pools.md) is the design, with the keys, what the relay sees and the threats.
+
 ## Running your own relay
 
 The relay is a single executable behind any HTTPS reverse proxy with WebSocket support. It only needs updating when its own
