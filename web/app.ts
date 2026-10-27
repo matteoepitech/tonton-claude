@@ -7,8 +7,10 @@ import {
   accepts,
   browserSocket,
   type ClientState,
+  changedFiles,
   chatItems,
   displayStatusText,
+  type Entry,
   importAccountKey,
   isLive,
   keepsSessionRules,
@@ -26,6 +28,7 @@ import {
   STATUS_LABELS,
   sessionRuleFor,
   shareSocket,
+  shownPath,
   Vault,
 } from '../shared'
 import type { SessionCommand, SessionStatus } from '../shared/protocol'
@@ -218,8 +221,13 @@ function renderChat(chat: HTMLElement, current: ClientState) {
     element('span', element('strong', session.project), element('small', details.filter(Boolean).join(' · '))),
     element('em', needsAttention(session.status) ? displayStatusText(session) : STATUS_LABELS[session.status]),
     ...commandButtons(session),
+    ...filesButton(session, current.entries ?? []),
   )
   header.className = 'chat-header'
+  if (filesOf === session.id) {
+    chat.replaceChildren(header, changedFilesList(session, current.entries ?? []), composer(session))
+    return
+  }
   const messages = element('div')
   messages.className = 'messages'
   if (!current.entries) messages.append(element('p', 'Loading the conversation…'))
@@ -227,6 +235,47 @@ function renderChat(chat: HTMLElement, current: ClientState) {
   for (const request of session.pendingPermissions) messages.append(permission(session, request))
   chat.replaceChildren(header, messages, composer(session))
   if (stickToBottom) messages.scrollTop = messages.scrollHeight
+}
+
+/** The session whose changed files show instead of its conversation. */
+let filesOf: string | null = null
+
+function filesButton(session: Session, entries: readonly Entry[]): HTMLElement[] {
+  const count = changedFiles(entries).length
+  if (!count) return []
+  const button = element('button', filesOf === session.id ? 'Conversation' : `Files (${count})`)
+  button.title = 'Files changed in this session'
+  button.onclick = () => {
+    filesOf = filesOf === session.id ? null : session.id
+    render()
+  }
+  return [button]
+}
+
+/** Each file Claude changed, the most recent first, with its diffs. */
+function changedFilesList(session: Session, entries: readonly Entry[]): HTMLElement {
+  const list = element('div')
+  list.className = 'messages'
+  for (const file of changedFiles(entries)) {
+    const changes = file.changes
+      ? `${file.changes} change${file.changes === 1 ? '' : 's'}${file.written && !file.edits.length ? ', written' : ''}`
+      : 'failed'
+    const summary = element(
+      'summary',
+      element('strong', file.name),
+      ` ${shownPath(file.path, session.cwd)} · ${changes}${file.lastFailed ? ' · the last change failed' : ''}`,
+    )
+    const item = element('details', summary)
+    item.className = file.lastFailed ? 'tool failed' : 'tool'
+    for (const edit of file.edits) {
+      const diff = element('pre')
+      diff.className = 'diff'
+      diff.append(element('del', edit.oldText), element('ins', edit.newText))
+      item.append(diff)
+    }
+    list.append(item)
+  }
+  return list
 }
 
 function message(item: ReturnType<typeof chatItems>[number]): HTMLElement {

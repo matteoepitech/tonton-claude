@@ -50,6 +50,7 @@ struct ChatPanel: View {
                 }
                 .onChange(of: pendingTexts.count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
             }
+            .overlay { ChangedFilesPanel(session: session) }
             ForEach(session.pendingPermissions) { req in
                 PermissionCard(
                     request: req, sessionRule: store.sessionRule(for: req, in: session),
@@ -213,6 +214,7 @@ struct ChatHeader: View {
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
                 if session.accepts(.interrupt) { interrupt }
                 if session.canChat && !session.menuCommands.isEmpty { commands }
+                ChangedFilesButton(session: session)
                 Menu {
                     Button("Markdown…") { export(.markdown) }
                     Button("HTML page…") { export(.html) }

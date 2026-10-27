@@ -3,6 +3,7 @@
 
 export * from './account-token'
 export * from './base64'
+export * from './changed-files'
 export * from './chat'
 export * from './client'
 export * from './crypto'
