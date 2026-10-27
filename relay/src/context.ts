@@ -116,6 +116,32 @@ export class RelayContext {
     this.broadcastPool(poolId, { t: 'pool_member_left', poolId, account: accountId })
   }
 
+  /**
+   * The pool key went to version `version`: everyone sees the new version, and each member left gets its own wrap. A
+   * kicked member is taken out first, like one that left, and never gets the new version.
+   */
+  poolKeyRotated(
+    poolId: string,
+    version: number,
+    remaining: readonly string[],
+    kicked: { account: string; sessions: PoolSessionOrderRow[] } | null,
+  ) {
+    if (kicked) {
+      this.hub.sendToApps(kicked.account, { t: 'pool_removed', poolId }, socket => socket.data.pools?.has(poolId) === true)
+      this.hub.dropPoolAccount(poolId, kicked.account)
+      for (const session of kicked.sessions) this.sessionLeftPool(session, true)
+      this.broadcastPool(poolId, { t: 'pool_member_left', poolId, account: kicked.account })
+    }
+    const sessions = this.poolSessions(poolId)
+    for (const account of remaining) {
+      const wrap = this.pools.wrap(poolId, account, version)
+      const own = sessions.filter(session => session.accountId === account).map(session => session.sessionId)
+      if (wrap) this.hub.sendToPoolMember(poolId, account, { t: 'pool_key', poolId, wrap }, own)
+    }
+    const state = this.pools.state(poolId)
+    if (state) this.broadcastPool(poolId, { t: 'pool_info', poolId, ...state })
+  }
+
   /** Tells the session's agent it is out of the pool, and the members when `announce`. */
   sessionLeftPool(session: Pick<PoolSessionOrderRow, 'poolId' | 'accountId' | 'sessionId'>, announce: boolean) {
     const { poolId, accountId, sessionId } = session

@@ -38,3 +38,6 @@ export const isPoolRole = (value: unknown): value is 'owner' | 'admin' | 'member
   value === 'owner' || value === 'admin' || value === 'member' || value === 'viewer'
 
 export const isRevision = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0
+
+/** An account id, as the relay issues them. */
+export const isAccountId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{12}$/.test(value)

@@ -22,6 +22,7 @@ const base = `http://127.0.0.1:${relay.server.port}`
 
 let key: string
 let accountToken: string
+let accountId: string
 let machineId: string
 let home: string
 let bridge: ReturnType<typeof Bun.spawn>
@@ -72,6 +73,7 @@ const sealedCommand = (name: string) =>
 beforeAll(async () => {
   const account = await (await api('/api/accounts', { method: 'POST' })).json()
   accountToken = account.token
+  accountId = account.accountId
   key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
   const { secret } = await (await api('/api/account/token', { method: 'POST', token: account.token, body: '{}' })).json()
   const joinRequest = { account: account.accountId, secret, name: await seal(key, { name: 'Linux-Box' }) }
@@ -323,7 +325,7 @@ describe('OpenCode through the relay', () => {
   })
 
   test('the session joins a pool: the bridge checks the order and takes the pool key, as for Claude Code', async () => {
-    const created = await new PoolApi({ relay: base, token: accountToken }).create(key, { name: 'Pool' })
+    const created = await new PoolApi({ relay: base, token: accountToken }).create(key, accountId, { name: 'Pool' })
     const poolId = created.pool.id
     app.send(JSON.stringify({ t: 'pool_subscribe', poolId }))
     const profile = await new PoolVault(created.key).seal({ area: 'front', tool: 'opencode' })

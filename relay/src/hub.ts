@@ -63,6 +63,17 @@ export class Hub {
   }
 
   /** To the apps that subscribed to the pool and to the agents of `sessions`, the pool's sessions. */
+  /** To one member of the pool only: its apps that follow the pool and the agents of its pool sessions. */
+  sendToPoolMember(poolId: string, accountId: string, message: PoolUpdate, sessions: readonly string[]) {
+    const raw = JSON.stringify(message)
+    const bytes = Buffer.byteLength(raw)
+    for (const socket of this.poolApps.get(poolId) ?? []) if (socket.data.accountId === accountId) this.sendRaw(socket, raw, bytes)
+    for (const sessionId of sessions) {
+      const agent = this.agents.get(sessionKey(accountId, sessionId))
+      if (agent) this.sendRaw(agent, raw, bytes)
+    }
+  }
+
   sendToPool(poolId: string, message: PoolUpdate, sessions: readonly { accountId: string; sessionId: string }[]) {
     const raw = JSON.stringify(message)
     const bytes = Buffer.byteLength(raw)

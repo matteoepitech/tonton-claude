@@ -95,7 +95,15 @@ describe('the pool state', () => {
       paused: false,
       keyVersion: 1,
       info: await vault.seal({ name: 'Hackathon', goal: 'Ship the app' }),
-      members: [{ account: 'acct', role: 'owner', joinedAt: '2026-10-27T10:00:00.000Z', profile: await vault.seal({ name: 'Matteo' }) }],
+      members: [
+        {
+          account: 'acct',
+          role: 'owner',
+          joinedAt: '2026-10-27T10:00:00.000Z',
+          profile: await vault.seal({ name: 'Matteo' }),
+          publicKeys: [],
+        },
+      ],
       sessions: [],
       tasks: [{ id: 'task0001', rev: 1, updatedAt: 'x', ...author, blob: await vault.seal({ title: 'API', state: 'todo' }) }],
       notes: null,

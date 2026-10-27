@@ -168,6 +168,26 @@ const MIGRATIONS = [
      blob TEXT NOT NULL
    );
    CREATE INDEX pool_posts_pool ON pool_posts(pool_id, kind, seq);`,
+  // Each member's key pair for its pools (docs/pools.md, Keys): its private key sealed with its account key, its public
+  // key sealed with each version of the pool key it saw, and the later versions of the pool key admins wrapped for it.
+  `ALTER TABLE pool_members ADD COLUMN secret_blob TEXT;
+   CREATE TABLE pool_member_keys (
+     pool_id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     version INTEGER NOT NULL,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (pool_id, account_id, version),
+     FOREIGN KEY (pool_id, account_id) REFERENCES pool_members(pool_id, account_id) ON DELETE CASCADE
+   );
+   CREATE TABLE pool_key_wraps (
+     pool_id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     version INTEGER NOT NULL,
+     from_account TEXT NOT NULL,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (pool_id, account_id, version),
+     FOREIGN KEY (pool_id, account_id) REFERENCES pool_members(pool_id, account_id) ON DELETE CASCADE
+   );`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */

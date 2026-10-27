@@ -2,7 +2,10 @@
 // in clear is ids, roles, revisions, sizes and times; everything that says what the pool does is sealed with the pool
 // key, which the members share and the relay never gets. Mirrors app/Sources/TontonCore/Pool.swift.
 
+import type { PoolKeyWrapWire } from './pool-keys'
 import type { Sealed } from './protocol'
+
+export type { PoolKeyWrapWire } from './pool-keys'
 
 export type PoolRole = 'owner' | 'admin' | 'member' | 'viewer'
 
@@ -105,9 +108,13 @@ export interface PoolSummary {
   keyVersion: number
   /** `PoolInfo`, sealed with the pool key. */
   info: Sealed
-  /** `PoolKeyGrant`, sealed with the account key. */
+  /** `PoolKeyGrant`, sealed with the account key: the version of the key this member joined with. */
   key: Sealed
   members: number
+  /** `PoolMemberSecret`, sealed with the account key: the member's private key for the pool. Null for older members. */
+  secret: Sealed | null
+  /** The later versions of the pool key, wrapped for this member by the admins who rotated it. */
+  wraps: PoolKeyWrapWire[]
 }
 
 export interface PoolMemberWire {
@@ -116,6 +123,11 @@ export interface PoolMemberWire {
   joinedAt: string
   /** `PoolMemberProfile`, sealed with the pool key. */
   profile: Sealed | null
+  /**
+   * `PoolMemberKey`, sealed with each version of the pool key it was published under, oldest first: what an admin wraps
+   * a new pool key for. Every one holds the same public key; a reader opens whichever its keys allow.
+   */
+  publicKeys: Sealed[]
 }
 
 export interface PoolSessionWire {
@@ -168,6 +180,8 @@ export interface PoolSnapshot {
   /** The latest ones only, oldest first. */
   messages: PoolPostWire[]
   events: PoolPostWire[]
+  /** For the account it is sent to: its private key for the pool and the later pool keys wrapped for it. */
+  own?: { secret: Sealed | null; wraps: PoolKeyWrapWire[] }
 }
 
 // app or agent -> relay. Agents add their `sessionId`; the relay attaches the sender to what it keeps.
@@ -187,12 +201,19 @@ export type PoolAppMessage =
   | { t: 'pool_info'; poolId: string; info: Sealed }
   /** Its own sealed `PoolMemberProfile`. */
   | { t: 'pool_profile'; poolId: string; profile: Sealed }
+  /**
+   * The account's own keys for the pool: `publicKey` a `PoolMemberKey` sealed with the pool key, `secret` a
+   * `PoolMemberSecret` sealed with the account key. Sent again with the latest pool key after a rotation.
+   */
+  | { t: 'pool_member_key'; poolId: string; publicKey: Sealed; secret: Sealed }
   /** Puts one of the account's sessions in the pool: `order` is a `PoolSessionOrder` sealed with the account key. */
   | { t: 'pool_join_session'; poolId: string; sessionId: string; order: Sealed; profile: Sealed }
   | { t: 'pool_leave_session'; poolId: string; sessionId: string }
 
 export type PoolAgentMessage =
   | (PoolPost & { sessionId: string })
+  /** The member's public key sealed with a newer pool key: agents hold the account key and can publish it too. */
+  | { t: 'pool_member_key'; sessionId: string; poolId: string; publicKey: Sealed }
   /** The agent opened the order and holds the pool key. */
   | { t: 'pool_ack'; sessionId: string; poolId: string }
 
@@ -209,6 +230,8 @@ export type PoolUpdate =
   | { t: 'pool_member_left'; poolId: string; account: string }
   | { t: 'pool_session'; poolId: string; session: PoolSessionWire }
   | { t: 'pool_session_left'; poolId: string; account: string; session: string }
+  /** To one member only: the pool key was rotated, here is the new version wrapped for it. */
+  | { t: 'pool_key'; poolId: string; wrap: PoolKeyWrapWire }
   /** A change sent against an older revision was refused: here is the current one. */
   | { t: 'pool_conflict'; poolId: string; kind: 'task' | 'notes'; id?: string; current: PoolTaskWire | PoolNotesWire | null }
   /** The account left, or the pool is gone. */
