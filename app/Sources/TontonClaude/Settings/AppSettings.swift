@@ -107,6 +107,8 @@ final class AppSettings: ObservableObject {
     @Published var soundOnAttention: Bool
     /// The sound of each `SoundEvent`, by its raw value.
     @Published var eventSounds: [String: String]
+    /// The sound a project plays when it finishes, by project name. Others play the event's.
+    @Published var projectSounds: [String: String]
     @Published var haptics: Bool
     @Published var systemNotifications: Bool
     @Published var quietHours: Bool
@@ -123,6 +125,10 @@ final class AppSettings: ObservableObject {
     var isConfigured: Bool { account != nil }
 
     func sound(for event: SoundEvent) -> String { eventSounds[event.rawValue] ?? "Glass" }
+
+    func sound(for event: SoundEvent, project: String) -> String {
+        ProjectSound.pick(event, project: project, projectSounds: projectSounds, eventSound: sound(for: event))
+    }
     var relayURL: String { account?.relay ?? serverURL }
 
     /// No sound, banner or notification while quiet hours are on.
@@ -205,6 +211,7 @@ final class AppSettings: ObservableObject {
         // Before sounds per event, one sound played for everything: it stays the sound of every event.
         let single = value("alertSound", "Glass")
         eventSounds = value("eventSounds", Dictionary(uniqueKeysWithValues: SoundEvent.allCases.map { ($0.rawValue, single) }))
+        projectSounds = value("projectSounds", [String: String]())
         haptics = value("haptics", true)
         systemNotifications = value("systemNotifications", false)
         quietHours = value("quietHours", false)
@@ -258,6 +265,7 @@ final class AppSettings: ObservableObject {
         persist($alertOnLimitReset, "alertOnLimitReset")
         persist($soundOnAttention, "soundOnAttention")
         persist($eventSounds, "eventSounds")
+        persist($projectSounds, "projectSounds")
         persist($haptics, "haptics")
         persist($systemNotifications, "systemNotifications")
         persist($quietHours, "quietHours")

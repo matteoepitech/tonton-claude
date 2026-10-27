@@ -210,7 +210,7 @@ final class NotchWindowController {
     /// A session needs the user or just finished: sound, haptics, notification, then the banner or the open notch.
     private func alert(_ session: SessionSummary, finished: Bool) {
         guard !settings.isQuietNow else { return }
-        signal(.of(session.status, finished: finished))
+        signal(.of(session.status, finished: finished), project: session.project)
         if settings.systemNotifications { Notifier.post(session, body: finished ? "Claude is done." : session.displayStatusText) }
         if settings.openOnPermission && session.status == .permission {
             store.selectedId = session.id
@@ -242,8 +242,9 @@ final class NotchWindowController {
         }
     }
 
-    private func signal(_ event: SoundEvent) {
-        if settings.soundOnAttention { SoundPlayer.play(settings.sound(for: event)) }
+    private func signal(_ event: SoundEvent, project: String? = nil) {
+        let sound = project.map { settings.sound(for: event, project: $0) } ?? settings.sound(for: event)
+        if settings.soundOnAttention { SoundPlayer.play(sound) }
         if settings.haptics { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
     }
 
