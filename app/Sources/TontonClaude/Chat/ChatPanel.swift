@@ -18,11 +18,17 @@ struct ChatPanel: View {
         let items = ChatItem.build(from: entries)
         let steps = ChatItem.subagentSteps(in: entries)
         let delivered = entries.filter { $0.viaNotch == true }.count
+        let load = store.load(of: session.id)
         VStack(spacing: 0) {
             ChatHeader(session: session)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
+                        // The end of a long conversation shows first, the rest of it right after.
+                        if load == .loadingEarlier { ConversationLoading(text: "Loading earlier messages…") }
+                        if load == .loading && items.isEmpty {
+                            ConversationLoading(text: "Loading the conversation…").padding(.top, 40)
+                        }
                         ForEach(items) { item in
                             ChatItemView(item: item, sessionWorking: session.status == .working, steps: steps)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.accent.opacity(item.id == highlighted ? 0.18 : 0)))
@@ -355,5 +361,20 @@ struct ThinkingWave: View {
         .padding(.leading, 2)
         .padding(.vertical, 2)
         .accessibilityLabel("Claude is working")
+    }
+}
+
+/// Says the conversation is on its way, rather than showing nothing while a long history arrives.
+struct ConversationLoading: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.small)
+            Text(text).font(.notch(11)).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }

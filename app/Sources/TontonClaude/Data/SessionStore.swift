@@ -43,9 +43,11 @@ final class SessionStore: ObservableObject {
     /// The repair each machine is running, until its diagnosis comes back.
     @Published private(set) var repairing: [String: String] = [:]
     @Published private var relayEntries: [String: [Entry]] = [:]
+    /// Sessions of which only the latest entries came yet: the rest of their history is on its way.
+    @Published private var partialHistories: Set<String> = []
     @Published private var localEntries: [String: [Entry]] = [:]
     /// The relay's history once it arrived, this Mac's transcript until then.
-    var entries: [String: [Entry]] { LocalSessions.entries(local: localEntries, relay: relayEntries) }
+    var entries: [String: [Entry]] { LocalSessions.entries(local: localEntries, relay: relayEntries, partial: partialHistories) }
     @Published private(set) var connection: ConnectionState = .notConfigured
     @Published private(set) var latency: RelayLatency?
     @Published var selectedId: String? {
@@ -97,14 +99,19 @@ final class SessionStore: ObservableObject {
         sessions: sessionsPublisher, tasks: taskDone.eraseToAnyPublisher(), entries: entriesPublisher, settings: settings)
     /// The conversations of this Mac and of the relay, merged as `entries` merges them.
     var entriesPublisher: AnyPublisher<[String: [Entry]], Never> {
-        $localEntries.combineLatest($relayEntries).map { local, relay in LocalSessions.entries(local: local, relay: relay) }
-            .eraseToAnyPublisher()
+        $localEntries.combineLatest($relayEntries, $partialHistories).map { local, relay, partial in
+            LocalSessions.entries(local: local, relay: relay, partial: partial)
+        }
+        .eraseToAnyPublisher()
     }
     /// One per reset time of the sessions a usage limit stopped.
     private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()
-    /// Histories fetched for the search, one session after the other.
+    /// Histories fetched for the search and the archive, one session after the other.
     private var catchUp = HistoryCatchUp()
+    /// The socket those histories come through, open while a catch-up runs: the main one never leaves the selected
+    /// session, whose live entries would wait otherwise.
+    private let fetchSocket = RelaySocket()
     /// Machines that got the current auto-approve rules since the app connected.
     private var rulesSentTo: Set<String> = []
 
@@ -113,6 +120,8 @@ final class SessionStore: ObservableObject {
         socket.onState = { [weak self] state in self?.socketStateChanged(state) }
         socket.onMessage = { [weak self] message in self?.handle(message) }
         socket.onLatency = { [weak self] latency in self?.latency = latency }
+        fetchSocket.onMessage = { [weak self] message in self?.fetched(message) }
+        fetchSocket.onState = { [weak self] state in if state == .connected { self?.fetch(self?.catchUp.waitingFor) } }
         // The join secret does not change the connection.
         // Each account has its archive. `$account` sends the new account before `settings.account` holds it.
         settings.$account.removeDuplicates { $0.map(AccountList.id(of:)) == $1.map(AccountList.id(of:)) }
@@ -246,6 +255,9 @@ final class SessionStore: ObservableObject {
         machines = []
         thisMac = nil
         relayEntries = [:]
+        partialHistories = []
+        catchUp.cancel()
+        fetchSocket.disconnect()
         updatingMachines = []
         updateErrors = [:]
         launches = []
@@ -268,12 +280,15 @@ final class SessionStore: ObservableObject {
 
     private func socketStateChanged(_ state: ConnectionState) {
         connection = state
-        if state != .connected { catchUp.cancel() }
+        if state != .connected {
+            catchUp.cancel()
+            fetchSocket.disconnect()
+        }
         if state == .connected {
             subscribe()
             // Histories asked for the archive before the connection dropped: asked again.
             for sessionId in archiveOnHistory {
-                if let first = catchUp.fetch(sessionId, selected: selectedId) { subscribe(to: first) }
+                if let first = catchUp.fetch(sessionId, selected: selectedId) { fetch(first) }
             }
         }
     }
@@ -300,14 +315,20 @@ final class SessionStore: ObservableObject {
         case .removed(let sessionId):
             relaySessions.removeAll { $0.id == sessionId }
             relayEntries[sessionId] = nil
+            partialHistories.remove(sessionId)
             settings.pinnedSessions.removeAll { $0 == sessionId }
             if selectedId == sessionId { selectedId = preferredSelection() }
         case .history(let sessionId, let wireEntries):
             relayEntries[sessionId] = vault.entries(wireEntries)
+            partialHistories.remove(sessionId)
             if archiveOnHistory.remove(sessionId) != nil, let session = relaySessions.first(where: { $0.id == sessionId }) {
                 archive.add(session, entries: entries[sessionId] ?? [])
             }
-            if catchUp.isRunning { subscribe(to: catchUp.received(sessionId)) }
+        case .recentHistory(let sessionId, let wireEntries):
+            guard ConversationLoad.takesRecent(current: relayEntries[sessionId], partial: partialHistories.contains(sessionId))
+            else { return }
+            relayEntries[sessionId] = vault.entries(wireEntries)
+            partialHistories.insert(sessionId)
         case .entries(let sessionId, let wireEntries):
             relayEntries[sessionId, default: []].append(contentsOf: vault.entries(wireEntries))
         case .error(let text):
@@ -374,7 +395,7 @@ final class SessionStore: ObservableObject {
         let followed = session.id == selectedId || !relaySessions.contains { $0.id == session.id }
         guard !followed, connection == .connected else { return archive.add(session, entries: entries[session.id] ?? []) }
         archiveOnHistory.insert(session.id)
-        if let first = catchUp.fetch(session.id, selected: selectedId) { subscribe(to: first) }
+        if let first = catchUp.fetch(session.id, selected: selectedId) { fetch(first) }
     }
 
     private static func sorted(_ list: [SessionSummary]) -> [SessionSummary] {
@@ -389,23 +410,54 @@ final class SessionStore: ObservableObject {
 
     // MARK: Session commands
 
+    /// Relays that know `latestFirst` send the end of the conversation at once, then all of it.
     private func subscribe() {
         guard connection == .connected else { return }
-        socket.send(["t": "subscribe", "sessionId": selectedId ?? NSNull()])
+        socket.send(["t": "subscribe", "sessionId": selectedId ?? NSNull(), "latestFirst": true])
     }
 
-    /// The next session of a catch-up, or back to the selected one when it is done.
-    private func subscribe(to sessionId: String?) {
-        guard let sessionId else { return subscribe() }
-        guard connection == .connected else { return catchUp.cancel() }
-        socket.send(["t": "subscribe", "sessionId": sessionId])
+    /// The next session of a catch-up, on the fetch socket, or closes it when the catch-up is done.
+    private func fetch(_ sessionId: String?) {
+        guard let sessionId else { return fetchSocket.disconnect() }
+        guard connection == .connected, let account = settings.account else {
+            catchUp.cancel()
+            return fetchSocket.disconnect()
+        }
+        switch fetchSocket.state {
+        case .connected: fetchSocket.send(["t": "subscribe", "sessionId": sessionId])
+        // Once connected, its `onState` asks for the session the catch-up waits for.
+        case .connecting: break
+        default: fetchSocket.connect(account)
+        }
+    }
+
+    /// Only the histories a catch-up asked for count on the fetch socket; the rest comes on the main one too.
+    private func fetched(_ message: RelayMessage) {
+        guard case .history(let sessionId, let wireEntries) = message, sessionId == catchUp.waitingFor, let vault else { return }
+        // The selected session is kept current by the main socket: an older copy must not replace it.
+        if sessionId != selectedId {
+            relayEntries[sessionId] = vault.entries(wireEntries)
+            partialHistories.remove(sessionId)
+        }
+        if archiveOnHistory.remove(sessionId) != nil, let session = relaySessions.first(where: { $0.id == sessionId }) {
+            archive.add(session, entries: entries[sessionId] ?? [])
+        }
+        fetch(catchUp.received(sessionId))
+    }
+
+    /// Whether the conversation of a session is still on its way, for the chat to say so.
+    func load(of sessionId: String) -> ConversationLoad {
+        ConversationLoad.state(
+            relaySession: isRelaySession(sessionId), reachable: connection == .connected || connection == .connecting,
+            relayEntries: relayEntries[sessionId], partial: partialHistories.contains(sessionId),
+            localEntries: localEntries[sessionId]?.count ?? 0)
     }
 
     /// Fetches the conversations of the relay sessions never opened, so the search finds their messages.
     func catchUpHistories() {
         guard connection == .connected else { return }
         let missing = relaySessions.map(\.id).filter { relayEntries[$0] == nil }
-        if let first = catchUp.start(sessions: missing, selected: selectedId) { subscribe(to: first) }
+        if let first = catchUp.start(sessions: missing, selected: selectedId) { fetch(first) }
     }
 
     /// An OpenCode session of this Mac that no agent reports: the notch talks to OpenCode's service itself.

@@ -112,6 +112,9 @@ final class LocalSessionsTests: XCTestCase {
         XCTAssertEqual(LocalSessions.entries(local: ["s1": [local]], relay: ["s1": [relay]])["s1"], [relay])
         XCTAssertEqual(LocalSessions.entries(local: [:], relay: ["s2": [relay]])["s2"], [relay])
         XCTAssertEqual(LocalSessions.entries(local: [:], relay: ["s3": []])["s3"], [])
+        // The relay's latest entries wait for the rest of its history when this Mac's transcript shows the whole of it.
+        XCTAssertEqual(LocalSessions.entries(local: ["s1": [local]], relay: ["s1": [relay]], partial: ["s1"])["s1"], [local])
+        XCTAssertEqual(LocalSessions.entries(local: [:], relay: ["s2": [relay]], partial: ["s2"])["s2"], [relay])
     }
 
     func testTheModelIsTheOneOfTheLastResponse() {

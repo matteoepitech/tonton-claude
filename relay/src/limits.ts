@@ -56,6 +56,13 @@ export const MAX_ALERTED_REQUESTS = 200
 /** A permission alert that could not be delivered within this is dropped by Apple. */
 export const PERMISSION_ALERT_TTL_S = 600
 
+/**
+ * What goes first to an app that subscribes with `latestFirst`: the latest entries within these, so the end of the
+ * conversation shows before a long history and its images have arrived.
+ */
+export const RECENT_HISTORY_ENTRIES = 60
+export const RECENT_HISTORY_BYTES = 256 * 1024
+
 export const FINISHED_SESSION_TTL_MS = 6 * 60 * 60_000
 
 export const RATE_LIMITS = {
