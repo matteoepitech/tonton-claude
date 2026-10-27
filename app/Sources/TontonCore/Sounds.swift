@@ -14,6 +14,15 @@ public enum SoundEvent: String, CaseIterable, Sendable {
     }
 }
 
+/// A project can have a sound of its own when it finishes, to know which one did without looking. Every other event,
+/// and a project without one, plays the event's sound.
+public enum ProjectSound {
+    public static func pick(_ event: SoundEvent, project: String, projectSounds: [String: String], eventSound: String) -> String {
+        guard event == .finished, let sound = projectSounds[project], !sound.isEmpty else { return eventSound }
+        return sound
+    }
+}
+
 /// Sound packs: the macOS alert sounds, and chiptunes made on the fly.
 public enum SoundPack: String, CaseIterable, Sendable {
     case macOS, eightBit

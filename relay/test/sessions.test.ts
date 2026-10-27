@@ -92,6 +92,19 @@ describe('SessionStore', () => {
     expect(removals).toEqual(['s1'])
   })
 
+  test('a name from a Mac is published without counting as activity, for sessions of the account only', () => {
+    const { store, updates } = createStore()
+    store.agentConnected('acc', 'm1', 's1', 'info', false)
+    const before = store.list('acc')[0].lastActivity
+    store.rename('acc', 's1', 'sealed-name')
+    expect(updates.at(-1)?.session).toMatchObject({ id: 's1', name: 'sealed-name', lastActivity: before })
+    store.rename('other', 's1', 'stolen')
+    store.rename('acc', 'unknown', 'sealed')
+    expect(store.list('acc')).toHaveLength(1)
+    expect(store.list('acc')[0].name).toBe('sealed-name')
+    expect(store.list('other')).toEqual([])
+  })
+
   test('every change is published', () => {
     const { store, updates } = createStore()
     store.agentConnected('acc', 'm1', 's1', 'info', false)

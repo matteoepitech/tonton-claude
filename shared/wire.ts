@@ -33,7 +33,8 @@ export function isSessionSummary(value: unknown): value is SessionSummary {
     Array.isArray(value.pendingPermissions) &&
     value.pendingPermissions.every(isPermission) &&
     isText(value.startedAt) &&
-    isText(value.lastActivity)
+    isText(value.lastActivity) &&
+    isOptionalText(value.name)
   )
 }
 
@@ -105,6 +106,24 @@ export function parseRelayMessage(raw: string): RelayToApp | null {
         state: m.state as Extract<RelayToApp, { t: 'session_start' }>['state'],
         ...(m.reason === 'offline' ? { reason: m.reason } : {}),
         detail: m.detail ?? null,
+      }
+    case 'agent_logs':
+      if (!isText(m.machineId) || !isText(m.requestId) || !isOptionalText(m.logs)) return null
+      return {
+        t: 'agent_logs',
+        machineId: m.machineId,
+        requestId: m.requestId,
+        ...(m.reason === 'offline' ? { reason: m.reason } : {}),
+        logs: m.logs ?? null,
+      }
+    case 'diagnosis':
+      if (!isText(m.machineId) || !isText(m.requestId) || !isOptionalText(m.diagnosis)) return null
+      return {
+        t: 'diagnosis',
+        machineId: m.machineId,
+        requestId: m.requestId,
+        ...(m.reason === 'offline' ? { reason: m.reason } : {}),
+        diagnosis: m.diagnosis ?? null,
       }
     default:
       return null

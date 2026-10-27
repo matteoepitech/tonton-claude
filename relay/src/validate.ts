@@ -10,9 +10,20 @@ export const isSessionId = (value: unknown): value is string => isText(value, 12
 
 export const isRequestId = (value: unknown): value is string => isText(value, 32)
 
-export const isLaunchId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]{8,32}$/.test(value)
+/** The random ids the app gives a start, a log request or a diagnosis. */
+const ORDER_ID = /^[a-z0-9]{8,32}$/
+
+export const isLaunchId = (value: unknown): value is string => typeof value === 'string' && ORDER_ID.test(value)
+
+export const isRequestToken = (value: unknown): value is string => typeof value === 'string' && ORDER_ID.test(value)
 
 export const isStartState = (value: unknown): value is 'starting' | 'asking' | 'started' | 'failed' =>
   value === 'starting' || value === 'asking' || value === 'started' || value === 'failed'
 
 export const isVersion = (value: unknown): value is string => typeof value === 'string' && VERSION_PATTERN.test(value)
+
+/** The random id an install of the iPhone app registers its tokens under. */
+export const isDeviceId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(value)
+
+/** An APNs device or Live Activity token, hex. */
+export const isPushToken = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-fA-F]{64,512}$/.test(value)

@@ -2,10 +2,13 @@ import Foundation
 
 public struct RelayError: LocalizedError, Equatable {
     public let message: String
+    /// The HTTP status, when the relay answered.
+    public let status: Int?
     public var errorDescription: String? { message }
 
-    public init(message: String) {
+    public init(message: String, status: Int? = nil) {
         self.message = message
+        self.status = status
     }
 }
 
@@ -70,6 +73,23 @@ public struct RelayAPI: Sendable {
         _ = try await request("DELETE", account.relay, "/api/account", token: account.token, as: Done.self)
     }
 
+    /// Saves what an iPhone wants pushed, and says whether the relay pushes at all. Nil from relays older than pushes.
+    public func register(_ device: PushDevice, for account: Account) async throws -> Bool? {
+        struct Status: Decodable { let enabled: Bool }
+        let body = try JSONEncoder().encode(device)
+        do {
+            return try await request("POST", account.relay, "/api/push/devices", token: account.token, body: body, as: Status.self).enabled
+        } catch let error as RelayError where error.status == 404 {
+            return nil
+        }
+    }
+
+    /// The phone signs out: the relay forgets its tokens.
+    public func unregister(device: String, for account: Account) async throws {
+        struct Done: Decodable { let ok: Bool }
+        _ = try await request("DELETE", account.relay, "/api/push/devices/\(device)", token: account.token, as: Done.self)
+    }
+
     public static func normalize(_ relay: String) -> String {
         relay.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
@@ -89,7 +109,7 @@ public struct RelayAPI: Sendable {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let message = (try? JSONDecoder().decode([String: String].self, from: data))?["error"] ?? "HTTP \(status)"
-            throw RelayError(message: message)
+            throw RelayError(message: message, status: status)
         }
         return try JSONDecoder().decode(T.self, from: data)
     }

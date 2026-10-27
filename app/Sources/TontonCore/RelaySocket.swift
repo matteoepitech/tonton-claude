@@ -19,15 +19,18 @@ public final class RelaySocket {
     private var backoff: TimeInterval = 1
     private var pingTimer: Timer?
     private var account: Account?
+    /// The iPhone app's install id: the relay leaves its Live Activity to it while this socket is open.
+    private var device: String?
     private(set) public var state: ConnectionState = .notConfigured {
         didSet { if state != oldValue { onState(state) } }
     }
 
     public init() {}
 
-    public func connect(_ account: Account) {
+    public func connect(_ account: Account, device: String? = nil) {
         disconnect(to: .connecting)
         self.account = account
+        self.device = device
         open()
     }
 
@@ -61,6 +64,7 @@ public final class RelaySocket {
         }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(account.token)", forHTTPHeaderField: "Authorization")
+        if let device { request.setValue(device, forHTTPHeaderField: "X-Tonton-Device") }
 
         generation += 1
         let current = generation

@@ -23,10 +23,11 @@ struct CommandPalette: View {
         let items = Array(FuzzyMatch.rank(allItems, query: query) { "\($0.title) \($0.detail)" }.prefix(Self.shown))
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("", text: $query, prompt: Text("Sessions, machines, settings…").foregroundStyle(Theme.ink.opacity(0.35)))
+                Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondary).accessibilityHidden(true)
+                TextField("", text: $query, prompt: Text("Sessions, machines, settings…").foregroundStyle(Theme.textFaint))
+                    .accessibilityLabel("Search sessions, machines and settings")
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14))
+                    .font(.notch(14))
                     .focused($focused)
                     .onSubmit { activate(items) }
                     .onKeyPress(.downArrow) {
@@ -43,20 +44,24 @@ struct CommandPalette: View {
             if !items.isEmpty { Rectangle().fill(Theme.border).frame(height: 1) }
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 HStack(spacing: 10) {
-                    Image(systemName: item.icon).font(.system(size: 12)).frame(width: 18).foregroundStyle(.secondary)
-                    Text(item.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                    Text(item.detail).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                    Image(systemName: item.icon).font(.notch(12)).frame(width: 18).foregroundStyle(Theme.secondary)
+                        .accessibilityHidden(true)
+                    Text(item.title).font(.notch(13, weight: .medium)).lineLimit(1)
+                    Text(item.detail).font(.notch(12)).foregroundStyle(Theme.secondary).lineLimit(1)
                     Spacer(minLength: 0)
-                    if index == selection { Text("↩").font(.system(size: 11)).foregroundStyle(.secondary) }
+                    if index == selection { Text("↩").font(.notch(11)).foregroundStyle(Theme.secondary).accessibilityHidden(true) }
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 34)
                 .background(index == selection ? Theme.ink.opacity(0.1) : .clear)
                 .contentShape(Rectangle())
                 .onTapGesture { finish(item) }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(index == selection ? [.isButton, .isSelected] : .isButton)
+                .accessibilityAction { finish(item) }
             }
             if items.isEmpty && !query.isEmpty {
-                Text("Nothing matches").font(.system(size: 12)).foregroundStyle(.secondary).frame(height: 40)
+                Text("Nothing matches").font(.notch(12)).foregroundStyle(Theme.secondary).frame(height: 40)
             }
         }
         .frame(width: 440)
@@ -70,7 +75,7 @@ struct CommandPalette: View {
     private var allItems: [Item] {
         let sessions = store.orderedSessions.map { session in
             Item(
-                id: "session-\(session.id)", icon: "bubble.left", title: session.project,
+                id: "session-\(session.id)", icon: "bubble.left", title: session.displayName,
                 detail: "\(session.machine) · \(session.title ?? session.status.label)"
             ) { store.selectedId = session.id }
         }

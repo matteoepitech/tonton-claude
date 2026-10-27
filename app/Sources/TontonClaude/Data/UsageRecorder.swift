@@ -3,6 +3,8 @@ import Foundation
 import OSLog
 import TontonCore
 
+enum BudgetPeriod { case day, month }
+
 /// Settings › Usage's history: records what sessions report while the app runs, and keeps it next to the account.
 @MainActor
 final class UsageRecorder: ObservableObject {
@@ -11,8 +13,10 @@ final class UsageRecorder: ObservableObject {
     @Published private(set) var wrapped: WrappedLog
     /// When Claude works, for the heat map.
     @Published private(set) var hours: BusyHours
-    /// Today's spending went past the daily budget, with what was spent so far. Once a day.
-    let budgetExceeded = PassthroughSubject<Double, Never>()
+    /// The turns counted in both, seen ending here or reported later by the agents.
+    private var turns: TurnLedger
+    /// Spending went past the daily budget (once a day) or the monthly one (once a month), with what was spent so far.
+    let budgetExceeded = PassthroughSubject<(period: BudgetPeriod, spent: Double), Never>()
     private let settings: AppSettings
     private var subscriptions = Set<AnyCancellable>()
 
@@ -24,6 +28,7 @@ final class UsageRecorder: ObservableObject {
         history = Self.load(UsageHistory.self, from: "usage.json") ?? UsageHistory()
         wrapped = Self.load(WrappedLog.self, from: "wrapped.json") ?? WrappedLog()
         hours = Self.load(BusyHours.self, from: "hours.json") ?? BusyHours()
+        turns = Self.load(TurnLedger.self, from: "turns.json") ?? TurnLedger()
         // Working sessions report every few seconds: one reading every few seconds is plenty.
         sessions
             .throttle(for: .seconds(5), scheduler: RunLoop.main, latest: true)
@@ -32,10 +37,12 @@ final class UsageRecorder: ObservableObject {
         tasks
             .sink { [weak self] task in
                 guard let self else { return }
-                wrapped.worked(task.worked, session: task.session.id, project: task.session.project)
-                saveWrapped()
-                hours.worked(task.worked, until: Date())
-                save(hours, to: "hours.json")
+                let now = Date()
+                let counted = turns.live(session: task.session.id, end: now)
+                save(turns, to: "turns.json")
+                // The agent already reported this turn: it was counted then.
+                guard counted else { return }
+                worked(task.worked, by: task.session, until: now)
             }
             .store(in: &subscriptions)
         // Conversations grow with each entry: counting the calls once things settle is enough.
@@ -48,7 +55,29 @@ final class UsageRecorder: ObservableObject {
             .store(in: &subscriptions)
     }
 
+    private func worked(_ seconds: TimeInterval, by session: SessionSummary, until end: Date) {
+        wrapped.worked(seconds, session: session.id, project: session.project, at: end)
+        saveWrapped()
+        hours.worked(seconds, until: end)
+        save(hours, to: "hours.json")
+    }
+
+    /// Turns the agents report that this Mac didn't see end, while it was asleep or the app closed: they count at their
+    /// own time.
+    private func countReportedTurns(_ sessions: [SessionSummary]) {
+        var counted = false
+        for session in sessions {
+            guard let reported = session.turns, !reported.isEmpty else { continue }
+            for turn in turns.reported(session: session.id, turns: reported) {
+                worked(turn.seconds, by: session, until: turn.end)
+                counted = true
+            }
+        }
+        if counted { save(turns, to: "turns.json") }
+    }
+
     private func record(_ sessions: [SessionSummary]) {
+        countReportedTurns(sessions)
         var next = history
         next.record(sessions)
         let spent = next.entries != history.entries
@@ -56,13 +85,22 @@ final class UsageRecorder: ObservableObject {
         // A reading that adds nothing only moves the baselines in memory: no need to write the file.
         guard spent else { return }
         save(history, to: "usage.json")
-        let today = UsageHistory.day(Date())
-        let spentToday = history.spent(on: Date())
+        let now = Date()
+        let today = UsageHistory.day(now)
+        let spentToday = history.spent(on: now)
         if DailyBudget.shouldAlert(
             spent: spentToday, budget: Double(settings.dailyBudget), lastAlertDay: settings.budgetAlertDay, today: today)
         {
             settings.budgetAlertDay = today
-            budgetExceeded.send(spentToday)
+            budgetExceeded.send((.day, spentToday))
+        }
+        let month = WrappedLog.month(now)
+        let spentThisMonth = history.spent(inMonth: month)
+        if MonthlyBudget.shouldAlert(
+            spent: spentThisMonth, budget: Double(settings.monthlyBudget), lastAlertMonth: settings.budgetAlertMonth, month: month)
+        {
+            settings.budgetAlertMonth = month
+            budgetExceeded.send((.month, spentThisMonth))
         }
     }
 

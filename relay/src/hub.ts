@@ -14,6 +14,8 @@ export interface SocketData {
   service: boolean
   /** Viewer: the read-only share it opened. */
   shareId?: string
+  /** App: the install of the iPhone app it is, from `X-Tonton-Device`. Missing for the Mac and older apps. */
+  device?: string | null
 }
 
 export type Socket = ServerWebSocket<SocketData>
@@ -91,6 +93,11 @@ export class Hub {
 
   isMachineOnline(machineId: string): boolean {
     return (this.machines.get(machineId)?.size ?? 0) > 0
+  }
+
+  /** That install of the iPhone app has its socket open, so it is in the foreground. */
+  isDeviceOnline(accountId: string, device: string): boolean {
+    return [...(this.apps.get(accountId) ?? [])].some(socket => socket.data.device === device)
   }
 
   /** The machine's background service, or else any of its connections. */

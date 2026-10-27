@@ -31,7 +31,7 @@ final class PermissionNotifications {
     /// The session's first pending request, with its buttons. One notification per request: posting again replaces it.
     func post(_ session: SessionSummary, request: PermissionRequest, store: SessionStore) {
         let content = UNMutableNotificationContent()
-        content.title = "\(session.machine) · \(session.project)"
+        content.title = "\(session.machine) · \(session.displayName)"
         content.subtitle = "Allow \(request.toolName)?"
         content.body = String(request.description.prefix(200))
         content.userInfo = PermissionNotification.userInfo(sessionId: session.id, requestId: request.requestId)

@@ -4,6 +4,7 @@ import TontonCore
 
 struct GeneralPane: View {
     @EnvironmentObject var settings: AppSettings
+    @ObservedObject private var updates = AppUpdater.shared
     @State private var newReply = ""
 
     private var shortcuts: [(String, [String])] {
@@ -44,6 +45,12 @@ struct GeneralPane: View {
                         settings.notchSize = NotchSizeChoice(rawValue: $0) ?? .standard
                     }
                 }
+                Hairline()
+                Row(title: "Text size", detail: "Size of the text in the open notch.") {
+                    Segmented(selection: settings.notchTextSize.rawValue, options: NotchTextSize.allCases.map { ($0.rawValue, $0.label) }) {
+                        settings.notchTextSize = NotchTextSize(rawValue: $0) ?? .standard
+                    }
+                }
             }
             GroupLabel(text: "Sessions")
             Card {
@@ -57,6 +64,15 @@ struct GeneralPane: View {
                         options: [("0", "None")] + [5, 10, 20, 50, 100, 200].map { (String($0), "$\($0)") }
                     ) {
                         settings.dailyBudget = Int($0) ?? 0
+                    }
+                }
+                Hairline()
+                Row(title: "Monthly budget", detail: "An alert the first time a month's cost goes past it.") {
+                    ChoiceMenu(
+                        selection: String(settings.monthlyBudget),
+                        options: [("0", "None")] + [50, 100, 200, 500, 1000, 2000].map { (String($0), "$\($0)") }
+                    ) {
+                        settings.monthlyBudget = Int($0) ?? 0
                     }
                 }
                 Hairline()
@@ -103,6 +119,12 @@ struct GeneralPane: View {
             }
             GroupLabel(text: "Updates")
             Card {
+                if updates.isOn {
+                    ToggleRow(
+                        title: "Check for updates", detail: "Looks for a new version of Tonton Claude once a day.",
+                        isOn: $updates.checksAutomatically)
+                    Hairline()
+                }
                 ToggleRow(
                     title: "Show what's new after an update",
                     detail: "The release notes open once when a new version starts. They come from the release on GitHub.",
@@ -175,6 +197,9 @@ struct GeneralPane: View {
                     Button("What's new") { AppDelegate.shared?.showWhatsNew() }.buttonStyle(.link).font(.system(size: 12))
                 }
                 Spacer()
+                if updates.isOn {
+                    Button("Check for Updates…") { updates.checkForUpdates() }.buttonStyle(ThemeButtonStyle()).disabled(!updates.canCheck)
+                }
                 Button("Quit Tonton Claude") { NSApp.terminate(nil) }.buttonStyle(ThemeButtonStyle())
             }
             .padding(.top, 28)
@@ -200,6 +225,25 @@ struct GeneralPane: View {
     }
 }
 
+/// How far a locked achievement is: `42/100` over a thin bar.
+private struct GoalGauge: View {
+    let goal: AchievementGoal
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text("\(goal.done.formatted())/\(goal.target.formatted())")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Theme.textDim)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.ink.opacity(0.1))
+                Capsule().fill(Theme.warning.opacity(0.8)).frame(width: 64 * goal.fraction)
+            }
+            .frame(width: 64, height: 4)
+        }
+        .fixedSize()
+    }
+}
+
 /// Every badge, unlocked ones in color.
 private struct AchievementsList: View {
     @ObservedObject private var store = AchievementStore.shared
@@ -220,6 +264,7 @@ private struct AchievementsList: View {
                         Text(achievement.detail).font(.system(size: 12)).foregroundStyle(Theme.textDim)
                     }
                     Spacer()
+                    if let goal = store.progress.goal(achievement) { GoalGauge(goal: goal) }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)

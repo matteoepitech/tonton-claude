@@ -21,7 +21,40 @@ export const MAX_VIEWERS_PER_SHARE = 20
 export const MAX_SHARE_HOURS = 30 * 24
 /** The sealed copy of a shared conversation, kept in memory only: the agent sends it again when it reconnects. */
 export const MAX_SHARE_BYTES = 4 * 1024 * 1024
+/** A session's sealed name: a few words, its session id and a date. */
+export const MAX_SESSION_NAME_BYTES = 2048
+/** A sealed request for a machine's agent log: two ids and a date. */
+export const MAX_LOG_REQUEST_BYTES = 4096
+/** The end of an agent log, sealed. The agent keeps it under this. */
+export const MAX_AGENT_LOG_BYTES = 256 * 1024
+/** A sealed request to check a machine's setup, with the repair it may ask for. */
+export const MAX_DIAGNOSE_REQUEST_BYTES = 4096
+/** A sealed diagnosis: a few lines of checks. */
+export const MAX_DIAGNOSIS_BYTES = 64 * 1024
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
+
+/** iPhones and iPads that get pushes, per account. The least recently registered goes first. */
+export const MAX_PUSH_DEVICES_PER_ACCOUNT = 10
+/** What Apple accepts in an alert or a Live Activity push. */
+export const MAX_PUSH_PAYLOAD_BYTES = 4096
+/** Sessions shown on the Live Activity, and the longest sealed blobs it carries for each. */
+export const ISLAND_SESSIONS = 3
+export const MAX_ISLAND_INFO_BYTES = 1024
+export const MAX_ISLAND_DETAIL_BYTES = 512
+/** Changes are gathered this long before the Live Activity is pushed. */
+export const ISLAND_DEBOUNCE_MS = 1500
+/** Between two pushes to one Live Activity, unless a session starts needing the user. */
+export const ISLAND_MIN_INTERVAL_MS = 10_000
+/** A Live Activity is ended once nothing has run for this long. */
+export const ISLAND_QUIET_MS = 15 * 60_000
+/** No Live Activity is started by push this soon after the phone's app closed its socket: it may have one on the way. */
+export const ISLAND_START_GRACE_MS = 60_000
+/** A Live Activity the relay started but the phone never reported is not started again before this. */
+export const ISLAND_RESTART_MS = 8 * 60 * 60_000
+/** Permission alerts already sent, kept to not send one twice when an agent reconnects. */
+export const MAX_ALERTED_REQUESTS = 200
+/** A permission alert that could not be delivered within this is dropped by Apple. */
+export const PERMISSION_ALERT_TTL_S = 600
 
 export const FINISHED_SESSION_TTL_MS = 6 * 60 * 60_000
 
