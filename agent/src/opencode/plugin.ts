@@ -1,3 +1,4 @@
+import { POOL_TOOLS } from '../channel/pool-work'
 import { FORWARDED_EVENTS } from './events'
 
 /** The file name in OpenCode's plugins folder. */
@@ -20,7 +21,12 @@ import { spawn } from 'node:child_process'
 
 const COMMAND = ${JSON.stringify(command)}
 const FORWARDED = new Set(${JSON.stringify(FORWARDED_EVENTS)})
-const state = (globalThis.__tontonClaude ??= { bridge: null, inputs: new Map(), client: null })
+const POOL_TOOLS = ${JSON.stringify(POOL_TOOLS)}
+const TOOL_TIMEOUT_MS = 30000
+const state = (globalThis.__tontonClaude ??= { bridge: null, inputs: new Map(), client: null, calls: new Map(), nextCall: 0 })
+state.calls ??= new Map()
+state.nextCall ??= 0
+state.nextCall ??= 0
 
 function bridge() {
   if (state.bridge && state.bridge.exitCode === null && !state.bridge.killed) return state.bridge
@@ -64,6 +70,14 @@ async function run(line) {
   try {
     command = JSON.parse(line)
   } catch {
+    return
+  }
+  if (command.op === 'tool_result') {
+    const call = state.calls.get(command.callID)
+    if (call) {
+      state.calls.delete(command.callID)
+      call(String(command.output ?? ''))
+    }
     return
   }
   try {
@@ -132,11 +146,89 @@ async function runIn1(client, { op, sessionID, ...command }) {
   }
 }
 
+/** A pool tool call, answered by the bridge. */
+function callTool(sessionID, name, args) {
+  const callID = 'call-' + ++state.nextCall + '-' + Date.now()
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      state.calls.delete(callID)
+      resolve('Tonton did not answer: the pool tools are not available right now.')
+    }, TOOL_TIMEOUT_MS)
+    state.calls.set(callID, output => {
+      clearTimeout(timer)
+      resolve(output)
+    })
+    send({ type: 'tonton.tool', data: { callID, sessionID, name, args: args ?? {} } })
+  })
+}
+
+/** OpenCode 2: tools with Effect schemas, added to its registry. */
+async function addTools2(input) {
+  if (!input.tool?.transform) return
+  let Schema
+  try {
+    ;({ Schema } = await import('effect'))
+  } catch {
+    return
+  }
+  const type = param =>
+    param.type === 'number' ? Schema.Number : param.type === 'boolean' ? Schema.Boolean : param.type === 'array' ? Schema.Array(Schema.String) : Schema.String
+  input.tool.transform(registry => {
+    for (const spec of POOL_TOOLS) {
+      try {
+        if (registry.get?.(spec.name)) continue
+        const fields = Object.fromEntries(
+          Object.entries(spec.params).map(([name, param]) => [name, param.required ? type(param) : Schema.optional(type(param))]),
+        )
+        registry.add({
+          name: spec.name,
+          description: spec.description,
+          input: Schema.Struct(fields),
+          output: Schema.String,
+          options: { namespace: 'tonton' },
+          execute: async (args, context) => {
+            const text = await callTool(context?.sessionID, spec.name, args)
+            return { output: text, content: text }
+          },
+        })
+      } catch {}
+    }
+  })
+}
+
+/** OpenCode 1: the \`tool\` hook, with zod from @opencode-ai/plugin. */
+async function tools1() {
+  let tool
+  try {
+    ;({ tool } = await import('@opencode-ai/plugin'))
+  } catch {
+    return undefined
+  }
+  const z = tool.schema
+  const type = param =>
+    (param.type === 'number' ? z.number() : param.type === 'boolean' ? z.boolean() : param.type === 'array' ? z.array(z.string()) : z.string()).describe(
+      param.description,
+    )
+  return Object.fromEntries(
+    POOL_TOOLS.map(spec => [
+      spec.name,
+      tool({
+        description: spec.description,
+        args: Object.fromEntries(Object.entries(spec.params).map(([name, param]) => [name, param.required ? type(param) : type(param).optional()])),
+        execute: async (args, context) => callTool(context?.sessionID, spec.name, args),
+      }),
+    ]),
+  )
+}
+
 export default {
   id: 'tonton-claude',
   setup: async input => {
     const directory = input.location?.directory
     if (directory) state.inputs.set(directory, input)
+    try {
+      await addTools2(input)
+    } catch {}
     const controller = new AbortController()
     ;(async () => {
       try {
@@ -152,7 +244,8 @@ export default {
   server: async input => {
     if (input?.client) state.client = input.client
     bridge()
-    return { event: async ({ event }) => forward(event) }
+    const tool = await tools1().catch(() => undefined)
+    return { event: async ({ event }) => forward(event), ...(tool ? { tool } : {}) }
   },
 }
 `

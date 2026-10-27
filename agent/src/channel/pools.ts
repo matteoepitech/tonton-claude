@@ -13,6 +13,8 @@ type Post = (build: () => Promise<AgentMessage | null>) => void
 interface Membership {
   key: string
   version: number
+  /** The machine owner's choice, from the order: start pool tasks at once, or ask the user first. */
+  autoStart: boolean
   vault: PoolVault
   /** Null until the relay sent the snapshot that follows the acknowledgement. */
   state: PoolState | null
@@ -20,6 +22,8 @@ interface Membership {
 
 export class SessionPools {
   private readonly pools = new Map<string, Membership>()
+  /** Told of every update as it comes, conflicts and errors included: the pool tools wait on them. */
+  private readonly listeners = new Set<(update: PoolUpdate) => void>()
   /** Updates are opened one after the other, so the state follows the relay's order. */
   private queue: Promise<void> = Promise.resolve()
 
@@ -28,7 +32,7 @@ export class SessionPools {
     private readonly accountKey: string,
     private readonly post: Post,
     /** Told whenever a pool's state changes, or the session joins or leaves one. */
-    private readonly changed: (poolId: string) => void = () => {},
+    private changed: (poolId: string) => void = () => {},
   ) {}
 
   /** A join order from the relay: kept and acknowledged if it is this session's. */
@@ -41,9 +45,10 @@ export class SessionPools {
         return null
       }
       const known = this.pools.get(poolId)
+      const autoStart = opened.autoStart === true
       if (known?.key !== opened.key) {
-        this.pools.set(poolId, { key: opened.key, version: opened.version, vault: new PoolVault(opened.key), state: null })
-      }
+        this.pools.set(poolId, { key: opened.key, version: opened.version, autoStart, vault: new PoolVault(opened.key), state: null })
+      } else known.autoStart = autoStart
       log('session joined a pool', { pool: poolId })
       this.changed(poolId)
       return { t: 'pool_ack', sessionId, poolId }
@@ -61,6 +66,7 @@ export class SessionPools {
     const poolId = update.t === 'pool_snapshot' ? update.pool.id : update.poolId
     const membership = this.pools.get(poolId)
     if (!membership) return
+    for (const listener of this.listeners) listener(update)
     this.queue = this.queue
       .then(async () => {
         if (update.t === 'pool_snapshot') membership.state = await membership.vault.snapshot(update.pool)
@@ -89,6 +95,21 @@ export class SessionPools {
   /** Seals with the pool's key, for what the session posts to it. */
   vault(poolId: string): PoolVault | null {
     return this.pools.get(poolId)?.vault ?? null
+  }
+
+  /** Who to tell of changes, once the pool tools exist. */
+  onChange(changed: (poolId: string) => void) {
+    this.changed = changed
+  }
+
+  autoStart(poolId: string): boolean {
+    return this.pools.get(poolId)?.autoStart ?? false
+  }
+
+  /** Every update of the session's pools, as it arrives; returns how to stop listening. */
+  listen(listener: (update: PoolUpdate) => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
   }
 
   /** Resolves once every update received so far was applied. */
