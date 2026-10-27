@@ -32,8 +32,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().setNotificationCategories([Self.permissionCategory])
         return true
     }
+
+    /// Allow and Deny on a permission alert. An Apple Watch shows them on the alert it mirrors, and hands the tap back
+    /// here. Allowing asks for the phone, or the watch, to be unlocked first.
+    private static let permissionCategory = UNNotificationCategory(
+        identifier: PermissionPush.category,
+        actions: [
+            UNNotificationAction(
+                identifier: PermissionAction.allow.rawValue, title: PermissionAction.allow.title, options: [.authenticationRequired],
+                icon: UNNotificationActionIcon(systemImageName: "checkmark")),
+            UNNotificationAction(
+                identifier: PermissionAction.deny.rawValue, title: PermissionAction.deny.title, options: [.destructive],
+                icon: UNNotificationActionIcon(systemImageName: "xmark")),
+        ],
+        intentIdentifiers: [], hiddenPreviewsBodyPlaceholder: "Permission request")
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         store.push.received(deviceToken: deviceToken)
@@ -59,8 +74,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let push = PermissionPush(userInfo: response.notification.request.content.userInfo)
+        let action = PermissionAction(rawValue: response.actionIdentifier)
         Task { @MainActor in
-            if let push { store.show(push.sessionId) }
+            // An action may wake the app in the background: the completion handler is what keeps it awake meanwhile.
+            if let push, let action {
+                await store.answer(push, with: action)
+            } else if let push {
+                store.show(push.sessionId)
+            }
             completionHandler()
         }
     }

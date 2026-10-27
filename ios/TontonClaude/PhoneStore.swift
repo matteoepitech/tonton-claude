@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import TontonCore
+import UserNotifications
 
 /// The account's sessions as the phone sees them, through the relay's socket while the app is open. Once it goes to
 /// the background the socket closes, and a relay with an APNs key takes over the Live Activity and the alerts.
@@ -22,6 +23,10 @@ final class PhoneStore {
     @ObservationIgnored private let api = RelayAPI()
     @ObservationIgnored private var vault: SessionVault?
     @ObservationIgnored private var foreground = false
+    /// The requests waiting when the relay last spoke: alerts of the others can go.
+    @ObservationIgnored private var lastPending: Set<String> = []
+    /// Answers from alerts under way, which keep the socket open in the background.
+    @ObservationIgnored private var answering = 0
 
     init() {
         account = SharedAccount.load()
@@ -112,9 +117,24 @@ final class PhoneStore {
         switch message {
         case .snapshot, .session, .removed:
             Task { await island.show(feed.island, relayPushes: push.relayPushes == true, foreground: foreground) }
+            let pending = Set(feed.sessions.flatMap { $0.pendingPermissions.map(\.requestId) })
+            if pending != lastPending {
+                lastPending = pending
+                Task { await clearAnsweredAlerts() }
+            }
         default:
             break
         }
+    }
+
+    /// Alerts of requests answered elsewhere, on the Mac say, go away: from the phone and from a watch it mirrors to.
+    private func clearAnsweredAlerts() async {
+        guard feed.snapshots > 0 else { return }
+        let center = UNUserNotificationCenter.current()
+        let answered = await center.deliveredNotifications().filter { notification in
+            PermissionPush(userInfo: notification.request.content.userInfo).map { feed.standing(of: $0) == .gone } ?? false
+        }
+        if !answered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: answered.map(\.request.identifier)) }
     }
 
     private func subscribe() {
@@ -152,5 +172,53 @@ final class PhoneStore {
     /// Removes a closed session from the list, for every app of the account.
     func dismiss(_ sessionId: String) {
         socket.send(["t": "dismiss", "sessionId": sessionId])
+    }
+
+    // MARK: Answers from alerts
+
+    /// Allow or Deny tapped on an alert, on the phone or on an Apple Watch, maybe with the app woken in the background.
+    /// It connects when it has to, checks the request still waits, answers it and waits for the relay to confirm. When it
+    /// cannot, a notification says so: nothing else would.
+    func answer(_ alert: PermissionPush, with action: PermissionAction) async {
+        guard let account else { return }
+        let current = connection == .connected
+        let seen = feed.snapshots
+        // Another answer may be connecting already.
+        if !current && connection != .connecting { socket.connect(account, device: push.deviceId) }
+        answering += 1
+        defer {
+            answering -= 1
+            // Back in the background, the relay takes the Live Activity over again.
+            if answering == 0 && !foreground { socket.disconnect(to: .paused) }
+        }
+        if !current, await !until({ self.feed.snapshots > seen }) { return await couldNotAnswer(alert) }
+        switch feed.standing(of: alert) {
+        case .gone: return
+        case .unreachable: return await couldNotAnswer(alert)
+        case .pending: break
+        }
+        socket.send(["t": "verdict", "sessionId": alert.sessionId, "requestId": alert.requestId, "behavior": action.rawValue])
+        if await !until({ self.feed.standing(of: alert) == .gone }) { await couldNotAnswer(alert) }
+    }
+
+    /// Whether the condition holds within a few seconds: the system gives an action about thirty in all.
+    private func until(_ condition: () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + .seconds(8)
+        while ContinuousClock.now < deadline {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        return condition()
+    }
+
+    private func couldNotAnswer(_ alert: PermissionPush) async {
+        let content = UNMutableNotificationContent()
+        content.title = vault?.alert(for: alert)?.title ?? "Permission request"
+        content.body = "Not answered: the relay or the session could not be reached. Open Tonton Claude to answer."
+        content.threadIdentifier = alert.sessionId
+        // Without the sealed blobs: opening it only needs the session.
+        content.userInfo = ["tonton": ["sessionId": alert.sessionId, "requestId": alert.requestId]]
+        let request = UNNotificationRequest(identifier: "unanswered-\(alert.requestId)", content: content, trigger: nil)
+        try? await UNUserNotificationCenter.current().add(request)
     }
 }

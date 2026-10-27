@@ -28,6 +28,39 @@ public struct PermissionPush: Codable, Equatable, Sendable {
     }
 }
 
+/// The buttons of a permission alert, on the iPhone's Lock Screen and on an Apple Watch the alert is mirrored to. The
+/// watch hands the tap to the iPhone app, which answers through the relay like the Mac does.
+public enum PermissionAction: String, CaseIterable, Sendable {
+    case allow, deny
+
+    public var title: String {
+        switch self {
+        case .allow: "Allow"
+        case .deny: "Deny"
+        }
+    }
+
+    public var allows: Bool { self == .allow }
+}
+
+/// Where the request of an alert stands, from what the relay last said.
+public enum RequestStanding: Equatable, Sendable {
+    /// Still waiting, and its session's agent is connected: a verdict reaches it.
+    case pending
+    /// Answered elsewhere, or given up by Claude Code.
+    case gone
+    /// Still listed, but its session's agent is not connected: the relay cannot pass a verdict on.
+    case unreachable
+}
+
+extension RelayFeed {
+    public func standing(of push: PermissionPush) -> RequestStanding {
+        guard let session = session(push.sessionId), session.pendingPermissions.contains(where: { $0.requestId == push.requestId })
+        else { return .gone }
+        return session.agentOnline ? .pending : .unreachable
+    }
+}
+
 /// What one install of the iPhone app wants pushed (`PushDevice` in shared/protocol.ts). Tokens are hex.
 public struct PushDevice: Codable, Equatable, Sendable {
     public enum Environment: String, Codable, Sendable { case sandbox, production }

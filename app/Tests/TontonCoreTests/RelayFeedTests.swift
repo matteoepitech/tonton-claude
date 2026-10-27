@@ -39,6 +39,39 @@ final class RelayFeedTests: XCTestCase {
         XCTAssertNil(feed.lastError)
     }
 
+    /// An alert's Allow or Deny goes out only while its request waits on a connected agent, and it is done once the
+    /// relay drops the request.
+    func testWhereTheRequestOfAnAlertStands() throws {
+        let vault = try AgentBlobs.vault()
+        var feed = RelayFeed()
+        let alert = PermissionPush(sessionId: "a", requestId: "r1", request: nil, info: nil)
+        XCTAssertEqual(feed.standing(of: alert), .gone)
+        XCTAssertEqual(feed.snapshots, 0)
+
+        let pending = #"[{"requestId":"r1","ts":"2026-10-26T10:03:00.000Z","blob":"\#(AgentBlobs.request)"}]"#
+        let asking = session("a", "permission", at: 4, pending: pending)
+        try feed.apply(message(#"{"t":"snapshot","sessions":[\#(asking)],"machines":[]}"#), vault: vault)
+        XCTAssertEqual(feed.snapshots, 1)
+        XCTAssertEqual(feed.standing(of: alert), .pending)
+        XCTAssertEqual(feed.standing(of: PermissionPush(sessionId: "a", requestId: "r2", request: nil, info: nil)), .gone)
+
+        let offline = asking.replacingOccurrences(of: #""agentOnline":true"#, with: #""agentOnline":false"#)
+        try feed.apply(message(#"{"t":"session","session":\#(offline)}"#), vault: vault)
+        XCTAssertEqual(feed.standing(of: alert), .unreachable)
+
+        try feed.apply(message(#"{"t":"session","session":\#(session("a", "working", at: 5))}"#), vault: vault)
+        XCTAssertEqual(feed.standing(of: alert), .gone)
+        try feed.apply(message(#"{"t":"snapshot","sessions":[],"machines":[]}"#), vault: vault)
+        XCTAssertEqual(feed.snapshots, 2)
+    }
+
+    func testTheActionsOfAnAlert() {
+        XCTAssertEqual(PermissionAction(rawValue: "allow"), .allow)
+        XCTAssertEqual(PermissionAction(rawValue: "deny")?.allows, false)
+        XCTAssertNil(PermissionAction(rawValue: UUID().uuidString), "a tap on the alert itself is no answer")
+        XCTAssertEqual(PermissionAction.allCases.map(\.title), ["Allow", "Deny"])
+    }
+
     func testConversationsAreKeptWithoutDuplicates() throws {
         let key = try E2E.key(fromBase64URL: E2E.newKey())
         let vault = SessionVault(key: key)
