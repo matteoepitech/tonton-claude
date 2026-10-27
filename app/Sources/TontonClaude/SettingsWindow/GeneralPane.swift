@@ -31,12 +31,6 @@ struct GeneralPane: View {
                         settings.hotkey = HotKeyPreset(rawValue: $0) ?? .optionCommandN
                     }
                 }
-                if updates.isOn {
-                    Hairline()
-                    ToggleRow(
-                        title: "Check for updates", detail: "Looks for a new version of Tonton Claude once a day.",
-                        isOn: $updates.checksAutomatically)
-                }
             }
             GroupLabel(text: "Display")
             Card {
@@ -110,6 +104,12 @@ struct GeneralPane: View {
             }
             GroupLabel(text: "Updates")
             Card {
+                if updates.isOn {
+                    ToggleRow(
+                        title: "Check for updates", detail: "Looks for a new version of Tonton Claude once a day.",
+                        isOn: $updates.checksAutomatically)
+                    Hairline()
+                }
                 ToggleRow(
                     title: "Show what's new after an update",
                     detail: "The release notes open once when a new version starts. They come from the release on GitHub.",
