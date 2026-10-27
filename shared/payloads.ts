@@ -122,6 +122,7 @@ export const decodeSessionMeta = decoder(
       // Names this client does not know are kept here; the vault drops them.
       commands: optional(f.commands, value => list(value, text)) as SessionMeta['commands'],
       model: optional(f.model, text),
+      branch: optional(f.branch, text),
     }),
 )
 

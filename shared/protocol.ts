@@ -76,6 +76,8 @@ export interface SessionMeta {
   /** The model that last answered or that the session switched to, as Claude Code names it (`claude-opus-4-5-20251101`).
    * Missing from older agents, and until Claude Code reports it. */
   model?: string
+  /** The git branch of its folder, or the short commit when detached. Missing outside git and from older agents. */
+  branch?: string
 }
 export interface StatusDetail {
   text: string

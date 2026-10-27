@@ -40,6 +40,7 @@ const session = (fields: Partial<Session>): Session => ({
   commands: ['compact', 'clear'],
   model: null,
   tool: null,
+  branch: null,
   ...fields,
 })
 
@@ -70,6 +71,8 @@ describe('sealed payloads', () => {
     })
     expect(decodeSessionMeta({ tokens: { input: 1.5, output: 2, cacheRead: 0, cacheWrite: 0 } })).toBeNull()
     expect(decodeSessionMeta('meta')).toBeNull()
+    expect(decodeSessionMeta({ branch: 'feat/login' })).toEqual({ branch: 'feat/login' })
+    expect(decodeSessionMeta({ branch: 3 })).toBeNull()
     expect(decodeMachineHealth({ cpu: 0.1, memoryUsed: 1, memoryTotal: 2, at: 'now' })).toEqual({
       cpu: 0.1,
       memoryUsed: 1,

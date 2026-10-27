@@ -210,7 +210,12 @@ function renderChat(chat: HTMLElement, current: ClientState) {
     showingChat = false
     render()
   }
-  const details = [session.machine, session.model ? modelName(session.model) : null, session.tool === 'opencode' ? 'OpenCode' : null]
+  const details = [
+    session.machine,
+    session.branch ? `⎇ ${session.branch}` : null,
+    session.model ? modelName(session.model) : null,
+    session.tool === 'opencode' ? 'OpenCode' : null,
+  ]
   const header = element(
     'div',
     back,

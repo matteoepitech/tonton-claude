@@ -99,6 +99,8 @@ export interface Session {
   model: string | null
   /** The coding agent running it: `opencode`, or null for Claude Code and older agents. */
   tool: string | null
+  /** The git branch it works on, or the short commit when detached. Null outside git and with older agents. */
+  branch: string | null
 }
 
 /** What agents that type in a terminal knew before `model`, and do not list. */

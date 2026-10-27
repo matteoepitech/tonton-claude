@@ -109,6 +109,8 @@ struct SessionMeta: Codable {
     var commands: [String]?
     /// The model's API id. Missing from older agents.
     var model: String?
+    /// The git branch of the session folder. Missing outside git and from older agents.
+    var branch: String?
 }
 struct WireContext: Codable { let usedTokens: Int; let windowTokens: Int? }
 struct WireUsageLimit: Codable { let usedPercent: Double; let resetsAt: String }
