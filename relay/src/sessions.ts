@@ -21,6 +21,11 @@ interface Session extends SessionSummary {
   history: SealedEntry[]
   historyIds: Set<string>
   historyBytes: number
+  /**
+   * Its hooks report the status. Entries then never change it: they come over the agent's socket and hooks over HTTP, so
+   * the last answer of a turn can land after its Stop and would leave the session working for good.
+   */
+  hooked: boolean
 }
 
 const HOOK_STATUS: Record<string, SessionStatus | undefined> = {
@@ -87,6 +92,7 @@ export class SessionStore {
     if (!session) return
 
     session.status = status
+    session.hooked = true
     session.statusDetail = detail ?? null
     if (status === 'idle' || status === 'ended') session.pendingPermissions = []
     if (status === 'ended') session.canChat = false
@@ -135,7 +141,8 @@ export class SessionStore {
     this.trim(accountId, session, MAX_ENTRIES_PER_SESSION, MAX_SESSION_BYTES)
     this.enforceAccountBudget(accountId)
 
-    if (fresh.length && !reset && (session.status === 'idle' || session.status === 'starting')) session.status = 'working'
+    if (fresh.length && !reset && !session.hooked && (session.status === 'idle' || session.status === 'starting'))
+      session.status = 'working'
     if (fresh.length || reset) this.changed(accountId, session)
     return fresh
   }
@@ -235,6 +242,7 @@ export class SessionStore {
       history: [],
       historyIds: new Set(),
       historyBytes: 0,
+      hooked: false,
     }
     sessions.set(sessionId, session)
     return session
@@ -262,6 +270,8 @@ export class SessionStore {
         history,
         historyIds: new Set(history.map(entry => entry.id)),
         historyBytes: history.reduce((sum, entry) => sum + entry.blob.length, 0),
+        // It ran before the restart: its hooks were reporting, they will again.
+        hooked: summary.status !== 'starting',
       }
       this.accountSessions(accountId).set(session.id, session)
       this.trim(accountId, session, MAX_ENTRIES_PER_SESSION, MAX_SESSION_BYTES)
@@ -322,6 +332,6 @@ function trimHistory(session: Session, maxEntries: number, maxBytes: number): st
 }
 
 function toSummary(session: Session): SessionSummary {
-  const { history: _history, historyIds: _ids, historyBytes: _bytes, ...summary } = session
+  const { history: _history, historyIds: _ids, historyBytes: _bytes, hooked: _hooked, ...summary } = session
   return summary
 }
