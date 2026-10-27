@@ -10,7 +10,8 @@ export interface LoginItem {
 }
 
 export function loginItem(): LoginItem {
-  if (process.platform === 'win32') {
+  // Run from source, it would register a bare Electron.
+  if (process.platform === 'win32' && app.isPackaged) {
     return {
       enabled: () => app.getLoginItemSettings().openAtLogin,
       set: enabled => app.setLoginItemSettings({ openAtLogin: enabled }),

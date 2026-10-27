@@ -38,10 +38,12 @@ export class IslandWindow {
     })
     this.window.on('show', onVisibility)
     this.window.on('hide', onVisibility)
-    // Alt+F4 and the like hide it: only Quit ends the app.
-    app.on('before-quit', () => {
+    // Alt+F4 and the like hide it: only Quit ends the app, or Windows logging off or shutting down, which it must not hold.
+    const quitting = () => {
       this.quitting = true
-    })
+    }
+    app.on('before-quit', quitting)
+    this.window.on('session-end', quitting)
     this.window.on('close', event => {
       if (this.quitting) return
       event.preventDefault()

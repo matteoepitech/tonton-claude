@@ -2,7 +2,7 @@
 // on Windows, the Secret Service or KWallet on Linux) in one file of the app's data folder. Without a keyring nothing is
 // written, and the account lasts until the island quits.
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { encodeRecoveryKey, parseRecoveryKey, type RecoveredAccount } from '../../../shared/recovery-key'
 
@@ -39,7 +39,10 @@ export class AccountStore {
     if (!this.keyring.available()) return false
     try {
       mkdirSync(dirname(this.file), { recursive: true })
-      writeFileSync(this.file, this.keyring.encrypt(encodeRecoveryKey(account)), { mode: 0o600 })
+      // Written aside, then moved over: a crash halfway leaves the previous file, not a truncated one that signs out.
+      const next = `${this.file}.next`
+      writeFileSync(next, this.keyring.encrypt(encodeRecoveryKey(account)), { mode: 0o600 })
+      renameSync(next, this.file)
       return true
     } catch {
       return false

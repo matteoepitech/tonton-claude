@@ -18,7 +18,7 @@ import {
   shell,
   Tray,
 } from 'electron'
-import { normalizeRelay } from '../../../shared/account-token'
+import { normalizeRelay, parseAccountToken } from '../../../shared/account-token'
 import { encodeRecoveryKey, parseRecoveryKey, type RecoveredAccount } from '../../../shared/recovery-key'
 import { CHANNELS, type IslandAccount, type SignInResult } from '../bridge'
 import { AccountStore, type Keyring } from './account-store'
@@ -49,7 +49,14 @@ if (app.requestSingleInstanceLock()) {
   })
   // The island hides, it never closes: the app runs until Quit.
   app.on('window-all-closed', () => {})
-  app.whenReady().then(start)
+  // Without its window or its tray, the island would hold the single-instance lock with nothing on screen: say so and quit.
+  app
+    .whenReady()
+    .then(start)
+    .catch(error => {
+      dialog.showErrorBox('Tonton Claude could not start', error instanceof Error ? error.message : String(error))
+      app.exit(1)
+    })
 } else {
   app.quit()
 }
@@ -88,6 +95,7 @@ function keyring(): Keyring {
 /** The page shows what sessions say: it never navigates, opens windows or asks for permissions. Links open in the browser. */
 function harden() {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+  session.defaultSession.setPermissionCheckHandler(() => false)
   app.on('web-contents-created', (_event, contents) => {
     contents.on('will-navigate', event => event.preventDefault())
     contents.setWindowOpenHandler(({ url }) => {
@@ -108,8 +116,16 @@ function handlePage() {
   handle(CHANNELS.account, () => (account ? pageAccount(account) : null))
   handle(CHANNELS.canRemember, () => store.canRemember)
   handle(CHANNELS.signIn, async (recoveryKey, remember) => {
-    const recovered = typeof recoveryKey === 'string' && recoveryKey.length < MAX_INPUT ? parseRecoveryKey(recoveryKey) : null
-    if (!recovered) return failure('This is not a Tonton Claude recovery key.')
+    const text = typeof recoveryKey === 'string' && recoveryKey.length < MAX_INPUT ? recoveryKey : ''
+    const recovered = parseRecoveryKey(text)
+    if (!recovered) {
+      // Like the web app: the account token looks alike, and only lets machines join.
+      return failure(
+        parseAccountToken(text)
+          ? 'This is the token machines join with, not the recovery key: Settings › Relay › Recovery key.'
+          : 'This is not a Tonton Claude recovery key.',
+      )
+    }
     return signIn(() => verifyAccount(recovered, net.fetch).then(() => recovered), remember === true)
   })
   handle(CHANNELS.createAccount, async (relay, remember) => {
@@ -128,7 +144,7 @@ function handlePage() {
 
 /** Only the island's own page may call. */
 function fromIsland(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
-  return !!island && event.sender === island.window.webContents
+  return !!island && event.sender === island.window.webContents && event.senderFrame === island.window.webContents.mainFrame
 }
 
 function handle(channel: string, run: (...args: unknown[]) => unknown) {

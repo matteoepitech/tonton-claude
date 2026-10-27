@@ -51,8 +51,13 @@ async function run() {
     document.querySelector('.sign-in input:not([type=checkbox])').value = ${JSON.stringify(relay)}
     ;[...document.querySelectorAll('button')].find(b => b.textContent === 'Create account').click()
   `)
-  await eventually(() => js(`document.querySelector('nav')?.textContent.includes('No sessions yet.')`), 'the connected list')
-  check(true, 'created an account and connected')
+  const outcome = await eventually(
+    () =>
+      js(`document.querySelector('nav')?.textContent.includes('No sessions yet.') ? 'connected'
+        : [...document.querySelectorAll('.sign-in .error')].map(e => e.textContent).join(' ').trim()`),
+    'the connected list',
+  )
+  check(outcome === 'connected', `created an account and connected (${outcome})`)
   const kept = path.join(home, 'account')
   if (fs.existsSync(kept)) check(!fs.readFileSync(kept, 'latin1').includes('"token"'), 'the account is kept encrypted')
   await shot(win, 'signed-in')
