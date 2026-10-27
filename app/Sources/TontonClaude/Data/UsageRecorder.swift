@@ -3,6 +3,8 @@ import Foundation
 import OSLog
 import TontonCore
 
+enum BudgetPeriod { case day, month }
+
 /// Settings › Usage's history: records what sessions report while the app runs, and keeps it next to the account.
 @MainActor
 final class UsageRecorder: ObservableObject {
@@ -13,8 +15,8 @@ final class UsageRecorder: ObservableObject {
     @Published private(set) var hours: BusyHours
     /// The turns counted in both, seen ending here or reported later by the agents.
     private var turns: TurnLedger
-    /// Today's spending went past the daily budget, with what was spent so far. Once a day.
-    let budgetExceeded = PassthroughSubject<Double, Never>()
+    /// Spending went past the daily budget (once a day) or the monthly one (once a month), with what was spent so far.
+    let budgetExceeded = PassthroughSubject<(period: BudgetPeriod, spent: Double), Never>()
     private let settings: AppSettings
     private var subscriptions = Set<AnyCancellable>()
 
@@ -83,13 +85,22 @@ final class UsageRecorder: ObservableObject {
         // A reading that adds nothing only moves the baselines in memory: no need to write the file.
         guard spent else { return }
         save(history, to: "usage.json")
-        let today = UsageHistory.day(Date())
-        let spentToday = history.spent(on: Date())
+        let now = Date()
+        let today = UsageHistory.day(now)
+        let spentToday = history.spent(on: now)
         if DailyBudget.shouldAlert(
             spent: spentToday, budget: Double(settings.dailyBudget), lastAlertDay: settings.budgetAlertDay, today: today)
         {
             settings.budgetAlertDay = today
-            budgetExceeded.send(spentToday)
+            budgetExceeded.send((.day, spentToday))
+        }
+        let month = WrappedLog.month(now)
+        let spentThisMonth = history.spent(inMonth: month)
+        if MonthlyBudget.shouldAlert(
+            spent: spentThisMonth, budget: Double(settings.monthlyBudget), lastAlertMonth: settings.budgetAlertMonth, month: month)
+        {
+            settings.budgetAlertMonth = month
+            budgetExceeded.send((.month, spentThisMonth))
         }
     }
 

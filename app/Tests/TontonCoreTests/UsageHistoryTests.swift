@@ -93,4 +93,16 @@ final class UsageHistoryTests: XCTestCase {
         XCTAssertFalse(DailyBudget.shouldAlert(spent: 19.99, budget: 20, lastAlertDay: "", today: today))
         XCTAssertFalse(DailyBudget.shouldAlert(spent: 500, budget: 0, lastAlertDay: "", today: today))
     }
+
+    func testTheMonthlyBudgetAlertsOnceAMonth() {
+        var history = UsageHistory()
+        history.record([session("s1", cost: 120)], at: now, calendar: calendar)
+        history.record([session("s1", cost: 150)], at: now.addingTimeInterval(86400), calendar: calendar)
+        let month = WrappedLog.month(now, calendar: calendar)
+        XCTAssertEqual(history.spent(inMonth: month), 150)
+        XCTAssertTrue(MonthlyBudget.shouldAlert(spent: 150, budget: 100, lastAlertMonth: "2026-09", month: month))
+        XCTAssertFalse(MonthlyBudget.shouldAlert(spent: 150, budget: 100, lastAlertMonth: month, month: month))
+        XCTAssertFalse(MonthlyBudget.shouldAlert(spent: 99, budget: 100, lastAlertMonth: "", month: month))
+        XCTAssertFalse(MonthlyBudget.shouldAlert(spent: 5000, budget: 0, lastAlertMonth: "", month: month))
+    }
 }

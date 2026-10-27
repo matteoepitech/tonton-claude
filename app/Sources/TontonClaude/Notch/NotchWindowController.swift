@@ -248,11 +248,15 @@ final class NotchWindowController {
     }
 
     /// Today's spending went past the daily budget of Settings › General.
-    private func budgetExceeded(_ spent: Double) {
+    private func budgetExceeded(_ period: BudgetPeriod, _ spent: Double) {
         guard !settings.isQuietNow else { return }
         signal(.question)
-        let text = String(format: "Today's cost passed $%d: $%.2f so far", settings.dailyBudget, spent)
-        if settings.systemNotifications { Notifier.post(title: "Daily budget", body: text) }
+        let text =
+            switch period {
+            case .day: String(format: "Today's cost passed $%d: $%.2f so far", settings.dailyBudget, spent)
+            case .month: String(format: "This month's cost passed $%d: $%.2f so far", settings.monthlyBudget, spent)
+            }
+        if settings.systemNotifications { Notifier.post(title: period == .day ? "Daily budget" : "Monthly budget", body: text) }
         peek(nil, text: text)
     }
 
@@ -323,7 +327,7 @@ final class NotchWindowController {
             .sink { [weak self] session in self?.alert(session, finished: true) }
             .store(in: &subscriptions)
         store.usage.budgetExceeded
-            .sink { [weak self] spent in self?.budgetExceeded(spent) }
+            .sink { [weak self] alert in self?.budgetExceeded(alert.period, alert.spent) }
             .store(in: &subscriptions)
         store.limitLifted
             .filter { [settings] _ in settings.alertOnLimitReset }
