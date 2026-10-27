@@ -9,7 +9,7 @@ import { agentBinaryName, TRAY_HELPER_NAME } from '../agent/src/update'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { open, seal } from '../shared/crypto'
-import type { RelayToApp, SessionSummary } from '../shared/protocol'
+import type { RelayToApp, SessionMeta, SessionSummary } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-e2e-'))
@@ -51,9 +51,9 @@ const api = (path: string, init: RequestInit & { token?: string } = {}) =>
 
 const line = (fields: object) => `${JSON.stringify({ sessionId, timestamp: new Date().toISOString(), ...fields })}\n`
 
-async function eventually<T>(read: () => T | undefined | false, label: string): Promise<T> {
+async function eventually<T>(read: () => T | undefined | false | Promise<T | undefined | false>, label: string): Promise<T> {
   for (let i = 0; i < 80; i++) {
-    const value = read()
+    const value = await read()
     if (value) return value
     await Bun.sleep(50)
   }
@@ -205,6 +205,27 @@ describe('end to end', () => {
     const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'live entries')
     if (live.t !== 'entries') throw new Error('unexpected message')
     expect(await open<{ text: string }>(key, live.entries[0].blob)).toMatchObject({ text: 'done' })
+  })
+
+  test("Claude's task list arrives sealed with its items, and its progress in the meta", async () => {
+    const before = app.messages.length
+    const todos = [
+      { content: 'SECRET first task', status: 'completed', activeForm: 'Doing the first task' },
+      { content: 'Second task', status: 'in_progress', activeForm: 'Doing the second task' },
+      { content: 'Third task', status: 'pending', activeForm: 'Doing the third task' },
+    ]
+    const call = { type: 'tool_use', id: 'todo1', name: 'TodoWrite', input: { todos } }
+    appendFileSync(transcript, line({ type: 'assistant', uuid: 'a-todo', message: { content: [call] } }))
+    const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'the task list')
+    if (live.t !== 'entries') throw new Error('unexpected message')
+    expect(await open(key, live.entries[0].blob)).toMatchObject({ kind: 'tool', name: 'TodoWrite', todos })
+    const meta = await eventually(async () => {
+      const sealed = latestSession(app)?.meta
+      const opened = sealed ? await open<SessionMeta>(key, sealed) : undefined
+      return opened?.tasks && opened
+    }, 'the progress')
+    expect(meta.tasks).toEqual({ done: 1, total: 3 })
+    expect(app.raw.slice(before).join('')).not.toContain('SECRET')
   })
 
   test('what Claude wrote while the Mac was away is waiting when it comes back', async () => {

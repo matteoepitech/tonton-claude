@@ -148,6 +148,6 @@ public enum LocalSessions {
             lastMessage: conversation.lastMessage, fiveHourLimit: conversation.fiveHourLimit,
             sevenDayLimit: conversation.sevenDayLimit, tokens: conversation.tokens,
             context: conversation.contextTokens.map { ContextUsage(usedTokens: $0, windowTokens: conversation.contextWindow) },
-            model: conversation.model)
+            model: conversation.model, tasks: TodoList.progress(TodoList.latest(in: conversation.entries)))
     }
 }

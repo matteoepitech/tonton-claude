@@ -17,6 +17,8 @@ export function chatItems(entries: readonly Entry[]): ChatItem[] {
   for (const entry of entries) if (entry.kind === 'tool_result') results.set(entry.toolUseId, entry)
   const items: ChatItem[] = []
   for (const entry of entries) {
+    // A task list shows as the checklist (`latestTodos`), not as a row per update.
+    if (entry.kind === 'tool' && entry.name === 'TodoWrite' && entry.todos) continue
     if (entry.kind === 'tool') items.push({ kind: 'tool', id: entry.id, call: entry, result: results.get(entry.toolUseId) ?? null })
     else if (entry.kind === 'user') items.push({ kind: 'user', id: entry.id, entry })
     else if (entry.kind === 'assistant') items.push({ kind: 'assistant', id: entry.id, entry })

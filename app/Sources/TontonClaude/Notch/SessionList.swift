@@ -237,6 +237,7 @@ struct SessionRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                     Spacer(minLength: 0)
+                    if let tasks = session.tasks { TaskProgressBadge(progress: tasks) }
                     if showCost, let cost = session.costUSD, cost > 0 {
                         Text(String(format: "$%.2f", cost)).font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
                     }

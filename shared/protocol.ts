@@ -18,12 +18,26 @@ export interface FileEdit {
   oldText: string
   newText: string
 }
+/** One task of the list Claude Code's TodoWrite (or OpenCode's todowrite) keeps. */
+export interface TodoItem {
+  content: string
+  /** `cancelled` comes from OpenCode only. Clients read any other value as `pending`. */
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+  /** What Claude Code shows while the task runs: "Running the tests". */
+  activeForm?: string
+}
+/** How far the session's latest task list is: tasks completed, out of those not cancelled. */
+export interface TaskProgress {
+  done: number
+  total: number
+}
 
 // A conversation entry, normalized from the Claude Code transcript (plaintext, before sealing).
 export type Entry =
   | { id: string; ts: string; kind: 'user'; text: string; images?: ImageData[]; viaNotch?: boolean }
   | { id: string; ts: string; kind: 'assistant'; text: string }
-  | { id: string; ts: string; kind: 'tool'; toolUseId: string; name: string; summary: string; edits?: FileEdit[] }
+  // `todos`: the task list a TodoWrite call sets, from agents that send it.
+  | { id: string; ts: string; kind: 'tool'; toolUseId: string; name: string; summary: string; edits?: FileEdit[]; todos?: TodoItem[] }
   | { id: string; ts: string; kind: 'tool_result'; toolUseId: string; text: string; isError: boolean; images?: ImageData[] }
   | { id: string; ts: string; kind: 'system'; text: string }
 
@@ -78,6 +92,8 @@ export interface SessionMeta {
   model?: string
   /** The git branch of its folder, or the short commit when detached. Missing outside git and from older agents. */
   branch?: string
+  /** Its latest task list, while it has one. Missing from older agents. */
+  tasks?: TaskProgress
 }
 export interface StatusDetail {
   text: string

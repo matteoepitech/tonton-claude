@@ -21,6 +21,25 @@ public struct FileEdit: Codable, Equatable, Sendable {
     }
 }
 
+/// One task of the list Claude Code's TodoWrite (or OpenCode's todowrite) keeps.
+public struct TodoItem: Codable, Equatable, Sendable {
+    public enum Status: String, Sendable { case pending, inProgress = "in_progress", completed, cancelled }
+
+    public let content: String
+    /// As sent: `cancelled` comes from OpenCode only, and a value this app does not know reads as pending.
+    let status: String
+    /// What Claude Code shows while the task runs: "Running the tests".
+    public let activeForm: String?
+
+    public var state: Status { Status(rawValue: status) ?? .pending }
+
+    public init(content: String, status: Status, activeForm: String? = nil) {
+        self.content = content
+        self.status = status.rawValue
+        self.activeForm = activeForm
+    }
+}
+
 public enum EntryKind: String, Codable, Sendable {
     case user, assistant, tool, system
     case toolResult = "tool_result"
@@ -40,10 +59,13 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
     public var isError: Bool?
     /// Edit and MultiEdit calls, from agents that send them.
     public var edits: [FileEdit]?
+    /// The task list a TodoWrite call sets, from agents that send it.
+    public var todos: [TodoItem]?
 
     public init(
         id: String, ts: String, kind: EntryKind, text: String? = nil, images: [ImageData]? = nil, viaNotch: Bool? = nil,
-        toolUseId: String? = nil, name: String? = nil, summary: String? = nil, isError: Bool? = nil, edits: [FileEdit]? = nil
+        toolUseId: String? = nil, name: String? = nil, summary: String? = nil, isError: Bool? = nil, edits: [FileEdit]? = nil,
+        todos: [TodoItem]? = nil
     ) {
         self.id = id
         self.ts = ts
@@ -56,6 +78,7 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
         self.summary = summary
         self.isError = isError
         self.edits = edits
+        self.todos = todos
     }
 
     /// The file a Read, Write or Edit call works on, when its summary holds the whole absolute path. The agent cuts long
@@ -67,6 +90,9 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
     }
 
     private static let fileTools: Set = ["Read", "Write", "Edit", "MultiEdit", "NotebookEdit"]
+
+    /// A TodoWrite call that carries its list.
+    public var isTodoList: Bool { kind == .tool && name == "TodoWrite" && todos != nil }
 }
 
 /// What the chat view renders: tool calls are merged with their result.
@@ -88,7 +114,8 @@ public enum ChatItem: Identifiable, Equatable, Sendable {
             entries.filter { $0.kind == .toolResult }.compactMap { entry in entry.toolUseId.map { ($0, entry) } },
             uniquingKeysWith: { _, latest in latest }
         )
-        return entries.compactMap { entry in
+        // A task list shows as the checklist (`TodoList.latest`), not as a row per update.
+        return entries.filter { !$0.isTodoList }.compactMap { entry in
             switch entry.kind {
             case .user: .user(entry)
             case .assistant: .assistant(entry)

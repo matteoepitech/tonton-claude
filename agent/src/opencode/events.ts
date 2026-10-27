@@ -1,5 +1,5 @@
 import type { Entry, ImageData, PermissionDetail, SessionCommand, SessionMeta, TokenCounts } from '../../../shared/protocol'
-import { fileEdits, toolSummary } from '../transcript/parser'
+import { fileEdits, todoItems, toolSummary } from '../transcript/parser'
 
 // OpenCode's plugin events, turned into what the notch shows for a Claude Code session: entries, a status and the meta.
 // They are not a format Tonton controls either: anything unexpected is skipped, never thrown. Two families exist:
@@ -725,7 +725,17 @@ function toolEntry(id: string, call: string, ts: string, tool: string, input: Fi
   const name = TOOL_NAMES[tool] ?? tool
   const claudeInput = Object.fromEntries(Object.entries(input).map(([key, value]) => [INPUT_FIELDS[key] ?? key, value]))
   const edits = fileEdits(name, claudeInput)
-  return { id, ts, kind: 'tool', toolUseId: call, name, summary: toolSummary(name, claudeInput), ...(edits.length ? { edits } : {}) }
+  const todos = todoItems(name, claudeInput)
+  return {
+    id,
+    ts,
+    kind: 'tool',
+    toolUseId: call,
+    name,
+    summary: toolSummary(name, claudeInput),
+    ...(edits.length ? { edits } : {}),
+    ...(todos ? { todos } : {}),
+  }
 }
 
 function resultEntry(id: string, call: string, ts: string, output: string, isError: boolean, images: ImageData[] = []): Entry {

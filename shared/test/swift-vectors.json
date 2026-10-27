@@ -2,56 +2,56 @@
   "about" : "Made by app/Tests/TontonCoreTests/VectorTests.swift, read by shared/test/swift-vectors.test.ts.",
   "accountToken" : {
     "account" : "abcdefghijkl",
-    "key" : "XPnTaEFEJUafQ0HLb2bXZKRNcYaSbFpapt_gp-fpFWs",
+    "key" : "X5I0gicF6d9xeEomZdt2vy2ita7Y_YWgRXvNMi8vK84",
     "relay" : "https://relay.example.com/tonton",
     "secret" : "sssssssssssssssssssssssssssssssssssssssssss",
-    "token" : "tonton_eyJrZXkiOiJYUG5UYUVGRUpVYWZRMEhMYjJiWFpLUk5jWWFTYkZwYXB0X2dwLWZwRldzIiwiYWNjb3VudCI6ImFiY2RlZmdoaWprbCIsInJlbGF5IjoiaHR0cHM6XC9cL3JlbGF5LmV4YW1wbGUuY29tXC90b250b24iLCJzZWNyZXQiOiJzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3NzIn0"
+    "token" : "tonton_eyJyZWxheSI6Imh0dHBzOlwvXC9yZWxheS5leGFtcGxlLmNvbVwvdG9udG9uIiwia2V5IjoiWDVJMGdpY0Y2ZDl4ZUVvbVpkdDJ2eTJpdGE3WV9ZV2dSWHZOTWk4dks4NCIsInNlY3JldCI6InNzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3MiLCJhY2NvdW50IjoiYWJjZGVmZ2hpamtsIn0"
   },
   "blobs" : [
     {
-      "blob" : "zwobBhpSdFRjaA9Z0ipTa/c/MUZmnJhifBwiUyAgmILfm0yJe65Y0Su0ne1ypGennhewZCGdD3dWX/dR8v7CWiz86lTJKS37xZCt5UoztxMm/Bc/2xjiG7Jk/C7VjC2IRQVNf1on04prpEjIwSxYoQRpYlNBRABi8fqv",
+      "blob" : "9sobdIV8btOUYtY5wbWGDrNAPBjJ9EC++HcdOc8P0V5DeswogsRY5oUtF3uv88N2fVdvN9lJWwPHxEMpMfkarOOaTgcTDlOX1oyomABTk7390p4TFwKjWes/1NsmT5vxOn+ltIv9hFjU95Sj1lRfeCu+sj9RrZL0cCAX",
       "name" : "prompt",
-      "plaintext" : "{\"images\":[{\"name\":\"a.png\",\"mediaType\":\"image\\/png\",\"data\":\"iVBORw0K\"}],\"text\":\"Run the tests\"}"
+      "plaintext" : "{\"text\":\"Run the tests\",\"images\":[{\"data\":\"iVBORw0K\",\"mediaType\":\"image\\/png\",\"name\":\"a.png\"}]}"
     },
     {
-      "blob" : "qGJeZSzVKwDACgQRp59NWF5mCd2p2JXp2hDqwn1i7UaSp3jUwUKm4taEU4utrBPq0lXorCmlOBtTfwkFqj4J3DOEYGEr53DPMqsu0WA/UFspz4rOleQWUx7S2x0kmpZb1DPsilOsJfi13SQsvHQ2aOxB4fLWal0AC8NUXsSaYDFjjY4WziIcPivYC7pxf0mswh4oPsYAGk7omVCoB98tg6YUq0sVvlPH78Gur5Hp8A==",
+      "blob" : "TVeQYUiCQDr9VvE9zUUo5IGgcHBHl9CUxWh3YMxgJHe45zMDvmM0GqN3+DYOulrmo/ANmLmfAiKx4gS+5aln4OTL45y9cdYFrDA6M0VbKBn3sV0PlbbZXAnbRLncIlDByVqvw5/j6tlQOyslOZWXj90rzF52o7qNqmMs/g81L98YHpFd0p8dL99Ynv6EMycZdZHWTz3VShNNV2bXbqhYHzv3zatDgv9lJFk0ten2gA==",
       "name" : "command",
-      "plaintext" : "{\"images\":[],\"command\":{\"id\":\"996a69a9-a41c-4700-858f-3ec3c7c93f13\",\"name\":\"compact\",\"sessionId\":\"s1\",\"issuedAt\":\"2026-10-20T12:00:00Z\"},\"text\":\"\"}"
+      "plaintext" : "{\"text\":\"\",\"images\":[],\"command\":{\"id\":\"55d8005a-1ced-4cfa-8a49-0af72cda7356\",\"sessionId\":\"s1\",\"issuedAt\":\"2026-10-20T12:00:00Z\",\"name\":\"compact\"}}"
     },
     {
-      "blob" : "TrWaEm8r7WIhviSvCrNa/FmhtYudYqLOETC4aVVijloQilTvFx2rnIg5XVUhNGWqbSEXj5MJ79nTAp3nuDdT1gAauplD1loGUMauW+8U8QGkqdK4duUG0n7Qtal5fU3pofMjEtsJrjT0x3UQT0z/PaqgaBiqyEm7odIek48c9DDgg1CcXJMvLb73ZdJdLrbz5tva0kRW9rjhS3GlITLrPSJo1OL8mh1sJiBGsom2gGbn9mGlh/dzcYMW6XwY",
+      "blob" : "u7a7bH6jNIqIdAzAkp8TlvXkeucCAi4ntoZrOyUZCAVM/xPLhE3/M5OfU8z5lp1Fhvbn7K8Xyy91TKYS3oSgi5LGtEjarJpf3izgro7hq4Iqx8IBtCJWn5l3Rxdvy7epnB52Q1eqKDxnMavtRlpJxQou2rAXPX08PcbGWLbuMIiI20kFfg28R42fu7vRtbkta8ZEmLf+wLIJhXRUAdGHzKb9eGIgJEBLrrS5VLZ1Ty4kCaWektHZPIHWfJbL",
       "name" : "model command",
-      "plaintext" : "{\"images\":[],\"command\":{\"id\":\"6bcc9bdb-d3f0-4ea1-9cd4-41e150317056\",\"name\":\"model\",\"sessionId\":\"s1\",\"issuedAt\":\"2026-10-20T12:00:00Z\",\"model\":\"haiku\"},\"text\":\"\"}"
+      "plaintext" : "{\"text\":\"\",\"images\":[],\"command\":{\"id\":\"33e72a26-008d-4633-a38b-99f07876f4b0\",\"sessionId\":\"s1\",\"issuedAt\":\"2026-10-20T12:00:00Z\",\"model\":\"haiku\",\"name\":\"model\"}}"
     },
     {
-      "blob" : "xXkIFjSTFyDGb2ZCJLvoCv1yM6Cuz/K8HErHLdOY0gcN2d7LBP7oka3wuK/HHomNjTAsQAjk5C4liFiLnQWsNKGqt9tZEUqSa5CxsPXv4PpC",
+      "blob" : "HYMLFhjAGQX0NH4pW8NCDbASjet0QaPoYWMhPr9YuviTtDrOM2Zou9ENcHWTjdpW+7Mu3UkH5O3mWJRGqBoturZZAOrqYqnrf1egIFdtbzJF",
       "name" : "update order",
       "plaintext" : "{\"version\":\"0.9.2\",\"issuedAt\":\"2026-10-20T12:00:00Z\"}"
     },
     {
-      "blob" : "nCTaXxCJjA1IpRteCBpwf2Ly3ITHSeZtKVSXTxtYM7lVPNpl3Za30dqW+PpHgwwbLbjVtZs3+37jEYEOwDWEwg3YIOLnotiEzh69KDer/2LF2hcCZFVpghzl3p11JQERs3a06eQxzCyg579R2xDveYMo+pU6j/ZAAFJtHq4=",
+      "blob" : "ieSqwXrN/CnJlmgll6WHv+cnZ3oim/OoDfs1tifBMJGaD5CQl4CJ9YCms+ciSM8nRe8iWk32VWcFYsk4hLu2Pd6cN2LXNlpXd/ZbAc37Dx1NoHXSSdS9diJidi1Q9Egb+45eW0yfuwRHsqqcdXgkOHjAQd5rdK+bal9vzdM=",
       "name" : "start order",
-      "plaintext" : "{\"issuedAt\":\"2026-10-20T12:00:00Z\",\"machineId\":\"m1\",\"cwd\":\"~\\/code\\/api\",\"launchId\":\"abcdefgh12\"}"
+      "plaintext" : "{\"launchId\":\"abcdefgh12\",\"machineId\":\"m1\",\"cwd\":\"~\\/code\\/api\",\"issuedAt\":\"2026-10-20T12:00:00Z\"}"
     },
     {
-      "blob" : "uT9o1ELOihWD2vGQBn7WYLDAlFUTS7gvoadzqHMp4aYxgws2GbFnd1E9/uk7WSSm7o+AbFcv0zxl4dXt4ty/32swCxUCX1XqF3jPR+Y7XHyycHqh+ANFf+HBHQ0H6dN8rUDVudD8vzS7AlRMjT5SABodUPPh+QlR6Yi3k5O+OBog9rq0AKhG",
+      "blob" : "E78LHFncAQxWnmHjZYdffev+MHL/PjjIfCLMryQkDklaEk7a82e6r1OmpoWJsPMD4YC8dGdcF+a1ibxe/RrerrS3iyRi1zjxBbs4k0veKkmqgJuLt0G6FKMaGIiBqVSkjYCq899kJj6HqVWj3QMaNJpa9jWsuBDg/rlImSmev/7ZhU7gyLuC",
       "name" : "start answer",
-      "plaintext" : "{\"issuedAt\":\"2026-10-20T12:00:00Z\",\"confirm\":true,\"machineId\":\"m1\",\"question\":\"q1\",\"launchId\":\"abcdefgh12\"}"
+      "plaintext" : "{\"launchId\":\"abcdefgh12\",\"machineId\":\"m1\",\"question\":\"q1\",\"issuedAt\":\"2026-10-20T12:00:00Z\",\"confirm\":true}"
     },
     {
-      "blob" : "cW8CIHaBneJPNtg7AAmMeOY2/tk7tKQIe2DTrXUxRcNA0ByPJXIZYcNcpweYwkmKx363yqitBu+IdTkA22pi+8I93OhZUdSDN/3rR6gYM5VYYhFGGqpLmg9z/I5TJFuZ8Kweu/zOUIrDXZORSOQ=",
+      "blob" : "yeH+P/Mb5ktMpfJl7wcRMKLBZGWhiE7msxOrZw4dHCMwNlULazwMbOACQvY+STPn6G6cjgryvQTWhBJqb0W6Q8H+CGIhnObwPjTKz1er2FJMoRDfu2gx38s6zSpmMfPKINDj9LqzYq0Jdw+NsbE=",
       "name" : "rules",
-      "plaintext" : "{\"rules\":[{\"tool\":\"Bash\",\"pattern\":\"npm test\"}],\"issuedAt\":\"2026-10-20T12:00:00Z\"}"
+      "plaintext" : "{\"issuedAt\":\"2026-10-20T12:00:00Z\",\"rules\":[{\"tool\":\"Bash\",\"pattern\":\"npm test\"}]}"
     },
     {
-      "blob" : "QxjXqfCenYnwLL0+DOT4vq69W2L0Cuf7iEZtZh99N8UUa+rYGRydcZf3rSD6Eb8xMQ==",
+      "blob" : "ndfeHPP1WnFn7FigMNpJs/0z15Ya6QjmJtlWO21QZMYkVYaQougTjaTd2/k/9Q4sIg==",
       "name" : "machine name",
       "plaintext" : "{\"name\":\"Studio ✨\"}"
     },
     {
-      "blob" : "FVhlrJvhdxceqEG0t2ZnJdKpLFaIvhWcdRfshZGzH1jt8Y5fS2Z5HKdFq9wvkr/B5MO2Na/DVd2jI4n8QGxhEErvEqXXOoIcehWxBSJDZyWdW7ZvlFRBCL/zdDuljZB0AbVU3KY2tgeDQaDKuysoJGP19GU3mAPLvCH0gh5GoYzm30k57BQ3AONcSRqOu+uBJufk8lHY2iXdegbLmeoTGU79",
+      "blob" : "b2SulKLQ4rshZ0xdj0ye6gIBya6ai1t4jzz5intZJyrz2XXDWG+y8+m7EtLZxMUnM2XhSHcWspOlwgBjab/9mEtzktAh4TXX5k2eQL2L9+dUopgL91p7F1meE/HEK0TrWT2TE+xgcFoVC7LvA2HiYAAQOe+OwkXd1kufWmfPQbzh58OvBw2npiHY7xAe0AwcI3tOUP4S3j+8okrteHMqKv26",
       "name" : "share order",
-      "plaintext" : "{\"key\":\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\",\"shareId\":\"abcdefghijkl\",\"expiresAt\":\"2026-10-26T10:00:00.000Z\",\"sessionId\":\"s1\"}"
+      "plaintext" : "{\"key\":\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\",\"expiresAt\":\"2026-10-26T10:00:00.000Z\",\"sessionId\":\"s1\",\"shareId\":\"abcdefghijkl\"}"
     }
   ],
   "expected" : {
@@ -127,6 +127,29 @@
         "kind" : "system",
         "text" : "Compacted",
         "ts" : "2026-10-25T10:00:06.000Z"
+      },
+      {
+        "id" : "d1",
+        "kind" : "tool",
+        "name" : "TodoWrite",
+        "summary" : "Updated the task list",
+        "todos" : [
+          {
+            "activeForm" : "Déploiement",
+            "content" : "Déployer",
+            "status" : "completed"
+          },
+          {
+            "content" : "Vérifier",
+            "status" : "in_progress"
+          },
+          {
+            "content" : "Annoncer",
+            "status" : "cancelled"
+          }
+        ],
+        "toolUseId" : "call-3",
+        "ts" : "2026-10-25T10:00:06.500Z"
       }
     ],
     "machines" : [
@@ -201,6 +224,10 @@
         "startedAt" : 1792922400123,
         "status" : "permission",
         "statusText" : "Claude needs your permission to use Bash",
+        "tasks" : {
+          "done" : 2,
+          "total" : 5
+        },
         "terminal" : true,
         "title" : "Rate limit login ✅",
         "tokens" : {
@@ -232,13 +259,13 @@
       }
     ]
   },
-  "history" : "{\"entries\":[{\"blob\":\"5si4TI3xfgvgxUAUXTOGOCzI9besjuhNw0ztAeyUYTBewvUt5a4L6bS0uKfIv1RTaLvp70uGwlzrrR43V2/6SOtiP9iBTCF7DNgynN1DT6CkUc4X3N3WrLlhVkrA9budmLyvO5Txf+tW9YnNiZ8ZcwG6vYFFcrNNXb1DyF70qklmNQ==\",\"id\":\"u1\",\"ts\":\"2026-10-25T10:00:01.000Z\"},{\"blob\":\"I9BOMpGo1U7Z2g2v1lFbqudABRyP8svJVEyHPa18cA4atoS65nXOHt+oXB9IoSZPkTwQBSTiFxSu/GbTbbqyoO2HXX6DLyk0Ha7vNjDCJRzrAYtGfXnkXHHxp1Ma3/Cb4AxR0/XNaaCCGi/2hrXBLAs=\",\"id\":\"a1\",\"ts\":\"2026-10-25T10:00:02.000Z\"},{\"blob\":\"G0SFUlbHhX4Z084Oc3SgXw1ljLA0TSq/RstI9egoPZBWMtMguVdma6xZ72VvwforMPYwGZAdNV9yDY3CkB/vfswm5FiFpVixj6Z1stOr5CLa/QBUuF+jXZ1PTtCPYUDdi4hgszSbB63hgB3SsQVs4AK4M+7gfvPMTWC9AuRlRuubOHZSbbT+e0lka/A4C9Wje3DbG39oL1VCVBuI8S2aOLV3NdMnoPNt8NcWTs66hO/CueamujQOXdV2hqPWM6NEKYPP5zvk8/qQrw==\",\"id\":\"t1\",\"ts\":\"2026-10-25T10:00:03.000Z\"},{\"blob\":\"mwDlVnxMKAoLNbyX/IKa6qvPeyNgK6N9EODtHMBK3R/MQstaYhk84KOpYJGzUPSbj9dP0Mtzp2JkHxWJt3QYjw==\",\"id\":\"f1\",\"ts\":\"2026-10-25T10:00:05.500Z\"},{\"blob\":\"DffuQTofLArbL5bAoH+Zj5Mnl6kyEr/nuQTk+3lsybv6IpIokUK4ullPUmegZRsYRX694vVleyaG/6hOpO3MkiBXYzQhBoiHYIN/i3nVGvIcCobn+4m3tDyn0QOa9V+KCAasGUD32Mt8FerON0RaqzZByZyv8Tf1IUvMJfPDJayKg1aip12Ua55OCE6m\",\"id\":\"r1\",\"ts\":\"2026-10-25T10:00:04.000Z\"},{\"blob\":\"ycp/JLTdUSniSfGbWW3pkOmgCIlWYF6ObpS3LwP57KgQXuy4UUsb3bykO9VNDc8oMo5RlNZc5JwQ8EFLMBpVny8MCO5URc6fAm+Ghea/hCvAiJ7iPAVWL9n8aw06vSu2u3GBIf1B/3IL8geUxAuVgKSaC/ZG4nGx67z7fcg4ANuCtPWAVLyizNgwT52zrQPi\",\"id\":\"t2\",\"ts\":\"2026-10-25T10:00:05.000Z\"},{\"blob\":\"LcUgMxMysp5pCOk2lSBjdz2BcI+XDxQB0EXph5vQYaVaHTXDCfJejIgpbG2500nraXuHgSug1FTitApv7pTN2RHTIMLNmmHCi5hLFdyrJ/1fi4H6iM8zhyK7zvtVKJF5BL3IM72s4I6G9w==\",\"id\":\"y1\",\"ts\":\"2026-10-25T10:00:06.000Z\"},{\"blob\":\"xwHCGO2xD9cBEu8Yqzs7eNyjN/EpdPEbN0Zm5PjaRCeo0VQ1ncujNW9mVWms2BWQfe60hL0oFTnE+Msrs2xZeDzRiPhQF3tDslBTS0Y+5XvKMN/HSxD8du7icu1xQMzFXeUCceHEUo+8F4OC2gZ+5n8=\",\"id\":\"o1\",\"ts\":\"2026-10-25T10:00:07.000Z\"}],\"sessionId\":\"s1\",\"t\":\"history\"}",
-  "key" : "XPnTaEFEJUafQ0HLb2bXZKRNcYaSbFpapt_gp-fpFWs",
+  "history" : "{\"entries\":[{\"blob\":\"dLjQte2JY2Qgy8JZ1z+r67Ozr0ftcbE7IQ+4ImfdlRw9o2SCHqHDcLM+BX+CkdR1ePEAx5etNpPo2MyYSr4YKK9K/fO2P90iPvUy96HKK7FgRuCmfUwWPwcYqcPATyDYQRers0GjJwPUzkuVhNTX2IR0pw9yeuKLqp8ZgXIkWnxs+g==\",\"id\":\"u1\",\"ts\":\"2026-10-25T10:00:01.000Z\"},{\"blob\":\"5+DogOA4YLprARJKmCTsUdsR51o6MxU9HsAXMcuMF7lqISxcX8RWf7igClv3G2HQwiw8cd9KmTSzEn5leykUe1aeAY4jIrJdUwuvwseG/Bv6Ieev+hjgDrkdPjCg76QwFH0D1smRvON/J1e1QcOjFW8=\",\"id\":\"a1\",\"ts\":\"2026-10-25T10:00:02.000Z\"},{\"blob\":\"BCrfHk+aVoLjjE/bdM700tb3CkH6wge02dVTV8+AeJKz6nc9CK6uznJWWrE33649r+xGg7NG+gxqFU2nBz880HtTqEYQsUVMGuftfa+XaKor5CAUavWK9Yk6rGx7lLyblF8P6t/ncHAXbm+zoOYq7hWB68iHIXY2DEJEOR+B1ltH7Nvmzk/xBwW0f1+2Icz9SbIB4ioRXNcHTjutbkmjHrUxCkwyD/s5Vrq7AWQQwK0FmOwS7vvCOuJtpayFle3+uKQJqmGQCbpqlg==\",\"id\":\"t1\",\"ts\":\"2026-10-25T10:00:03.000Z\"},{\"blob\":\"3wDu/kWT1j+KO27RoWVNYDjxduBsbmwirPIxWXGJNOkl2QBIOi4IDBbmnm4Ha4kCy5mUf8hwRPpjPXoN+qeCsA==\",\"id\":\"f1\",\"ts\":\"2026-10-25T10:00:05.500Z\"},{\"blob\":\"7YIxc4/GA7/s0HCQnKLgeQv2264vPCNVQK+3HIV0k+ntveVsbbB4x6L//6FwoLNNpIg6RSrvt69Vx3gukezxuZZs5h0UTIIJri/z/hyAjrg5S1qc3MimEueFdekQFXbJKjx/APJZWsGXRzLNNGrG9huTp7fSLxeICOapgw03P8ZsPo7fKz4Ie5mUCFQu\",\"id\":\"r1\",\"ts\":\"2026-10-25T10:00:04.000Z\"},{\"blob\":\"jtKg/gY1u6sBf9Lt1ewOvSDdgXV3Mj3+jw5PjhiLWLwZWWIPy4Vqi3bXh64ug4EPrR4k9l41oSv3fmMKJyVnuUFLEa6g7HhiJXcw0/ALu6P8bNYgokGuXxYpw/Q63oT0hzfZE2ZXFIpoeF4uq0+Vs5d8+qWE4FbrWhUraNDqLFn0hMcNWCWmYRnFsmZcdTk+\",\"id\":\"t2\",\"ts\":\"2026-10-25T10:00:05.000Z\"},{\"blob\":\"pMRbjX6ggX8t8mqnvqTQse7x5fPE/+Ft7kfHzqDI3wEoi8rkxW0+5EHjCrkxhiR4TmCwn7z9NhBTspCdcR6ixP8JhJZsITQgcodCMZJmUsqsXkhh5UBOn/kl80piD0JCLGlLTadi62edbA==\",\"id\":\"y1\",\"ts\":\"2026-10-25T10:00:06.000Z\"},{\"blob\":\"6PXY3aq10TZ//Z5+cb1zVG4dVOq0WFEm50BsHt5WpwLryLRh+oGq84PATwx5cQb7ntdnr82BA2JADyHVGdn+ImbxmaN7W330URjnR5hFuLFo6ArOKUR2MNGiqimkQXJWLHlLI+WwPhwVfuwvzKrcaelQ/zWmYPGUTGM0jR/8qdOkxP+GSf29QfvN093EvI+BeXQfoBTdesJcOUWpvdxtTnrO+WnVnhTyiwo963Q6lI8BKZlNJ1Z6Jg7eGlM8JfmxnbVc1qqrTwSsnTbIo29erEKmqbMantFuUUwnZPJgE8NFf2kTs6cJ3Yed0L1GE6aPf2mnQ984CVlubCph6SaMTI7tIWREploMyijt95MNSA6weg0BQzIOtw6cqo6MLy/yOcnzEHD0q5J/jvhRXWDj0StFiRdXN7YonQ3kC9xDquzEIsvbzwIL4g6Te44l\",\"id\":\"d1\",\"ts\":\"2026-10-25T10:00:06.500Z\"},{\"blob\":\"XHimmiqag4pBvKJd5buftD5K8qBZiYxqD6e8/dKMYPRwGmeAartyDrud7Wr2ShXzPQCVZgBMmx9XDLQo1bdTJsiGABPdKT63nleMO5r3JtzS12Z59nZIgpndQCc1ZoXNvhN4yk7mtqsDofSQZ7U2528=\",\"id\":\"o1\",\"ts\":\"2026-10-25T10:00:07.000Z\"}],\"sessionId\":\"s1\",\"t\":\"history\"}",
+  "key" : "X5I0gicF6d9xeEomZdt2vy2ita7Y_YWgRXvNMi8vK84",
   "shareLink" : {
     "key" : "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
     "relay" : "https://relay.example.com/tonton",
     "text" : "tontonshare1.eyJrZXkiOiJra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2trIiwicmVsYXkiOiJodHRwczovL3JlbGF5LmV4YW1wbGUuY29tL3RvbnRvbiIsInRva2VuIjoidHNfYWJjZGVmZ2hpamtsX3R0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHQifQ",
     "token" : "ts_abcdefghijkl_ttttttttttttttttttttttttttttttttttttttttttt"
   },
-  "snapshot" : "{\"machines\":[{\"agentVersion\":\"0.9.1\",\"createdAt\":\"2026-10-25T10:00:00.000Z\",\"health\":\"jhohp81KDenvIruBBGJOuIs//Y4xG7MUfQlHQSmn6lGo5E4KlCsMKh9NXBeMzqlXOSlF5S2T9F5Zn37/LpEnIyt126aWECdf7FY7HaNsk1qxx5HR8s8sBKzm0qcqdZbXXJ2TufOgBF7TXnlMfb8uxramky3HMEIMrT0++LXxlA0jqHkSgDHJqxIcQ3QRkYwA8ZhXFXnYQkYK3agFknXfR1mdQQgCJQxyr9bZO3MfbVUNTvgRa9mnKlBGS9M=\",\"id\":\"m1\",\"lastSeen\":\"2026-10-25T10:05:00Z\",\"name\":\"ODPfW+MqYSwwKl852GAEmYi8v6026NkKCcLe6ZeHx1f4ij73PoNuREl92xVGtlGQuOQ7VYPp0Sm1kSuWRB00GEroBw==\",\"online\":true},{\"agentVersion\":null,\"createdAt\":\"2026-10-24T08:00:00.000Z\",\"id\":\"m2\",\"lastSeen\":null,\"name\":\"UJk2GcyqKIIqUkciqogPFfXOx0z7BDhnXnrqJdzho2/WIswbPhcb0FIsZiQh\",\"online\":false}],\"sessions\":[{\"agentOnline\":true,\"canChat\":true,\"id\":\"s1\",\"info\":\"Yb6iuaxb+3PTcAN4XVSbH4r4KhQRz34Oekrj65Tps+p+MPbHKMh7B9akQdVVv2UUiW0djij5/znZQ+BiNBxsD/0thkKv0i47wtDNxXXthsIWnK2WtALMLubH7MdQJP+A8q1zl9kGKLYQdKNr\",\"lastActivity\":\"2026-10-25T10:05:00Z\",\"machineId\":\"m1\",\"meta\":\"9/oAKR0Fikdy2T5YajNgZ0jPDTQInNY5G1vE1G2VTWk/6LeucvlO4TE8r3GlfU63iMZGZNGn71FbNxsNSF2VgZxeTR9bgUcVGBcuOFL/0oXDw8BmoQz4pNjzcCZkfGSPaw3w0+0ZSQO/OYZPds3dVTd4EEc+kQImsf3v0Xb2YF3dkWzUfXK+Nvd4vw6zhp38DvM+XYOEarMJZCiXVQ6UhjK06I2ay3IJhQFLRDFXQ4aSYn4h/xunEa8Jb4RMeGlnA+sF4sCHltSyBastRFd1w6G3HjPeMSw7b/YaaMA7cc8Hwi9UfP0qR7KWpoRuza4/+8YYH1LyxNjr6rERO1ZGAtMCTGipNkM40CU3kdmkkq2c4I5GwVp8tsaeJ7cnPjpnq5BScLOzapRAyHqbJ2O2x+TS4u0+fij+o72qvQeikNj5kEyV7WMCOVP5sFVpadhyu9ZqdzOgEgUsZlkAmzIMvMTHbfM6fN0u9RlG/yaKUei+bIs7x6H6a+V362ch/1Hf3muQVnvAX/JSBeBoyl2FF34rGf/hxDb/KduH7fJEyg+nec4=\",\"pendingPermissions\":[{\"blob\":\"ZdPayT+SCt29R6CtPr2XJchv9JkaWUvd4T91SXTYsxsCqMF4+dEqoCWvKPb46FHvEMVKztjQ4FyNL7271acnPHOfut6PyIlIzEXBIihfF0qaV/nhtEKIZAvG5jKB4Sx3wldZW45gsNZwuRddDUK4+lOvr7KWqwyRzLdpqhykrfw=\",\"requestId\":\"abcde\",\"ts\":\"2026-10-25T10:05:00.000Z\"},{\"blob\":\"aM2PikmGTXJMvPplVNyYVdnnyJT15NMJo7R1W4gTrRFOdnxoURkvbgYxzE/3DKGnhqyu8c1zdT3jxt4Ut4GB1FdlVrgxKVX22rbDJGFVbLV4f0yOdm/30Mo/jW3v51V0iQXL11/nSbQf44xD4USziiBnJ7ZoXmL9yk6ikE7Q8WA=\",\"requestId\":\"fghij\",\"ts\":\"2026-10-25T10:05:01.000Z\"}],\"startedAt\":\"2026-10-25T10:00:00.123Z\",\"status\":\"permission\",\"statusDetail\":\"9+M91RMW57ApnWJ5X4ANPZdCvfYTgn29nLzlfZl3ekLC4hBr9oTJnFOQevRzj7aDQYbOQc524fA8ZtKwIz/BSgPQlha5klNQyXD6HbNVng==\"},{\"agentOnline\":false,\"canChat\":false,\"id\":\"s2\",\"info\":\"XvAn4NlECHFcwt7OJxKFEseno/xibe1ZlOkeXAUf2bxv/yVjoTcuqPXQmJboFf23DnV97SiwZlEX/Jtal4w0QmfSilGfuHnGWCVB4tLLHMmM\",\"lastActivity\":\"yesterday\",\"machineId\":\"m1\",\"meta\":\"IszielNoNmaupEUTvmPf36rOI0S0kVRf4xJcajgNtjhPuDbMenw0G2chBoIPAb3k+11rdSEmpJhReys2JUv2wwhXfPeU\",\"pendingPermissions\":[],\"startedAt\":\"2026-10-25T09:00:00.000Z\",\"status\":\"idle\",\"statusDetail\":null}],\"t\":\"snapshot\"}"
+  "snapshot" : "{\"machines\":[{\"agentVersion\":\"0.9.1\",\"createdAt\":\"2026-10-25T10:00:00.000Z\",\"health\":\"P1dm1r56ycZw+iyA/UPQZ+QFl7Zl+xgoi6hR+uObiVcwP53fAEPGQYDQxgUYP2Q0zCBjFt1qFl8MeZkYkIU+GZtOCuKWplmj09AojYL4+/FDL6mnm7Ax6vKneAv7HRmtl0dhIjq/35NM4MtFAJ99Wd26DDo39vWbPHT2lIn8ABZtY7WEVNQ4b23UNScCJNVCiJb4jKsNXrRFyCYNQNt98WYjpIuV/lpX82q/5Ov9aSeQmAoJ8zbEmi6Dc4c=\",\"id\":\"m1\",\"lastSeen\":\"2026-10-25T10:05:00Z\",\"name\":\"aqdW3CQSBoEuvxRE/euELiIVLAJnAR8cVABuYHl7fSdXrl3LkaPssQhHTvBCk3RwEKAGgnG4GPGWfEkF3c5kKH+tMw==\",\"online\":true},{\"agentVersion\":null,\"createdAt\":\"2026-10-24T08:00:00.000Z\",\"id\":\"m2\",\"lastSeen\":null,\"name\":\"869SkePpIaYDztGvESgvIsISnwkmvYMJyanhULS1yQ4cSTDQbafD28YwhFij\",\"online\":false}],\"sessions\":[{\"agentOnline\":true,\"canChat\":true,\"id\":\"s1\",\"info\":\"r28LBu3iNj8/O29BS7tngrjo9EFTnOfWM/Q7xcC2nq4UeGO0zu8L/spiIGoKa3sAKCTn9hdd9a5WrTNaQ15a5ziRcCIGSOs3dikRit6850opEkgXQrftYLHpo1GjJm2OkU/QatTw8q8dDAnA\",\"lastActivity\":\"2026-10-25T10:05:00Z\",\"machineId\":\"m1\",\"meta\":\"c2Z8phFwFlocwAvUfiH6dTGDUQ7KqHgUxKjuofTTKTbKIYiAbaG0UAUEGJbGb9yjk6U+N0oeVC4CVsPVU1xFHfOSZFO7TWX/m5ECmnNHtWEr0bwMldK4/IuYT97AldL6D+j70p5Q//XEbYPjYmWX7n34n7xesrzUOva/JvLn+jzbqILtnb6pfqdBBnJ0wc9iHMwmyc6jv8lxaM66hYjAUz/y9pgO8HkQEX2yrh1N3HY5LiyPg0VCb1RlbYMATsBCxG8GegJsfNpZE2RvkmNJbavf7jHxXLTaWFOf9Fejz27qlNFSPwQqMMbMasJt2CN4hVXrEvei9w4spG4y7ls+TxrIexIkdJDrjet1OAxOMFQB+i/3WwWiCC96ztzD9jyauza27lRukJJohBwm+YSmflJpRHJZi5nECkuf+/CzhbrCfiTakhS/Rch/J0VZ5JWTMDXeG0ywsyzhAcH+LPnikQzB+w2BgpCV31cdN5+g/vcHn9SQI+sbPK9dF7Ky7Uwy1Ar7wk7MYfwBF4Z+BAgy+ooSzFht5tQF0Umbuv84oMvUkgs0wNHvCHn8Paws9mS/8SsT2dJtvIFEFWpOUmfgHg==\",\"pendingPermissions\":[{\"blob\":\"yd6obOwnc00HPf7Gx4JiEYCTLELC/vZ3OqiWW+A0P1K7x9GTzbs7Wg73JKcG5Z+tJfkSvRcA0JxGHS1GQxDaz76goIhMmjivVr+tPTtLA8RTrlFdHX5Y9Anc904Cg8Wn1OLmnnY7JAFTC3VLuY0JFaRwC260l6JyLwzkob4y4ZY=\",\"requestId\":\"abcde\",\"ts\":\"2026-10-25T10:05:00.000Z\"},{\"blob\":\"h13t1riQRLQarqZ0Lt7+iwKcYqgnkRObEgRfrkIQ4ZS2CnXkwvDIHHN6cbKMvNEQrXRAxagBdaEVwjy/bpJRLtWO+nvARFjUraJe4ZH2wvWQhfsTK0sRPjvAUEKn1ZTxJ3GUkPY15/5Q/VUT7GadPOy9N5J1c2lmmClbn3hxtBo=\",\"requestId\":\"fghij\",\"ts\":\"2026-10-25T10:05:01.000Z\"}],\"startedAt\":\"2026-10-25T10:00:00.123Z\",\"status\":\"permission\",\"statusDetail\":\"BL+Su1PsffARqbeoklgjfdykSFMmxi2OXi9WSPubP8lGs3CGOVVN70n1FvvaYUi7FQQlcgP1EPMH5+e213uIBi3fwHK7QJQWkveWSM9pTA==\"},{\"agentOnline\":false,\"canChat\":false,\"id\":\"s2\",\"info\":\"wCwgDx02IA+mY3+OAlqV02q0ZgwJcFFepIB/HIpQuX4WyPd1QHLtklpWidFkFC4pSocOJjY9TgO2Ud9G/OsO8NjUG4M24UzyYFGEvVh6bY3n\",\"lastActivity\":\"yesterday\",\"machineId\":\"m1\",\"meta\":\"7/yNuMUIAd4yuv4TYzczgwBT79wb0Ln1kJBRwRGaqWOBuIaEgbwhQMMKwq9/ITJHk/iBnO1zelEHtQC1wqwXZ61CbfRA\",\"pendingPermissions\":[],\"startedAt\":\"2026-10-25T09:00:00.000Z\",\"status\":\"idle\",\"statusDetail\":null}],\"t\":\"snapshot\"}"
 }

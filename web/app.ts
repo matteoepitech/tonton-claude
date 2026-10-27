@@ -12,6 +12,7 @@ import {
   importAccountKey,
   isLive,
   keepsSessionRules,
+  latestTodos,
   menuCommands,
   modelName,
   needsAttention,
@@ -28,7 +29,7 @@ import {
   shareSocket,
   Vault,
 } from '../shared'
-import type { SessionCommand, SessionStatus } from '../shared/protocol'
+import type { SessionCommand, SessionStatus, TaskProgress, TodoItem } from '../shared/protocol'
 import { element, inline, renderMarkdown } from './markdown'
 
 interface Saved {
@@ -168,6 +169,7 @@ function renderList(list: HTMLElement, current: ClientState) {
           element('strong', session.project),
           element('small', needsAttention(session.status) ? displayStatusText(session) : (session.title ?? STATUS_LABELS[session.status])),
         ),
+        ...(session.tasks ? [progress(session.tasks)] : []),
       )
       row.className = 'session'
       if (session.id === current.selectedId) row.classList.add('selected')
@@ -181,6 +183,13 @@ function renderList(list: HTMLElement, current: ClientState) {
     }
   }
   list.replaceChildren(...children)
+}
+
+function progress(tasks: TaskProgress): HTMLElement {
+  const node = element('em', `${tasks.done}/${tasks.total}`)
+  node.className = 'tasks'
+  node.title = 'Tasks done in Claude’s list'
+  return node
 }
 
 function dot(status: SessionStatus): HTMLElement {
@@ -230,7 +239,8 @@ function renderChat(chat: HTMLElement, current: ClientState) {
   if (!current.entries) messages.append(element('p', 'Loading the conversation…'))
   for (const item of chatItems(current.entries ?? [])) messages.append(message(item))
   for (const request of session.pendingPermissions) messages.append(permission(session, request))
-  chat.replaceChildren(header, messages, composer(session))
+  const todos = latestTodos(current.entries ?? [])
+  chat.replaceChildren(header, messages, ...(todos?.length ? [checklist(todos)] : []), composer(session))
   if (stickToBottom) messages.scrollTop = messages.scrollHeight
 }
 
@@ -261,6 +271,28 @@ function message(item: ReturnType<typeof chatItems>[number]): HTMLElement {
     tool.append(diff)
   }
   return tool
+}
+
+/** Claude's latest task list, above the composer, in place of a TodoWrite row per update. */
+function checklist(todos: TodoItem[]): HTMLElement {
+  const counted = todos.filter(todo => todo.status !== 'cancelled')
+  const done = counted.filter(todo => todo.status === 'completed').length
+  const marks: Record<TodoItem['status'], string> = { completed: '✓', in_progress: '◐', cancelled: '✕', pending: '○' }
+  const items = todos.map(todo => {
+    const item = element(
+      'li',
+      element('i', marks[todo.status]),
+      todo.status === 'in_progress' ? (todo.activeForm ?? todo.content) : todo.content,
+    )
+    item.className = todo.status
+    return item
+  })
+  const summary = element('summary', element('strong', 'Tasks'), ` ${done === counted.length ? 'All done' : `${done}/${counted.length}`}`)
+  const list = element('details', summary, element('ul', ...items))
+  list.className = 'todos'
+  // A finished list starts folded: there is nothing left to follow.
+  list.open = done < counted.length
+  return list
 }
 
 function permission(session: Session, request: Session['pendingPermissions'][number]): HTMLElement {

@@ -374,6 +374,52 @@ main > p {
   min-height: 1.5em;
 }
 
+.todos {
+  margin: 0 16px 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--raised);
+  font-size: 13px;
+}
+.todos summary {
+  cursor: pointer;
+}
+.todos ul {
+  list-style: none;
+  margin: 6px 0 2px;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.todos li {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+.todos li i {
+  font-style: normal;
+  width: 1em;
+  flex: none;
+}
+.todos li.completed,
+.todos li.cancelled {
+  color: var(--dim);
+  text-decoration: line-through;
+}
+.todos li.in_progress {
+  font-weight: 600;
+}
+.todos li.in_progress i {
+  color: var(--accent);
+}
+.session .tasks {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--dim);
+}
+
 .shell[data-view="shared"] {
   grid-template-columns: 1fr;
 }

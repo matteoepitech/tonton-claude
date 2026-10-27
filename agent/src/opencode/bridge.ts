@@ -2,8 +2,9 @@ import { readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { open, seal } from '../../../shared/crypto'
 import type { Entry, PermissionRule, PromptPayload, RelayToAgent, SealedEntry, SessionCommand, SessionInfo } from '../../../shared/protocol'
+import { latestTodos, taskProgress } from '../../../shared/todos'
 import { withAttachments } from '../channel'
-import { branchOf, projectOf } from '../channel/conversation'
+import { branchOf, isTodoWrite, projectOf } from '../channel/conversation'
 import { RelayConnection } from '../channel/relay-connection'
 import { SessionShares } from '../channel/shares'
 import { claimCommand, whyInvalid } from '../channel/terminal'
@@ -68,6 +69,7 @@ class Link {
     if (marked.length)
       this.relay.post(async () => ({ t: 'entries', sessionId: this.sessionId, entries: await this.seal(marked), reset: false }))
     this.shares.entries(marked)
+    if (marked.some(isTodoWrite)) this.postMeta()
   }
 
   /** OpenCode's own history arrived: it replaces what the relay holds. */
@@ -77,10 +79,15 @@ class Link {
     const entries = this.entries
     this.relay.post(async () => ({ t: 'entries', sessionId: this.sessionId, entries: await this.seal(entries), reset: true }))
     this.shares.entries(entries, true)
+    if (entries.some(isTodoWrite)) this.postMeta()
   }
 
   postMeta() {
-    const meta = { ...this.tracker.meta(this.sessionId), ...branchOf(this.cwd() ?? process.cwd()) }
+    const meta = {
+      ...this.tracker.meta(this.sessionId),
+      ...branchOf(this.cwd() ?? process.cwd()),
+      tasks: taskProgress(latestTodos(this.entries)) ?? undefined,
+    }
     this.relay.post(async () => ({ t: 'meta', sessionId: this.sessionId, meta: await seal(this.config.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd() ?? process.cwd()), title: meta.title, tool: 'opencode' })
   }

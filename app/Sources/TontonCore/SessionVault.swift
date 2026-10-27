@@ -46,7 +46,7 @@ public struct SessionVault: Sendable {
             commands: meta?.commands.map { Set($0.compactMap(SessionCommandName.init(rawValue:))) },
             model: meta?.model,
             tool: info?.tool,
-            branch: meta?.branch
+            branch: meta?.branch, tasks: meta?.tasks
         )
     }
 

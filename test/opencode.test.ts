@@ -34,9 +34,9 @@ const api = (path: string, init: RequestInit & { token?: string } = {}) =>
     headers: { 'content-type': 'application/json', ...(init.token ? { authorization: `Bearer ${init.token}` } : {}) },
   })
 
-async function eventually<T>(read: () => T | undefined | false, label: string): Promise<T> {
+async function eventually<T>(read: () => T | undefined | false | Promise<T | undefined | false>, label: string): Promise<T> {
   for (let i = 0; i < 100; i++) {
-    const value = read()
+    const value = await read()
     if (value) return value
     await Bun.sleep(50)
   }
@@ -191,6 +191,32 @@ describe('OpenCode through the relay', () => {
     ask('per_make3', 'make clean', 'call_m3')
     await eventually(() => latest()?.pendingPermissions.some(p => p.requestId === 'per_make3'), 'the other request')
     expect(commands.some(c => c.op === 'reply' && c.requestID === 'per_make3')).toBe(false)
+  })
+
+  test("OpenCode's task list arrives sealed with its items, and its progress in the meta, as for Claude Code", async () => {
+    const before = messages.length
+    const todos = [
+      { id: '1', content: 'Write the fix', status: 'completed', priority: 'high' },
+      { id: '2', content: 'Run the tests', status: 'pending', priority: 'low' },
+    ]
+    emit('session.tool.called', { callID: 'call_todo', tool: 'todowrite', input: { todos }, timestamp: Date.now() })
+    const live = await eventually(() => messages.slice(before).find(m => m.t === 'entries' && m.sessionId === SESSION), 'the task list')
+    if (live.t !== 'entries') throw new Error('unexpected message')
+    const opened = await Promise.all(live.entries.map(entry => open<Entry>(key, entry.blob)))
+    expect(opened.find(entry => entry.kind === 'tool')).toMatchObject({
+      name: 'TodoWrite',
+      todos: [
+        { content: 'Write the fix', status: 'completed' },
+        { content: 'Run the tests', status: 'pending' },
+      ],
+    })
+    let tasks: SessionMeta['tasks']
+    await eventually(async () => {
+      const sealed = latest()?.meta
+      tasks = sealed ? (await open<SessionMeta>(key, sealed)).tasks : undefined
+      return tasks !== undefined
+    }, 'the progress')
+    expect(tasks).toEqual({ done: 1, total: 2 })
   })
 
   test('compact and interrupt run through OpenCode, clear says why it cannot', async () => {

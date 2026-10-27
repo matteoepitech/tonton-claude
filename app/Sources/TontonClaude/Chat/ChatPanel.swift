@@ -58,6 +58,9 @@ struct ChatPanel: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 6)
             }
+            if let todos = TodoList.latest(in: store.entries[session.id] ?? []), !todos.isEmpty {
+                TodoChecklist(todos: todos).padding(.horizontal, 10).padding(.bottom, 6)
+            }
             Composer(session: session) { text, images in
                 store.sendPrompt(text, images: images, to: session.id)
                 pendingTexts.append(text.isEmpty ? "(\(images.count) attachment\(images.count == 1 ? "" : "s"))" : text)
