@@ -4,6 +4,7 @@
 
 import { bytesToBase64Url } from './base64'
 import { type AccountKey, newAccountKey, open, seal } from './crypto'
+import { PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
 import type {
   PoolAuthor,
   PoolEventBody,
@@ -159,6 +160,8 @@ export interface PoolMember {
   role: PoolRole
   joinedAt: string
   profile: PoolMemberProfile | null
+  /** Its public key, sealed with each version it was published under: opened when a key is wrapped for it. */
+  publicKeys: Sealed[]
 }
 
 export interface PoolSession {
@@ -198,23 +201,33 @@ export interface PoolState {
   notes: (PoolAuthor & { rev: number; updatedAt: string; text: string | null }) | null
   messages: PoolPostItem<PoolMessageBody>[]
   events: PoolPostItem<PoolEventBody>[]
+  /** This member's private key for the pool (sealed with its account key) and the pool keys wrapped for it. */
+  own: { secret: Sealed | null; wraps: PoolKeyWrapWire[] }
 }
 
 /** How many messages and events a client keeps in memory. */
 const KEPT_POSTS = 500
 
-/** Seals and opens with the pool key. */
+/**
+ * Seals with the latest pool key it holds, and opens with whichever version sealed a blob: after a rotation, what was
+ * written before stays readable.
+ */
 export class PoolVault {
-  constructor(private readonly key: AccountKey) {}
+  readonly keyring: PoolKeyring
+
+  /** A key alone is version 1 of the pool key. */
+  constructor(key: string | PoolKeyring) {
+    this.keyring = typeof key === 'string' ? new PoolKeyring(key, 1) : key
+  }
 
   seal(value: PoolInfo | PoolMemberProfile | PoolSessionProfile | PoolTask | { text: string } | PoolMessageBody | PoolEventBody) {
-    return seal(this.key, value)
+    return this.keyring.seal(value)
   }
 
   async read<T>(blob: unknown, decode: (value: unknown) => T | null): Promise<T | null> {
     if (typeof blob !== 'string') return null
     try {
-      return decode(await open<unknown>(this.key, blob))
+      return decode(await this.keyring.open<unknown>(blob))
     } catch {
       return null
     }
@@ -241,6 +254,7 @@ export class PoolVault {
       notes: pool.notes ? await this.notes(pool.notes) : null,
       messages,
       events,
+      own: pool.own ?? { secret: null, wraps: [] },
     }
   }
 
@@ -280,6 +294,10 @@ export class PoolVault {
       }
       case 'pool_session_left':
         return { ...state, sessions: state.sessions.filter(s => s.account !== update.account || s.session !== update.session) }
+      case 'pool_key': {
+        const others = state.own.wraps.filter(wrap => wrap.version !== update.wrap.version)
+        return { ...state, own: { ...state.own, wraps: [...others, update.wrap].sort((a, b) => a.version - b.version) } }
+      }
       case 'pool_removed':
         return null
       case 'pool_conflict':
@@ -294,6 +312,7 @@ export class PoolVault {
       role: member.role,
       joinedAt: member.joinedAt,
       profile: await this.read(member.profile, decodePoolMemberProfile),
+      publicKeys: member.publicKeys,
     }
   }
 

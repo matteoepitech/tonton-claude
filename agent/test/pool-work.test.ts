@@ -99,8 +99,8 @@ async function join(autoStart = false) {
     ...relay.snapshot,
     info: await vault.seal({ name: 'Hackathon', goal: 'Ship the app' }),
     members: [
-      { account: 'acc_me', role: 'member', joinedAt: 'now', profile: await vault.seal({ name: 'Me' }) },
-      { account: 'acc_ana', role: 'owner', joinedAt: 'now', profile: await vault.seal({ name: 'Ana' }) },
+      { account: 'acc_me', role: 'member', joinedAt: 'now', profile: await vault.seal({ name: 'Me' }), publicKeys: [] },
+      { account: 'acc_ana', role: 'owner', joinedAt: 'now', profile: await vault.seal({ name: 'Ana' }), publicKeys: [] },
     ],
     sessions: [
       { account: 'acc_me', session: ME, joinedAt: 'now', profile: await vault.seal({ area: 'back' }), online: true, ready: true },

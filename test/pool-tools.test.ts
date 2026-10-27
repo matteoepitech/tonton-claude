@@ -15,6 +15,7 @@ import { RelayClient, type SocketLike } from '../shared/client'
 import { newAccountKey, seal } from '../shared/crypto'
 import { newPoolItemId, type PoolState, PoolVault, sealPoolSessionOrder } from '../shared/pool'
 import { PoolApi } from '../shared/pool-api'
+import { PoolKeyring } from '../shared/pool-keys'
 import { formatPoolInvite, parsePoolInvite } from '../shared/pool-link'
 import type { PoolTask, PoolUpdate } from '../shared/pool-protocol'
 import { Vault } from '../shared/vault'
@@ -98,7 +99,7 @@ async function account(name: string): Promise<{ app: App; home: string }> {
 }
 
 async function stateOf(peer: App): Promise<PoolState | null> {
-  const vault = new PoolVault(poolKey)
+  const vault = new PoolVault(new PoolKeyring(poolKey, 1))
   let state: PoolState | null = null
   for (const update of peer.updates) {
     if (update.t === 'pool_snapshot') state = await vault.snapshot(update.pool)
@@ -188,17 +189,17 @@ afterAll(async () => {
 describe('pool tools end to end', () => {
   test('both sessions join one pool, each from its own account', async () => {
     const api = new PoolApi({ relay: base, token: back.token })
-    const created = await api.create(back.key, { name: 'SECRET hackathon', goal: 'Ship the app' }, { name: 'Ana' })
+    const created = await api.create(back.key, back.accountId, { name: 'SECRET hackathon', goal: 'Ship the app' }, { name: 'Ana' })
     poolId = created.pool.id
     poolKey = created.key
     const invite = await api.createInvite(poolId, { uses: 1, hours: 1 })
     const pasted = parsePoolInvite(formatPoolInvite({ relay: base, pool: poolId, token: invite.token, key: poolKey, version: 1 }))
     if (!pasted) throw new Error('the invite does not parse')
-    await new PoolApi({ relay: base, token: front.token }).join(front.key, pasted, { name: 'Bob' })
+    await new PoolApi({ relay: base, token: front.token }).join(front.key, front.accountId, pasted, { name: 'Bob' })
     back.client.subscribePool(poolId)
     front.client.subscribePool(poolId)
 
-    const vault = new PoolVault(poolKey)
+    const vault = new PoolVault(new PoolKeyring(poolKey, 1))
     // The Claude Code session's owner lets it start pool tasks at once; the OpenCode one asks first.
     const claudeOrder = await sealPoolSessionOrder(back.key, { poolId, sessionId: CLAUDE, key: poolKey, version: 1, autoStart: true })
     back.client.sendPool({
@@ -262,7 +263,7 @@ describe('pool tools end to end', () => {
       area: 'front',
       assignee: { account: front.accountId, session: OPENCODE },
     }
-    back.client.sendPool({ t: 'pool_task', poolId, id, rev: 0, blob: await new PoolVault(poolKey).seal(task) })
+    back.client.sendPool({ t: 'pool_task', poolId, id, rev: 0, blob: await new PoolVault(new PoolKeyring(poolKey, 1)).seal(task) })
     const delivered = await eventually(() => promptsToOpenCode().find(p => p.text.includes(`task="${id}"`)), 'the task in OpenCode')
     expect(delivered.text).toContain('Do not start it yet')
     expect(await openCodeTool('task_claim', { task: id })).toStartWith('Started.')
@@ -282,7 +283,7 @@ describe('pool tools end to end', () => {
       area: 'back',
       assignee: { account: back.accountId, session: CLAUDE },
     }
-    front.client.sendPool({ t: 'pool_task', poolId, id, rev: 0, blob: await new PoolVault(poolKey).seal(task) })
+    front.client.sendPool({ t: 'pool_task', poolId, id, rev: 0, blob: await new PoolVault(new PoolKeyring(poolKey, 1)).seal(task) })
     const delivered = await eventually(
       () => notifications.find(n => n.params?.meta?.sender === 'pool' && n.params?.content?.includes(`task="${id}"`)),
       'the task in Claude Code',

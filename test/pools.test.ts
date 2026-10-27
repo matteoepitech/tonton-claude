@@ -13,6 +13,7 @@ import { RelayClient, type SocketLike } from '../shared/client'
 import { newAccountKey, seal } from '../shared/crypto'
 import { newPoolItemId, openPoolGrant, type PoolState, PoolVault, sealPoolSessionOrder } from '../shared/pool'
 import { PoolApi } from '../shared/pool-api'
+import { blobVersion, openPoolMemberKey, PoolKeyring, resolvePoolKeyring } from '../shared/pool-keys'
 import { formatPoolInvite, parsePoolInvite } from '../shared/pool-link'
 import type { PoolUpdate } from '../shared/pool-protocol'
 import { Vault } from '../shared/vault'
@@ -30,6 +31,7 @@ interface App {
   client: RelayClient
   updates: PoolUpdate[]
   raw: string[]
+  account: string
 }
 
 let owner: App
@@ -54,8 +56,8 @@ const post = async (path: string, body: object, token?: string) =>
     })
   ).json()
 
-async function app(token: string, key: string): Promise<App> {
-  const opened: App = { token, key, updates: [], raw: [], client: undefined as unknown as RelayClient }
+async function app(token: string, key: string, account: string): Promise<App> {
+  const opened: App = { token, key, account, updates: [], raw: [], client: undefined as unknown as RelayClient }
   opened.client = new RelayClient({
     vault: new Vault(key),
     connect: () => {
@@ -71,8 +73,8 @@ async function app(token: string, key: string): Promise<App> {
   return opened
 }
 
-/** The pool as this app reads it, from every message it got, opened with the pool key. */
-async function stateOf(peer: App, poolKey: string): Promise<PoolState | null> {
+/** The pool as this app reads it, from every message it got, opened with the pool key or a keyring. */
+async function stateOf(peer: App, poolKey: string | PoolKeyring): Promise<PoolState | null> {
   const vault = new PoolVault(poolKey)
   let state: PoolState | null = null
   for (const update of peer.updates) {
@@ -84,7 +86,7 @@ async function stateOf(peer: App, poolKey: string): Promise<PoolState | null> {
 
 beforeAll(async () => {
   const ownerAccount = await post('/api/accounts', {})
-  owner = await app(ownerAccount.token, newAccountKey())
+  owner = await app(ownerAccount.token, newAccountKey(), ownerAccount.accountId)
 
   // The member has a machine with a Claude Code session.
   const memberAccount = await post('/api/accounts', {})
@@ -104,7 +106,7 @@ beforeAll(async () => {
   const env = { ...process.env, TONTON_HOME: home, TONTON_CHANNEL: '1', TONTON_SERVICE: 'off' } as Record<string, string>
   claude = new Client({ name: 'claude-code', version: 'test' })
   await claude.connect(new StdioClientTransport({ command: 'bun', args: [AGENT, 'channel'], env }))
-  member = await app(memberAccount.token, memberKey)
+  member = await app(memberAccount.token, memberKey, memberAccount.accountId)
   await eventually(() => member.client.state.sessions.some(s => s.id === sessionId && s.agentOnline), 'the session online')
 }, 20_000)
 
@@ -122,7 +124,7 @@ describe('pools end to end', () => {
 
   test('the owner makes a pool and an invite; the other account joins with the link and reads the pool', async () => {
     const ownerApi = new PoolApi({ relay: base, token: owner.token })
-    const created = await ownerApi.create(owner.key, { name: 'SECRET hackathon', goal: 'Ship the app' }, { name: 'Owner' })
+    const created = await ownerApi.create(owner.key, owner.account, { name: 'SECRET hackathon', goal: 'Ship the app' }, { name: 'Owner' })
     poolId = created.pool.id
     poolKey = created.key
     const invite = await ownerApi.createInvite(poolId, { uses: 1, hours: 1 })
@@ -131,7 +133,7 @@ describe('pools end to end', () => {
     // The link travels; the member pastes it.
     const pasted = parsePoolInvite(link)
     if (!pasted) throw new Error('the link does not parse')
-    const joined = await new PoolApi({ relay: base, token: member.token }).join(member.key, pasted, { name: 'Member' })
+    const joined = await new PoolApi({ relay: base, token: member.token }).join(member.key, member.account, pasted, { name: 'Member' })
     expect(joined.role).toBe('member')
     // Its own copy of the key opens with its own account key: its other devices and its machines get it from there.
     expect(await openPoolGrant(member.key, joined.key, poolId)).toMatchObject({ key: poolKey })
@@ -190,6 +192,67 @@ describe('pools end to end', () => {
       const traffic = peer.raw.join('')
       for (const secret of ['SECRET', 'hackathon', 'Ship the app', 'shop']) expect(traffic).not.toContain(secret)
     }
+  })
+
+  test('kicking a third member rotates the key: the others read what follows, the kicked one gets nothing', async () => {
+    const third = await post('/api/accounts', {})
+    const kicked = await app(third.token, newAccountKey(), third.accountId)
+    const ownerApi = new PoolApi({ relay: base, token: owner.token })
+    const invite = await ownerApi.createInvite(poolId, { uses: 1, hours: 1 })
+    await new PoolApi({ relay: base, token: kicked.token }).join(kicked.key, kicked.account, {
+      relay: base,
+      pool: poolId,
+      token: invite.token,
+      key: poolKey,
+      version: 1,
+    })
+    kicked.client.subscribePool(poolId)
+    await eventually(async () => (await stateOf(owner, poolKey))?.members.length === 3, 'three members')
+
+    const rotated = await ownerApi.kick(owner.key, owner.account, poolId, kicked.account)
+    expect(rotated.version).toBe(2)
+    expect(rotated.skipped).toEqual([])
+    await eventually(() => kicked.updates.some(u => u.t === 'pool_removed' && u.poolId === poolId), 'the kicked member out')
+    expect((await new PoolApi({ relay: base, token: kicked.token }).list()).map(p => p.id)).not.toContain(poolId)
+
+    // The member opens version 2 from the wrap the owner made for it, with its private key.
+    const summary = (await new PoolApi({ relay: base, token: member.token }).list()).find(p => p.id === poolId)
+    if (!summary) throw new Error('the member lost the pool')
+    const grant = await openPoolGrant(member.key, summary.key, poolId)
+    if (!grant) throw new Error('no grant')
+    const members = await new PoolApi({ relay: base, token: member.token }).members(poolId)
+    const { keyring } = await resolvePoolKeyring({
+      accountKey: member.key,
+      poolId,
+      account: member.account,
+      grant,
+      secret: summary.secret,
+      wraps: summary.wraps,
+      members,
+    })
+    expect(keyring.key(2)).toBe(rotated.key)
+
+    // What the owner writes now reads for the member and not with the key the kicked member had.
+    const ownerKeys = new PoolKeyring(poolKey, 1)
+    ownerKeys.add(2, rotated.key)
+    const blob = await new PoolVault(ownerKeys).seal({ title: 'SECRET after the kick', state: 'todo' })
+    expect(blobVersion(blob)).toBe(2)
+    owner.client.sendPool({ t: 'pool_task', poolId, id: newPoolItemId(), rev: 0, blob })
+    await eventually(async () => {
+      const read = await stateOf(member, keyring)
+      return read?.tasks.some(t => t.task?.title === 'SECRET after the kick')
+    }, 'the new task at the member')
+    expect(await new PoolVault(poolKey).read(blob, value => value)).toBeNull()
+    expect(kicked.raw.join('')).not.toContain(blob)
+    expect(kicked.updates.some(u => u.t === 'pool_key')).toBe(false)
+
+    // The member's agent followed the rotation too: it published the member's public key under version 2.
+    const republished = await eventually(async () => {
+      const read = await stateOf(owner, ownerKeys)
+      const blobs = read?.members.find(m => m.account === member.account)?.publicKeys ?? []
+      return blobs.find(b => blobVersion(b) === 2)
+    }, 'the public key under version 2')
+    expect(await openPoolMemberKey(ownerKeys, republished, poolId, member.account)).not.toBeNull()
   })
 
   test('the member leaves: its session leaves with it, and the owner sees both go', async () => {

@@ -2,6 +2,7 @@
 // shape is wrong is dropped, a record whose shape is wrong is left out, and unknown fields are ignored.
 
 import { isPoolRole } from './pool'
+import type { PoolKeyWrapWire } from './pool-keys'
 import type {
   PoolMemberWire,
   PoolNotesWire,
@@ -22,7 +23,22 @@ const isNullableText = (value: unknown): value is string | null => value === nul
 const isAuthor = (value: Fields) => isText(value.account) && isNullableText(value.session)
 
 const isMember = (value: unknown): value is PoolMemberWire =>
-  isFields(value) && isText(value.account) && isPoolRole(value.role) && isText(value.joinedAt) && isNullableText(value.profile)
+  isFields(value) &&
+  isText(value.account) &&
+  isPoolRole(value.role) &&
+  isText(value.joinedAt) &&
+  isNullableText(value.profile) &&
+  Array.isArray(value.publicKeys) &&
+  value.publicKeys.every(isText)
+
+const isWrap = (value: unknown): value is PoolKeyWrapWire =>
+  isFields(value) && isCount(value.version) && value.version >= 2 && isText(value.from) && isText(value.blob)
+
+/** The member's own keys in a snapshot: left out when their shape is wrong. */
+function own(value: unknown): PoolSnapshot['own'] {
+  if (!isFields(value) || !isNullableText(value.secret)) return undefined
+  return { secret: value.secret, wraps: list(value.wraps, isWrap) ?? [] }
+}
 
 const isSession = (value: unknown): value is PoolSessionWire =>
   isFields(value) &&
@@ -56,7 +72,8 @@ function snapshot(value: unknown): PoolSnapshot | null {
   const notes = value.notes === null ? null : isNotes(value.notes) ? value.notes : undefined
   if (notes === undefined) return null
   const { id, createdAt, paused, keyVersion, info } = value
-  return { id, createdAt, paused, keyVersion, info, members, sessions, tasks, notes, messages, events }
+  const mine = own(value.own)
+  return { id, createdAt, paused, keyVersion, info, members, sessions, tasks, notes, messages, events, ...(mine ? { own: mine } : {}) }
 }
 
 /** A pool message from the relay, or null for one this client does not know or with the wrong shape. */
@@ -106,6 +123,8 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
       if (current === undefined) return null
       return { t: 'pool_conflict', poolId, kind: value.kind, ...(isText(value.id) ? { id: value.id } : {}), current }
     }
+    case 'pool_key':
+      return isWrap(value.wrap) ? { t: 'pool_key', poolId, wrap: value.wrap } : null
     case 'pool_removed':
       return { t: 'pool_removed', poolId }
     case 'pool_error':

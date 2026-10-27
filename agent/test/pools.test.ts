@@ -1,6 +1,15 @@
 import { expect, test } from 'bun:test'
 import { newAccountKey } from '../../shared/crypto'
 import { PoolVault, sealPoolSessionOrder } from '../../shared/pool'
+import {
+  blobVersion,
+  newPoolMemberSecret,
+  PoolKeyring,
+  publicKeyOf,
+  sealPoolMemberKey,
+  sealPoolMemberSecret,
+  wrapPoolKey,
+} from '../../shared/pool-keys'
 import type { PoolSnapshot } from '../../shared/pool-protocol'
 import type { AgentMessage } from '../../shared/protocol'
 import { SessionPools } from '../src/channel/pools'
@@ -85,4 +94,72 @@ test('an order for another session or pool, or not sealed with the account key, 
   set.apply({ t: 'pool_snapshot', pool: await snapshot() })
   await set.settled()
   expect(set.state('pool00000001')).toBeNull()
+})
+
+test('a rotation reaches the session: it opens the new key from its wrap, reads what follows, and republishes', async () => {
+  const { set, sent, flushed } = pools()
+  const poolId = 'pool00000001'
+  const v1 = new PoolKeyring(poolKey, 1)
+  // The owner and this session's member, each with a key pair; the member's private key sealed with the account key.
+  const ownerSecret = await newPoolMemberSecret(poolId)
+  const memberSecret = await newPoolMemberSecret(poolId)
+  const members = [
+    {
+      account: 'owner0000001',
+      role: 'owner' as const,
+      joinedAt: 'x',
+      profile: null,
+      publicKeys: [await sealPoolMemberKey(v1, poolId, 'owner0000001', ownerSecret)],
+    },
+    {
+      account: 'member000001',
+      role: 'member' as const,
+      joinedAt: 'x',
+      profile: null,
+      publicKeys: [await sealPoolMemberKey(v1, poolId, 'member000001', memberSecret)],
+    },
+  ]
+  const base = await snapshot()
+  const own = { secret: await sealPoolMemberSecret(accountKey, memberSecret), wraps: [] }
+  const session = { account: 'member000001', session: 'ses_1', joinedAt: 'x', profile: null, online: true, ready: true }
+  set.receive(poolId, await order())
+  await flushed()
+  set.apply({ t: 'pool_snapshot', pool: { ...base, members, sessions: [session], own } })
+  await set.settled()
+
+  const v2 = newAccountKey()
+  const wrap = await wrapPoolKey(ownerSecret, publicKeyOf(memberSecret), {
+    poolId,
+    version: 2,
+    key: v2,
+    from: 'owner0000001',
+    to: 'member000001',
+  })
+  set.apply({ t: 'pool_key', poolId, wrap: { version: 2, from: 'owner0000001', blob: wrap } })
+  await set.settled()
+  await flushed()
+  expect(set.vault(poolId)?.keyring.versions()).toEqual([1, 2])
+  // Its public key, published under version 2 for the members who join later.
+  const republished = sent.find(m => m.t === 'pool_member_key')
+  if (republished?.t !== 'pool_member_key') throw new Error('no republished key')
+  expect(blobVersion(republished.publicKey)).toBe(2)
+
+  const keyring = new PoolKeyring(poolKey, 1)
+  keyring.add(2, v2)
+  const blob = await new PoolVault(keyring).seal({ title: 'After the kick', state: 'todo' })
+  set.apply({ t: 'pool_task', poolId, task: { id: 'task0002', rev: 1, updatedAt: 'y', account: 'owner0000001', session: null, blob } })
+  await set.settled()
+  expect(set.state(poolId)?.tasks.find(t => t.id === 'task0002')?.task?.title).toBe('After the kick')
+
+  // A wrap made by someone else than the admin it names does not open: nothing changes.
+  const forged = await wrapPoolKey(memberSecret, publicKeyOf(memberSecret), {
+    poolId,
+    version: 3,
+    key: newAccountKey(),
+    from: 'owner0000001',
+    to: 'member000001',
+  })
+  set.apply({ t: 'pool_key', poolId, wrap: { version: 3, from: 'owner0000001', blob: forged } })
+  await set.settled()
+  expect(set.vault(poolId)?.keyring.versions()).toEqual([1, 2])
 })

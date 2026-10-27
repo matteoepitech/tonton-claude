@@ -11,6 +11,7 @@ import { acceptsCommands, displayStatusText, type Session } from '../session'
 import { parseShareLink } from '../share-link'
 import { Vault } from '../vault'
 import { parseRelayMessage } from '../wire'
+import { checkPoolKeyVectors } from './pool-key-vectors'
 import vectors from './swift-vectors.json'
 
 /** Swift leaves out the optionals that are nil, TypeScript has null for them. */
@@ -52,6 +53,10 @@ describe('vectors from the Swift implementation', () => {
     expect(parseShareLink(text)).toEqual(fields)
     // From the address bar too: the web app takes it after the #.
     expect(parseShareLink(`#${text}`)).toEqual(fields)
+  })
+
+  test('a pool key the app wrapped after a kick opens here, and with it what the app sealed with that version', async () => {
+    await checkPoolKeyVectors({ ...vectors.poolKeys, key: vectors.key })
   })
 
   test("the pool invite the app makes, its key grant and a session's order, are read as the app wrote them", async () => {

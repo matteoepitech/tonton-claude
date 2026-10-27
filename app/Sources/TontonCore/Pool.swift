@@ -189,20 +189,26 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
     public var model: String?
 }
 
-/// Seals and opens with a pool's key. What another member sealed is read like anything else untrusted: a blob that
-/// does not open, or does not have the expected shape, reads as nil.
+/// Seals with the latest pool key it holds and opens with whichever version sealed a blob. What another member sealed
+/// is read like anything else untrusted: a blob that does not open, or does not have the expected shape, reads as nil.
 public struct PoolVault: Sendable {
-    let key: SymmetricKey
+    public let keyring: PoolKeyring
 
+    /// A key alone is version 1 of the pool key.
     public init(key base64URL: String) throws {
-        key = try E2E.key(fromBase64URL: base64URL)
+        _ = try E2E.key(fromBase64URL: base64URL)
+        keyring = PoolKeyring(key: base64URL)
     }
 
-    public func seal<T: Encodable>(_ value: T) throws -> String { try E2E.seal(value, with: key) }
+    public init(keyring: PoolKeyring) {
+        self.keyring = keyring
+    }
+
+    public func seal<T: Encodable>(_ value: T) throws -> String { try keyring.seal(value) }
 
     public func open<T: Decodable>(_ blob: String?, as type: T.Type) -> T? {
         guard let blob else { return nil }
-        return try? E2E.open(blob, as: type, with: key)
+        return try? keyring.open(blob, as: type)
     }
 }
 
@@ -217,9 +223,29 @@ public struct PoolSummary: Codable, Equatable, Sendable {
     public let keyVersion: Int
     /// `PoolInfo`, sealed with the pool key.
     public let info: String
-    /// `PoolKeyGrant`, sealed with the account key.
+    /// `PoolKeyGrant`, sealed with the account key: the version this member joined with.
     public let key: String
     public let members: Int
+    /// `PoolMemberSecret`, sealed with the account key.
+    public let secret: String?
+    /// Later versions of the pool key, wrapped for this member.
+    public let wraps: [PoolKeyWrapWire]
+
+    private enum Keys: String, CodingKey { case id, role, createdAt, paused, keyVersion, info, key, members, secret, wraps }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        (id, role, createdAt) = (
+            try c.decode(String.self, forKey: .id), try c.decode(PoolRole.self, forKey: .role),
+            try c.decode(String.self, forKey: .createdAt)
+        )
+        (paused, keyVersion, info) = (
+            try c.decode(Bool.self, forKey: .paused), try c.decode(Int.self, forKey: .keyVersion), try c.decode(String.self, forKey: .info)
+        )
+        (key, members) = (try c.decode(String.self, forKey: .key), try c.decode(Int.self, forKey: .members))
+        secret = try c.decodeIfPresent(String.self, forKey: .secret)
+        wraps = try c.decodeIfPresent([PoolKeyWrapWire].self, forKey: .wraps) ?? []
+    }
 }
 
 public struct PoolMemberWire: Codable, Equatable, Sendable {
@@ -227,6 +253,23 @@ public struct PoolMemberWire: Codable, Equatable, Sendable {
     public let role: PoolRole
     public let joinedAt: String
     public let profile: String?
+    /// `PoolMemberKey`, sealed with each version of the pool key it was published under.
+    public let publicKeys: [String]
+
+    public init(account: String, role: PoolRole, joinedAt: String, profile: String?, publicKeys: [String] = []) {
+        (self.account, self.role, self.joinedAt, self.profile, self.publicKeys) = (account, role, joinedAt, profile, publicKeys)
+    }
+
+    private enum Keys: String, CodingKey { case account, role, joinedAt, profile, publicKeys }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        account = try c.decode(String.self, forKey: .account)
+        role = try c.decode(PoolRole.self, forKey: .role)
+        joinedAt = try c.decode(String.self, forKey: .joinedAt)
+        profile = try c.decodeIfPresent(String.self, forKey: .profile)
+        publicKeys = try c.decodeIfPresent([String].self, forKey: .publicKeys) ?? []
+    }
 }
 
 public struct PoolSessionWire: Codable, Equatable, Sendable {
@@ -265,6 +308,8 @@ public struct PoolSnapshot: Codable, Equatable, Sendable {
     public let notes: PoolItemWire?
     public let messages: [PoolItemWire]
     public let events: [PoolItemWire]
+    /// For the account it was sent to: its private key and the pool keys wrapped for it.
+    public let own: PoolOwnKeys?
 }
 
 /// The pool messages of the relay, on the app's socket (`RelayMessage.pool`).
@@ -279,13 +324,15 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
     case memberLeft(poolId: String, account: String)
     case session(poolId: String, PoolSessionWire)
     case sessionLeft(poolId: String, account: String, session: String)
+    /// To one member: the pool key was rotated, here is the new version wrapped for it.
+    case key(poolId: String, PoolKeyWrapWire)
     /// A change sent over an older revision was refused: the current one, if any.
     case conflict(poolId: String, kind: String, id: String?, current: PoolItemWire?)
     case removed(poolId: String)
     case error(poolId: String, message: String)
 
     private enum Keys: String, CodingKey {
-        case t, pool, poolId, task, notes, message, event, info, paused, keyVersion, member, account, session, kind, id, current
+        case t, pool, poolId, task, notes, message, event, info, paused, keyVersion, member, account, session, kind, id, current, wrap
     }
 
     public init(from decoder: Decoder) throws {
@@ -313,6 +360,7 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
             self = .conflict(
                 poolId: poolId, kind: try value(.kind), id: try container.decodeIfPresent(String.self, forKey: .id),
                 current: try container.decodeIfPresent(PoolItemWire.self, forKey: .current))
+        case "pool_key": self = .key(poolId: poolId, try value(.wrap))
         case "pool_removed": self = .removed(poolId: poolId)
         case "pool_error": self = .error(poolId: poolId, message: try value(.message))
         default: throw DecodingError.dataCorruptedError(forKey: .t, in: container, debugDescription: "unknown pool message \(t)")

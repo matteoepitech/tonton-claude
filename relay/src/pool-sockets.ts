@@ -7,6 +7,7 @@ import type { RelayContext } from './context'
 import type { Socket } from './hub'
 import {
   MAX_POOL_INFO_BYTES,
+  MAX_POOL_KEY_BYTES,
   MAX_POOL_NOTES_BYTES,
   MAX_POOL_POST_BYTES,
   MAX_POOL_POSTS_PER_MINUTE,
@@ -25,6 +26,7 @@ const POOL_APP_MESSAGES = new Set([
   'pool_event',
   'pool_info',
   'pool_profile',
+  'pool_member_key',
   'pool_join_session',
   'pool_leave_session',
 ])
@@ -41,7 +43,7 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
   switch (message.t) {
     case 'pool_subscribe': {
       ctx.hub.subscribePool(socket, poolId)
-      const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.hub.poolSessionState(poolId, account, session))
+      const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.hub.poolSessionState(poolId, account, session), accountId)
       if (pool) ctx.hub.send(socket, { t: 'pool_snapshot', pool })
       break
     }
@@ -60,6 +62,11 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
       ctx.pools.setProfile(poolId, accountId, message.profile)
       const member = ctx.pools.member(poolId, accountId)
       if (member) ctx.broadcastPool(poolId, { t: 'pool_member', poolId, member })
+      break
+    }
+    case 'pool_member_key': {
+      if (!isSealed(message.publicKey, MAX_POOL_KEY_BYTES) || !isSealed(message.secret, MAX_POOL_KEY_BYTES)) return true
+      memberKeyChanged(ctx, poolId, accountId, message.publicKey, message.secret)
       break
     }
     case 'pool_join_session': {
@@ -99,7 +106,7 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
   return true
 }
 
-const POOL_AGENT_MESSAGES = new Set(['pool_ack', 'pool_task', 'pool_notes', 'pool_message', 'pool_event'])
+const POOL_AGENT_MESSAGES = new Set(['pool_ack', 'pool_member_key', 'pool_task', 'pool_notes', 'pool_message', 'pool_event'])
 
 /** True when the message was a pool's. `sessionId` is the session the agent socket speaks for. */
 export function handleAgentPoolMessage(ctx: RelayContext, socket: Socket, message: PoolAgentMessage, sessionId: string): boolean {
@@ -109,9 +116,14 @@ export function handleAgentPoolMessage(ctx: RelayContext, socket: Socket, messag
   const { poolId } = message
   if (message.t === 'pool_ack') {
     ctx.hub.setPoolSessionReady(poolId, accountId, sessionId, true)
-    const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.hub.poolSessionState(poolId, account, session))
+    const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.hub.poolSessionState(poolId, account, session), accountId)
     if (pool) ctx.hub.send(socket, { t: 'pool_snapshot', pool })
     ctx.poolSessionChanged(poolId, accountId, sessionId)
+    return true
+  }
+  if (message.t === 'pool_member_key') {
+    // Only the public key: the private one is published by the member's apps, which made it.
+    if (isSealed(message.publicKey, MAX_POOL_KEY_BYTES)) memberKeyChanged(ctx, poolId, accountId, message.publicKey, null)
     return true
   }
   const role = ctx.pools.role(poolId, accountId)
@@ -135,6 +147,13 @@ export function poolSessionDisconnected(ctx: RelayContext, accountId: string, se
     ctx.hub.setPoolSessionReady(poolId, accountId, sessionId, false)
     ctx.poolSessionChanged(poolId, accountId, sessionId)
   }
+}
+
+/** A member published its keys: the others see its new public key. */
+function memberKeyChanged(ctx: RelayContext, poolId: string, accountId: string, publicKey: string, secret: string | null) {
+  ctx.pools.setMemberKeys(poolId, accountId, publicKey, secret)
+  const member = ctx.pools.member(poolId, accountId)
+  if (member) ctx.broadcastPool(poolId, { t: 'pool_member', poolId, member })
 }
 
 /** A task, the notes, a message or an event: kept, then sent to every member. */
