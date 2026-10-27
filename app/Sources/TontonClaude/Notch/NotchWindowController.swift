@@ -294,12 +294,11 @@ final class NotchWindowController {
             .sink { [weak self] app in self?.otherAppActivated(app) }
             .store(in: &subscriptions)
         store.sessionsPublisher.combineLatest(settings.$showPills, settings.$hiddenMachines, settings.$pinnedSessions)
-            .map { [store] sessions, on, hidden, pinned in
-                on
-                    ? PillRow(
-                        SessionLayout.ordered(sessions.filter { !hidden.contains($0.machine) }, pinned: pinned, thisMac: store.thisMachines)
-                    )
-                    : PillRow([])
+            .combineLatest(settings.$projectTags)
+            .map { [store] values, tags in
+                let (sessions, on, hidden, pinned) = values
+                let shown = sessions.filter { !hidden.contains($0.machine) }
+                return on ? PillRow(SessionLayout.ordered(shown, pinned: pinned, thisMac: store.thisMachines, tags: tags)) : PillRow([])
             }
             .removeDuplicates()
             .sink { [weak self] row in self?.state.pills = row }

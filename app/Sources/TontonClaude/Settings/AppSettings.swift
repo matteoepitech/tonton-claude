@@ -67,6 +67,8 @@ final class AppSettings: ObservableObject {
     @Published var terminal: TerminalChoice
     /// Session ids, in the order they were pinned.
     @Published var pinnedSessions: [String]
+    /// A tag per project, by project name: the list groups their sessions under it.
+    @Published var projectTags: [String: String]
     /// The pins of the accounts not connected, by `AccountList.id`, until the user switches back.
     @Published var parkedPins: [String: [String]]
     /// Folders sessions were started in from the notch, most recent first, per machine id.
@@ -173,6 +175,7 @@ final class AppSettings: ObservableObject {
         editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
         terminal = choice("terminal", .terminal)
         pinnedSessions = value("pinnedSessions", [String]())
+        projectTags = value("projectTags", [String: String]())
         parkedPins = value("parkedPins", [String: [String]]())
         startFolders = value("startFolders", [String: [String]]())
         openOnHover = value("openOnHover", true)
@@ -230,6 +233,7 @@ final class AppSettings: ObservableObject {
         persist($editor.map(\.rawValue), "editor")
         persist($terminal.map(\.rawValue), "terminal")
         persist($pinnedSessions, "pinnedSessions")
+        persist($projectTags, "projectTags")
         persist($parkedPins, "parkedPins")
         persist($startFolders, "startFolders")
         persist($openOnHover, "openOnHover")
