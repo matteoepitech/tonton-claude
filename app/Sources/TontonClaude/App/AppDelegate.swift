@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notch: NotchWindowController?
     private var webhooks: WebhookNotifier?
     private var widgets: WidgetPublisher?
+    private var dailySummary: DailySummaryNotifier?
     private var achievements: AchievementTracker?
     private lazy var settingsWindow = SettingsWindowController(store: store, settings: settings)
     private let whatsNew = WhatsNewWindowController()
@@ -37,12 +38,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MessageQueues.shared.attach(store)
         webhooks = WebhookNotifier(store: store, settings: settings)
         widgets = WidgetPublisher(store: store, settings: settings)
+        dailySummary = DailySummaryNotifier(store: store, settings: settings)
         if let notch { achievements = AchievementTracker(store: store, notch: notch.state, settings: settings) }
         UNUserNotificationCenter.current().delegate = self
 
         settings.$showMenuBarIcon.sink { [weak self] visible in self?.statusItem.setVisible(visible) }.store(in: &subscriptions)
         settings.$hotkey.sink { [weak self] preset in self?.registerHotKey(preset) }.store(in: &subscriptions)
         settings.$systemNotifications.removeDuplicates().filter { $0 }.sink { _ in Notifier.requestAccess() }.store(in: &subscriptions)
+        // The summary is a notification too: without the permission, the setting goes back off.
+        settings.$dailySummary.removeDuplicates().filter { $0 }
+            .sink { _ in Notifier.requestAccess { AppSettings.shared.dailySummary = false } }
+            .store(in: &subscriptions)
 
         store.connect()
         let welcomed = UserDefaults.standard.bool(forKey: "welcomed")

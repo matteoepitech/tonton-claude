@@ -130,6 +130,18 @@ struct NotchPane: View {
                     Row(title: "To") { TimeField(minutes: $settings.quietEnd) }
                 }
             }
+            GroupLabel(text: "Daily summary")
+            Card {
+                ToggleRow(
+                    title: "Sum up the day",
+                    detail: "A macOS notification in the evening: how long Claude worked, in how many sessions, and the cost when costs "
+                        + "are shown.",
+                    isOn: $settings.dailySummary)
+                if settings.dailySummary {
+                    Hairline()
+                    Row(title: "At") { TimeField(minutes: $settings.dailySummaryTime) }
+                }
+            }
             GroupLabel(text: "Webhooks")
             Card {
                 VStack(alignment: .leading, spacing: 12) {

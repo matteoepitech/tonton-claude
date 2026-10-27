@@ -3,9 +3,10 @@ import UserNotifications
 
 /// Optional macOS notifications (Settings › Notch). Clicking one opens the notch on that session.
 enum Notifier {
-    static func requestAccess() {
+    /// `denied` turns off the setting that asked, the notifications of Settings › Notch by default.
+    static func requestAccess(denied: @escaping @MainActor () -> Void = { AppSettings.shared.systemNotifications = false }) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            if !granted { DispatchQueue.main.async { AppSettings.shared.systemNotifications = false } }
+            if !granted { Task { @MainActor in denied() } }
         }
     }
 
