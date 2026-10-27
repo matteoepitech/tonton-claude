@@ -145,7 +145,7 @@ struct WhatsNewView: View {
                 Text("Loading the release notes…").font(.system(size: 13)).foregroundStyle(Theme.textDim)
             }
         case .loaded(let release):
-            MarkdownText(text: WhatsNew.readable(release.body))
+            MarkdownText(text: WhatsNew.readable(release.body), textSize: .standard)
         case .failed:
             Text("The release notes could not be loaded. They are on GitHub too.")
                 .font(.system(size: 13))

@@ -20,10 +20,10 @@ struct SessionListView: View {
             if store.hasSessions {
                 HStack(spacing: 4) {
                     HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(Theme.secondary)
+                        Image(systemName: "magnifyingglass").font(.notch(10)).foregroundStyle(Theme.secondary)
                         TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(Theme.textFaint))
                             .textFieldStyle(.plain)
-                            .font(.system(size: 11))
+                            .font(.notch(11))
                     }
                     .padding(.horizontal, 8)
                     .frame(height: 26)
@@ -86,8 +86,8 @@ struct SessionListView: View {
             settings.hideFinishedAfterHours = FinishedSessions.toggled(settings.hideFinishedAfterHours, previous: previous)
         } label: {
             HStack(spacing: 3) {
-                Image(systemName: hidden ? "eye.slash" : "eye").font(.system(size: 10))
-                if hidden && count > 0 { Text("\(count)").font(.system(size: 9, weight: .semibold)).monospacedDigit() }
+                Image(systemName: hidden ? "eye.slash" : "eye").font(.notch(10))
+                if hidden && count > 0 { Text("\(count)").font(.notch(9, weight: .semibold)).monospacedDigit() }
             }
             .frame(minWidth: 26, minHeight: 26)
             .background(RoundedRectangle(cornerRadius: 7).fill(hidden ? Theme.accent.opacity(0.16) : Theme.ink.opacity(0.07)))
@@ -102,18 +102,18 @@ struct SessionListView: View {
     @ViewBuilder private var messageResults: some View {
         let matches = ConversationSearch.search(query, sessions: store.orderedSessions, entries: store.entries)
         let projects = Dictionary(store.sessions.map { ($0.id, $0.project) }) { first, _ in first }
-        Text("MESSAGES").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
+        Text("MESSAGES").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
             .padding(.horizontal, 8).padding(.top, 10)
         if matches.isEmpty {
             Text("Nothing found in the conversations opened since Tonton Claude started, or on this Mac.")
-                .font(.system(size: 10))
+                .font(.notch(10))
                 .foregroundStyle(Theme.tertiary)
                 .padding(.horizontal, 8)
         }
         ForEach(matches) { match in
             VStack(alignment: .leading, spacing: 2) {
-                Text(projects[match.sessionId] ?? "").font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                Text(match.snippet).font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(2)
+                Text(projects[match.sessionId] ?? "").font(.notch(11, weight: .semibold)).lineLimit(1)
+                Text(match.snippet).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
@@ -149,13 +149,13 @@ struct SessionListView: View {
 
     private func tagEditor(_ project: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "tag").font(.system(size: 10)).foregroundStyle(Theme.secondary)
+            Image(systemName: "tag").font(.notch(10)).foregroundStyle(Theme.secondary)
             TextField("", text: $newTag, prompt: Text("Tag for \(project)").foregroundStyle(Theme.textFaint))
                 .textFieldStyle(.plain)
-                .font(.system(size: 11))
+                .font(.notch(11))
                 .onSubmit { saveTag(project) }
-            Button("Cancel") { tagging = nil }.buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(Theme.secondary)
-            Button("Save") { saveTag(project) }.buttonStyle(.plain).font(.system(size: 10, weight: .semibold))
+            Button("Cancel") { tagging = nil }.buttonStyle(.plain).font(.notch(10)).foregroundStyle(Theme.secondary)
+            Button("Save") { saveTag(project) }.buttonStyle(.plain).font(.notch(10, weight: .semibold))
                 .disabled(ProjectTags.clean(newTag).isEmpty)
         }
         .padding(.horizontal, 8)
@@ -180,27 +180,27 @@ struct SessionListView: View {
         HStack(spacing: 4) {
             switch section.kind {
             case .pinned:
-                Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(Theme.secondary)
-                Text("PINNED").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
+                Image(systemName: "pin.fill").font(.notch(8)).foregroundStyle(Theme.secondary)
+                Text("PINNED").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
                 Spacer(minLength: 4)
             case .tag(let tag):
-                Image(systemName: "tag.fill").font(.system(size: 8)).foregroundStyle(Theme.secondary)
-                Text(tag.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
+                Image(systemName: "tag.fill").font(.notch(8)).foregroundStyle(Theme.secondary)
+                Text(tag.uppercased()).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
                 Spacer(minLength: 4)
             case .thisMac:
                 if let style = store.thisMac.flatMap({ settings.machineStyles[$0] }), !style.isEmpty {
                     MachineBadge(style: style, size: 9)
                 } else {
-                    Image(systemName: "laptopcomputer").font(.system(size: 9)).foregroundStyle(Theme.secondary)
+                    Image(systemName: "laptopcomputer").font(.notch(9)).foregroundStyle(Theme.secondary)
                 }
-                Text("THIS MAC").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
+                Text("THIS MAC").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
                 Spacer(minLength: 4)
                 if let info = store.machines.first(where: { $0.id == store.thisMac }) { NotchAgentUpdate(machine: info) }
             case .machine(let machine):
                 if let style = section.sessions.first.flatMap({ settings.machineStyles[$0.machineId] }) {
                     MachineBadge(style: style, size: 9)
                 }
-                Text(machine.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
+                Text(machine.uppercased()).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
                 Spacer(minLength: 4)
                 if let info = store.machines.first(where: { $0.id == section.sessions.first?.machineId }) {
                     NotchAgentUpdate(machine: info)
@@ -223,7 +223,7 @@ struct NotchAgentUpdate: View {
             if store.updatingMachines.contains(machine.id) {
                 HStack(spacing: 4) {
                     ProgressView().controlSize(.mini)
-                    Text("Updating").font(.system(size: 9, weight: .medium)).foregroundStyle(Theme.secondary)
+                    Text("Updating").font(.notch(9, weight: .medium)).foregroundStyle(Theme.secondary)
                 }
             } else {
                 pill("Update agent") { store.updateAgent(machine) }
@@ -240,8 +240,8 @@ struct NotchAgentUpdate: View {
     private func pill(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 3) {
-                Image(systemName: "arrow.up.circle.fill").font(.system(size: 9))
-                Text(title).font(.system(size: 9, weight: .semibold))
+                Image(systemName: "arrow.up.circle.fill").font(.notch(9))
+                Text(title).font(.notch(9, weight: .semibold))
             }
             .foregroundStyle(Theme.accent)
             .padding(.horizontal, 6)
@@ -278,32 +278,32 @@ struct SessionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     if let tool { ToolMark(tool: tool, size: 9) }
-                    Text(session.project).font(.system(size: 12, weight: .semibold)).lineLimit(1).layoutPriority(1)
+                    Text(session.project).font(.notch(12, weight: .semibold)).lineLimit(1).layoutPriority(1)
                     if let machine {
                         if let machineStyle { MachineBadge(style: machineStyle, size: 9) }
-                        Text(machine).font(.system(size: 10)).foregroundStyle(Theme.tertiary).lineLimit(1)
+                        Text(machine).font(.notch(10)).foregroundStyle(Theme.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 4)
                     if let shortcut {
-                        Text("⌘\(shortcut)").font(.system(size: 9, weight: .medium)).foregroundStyle(Theme.tertiary)
+                        Text("⌘\(shortcut)").font(.notch(9, weight: .medium)).foregroundStyle(Theme.tertiary)
                     }
                     if !session.pendingPermissions.isEmpty {
-                        Image(systemName: "lock.fill").font(.system(size: 9)).foregroundStyle(Theme.accent)
+                        Image(systemName: "lock.fill").font(.notch(9)).foregroundStyle(Theme.accent)
                     }
                     Text(session.lastActivity, style: .relative)
-                        .font(.system(size: 9))
+                        .font(.notch(9))
                         .foregroundStyle(Theme.tertiary)
                         .lineLimit(1)
                         .frame(maxWidth: 70, alignment: .trailing)
                 }
                 HStack(alignment: .top, spacing: 6) {
                     Text(session.title ?? session.lastMessage ?? session.status.label)
-                        .font(.system(size: 11))
+                        .font(.notch(11))
                         .foregroundStyle(Theme.secondary)
                         .lineLimit(2)
                     Spacer(minLength: 0)
                     if showCost, let cost = session.costUSD, cost > 0 {
-                        Text(String(format: "$%.2f", cost)).font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.tertiary)
+                        Text(String(format: "$%.2f", cost)).font(.notch(9, design: .monospaced)).foregroundStyle(Theme.tertiary)
                     }
                 }
                 if session.status.needsAttention || session.status.isLive && (session.limitToWatch() != nil || runsOut(at: .now) != nil) {
@@ -340,7 +340,7 @@ struct SessionRow: View {
             let parts = [attention, countdown, pace].compactMap { $0 }
             if let first = parts.first {
                 parts.dropFirst().reduce(first) { line, part in line + Text(" · ").foregroundColor(.secondary) + part }
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.notch(10, weight: .medium))
                     .lineLimit(1)
             }
         }
@@ -354,7 +354,7 @@ struct ToolMark: View {
 
     var body: some View {
         Image(systemName: tool.symbol)
-            .font(.system(size: size, weight: .semibold))
+            .font(.notch(size, weight: .semibold))
             .foregroundStyle(Theme.secondary)
             .help(tool.label)
             .accessibilityLabel(tool.label)

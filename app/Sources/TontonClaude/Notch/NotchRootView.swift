@@ -33,6 +33,8 @@ struct NotchRootView: View {
                         // Laid out once at its final size and revealed by the animated clip: resizing the conversation and its
                         // text field on every frame of the spring made opening and closing stutter.
                         ExpandedView(onSettings: onSettings)
+                            // Its fonts read the text size (Font.notch): a new size redraws all of it.
+                            .id(settings.notchTextSize)
                             .foregroundStyle(Theme.text)
                             .padding(.horizontal, 14)
                             .frame(width: NotchState.expandedSize.width, height: NotchState.expandedSize.height)

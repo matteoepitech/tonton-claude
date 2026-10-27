@@ -35,6 +35,9 @@ final class AppSettings: ObservableObject {
     @Published var hotkey: HotKeyPreset
     @Published var display: DisplayChoice
     @Published var notchSize: NotchSizeChoice
+    @Published var notchTextSize: NotchTextSize {
+        didSet { Theme.textSize = notchTextSize }
+    }
     @Published var showCosts: Bool
     /// AppleScript can always read the sessions; sending them messages needs this.
     @Published var scriptsCanSend: Bool
@@ -153,6 +156,9 @@ final class AppSettings: ObservableObject {
         hotkey = choice("hotkey", .optionCommandN)
         display = choice("display", .builtIn)
         notchSize = choice("notchSize", .standard)
+        let notchTextSize = choice("notchTextSize", NotchTextSize.standard)
+        self.notchTextSize = notchTextSize
+        Theme.textSize = notchTextSize
         showCosts = value("showCosts", true)
         scriptsCanSend = value("scriptsCanSend", false)
         showWhatsNew = value("showWhatsNew", true)
@@ -215,6 +221,7 @@ final class AppSettings: ObservableObject {
         persist($hotkey.map(\.rawValue), "hotkey")
         persist($display.map(\.rawValue), "display")
         persist($notchSize.map(\.rawValue), "notchSize")
+        persist($notchTextSize.map(\.rawValue), "notchTextSize")
         persist($showCosts, "showCosts")
         persist($scriptsCanSend, "scriptsCanSend")
         persist($showWhatsNew, "showWhatsNew")

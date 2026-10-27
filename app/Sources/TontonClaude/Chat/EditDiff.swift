@@ -24,7 +24,7 @@ struct EditDiff: View {
             if total > Self.foldedLines {
                 Button(expanded ? "Show less" : "Show all \(total) lines") { expanded.toggle() }
                     .buttonStyle(.plain)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.notch(10, weight: .medium))
                     .foregroundStyle(Theme.accent)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
@@ -47,7 +47,7 @@ struct EditDiff: View {
             Text(mark).foregroundStyle(tint ?? .secondary).frame(width: 8)
             Text(Self.highlighted(line.text, fileExtension: fileExtension)).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(.system(size: 10, design: .monospaced))
+        .font(.notch(10, design: .monospaced))
         .padding(.horizontal, 6)
         .padding(.vertical, 0.5)
         .background(tint.map { $0.opacity(0.14) } ?? .clear)

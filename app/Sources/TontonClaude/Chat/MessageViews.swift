@@ -16,7 +16,7 @@ struct ChatItemView: View {
             ToolRow(call: call, result: result, running: result == nil && sessionWorking)
         case .system(let e):
             Text(e.text ?? "")
-                .font(.system(size: 10))
+                .font(.notch(10))
                 .foregroundStyle(Theme.tertiary)
                 .frame(maxWidth: .infinity)
         }
@@ -36,7 +36,7 @@ struct UserBubble: View {
                 if !images.isEmpty { ImageStrip(images: images) }
                 if !text.isEmpty {
                     Text(text)
-                        .font(.system(size: 12))
+                        .font(.notch(12))
                         .textSelection(.enabled)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
@@ -44,7 +44,7 @@ struct UserBubble: View {
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.accent.opacity(pending ? 0.35 : 0.8)))
                 }
                 if viaNotch || pending {
-                    Text(pending ? "sending…" : "from the notch").font(.system(size: 9)).foregroundStyle(Theme.tertiary)
+                    Text(pending ? "sending…" : "from the notch").font(.notch(9)).foregroundStyle(Theme.tertiary)
                 }
             }
         }
@@ -104,9 +104,9 @@ struct ToolRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 10)).frame(width: 14)
-                Text(call.name ?? "?").font(.system(size: 11, weight: .semibold))
-                Text(call.summary ?? "").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1)
+                Image(systemName: icon).font(.notch(10)).frame(width: 14)
+                Text(call.name ?? "?").font(.notch(11, weight: .semibold))
+                Text(call.summary ?? "").font(.notch(11, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
                 if let path = call.filePath, FileManager.default.fileExists(atPath: path) {
@@ -114,7 +114,7 @@ struct ToolRow: View {
                     Button {
                         editor.open(path)
                     } label: {
-                        Image(systemName: "arrow.up.forward.square").font(.system(size: 10))
+                        Image(systemName: "arrow.up.forward.square").font(.notch(10))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.secondary)
@@ -123,9 +123,9 @@ struct ToolRow: View {
                 if running {
                     ProgressView().controlSize(.mini)
                 } else if result?.isError == true {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 10)).foregroundStyle(.red)
+                    Image(systemName: "xmark.circle.fill").font(.notch(10)).foregroundStyle(.red)
                 } else if result != nil {
-                    Image(systemName: "checkmark").font(.system(size: 9)).foregroundStyle(Theme.tertiary)
+                    Image(systemName: "checkmark").font(.notch(9)).foregroundStyle(Theme.tertiary)
                 }
             }
             .contentShape(Rectangle())
@@ -135,7 +135,7 @@ struct ToolRow: View {
                 if let imgs = result.images, !imgs.isEmpty { ImageStrip(images: imgs) }
                 ScrollView {
                     Text(result.text ?? "")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.notch(10, design: .monospaced))
                         .foregroundStyle(result.isError == true ? .red : .secondary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
