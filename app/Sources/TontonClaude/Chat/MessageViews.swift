@@ -54,32 +54,30 @@ struct UserBubble: View {
 struct ImageStrip: View {
     let images: [ImageData]
     @EnvironmentObject var store: SessionStore
+    @EnvironmentObject var state: NotchState
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(Array(images.enumerated()), id: \.offset) { _, img in
+            ForEach(Array(images.enumerated()), id: \.offset) { index, img in
                 if let ns = ImageCache.shared.image(for: img) {
                     Image(nsImage: ns)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: 220, maxHeight: 150)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .onTapGesture { openInPreview(img) }
-                        .help("Open in Preview")
+                        .quickLook({ preview(at: index) }, state: state)
                 }
             }
         }
     }
 
-    private func openInPreview(_ img: ImageData) {
-        guard let data = Data(base64Encoded: img.data) else { return }
-        let ext = img.mediaType.split(separator: "/").last.map(String.init) ?? "png"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("tonton-\(UUID().uuidString).\(ext)")
-        if let failure = SaveFailure.write(data, to: url) {
-            store.lastError = failure
-            return
+    /// Every image of the message, so the arrows go from one to the next.
+    private func preview(at index: Int) {
+        let items = images.enumerated().map { offset, img in
+            let ext = img.mediaType.split(separator: "/").last.map(String.init) ?? "png"
+            return QuickLook.Item(name: "image-\(offset + 1).\(ext)", data: Data(base64Encoded: img.data) ?? Data())
         }
-        NSWorkspace.shared.open(url)
+        if let failure = QuickLook.shared.show(items, at: index) { store.lastError = failure }
     }
 }
 

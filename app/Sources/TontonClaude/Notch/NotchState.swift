@@ -22,6 +22,8 @@ final class NotchState: ObservableObject {
     /// Unsent text per session, kept when the notch closes or the selection changes. Not published: a keystroke must only
     /// redraw the composer, not the whole notch.
     var drafts: [String: String] = [:]
+    /// Opens the attachment or image under the pointer in Quick Look, for Space.
+    var quickLookUnderPointer: (() -> Void)?
     /// Optional activity dots beside the camera (Settings › Notch); off means the notch is fully hidden at rest.
     @Published var showWings = false
     /// Set by the open session's composer: files dropped anywhere on the conversation go to it.

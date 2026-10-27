@@ -127,6 +127,7 @@ struct Composer: View {
                                 fileChip(attachment)
                             }
                         }
+                        .quickLook({ preview(attachment) }, state: state)
                         .overlay(alignment: .topTrailing) {
                             Button {
                                 attachments.removeAll { $0.id == attachment.id }
@@ -149,6 +150,12 @@ struct Composer: View {
             .font(.system(size: 9))
             .foregroundStyle(Theme.tertiary)
         }
+    }
+
+    /// The attachments of the message, opened on this one.
+    private func preview(_ attachment: Attachment) {
+        let index = attachments.firstIndex { $0.id == attachment.id } ?? 0
+        attachError = QuickLook.shared.show(attachments.map { QuickLook.Item(name: $0.name, data: $0.data) }, at: index)
     }
 
     private func fileChip(_ attachment: Attachment) -> some View {
