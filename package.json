@@ -6,7 +6,7 @@
     "relay": "bun run relay/src/main.ts",
     "build": "bun run scripts/build.ts",
     "test": "bun test",
-    "check": "biome check . && tsc --noEmit -p . && tsc --noEmit -p shared && tsc --noEmit -p web",
+    "check": "biome check . && tsc --noEmit -p . && tsc --noEmit -p shared && tsc --noEmit -p web && tsc --noEmit -p desktop/src/renderer",
     "format": "biome check --write .",
     "web": "bun scripts/build-web.ts"
   },

@@ -19,6 +19,8 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 | `relay/` | The relay. Accounts, machines and the sealed history of sessions in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
 | `app/` | The macOS app living in the notch (SwiftUI), plus its settings window. |
 | `shared/` | The client core shared by the agent, the relay and the clients: wire protocol, AES-256-GCM sealing with WebCrypto, account token, session models. It runs in browsers. |
+| `web/` | The web app, one HTML file. Its views (`web/views.ts`) also make up the island. |
+| `desktop/` | The island for Windows: an Electron window at the top of the screen, a tray icon, the account in the system's keyring. |
 | `scripts/` | Builds, and the install scripts published with each release. |
 
 ## Security model
@@ -193,6 +195,27 @@ crypto and relay client.
 - A relay without an APNs key answers `{ "enabled": false }` and keeps nothing; older relays answer 404. The app then
   works while it is open, and its Live Activity says it may be out of date after 15 minutes.
 
+## The Windows island
+
+`TontonClaude-Setup-<version>.exe`, published with each release, puts the sessions in a small island at the top of the
+screen, above other windows: a bar that says what the sessions do, which opens on their list, a conversation and its
+permission requests. It is the web app's views in an Electron window (`desktop/`), with a tray icon.
+
+- **Signing in.** Paste the recovery key of an account (Settings › Relay in the Mac app), or create an account on the
+  hosted relay or on yours: the island then makes the end-to-end key itself, and its menu (the tray icon, or ⋯ in the
+  island) copies the install command for machines and the recovery key. No Mac needed.
+- **Where the account is kept.** With **Remember on this computer**, the recovery key is encrypted with Windows' DPAPI
+  (Electron's `safeStorage`) in `%APPDATA%\Tonton Claude\account`. Without it, nothing is written and the island
+  forgets the account when it quits.
+- **The token stays out of the page.** The main process adds the account's token to the page's socket as an
+  `Authorization` header, so it works with every relay, and refuses sockets to anything else. The page gets the relay's
+  address and the end-to-end key, imports the key as a `CryptoKey` it cannot read back, and decrypts like the web app.
+- **The page** has the web app's Content-Security-Policy, runs sandboxed without Node, never navigates, and opens links
+  in the browser. It asks for no permission (camera, notifications…).
+- **Start at login** is in the menu, off by default.
+
+The installer is not signed: Windows SmartScreen warns about it until the project has a code-signing certificate.
+
 ## Running your own relay
 
 The relay is a single executable behind any HTTPS reverse proxy with WebSocket support. It only needs updating when its own
@@ -284,6 +307,8 @@ bun test                       # unit tests and the end-to-end test
 cd app && swift test           # TontonCore tests (crypto, wire format, models)
 cd app && ./scripts/build-app.sh --install    # the macOS app
 open ios/TontonClaude.xcodeproj                # the iPhone app: pick your team in Signing & Capabilities, then Run
+cd desktop && bun install && bun run start    # the island (TONTON_ISLAND_HOME=<dir> keeps its account apart)
+cd desktop && bun run package:windows         # its installer in desktop/out/, from any OS
 ```
 
 The iPhone app also builds without signing, for the Simulator:
@@ -297,7 +322,8 @@ The macOS tray icon is a separate Swift program: `swiftc -O agent/tray/macos/mai
 ## Releasing
 
 Pushing a version tag publishes everything at that version: the app (DMG, and its update feed once the keys below are
-set), the agents, their install scripts, the relay (executables, install script, Docker image) and a `SHA256SUMS`:
+set), the Windows island (installer), the agents, their install scripts, the relay (executables, install script, Docker
+image) and a `SHA256SUMS`:
 
 ```sh
 git tag -s v0.4.0 -m "v0.4.0"
