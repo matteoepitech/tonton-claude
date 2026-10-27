@@ -10,6 +10,7 @@ struct BrowserPairingCard: View {
     @Environment(\.controlActiveState) private var windowState
     @State private var code: QRCode?
     @State private var hidesAt = Date.distantPast
+    @State private var failed = false
 
     private static let visibleFor: TimeInterval = 60
     private static let webApp = URL(string: "\(InstallCommand.releases)/tonton-web.html")
@@ -39,6 +40,11 @@ struct BrowserPairingCard: View {
                     }
                     .padding(.top, 4)
                 } else {
+                    if failed {
+                        Text("The QR code could not be made. Copy the recovery key from Settings › Relay instead.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.danger)
+                    }
                     HStack(spacing: 8) {
                         Button("Show the QR code") { show() }.buttonStyle(ThemeButtonStyle())
                         if let webApp = Self.webApp {
@@ -63,6 +69,7 @@ struct BrowserPairingCard: View {
     private func show() {
         guard let account = settings.account else { return }
         code = QRCode(account.browserKey)
+        failed = code == nil
         hidesAt = Date().addingTimeInterval(Self.visibleFor)
     }
 

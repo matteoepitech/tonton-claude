@@ -26,6 +26,9 @@ final class QRCodeTests: XCTestCase {
         // Read once: JSONEncoder does not always write the keys in the same order.
         let key = account.browserKey
         let code = try XCTUnwrap(QRCode(key))
+        // Its top left finder pattern, the right way up.
+        let corner = ["1111111", "1000001", "1011101", "1011101", "1011101", "1000001", "1111111"]
+        XCTAssertEqual(code.rows.prefix(7).map { String($0.prefix(7)) }, corner)
         XCTAssertEqual(Self.read(code), key)
         // Versions grow by 4 modules from 21.
         XCTAssertEqual(code.size % 4, 1)
