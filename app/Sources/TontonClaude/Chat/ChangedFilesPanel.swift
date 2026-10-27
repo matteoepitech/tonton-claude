@@ -23,7 +23,7 @@ struct ChangedFilesButton: View {
             .buttonStyle(.plain)
             .foregroundStyle(open ? Theme.accent : .secondary)
             .help(open ? "Back to the conversation" : "Files changed in this session")
-            .accessibilityLabel("\(count) file\(count == 1 ? "" : "s") changed")
+            .accessibilityLabel("\(count) files changed")
         }
     }
 }
