@@ -4,13 +4,18 @@ import UserNotifications
 /// Optional macOS notifications (Settings › Notch). Clicking one opens the notch on that session.
 enum Notifier {
     static func requestAccess() {
+        UNUserNotificationCenter.current().setNotificationCategories(PermissionNotifications.categories)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
             if !granted { DispatchQueue.main.async { AppSettings.shared.systemNotifications = false } }
         }
     }
 
+    /// A permission request gets Allow and Deny buttons (PermissionNotifications).
     @MainActor
     static func post(_ session: SessionSummary, body: String) {
+        if session.status == .permission, let request = session.pendingPermissions.first, let store = AppDelegate.shared?.store {
+            return PermissionNotifications.shared.post(session, request: request, store: store)
+        }
         post(title: "\(session.machine) · \(session.project)", body: body, sessionId: session.id)
     }
 

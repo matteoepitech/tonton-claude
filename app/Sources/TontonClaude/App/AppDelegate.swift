@@ -112,15 +112,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
-    /// Clicking a notification opens the notch on its session.
+    /// Clicking a notification opens the notch on its session; the buttons of a permission request answer it.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let sessionId = response.notification.request.content.userInfo["sessionId"] as? String
+        let userInfo = response.notification.request.content.userInfo.reduce(into: [String: String]()) { fields, field in
+            if let key = field.key as? String, let value = field.value as? String { fields[key] = value }
+        }
+        let action = response.actionIdentifier
         Task { @MainActor in
-            if let sessionId { self.store.selectedId = sessionId }
-            self.notch?.expand()
+            PermissionNotifications.shared.handle(actionIdentifier: action, userInfo: userInfo, store: self.store) { sessionId in
+                if let sessionId { self.store.selectedId = sessionId }
+                self.notch?.expand()
+            }
         }
         completionHandler()
     }
