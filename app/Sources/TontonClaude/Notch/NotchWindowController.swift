@@ -552,7 +552,7 @@ final class NotchWindowController {
             store.sendCommand(.interrupt, to: session.id)
             return true
         }
-        let sessions = store.orderedSessions
+        let sessions = store.navigableSessions
         guard !sessions.isEmpty else { return false }
         if let digit = event.charactersIgnoringModifiers.flatMap(Int.init), (1...9).contains(digit) {
             if digit <= sessions.count { store.selectedId = sessions[digit - 1].id }

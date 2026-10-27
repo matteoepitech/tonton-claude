@@ -16,11 +16,14 @@ import {
   ShareViewer,
   type SocketLike,
   shareSocket,
+  toggledFold,
   Vault,
 } from '../shared'
 import { element } from './markdown'
 import { cameraProblem, canScan, type Scan, startScan } from './scanner'
 import { renderChat, renderList, renderShared } from './views'
+
+const FOLDED_KEY = 'tonton.foldedMachines'
 
 interface Saved {
   relay: string
@@ -34,6 +37,8 @@ let state: ClientState | null = null
 let viewer: ShareViewer | null = null
 /** On phones, the list or one conversation. */
 let showingChat = false
+/** Machines folded in the list, kept in this browser only: a convenience, lost with the site's data. */
+let foldedMachines = loadFolded()
 
 async function start() {
   const shared = parseShareLink(location.hash)
@@ -209,15 +214,42 @@ function render() {
     state.connection === 'connected' ? '● connected' : state.connection === 'connecting' ? '○ connecting' : '○ offline'
   parts.status.dataset.state = state.connection
   parts.shell.dataset.view = showingChat && state.selectedId ? 'chat' : 'list'
-  renderList(parts.list, state, session => {
-    showingChat = true
-    client?.select(session.id)
-    render()
-  })
+  renderList(
+    parts.list,
+    state,
+    session => {
+      showingChat = true
+      client?.select(session.id)
+      render()
+    },
+    {
+      folded: foldedMachines,
+      toggle: key => {
+        foldedMachines = toggledFold(foldedMachines, key)
+        saveFolded(foldedMachines)
+        render()
+      },
+    },
+  )
   renderChat(parts.chat, state, client, () => {
     showingChat = false
     render()
   })
+}
+
+function loadFolded(): Set<string> {
+  try {
+    const keys = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '[]')
+    return new Set(Array.isArray(keys) ? keys.filter((key): key is string => typeof key === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveFolded(folded: ReadonlySet<string>) {
+  try {
+    localStorage.setItem(FOLDED_KEY, JSON.stringify([...folded]))
+  } catch {}
 }
 
 // MARK: Read-only share

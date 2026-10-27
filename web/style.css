@@ -407,6 +407,38 @@ main > p {
   text-align: center;
 }
 
+/* A machine of the list folds to its header. */
+nav h2 .fold {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+nav h2 .fold small {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--raised);
+  letter-spacing: 0;
+}
+nav h2 .fold .dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 0;
+}
+
 @media (max-width: 720px) {
   .shell {
     grid-template-columns: 1fr;
