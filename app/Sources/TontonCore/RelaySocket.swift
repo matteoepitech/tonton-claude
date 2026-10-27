@@ -59,7 +59,7 @@ public final class RelaySocket {
         components.scheme = components.scheme == "http" ? "ws" : "wss"
         components.path += "/ws/app"
         guard let url = components.url else {
-            state = .failed("Invalid relay URL")
+            state = .failed(String(core: "Invalid relay URL"))
             return
         }
         var request = URLRequest(url: url)
@@ -111,7 +111,7 @@ public final class RelaySocket {
                     self.receive(task, generation: current)
                 case .failure(let error):
                     let unauthorized = (task.response as? HTTPURLResponse)?.statusCode == 401
-                    self.state = .failed(unauthorized ? "Account rejected by the relay" : error.localizedDescription)
+                    self.state = .failed(unauthorized ? String(core: "Account rejected by the relay") : error.localizedDescription)
                     self.scheduleReconnect(generation: current)
                 }
             }

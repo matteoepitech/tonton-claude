@@ -122,3 +122,19 @@ public enum ChatItem: Identifiable, Equatable, Sendable {
         return steps
     }
 }
+
+/// The fixed texts of a conversation: system lines, the summary of a task list update, a tool that failed without saying
+/// why. The agents write them in English, and so does this Mac's reading of its own transcripts (Transcript,
+/// OpenCodeLocal); the chat shows them in the app's language. Any other text shows as it was written.
+public enum AgentText {
+    public static func localized(_ text: String) -> String {
+        switch text {
+        case "Conversation compacted": String(core: "Conversation compacted")
+        case "Background task finished": String(core: "Background task finished")
+        case "Interrupted by user": String(core: "Interrupted by user")
+        case "Updated the task list": String(core: "Updated the task list")
+        case "The tool failed": String(core: "The tool failed")
+        default: text
+        }
+    }
+}

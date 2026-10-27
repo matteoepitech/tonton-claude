@@ -28,9 +28,16 @@ public struct MachineHealth: Codable, Equatable, Sendable {
 
     /// e.g. "CPU 23% · memory 11.2 / 16 GB · battery 87% ⚡".
     public var summary: String {
-        let gigabytes = { (bytes: Double) in String(format: bytes >= 10 * 1_073_741_824 ? "%.0f" : "%.1f", bytes / 1_073_741_824) }
-        var parts = ["CPU \(Int((cpu * 100).rounded()))%", "memory \(gigabytes(memoryUsed)) / \(gigabytes(memoryTotal)) GB"]
-        if let battery { parts.append("battery \(battery.percent)%\(battery.charging ? " ⚡" : "")") }
+        // The decimal mark of the language, like Money: the English stays as it was.
+        let language = Locale(identifier: Strings.locale.language.languageCode?.identifier ?? "en")
+        let gigabytes = { (bytes: Double) in
+            String(format: bytes >= 10 * 1_073_741_824 ? "%.0f" : "%.1f", locale: language, bytes / 1_073_741_824)
+        }
+        let cpu = Int((self.cpu * 100).rounded())
+        var parts = [String(core: "CPU \(cpu)%"), String(core: "memory \(gigabytes(memoryUsed)) / \(gigabytes(memoryTotal)) GB")]
+        if let battery {
+            parts.append(battery.charging ? String(core: "battery \(battery.percent)% ⚡") : String(core: "battery \(battery.percent)%"))
+        }
         return parts.joined(separator: " · ")
     }
 }

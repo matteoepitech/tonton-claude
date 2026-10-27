@@ -27,7 +27,7 @@ public enum ProjectSound {
 public enum SoundPack: String, CaseIterable, Sendable {
     case macOS, eightBit
 
-    public var label: String { self == .macOS ? "macOS" : "8-bit" }
+    public var label: String { self == .macOS ? "macOS" : String(core: "8-bit") }
 
     /// The sound of each event in this pack.
     public func sound(for event: SoundEvent) -> String {
@@ -48,16 +48,27 @@ public enum SoundPack: String, CaseIterable, Sendable {
 public enum ChipSound: String, CaseIterable, Sendable {
     case coin, powerUp, alert, blip, error
 
-    /// How sounds are named in the settings. macOS sounds keep their system name.
-    public var id: String { "8-bit \(label)" }
+    /// How sounds are named in the settings, whatever the language. macOS sounds keep their system name.
+    public var id: String { "8-bit \(name)" }
 
-    public var label: String {
+    private var name: String {
         switch self {
         case .coin: "Coin"
         case .powerUp: "Power-up"
         case .alert: "Alert"
         case .blip: "Blip"
         case .error: "Error"
+        }
+    }
+
+    /// What the menus show.
+    public var label: String {
+        switch self {
+        case .coin: String(core: "8-bit Coin")
+        case .powerUp: String(core: "8-bit Power-up")
+        case .alert: String(core: "8-bit Alert")
+        case .blip: String(core: "8-bit Blip")
+        case .error: String(core: "8-bit Error")
         }
     }
 

@@ -7,35 +7,35 @@ public enum Achievement: String, CaseIterable, Codable, Sendable {
 
     public var title: String {
         switch self {
-        case .firstSession: "Hello, Tonton"
-        case .approved10: "Rubber stamp"
-        case .approved100: "Trusted operator"
-        case .threeMachines: "Fleet commander"
-        case .fiveAtOnce: "Juggler"
-        case .marathon: "Marathon"
-        case .deepWork: "Deep work"
-        case .nightOwl: "Night owl"
-        case .remoteControl: "Remote control"
-        case .weekStreak: "On a roll"
-        case .toolCalls1000: "Toolsmith"
-        case .everyPlatform: "Cross-platform"
+        case .firstSession: String(core: "Hello, Tonton")
+        case .approved10: String(core: "Rubber stamp")
+        case .approved100: String(core: "Trusted operator")
+        case .threeMachines: String(core: "Fleet commander")
+        case .fiveAtOnce: String(core: "Juggler")
+        case .marathon: String(core: "Marathon")
+        case .deepWork: String(core: "Deep work")
+        case .nightOwl: String(core: "Night owl")
+        case .remoteControl: String(core: "Remote control")
+        case .weekStreak: String(core: "On a roll")
+        case .toolCalls1000: String(core: "Toolsmith")
+        case .everyPlatform: String(core: "Cross-platform")
         }
     }
 
     public var detail: String {
         switch self {
-        case .firstSession: "A first session showed up in the notch."
-        case .approved10: "10 permissions approved."
-        case .approved100: "100 permissions approved."
-        case .threeMachines: "Sessions on 3 machines at once."
-        case .fiveAtOnce: "5 sessions working at the same time."
-        case .marathon: "A session open for 6 hours."
-        case .deepWork: "Claude worked 30 minutes on a single turn."
-        case .nightOwl: "Claude at work between 2 and 5 in the morning."
-        case .remoteControl: "50 messages sent from the notch."
-        case .weekStreak: "Claude worked 7 days in a row."
-        case .toolCalls1000: "1,000 tool calls in the conversations."
-        case .everyPlatform: "Sessions on macOS, Windows and Linux."
+        case .firstSession: String(core: "A first session showed up in the notch.")
+        case .approved10: String(core: "10 permissions approved.")
+        case .approved100: String(core: "100 permissions approved.")
+        case .threeMachines: String(core: "Sessions on 3 machines at once.")
+        case .fiveAtOnce: String(core: "5 sessions working at the same time.")
+        case .marathon: String(core: "A session open for 6 hours.")
+        case .deepWork: String(core: "Claude worked 30 minutes on a single turn.")
+        case .nightOwl: String(core: "Claude at work between 2 and 5 in the morning.")
+        case .remoteControl: String(core: "50 messages sent from the notch.")
+        case .weekStreak: String(core: "Claude worked 7 days in a row.")
+        case .toolCalls1000: String(core: "1,000 tool calls in the conversations.")
+        case .everyPlatform: String(core: "Sessions on macOS, Windows and Linux.")
         }
     }
 

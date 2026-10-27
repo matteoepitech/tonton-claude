@@ -5,14 +5,14 @@ public enum SessionStatus: String, Codable, Sendable {
 
     public var label: String {
         switch self {
-        case .starting: "Starting"
-        case .working: "Working"
-        case .waiting: "Waiting for you"
-        case .permission: "Needs approval"
-        case .idle: "Done"
-        case .error: "Error"
-        case .ended: "Closed"
-        case .offline: "Offline"
+        case .starting: String(core: "Starting")
+        case .working: String(core: "Working")
+        case .waiting: String(core: "Waiting for you")
+        case .permission: String(core: "Needs approval")
+        case .idle: String(core: "Done")
+        case .error: String(core: "Error")
+        case .ended: String(core: "Closed")
+        case .offline: String(core: "Offline")
         }
     }
 
@@ -152,10 +152,12 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     /// A status text from Claude Code shortened, or the status when there is none.
     public static func statusText(_ statusText: String?, status: SessionStatus) -> String {
         guard let text = statusText, !text.isEmpty else { return status.label }
-        if let range = text.range(of: "needs your permission to use ") { return "Wants to use \(text[range.upperBound...])" }
-        if text.contains("waiting for your input") { return "Waiting for you" }
+        if let range = text.range(of: "needs your permission to use ") {
+            return String(core: "Wants to use \(String(text[range.upperBound...]))")
+        }
+        if text.contains("waiting for your input") { return String(core: "Waiting for you") }
         // StopFailure's error type when the plan's limit refuses a request.
-        if text == "rate_limit" { return "Usage limit reached" }
+        if text == "rate_limit" { return String(core: "Usage limit reached") }
         return text
     }
 }
@@ -261,10 +263,10 @@ public struct UsageLimit: Equatable, Sendable {
     /// `1 h 42`, `42 min` or `2 d 5 h` from one time to another, at least a minute.
     public static func duration(from now: Date, to end: Date) -> String {
         let minutes = max(1, Int((end.timeIntervalSince(now) / 60).rounded(.up)))
-        if minutes < 60 { return "\(minutes) min" }
-        if minutes < 24 * 60 { return "\(minutes / 60) h \(String(format: "%02d", minutes % 60))" }
+        if minutes < 60 { return String(core: "\(minutes) min") }
+        if minutes < 24 * 60 { return String(core: "\(minutes / 60) h \(String(format: "%02d", minutes % 60))") }
         let hours = minutes / 60
-        return hours % 24 == 0 ? "\(hours / 24) d" : "\(hours / 24) d \(hours % 24) h"
+        return hours % 24 == 0 ? String(core: "\(hours / 24) d") : String(core: "\(hours / 24) d \(hours % 24) h")
     }
 }
 

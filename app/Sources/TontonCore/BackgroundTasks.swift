@@ -36,7 +36,7 @@ public struct BackgroundTasks: Equatable, Sendable {
     /// What the session waits for, while tasks run: "Waiting for 2 background tasks".
     public func waiting(at now: Date = Date()) -> String? {
         let count = count(at: now)
-        return count == 0 ? nil : "Waiting for \(count) background task\(count == 1 ? "" : "s")"
+        return count == 0 ? nil : String(core: "Waiting for \(count) background tasks")
     }
 
     private static let over: Set = ["completed", "failed", "killed", "stopped", "cancelled", "canceled", "error", "timeout"]

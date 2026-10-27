@@ -38,7 +38,7 @@ public struct SessionLaunch: Identifiable, Equatable, Sendable {
     public func reported(_ state: String, reason: String?, detail: StartDetail?, machine: String) -> SessionLaunch {
         // The relay's own word: it could not reach the machine.
         if reason == "offline" && state == State.failed.rawValue {
-            return failed("\(machine) is offline. Check that it is on and that the Tonton Claude agent runs there.")
+            return failed(String(core: "\(machine) is offline. Check that it is on and that the Tonton Claude agent runs there."))
         }
         guard let detail, detail.launchId == id, detail.machineId == machineId, detail.state == state,
             let next = State(rawValue: state), next != .sending
