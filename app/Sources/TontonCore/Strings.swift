@@ -10,6 +10,10 @@ public enum Strings {
     /// Picks the plural forms and writes the numbers. The app's language and the current locale's always agree: macOS
     /// gives the process the language of the app's localization it runs in.
     nonisolated(unsafe) public static var locale = Locale.autoupdatingCurrent
+
+    /// Writes the decimals of costs, sizes and token counts: `4.2` in English, `4,2` in French. By the language, not
+    /// the region, so the English text stays what it always was.
+    public static var numbers: Locale { Locale(identifier: locale.language.languageCode?.identifier ?? "en") }
 }
 
 extension String {

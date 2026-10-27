@@ -28,10 +28,8 @@ public struct MachineHealth: Codable, Equatable, Sendable {
 
     /// e.g. "CPU 23% · memory 11.2 / 16 GB · battery 87% ⚡".
     public var summary: String {
-        // The decimal mark of the language, like Money: the English stays as it was.
-        let language = Locale(identifier: Strings.locale.language.languageCode?.identifier ?? "en")
         let gigabytes = { (bytes: Double) in
-            String(format: bytes >= 10 * 1_073_741_824 ? "%.0f" : "%.1f", locale: language, bytes / 1_073_741_824)
+            String(format: bytes >= 10 * 1_073_741_824 ? "%.0f" : "%.1f", locale: Strings.numbers, bytes / 1_073_741_824)
         }
         let cpu = Int((self.cpu * 100).rounded())
         var parts = [String(core: "CPU \(cpu)%"), String(core: "memory \(gigabytes(memoryUsed)) / \(gigabytes(memoryTotal)) GB")]

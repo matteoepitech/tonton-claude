@@ -186,9 +186,12 @@ public struct TokenCounts: Codable, Equatable, Sendable {
             cacheWrite: a.cacheWrite + b.cacheWrite)
     }
 
-    /// `950`, `4.2k`, `48k`, `1.2M`.
+    /// `950`, `4.2k`, `48k`, `1.2M`, with the language's decimal mark.
     public static func short(_ count: Int) -> String {
-        func trimmed(_ value: Double) -> String { String(format: "%.1f", value).replacingOccurrences(of: ".0", with: "") }
+        func trimmed(_ value: Double) -> String {
+            let mark = Strings.numbers.decimalSeparator ?? "."
+            return String(format: "%.1f", locale: Strings.numbers, value).replacingOccurrences(of: "\(mark)0", with: "")
+        }
         if count < 1000 { return "\(count)" }
         if count < 10_000 { return "\(trimmed(Double(count) / 1000))k" }
         if count < 1_000_000 { return "\(count / 1000)k" }
