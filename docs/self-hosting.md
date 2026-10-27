@@ -42,6 +42,10 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 - **App updates.** The app reads the `appcast.xml` of the latest GitHub release with Sparkle. The feed and the disk image
   are signed with an EdDSA key whose public half is built into the app, and both are checked before anything is opened:
   a changed release file or a network in the middle can't install anything.
+- **Widget.** The app writes what the widget shows, each session's project, machine and state, to a file in the app group
+  container it shares with the widget, readable by you only. Conversations, prompts, status texts and folders never go
+  there, and the file is emptied when the app quits. From macOS 15, other apps need your permission to open that
+  container.
 - **Abuse limits.** Per-IP rate limits on sign-ups, joins and failed authentications; caps on machines and sessions per account.
 
 **While your Mac is away.** The relay keeps each session's sealed history, so the notch catches up when the Mac wakes
@@ -264,6 +268,20 @@ Developer ID and notarize it, add these repository secrets:
 | `MACOS_CERTIFICATE_PASSWORD` | Password of the .p12 |
 | `CODESIGN_IDENTITY` | e.g. `Developer ID Application: Your Name (TEAMID)` |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Apple account, team and app-specific password used by `notarytool` |
+
+The desktop and Notification Center widget also needs the Developer ID. It reads the sessions from an app group
+container the app writes to, and from macOS 15 a group is shared without asking the user only when its name starts with
+the Team ID of the signature. So `build-app.sh` names it `<TeamID>.tech.d3l.tontonclaude` and embeds the widget only
+then: no provisioning profile is needed for a group named that way.
+
+| | Ad-hoc signature (no secrets) | Developer ID |
+|---|---|---|
+| The app, Sparkle updates | Yes. macOS asks to confirm the first launch. | Yes, notarized. |
+| Widget | Left out. Without a Team ID, macOS 15 would ask at every launch of the app, and the widget can't ask, so it would read nothing. | Embedded, sandboxed, with the app group. |
+
+`APP_GROUP=<any name> app/scripts/build-app.sh` embeds the widget in an ad-hoc build anyway, to check the bundle or try
+it on macOS 14, which doesn't guard group containers. On macOS 15 and later the app then asks for access at every launch
+and the widget stays empty.
 
 For the app to update itself, make a pair of update keys once with Sparkle's `generate_keys`, which `swift build` puts
 in `app/.build/artifacts/sparkle/Sparkle/bin/`. It keeps the private key in your login keychain. Then add:

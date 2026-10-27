@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var store = SessionStore(settings: settings)
     private var notch: NotchWindowController?
     private var webhooks: WebhookNotifier?
+    private var widgets: WidgetPublisher?
     private var achievements: AchievementTracker?
     private lazy var settingsWindow = SettingsWindowController(store: store, settings: settings)
     private let whatsNew = WhatsNewWindowController()
@@ -35,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notch = NotchWindowController(store: store, settings: settings)
         MessageQueues.shared.attach(store)
         webhooks = WebhookNotifier(store: store, settings: settings)
+        widgets = WidgetPublisher(store: store, settings: settings)
         if let notch { achievements = AchievementTracker(store: store, notch: notch.state, settings: settings) }
         UNUserNotificationCenter.current().delegate = self
 
@@ -51,6 +53,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showWhatsNewAfterUpdate(ranBefore: welcomed || settings.isConfigured)
         pendingLinks.forEach(open)
         pendingLinks = []
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        widgets?.stop()
     }
 
     /// Reopening the app (Spotlight, Finder, Dock) shows the settings: the way back when the menu bar icon is hidden.
@@ -102,6 +108,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .close: notch.collapse(force: true)
         case .toggle: notch.toggle()
         case .settings(let pane): showSettings(pane: pane)
+        case .session(let id):
+            store.selectedId = id
+            notch.expand()
         }
     }
 
