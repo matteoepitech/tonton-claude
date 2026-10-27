@@ -39,6 +39,7 @@ bun run relay                 # a relay on :7777 with its data in ./data
 cd app
 swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos ../ios
 swift build && swift test
+./scripts/sync-strings.sh     # adds new UI strings to Resources/Localizable.xcstrings (CI runs it with --check)
 ./scripts/build-app.sh        # build/TontonClaude.app (--install copies it to /Applications and launches it)
 
 cd ios                        # the iPhone app, for the Simulator, unsigned
@@ -122,6 +123,11 @@ repository's secrets.
   goes in `TontonCore`; views stay thin.
 - Writing (docs, UI strings, PRs): plain, short English sentences. User-facing names follow the app: Settings › Machines,
   **Update agent**, the notch.
+- The Mac app is in English and French. UI text goes to `Text`, `Button`, `.help`, `String(localized:)` in the app or
+  `String(core:)` in `TontonCore`, never as a `String` put together by hand, so it lands in
+  `app/Resources/Localizable.xcstrings`. Run `app/scripts/sync-strings.sh`, then give each new string its French in the
+  catalog (Xcode's editor, or the JSON): `LocalizationTests` fails for a string without French, with other values than
+  the English, or without French punctuation, and CI fails when the catalog is behind the code.
 - No new dependency without a reason in the PR. The agent has two runtime dependencies and the web app bundles one, jsQR,
   its QR scanner. The app has one, Sparkle, for its own updates, and `TontonCore` has none. The island in `desktop/` has
   Electron, and electron-builder to package it, in its own `package.json`.
