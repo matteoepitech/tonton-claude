@@ -304,7 +304,7 @@ private struct SharesSection: View {
     }
 
     private func project(of share: ShareSummary) -> String {
-        store.sessions.first { $0.id == share.sessionId }.map { $0.title ?? $0.project } ?? "A session no longer listed"
+        store.sessions.first { $0.id == share.sessionId }.map { $0.name ?? $0.title ?? $0.project } ?? "A session no longer listed"
     }
 
     private func details(of share: ShareSummary) -> String {

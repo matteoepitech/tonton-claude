@@ -57,7 +57,7 @@ struct LiveActivityWings: View {
     var body: some View {
         HStack(spacing: 6) {
             if mascot { MascotView(status: session.status, size: 16) } else { StatusDot(status: session.status, size: 7) }
-            Text(session.project).font(.system(size: 11, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+            Text(session.displayName).font(.system(size: 11, weight: .semibold)).lineLimit(1).truncationMode(.tail)
         }
         .padding(.horizontal, 10)
         .frame(width: width, alignment: .leading)
@@ -81,7 +81,7 @@ struct PeekView: View {
             if let s = state.peekSession {
                 HStack(spacing: 8) {
                     StatusDot(status: s.status, limit: s.fiveHourLimit)
-                    Text("\(s.machine) · \(s.project)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text("\(s.machine) · \(s.displayName)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
                     Text(state.peekText ?? s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .frame(height: NotchState.peekHeight)

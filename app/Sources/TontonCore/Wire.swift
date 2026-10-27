@@ -20,6 +20,8 @@ public struct WireSession: Decodable, Sendable {
     public let pendingPermissions: [WirePermission]
     public let startedAt: String
     public let lastActivity: String
+    /// Sealed `SessionName`. Missing from older relays, and until a Mac renames the session.
+    public var name: String? = nil
 }
 
 public struct WireEntry: Decodable, Sendable {
@@ -150,6 +152,7 @@ struct PromptPayload: Codable {
     var command: SessionCommand?
 }
 struct UpdateOrder: Codable { let version: String; let issuedAt: String }
+struct SessionName: Codable { let sessionId: String; let name: String; let issuedAt: String }
 struct LogRequest: Codable { let requestId: String; let machineId: String; let issuedAt: String }
 struct DiagnoseRequest: Codable {
     let requestId: String

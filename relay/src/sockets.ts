@@ -10,6 +10,7 @@ import {
   MAX_HEALTH_BYTES,
   MAX_LOG_REQUEST_BYTES,
   MAX_RULES_BYTES,
+  MAX_SESSION_NAME_BYTES,
   MAX_START_DETAIL_BYTES,
   MAX_START_ORDER_BYTES,
   MAX_VIEWERS_PER_SHARE,
@@ -186,6 +187,10 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     }
     case 'dismiss':
       if (isSessionId(message.sessionId)) ctx.sessions.remove(accountId, message.sessionId)
+      break
+    case 'rename':
+      if (isSessionId(message.sessionId) && isSealed(message.name, MAX_SESSION_NAME_BYTES))
+        ctx.sessions.rename(accountId, message.sessionId, message.name)
       break
     case 'start_session': {
       const { machineId, launchId, order } = message

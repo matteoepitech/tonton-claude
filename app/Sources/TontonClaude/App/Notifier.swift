@@ -11,7 +11,7 @@ enum Notifier {
 
     @MainActor
     static func post(_ session: SessionSummary, body: String) {
-        post(title: "\(session.machine) · \(session.project)", body: body, sessionId: session.id)
+        post(title: "\(session.machine) · \(session.displayName)", body: body, sessionId: session.id)
     }
 
     /// Without a session, clicking the notification just opens the notch.

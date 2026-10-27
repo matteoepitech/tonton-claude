@@ -96,6 +96,8 @@ const MIGRATIONS = [
      updated_at TEXT NOT NULL,
      PRIMARY KEY (account_id, id)
    );`,
+  // The name a Mac gave a session, sealed like the rest.
+  `ALTER TABLE sessions ADD COLUMN name TEXT;`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */

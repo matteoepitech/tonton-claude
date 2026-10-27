@@ -62,7 +62,7 @@ struct SessionRow: View {
                 .background(Circle().fill(session.status.tint.opacity(0.15)))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(session.project).font(.headline).lineLimit(1)
+                    Text(session.displayName).font(.headline).lineLimit(1)
                     Spacer(minLength: 8)
                     Text(session.lastActivity, format: .relative(presentation: .named))
                         .font(.caption)

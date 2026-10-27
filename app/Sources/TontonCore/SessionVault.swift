@@ -46,8 +46,28 @@ public struct SessionVault: Sendable {
             commands: meta?.commands.map { Set($0.compactMap(SessionCommandName.init(rawValue:))) },
             model: meta?.model,
             tool: info?.tool,
-            turns: meta?.turns.map { $0.compactMap { turn in ISO8601.parse(turn.end).map { Turn(end: $0, seconds: turn.seconds) } } }
+            turns: meta?.turns.map { $0.compactMap { turn in ISO8601.parse(turn.end).map { Turn(end: $0, seconds: turn.seconds) } } },
+            name: sessionName(wire)
         )
+    }
+
+    /// A name sealed for another session is one the relay moved: ignored, like an empty one.
+    private func sessionName(_ wire: WireSession) -> String? {
+        guard let sealed = open(wire.name, as: SessionName.self), sealed.sessionId == wire.id else { return nil }
+        let name = sealed.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
+    }
+
+    /// Characters of a session name: a few words, well under what the relay keeps.
+    public static let maxSessionName = 80
+
+    /// The user's own name for a session, for every Mac of the account. An empty one brings the project back.
+    public func sealSessionName(_ name: String, for sessionId: String, issuedAt: Date = Date()) throws -> String {
+        let cut = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.maxSessionName))
+        let payload = SessionName(
+            sessionId: sessionId, name: cut.trimmingCharacters(in: .whitespacesAndNewlines),
+            issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+        return try E2E.seal(payload, with: key)
     }
 
     private func usageLimit(_ wire: WireUsageLimit) -> UsageLimit? {

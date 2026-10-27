@@ -1,7 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { type ClientEvent, type ClientState, initialState, RelayClient, reduce, type SocketLike } from '../client'
 import { newAccountKey, open, seal } from '../crypto'
-import type { AgentLog, DiagnoseRequest, Diagnosis, Entry, LogRequest, PromptPayload, RelayToApp, SessionSummary } from '../protocol'
+import type {
+  AgentLog,
+  DiagnoseRequest,
+  Diagnosis,
+  Entry,
+  LogRequest,
+  PromptPayload,
+  RelayToApp,
+  SessionName,
+  SessionSummary,
+} from '../protocol'
 import { Vault } from '../vault'
 
 const key = newAccountKey()
@@ -200,6 +210,29 @@ describe('relay client', () => {
     await eventually(() => events.filter(event => event.t === 'diagnosis').length === 3, 'the answers')
     const answers = events.filter(event => event.t === 'diagnosis').map(event => (event.t === 'diagnosis' ? event.diagnosis : null))
     expect(answers).toEqual([null, diagnosis as Diagnosis, null])
+  })
+
+  test('names a session for every client, and ignores a name sealed for another session', async () => {
+    const { relay, sockets } = client()
+    relay.start()
+    const socket = sockets[0]
+    socket.receive({ t: 'snapshot', sessions: [await wireSession('api')], machines: [] })
+    await eventually(() => relay.state.connection === 'connected', 'the snapshot')
+    expect(relay.state.sessions[0].name).toBeNull()
+
+    expect(await relay.rename('api', '  Billing rewrite ')).toBe(true)
+    const sent = socket.sent[0] as { t: string; sessionId: string; name: string }
+    expect(sent).toMatchObject({ t: 'rename', sessionId: 'api' })
+    expect(await open<SessionName>(key, sent.name)).toMatchObject({ sessionId: 'api', name: 'Billing rewrite' })
+    await relay.rename('api', 'é'.repeat(500))
+    expect((await open<SessionName>(key, (socket.sent[1] as { name: string }).name)).name).toHaveLength(80)
+
+    socket.receive({ t: 'session', session: await wireSession('api', { name: sent.name }) })
+    await eventually(() => relay.state.sessions[0]?.name === 'Billing rewrite', 'the name')
+    const moved = await seal(key, { sessionId: 'web', name: 'Not this one', issuedAt: new Date().toISOString() })
+    socket.receive({ t: 'session', session: await wireSession('api', { name: moved, status: 'idle' }) })
+    await eventually(() => relay.state.sessions[0]?.status === 'idle', 'the update')
+    expect(relay.state.sessions[0].name).toBeNull()
   })
 
   test('reconnects with backoff, subscribes again, and stops for good when signed out', async () => {

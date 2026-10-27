@@ -18,7 +18,7 @@ public enum Webhook {
     }
 
     public static func message(_ event: Event, _ session: SessionSummary, privacy: Privacy) -> String {
-        let who = privacy.includeNames ? "Claude (\(session.project) on \(session.machine))" : "A Claude session"
+        let who = privacy.includeNames ? "Claude (\(session.displayName) on \(session.machine))" : "A Claude session"
         var text =
             switch event {
             case .finished: "\(who) finished."

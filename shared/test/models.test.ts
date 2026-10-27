@@ -25,6 +25,7 @@ const session = (fields: Partial<Session>): Session => ({
   platform: null,
   cwd: '/x',
   project: 'x',
+  name: null,
   title: null,
   status: 'idle',
   statusText: null,

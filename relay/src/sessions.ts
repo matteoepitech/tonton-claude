@@ -140,6 +140,14 @@ export class SessionStore {
     return fresh
   }
 
+  /** The name a Mac gave the session. Not activity: the session keeps its place in the list. */
+  rename(accountId: string, sessionId: string, name: Sealed) {
+    const session = this.get(accountId, sessionId)
+    if (!session) return
+    session.name = name
+    this.saved(accountId, session)
+  }
+
   setMeta(accountId: string, sessionId: string, meta: Sealed) {
     const session = this.get(accountId, sessionId)
     if (!session) return
@@ -223,6 +231,7 @@ export class SessionStore {
       pendingPermissions: [],
       startedAt: now,
       lastActivity: now,
+      name: null,
       history: [],
       historyIds: new Set(),
       historyBytes: 0,
@@ -233,6 +242,10 @@ export class SessionStore {
 
   private changed(accountId: string, session: Session) {
     session.lastActivity = new Date().toISOString()
+    this.saved(accountId, session)
+  }
+
+  private saved(accountId: string, session: Session) {
     this.archive?.saveSession(accountId, session)
     this.listener.updated(accountId, toSummary(session))
   }

@@ -235,6 +235,11 @@ export class RelayClient {
     return this.send({ t: 'diagnose', machineId, requestId, request }) ? requestId : null
   }
 
+  /** Names the session on every client of the account, instead of its project. An empty name brings the project back. */
+  async rename(sessionId: string, name: string): Promise<boolean> {
+    return this.send({ t: 'rename', sessionId, name: await this.options.vault.sealSessionName(sessionId, name) })
+  }
+
   /** Removes a finished session from the account's list. */
   dismiss(sessionId: string): boolean {
     return this.send({ t: 'dismiss', sessionId })

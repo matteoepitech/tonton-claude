@@ -33,7 +33,8 @@ export function isSessionSummary(value: unknown): value is SessionSummary {
     Array.isArray(value.pendingPermissions) &&
     value.pendingPermissions.every(isPermission) &&
     isText(value.startedAt) &&
-    isText(value.lastActivity)
+    isText(value.lastActivity) &&
+    isOptionalText(value.name)
   )
 }
 

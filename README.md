@@ -104,6 +104,8 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Starting a session.** <kbd>+</kbd> in the open notch, or <kbd>⌘</kbd> <kbd>N</kbd>, starts claude in a folder of any
   machine, in a tmux session you can attach to later. The machine needs tmux, so not Windows. The questions Claude Code
   asks on the way, like trusting the folder, show up in the notch: nothing is confirmed for you.
+- **Naming a session.** Right-click a session › **Rename…** and type a name: it shows instead of the project on every
+  Mac of the account, encrypted like the rest. **Show the project name** brings the project back.
 - **Slash commands.** Claude Code doesn't let a channel run `/compact`, `/clear` or `/model`, so the notch types them in
   the session's terminal instead. That works for sessions running in tmux, like the ones started from the notch: a
   terminal icon in the session's header, once Claude is done. `/clear` asks first, and **Model** switches to Opus, Sonnet

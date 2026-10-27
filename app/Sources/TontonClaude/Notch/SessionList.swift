@@ -9,6 +9,9 @@ struct SessionListView: View {
     /// The project getting a new tag, typed in a row above the list: the notch can't show an alert.
     @State private var tagging: String?
     @State private var newTag = ""
+    /// The session whose row is being renamed, and the name typed so far.
+    @State private var renaming: String?
+    @State private var draft = ""
 
     var body: some View {
         let sessions = store.visibleSessions.filter { $0.matches(query) }
@@ -48,7 +51,8 @@ struct SessionListView: View {
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
                                 shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil,
                                 tool: mixed ? s.codingTool : nil,
-                                forecast: store.forecast
+                                forecast: store.forecast,
+                                rename: nameField(s)
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { store.selectedId = s.id }
@@ -64,6 +68,14 @@ struct SessionListView: View {
                                     ForEach(SoundPlayer.names, id: \.self) { name in Toggle(name, isOn: projectSound(s.project, name)) }
                                 }
                                 if store.isOnThisMac(s) { LocalFolderActions(session: s, style: .menu) }
+                                if store.canRename(s) {
+                                    Divider()
+                                    Button("Rename…") {
+                                        draft = s.displayName
+                                        renaming = s.id
+                                    }
+                                    if s.name != nil { Button("Show the project name") { store.rename(s, to: "") } }
+                                }
                                 Divider()
                                 Button("Remove from list") { store.dismiss(s.id) }
                             }
@@ -103,10 +115,22 @@ struct SessionListView: View {
         .accessibilityLabel(hidden ? "Show finished sessions" : "Hide finished sessions")
     }
 
+    /// The field of the row being renamed.
+    private func nameField(_ session: SessionSummary) -> SessionNameField.Editing? {
+        guard renaming == session.id else { return nil }
+        return SessionNameField.Editing(
+            text: $draft,
+            commit: {
+                store.rename(session, to: draft)
+                renaming = nil
+            },
+            cancel: { renaming = nil })
+    }
+
     /// Messages that match the search, in every conversation the app has open: a click shows the message in its session.
     @ViewBuilder private var messageResults: some View {
         let matches = ConversationSearch.search(query, sessions: store.orderedSessions, entries: store.entries)
-        let projects = Dictionary(store.sessions.map { ($0.id, $0.project) }) { first, _ in first }
+        let projects = Dictionary(store.sessions.map { ($0.id, $0.displayName) }) { first, _ in first }
         Text("MESSAGES").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
             .padding(.horizontal, 8).padding(.top, 10)
         if matches.isEmpty {
@@ -280,6 +304,8 @@ struct SessionRow: View {
     /// Shown when the list has sessions of both tools.
     var tool: CodingTool?
     var forecast = LimitForecast()
+    /// Set while the user types a new name in place of the session's.
+    var rename: SessionNameField.Editing?
 
     /// When the session's 5-hour window runs out at the current pace, if before it resets.
     private func runsOut(at now: Date) -> Date? {
@@ -293,7 +319,12 @@ struct SessionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     if let tool { ToolMark(tool: tool, size: 9) }
-                    Text(session.project).font(.notch(12, weight: .semibold)).lineLimit(1).layoutPriority(1)
+                    if let rename {
+                        SessionNameField(editing: rename, placeholder: session.project)
+                    } else {
+                        Text(session.displayName).font(.notch(12, weight: .semibold)).lineLimit(1).layoutPriority(1)
+                            .help(session.name == nil ? "" : "Renamed. Its project is \(session.project).")
+                    }
                     if let machine {
                         if let machineStyle { MachineBadge(style: machineStyle, size: 9) }
                         Text(machine).font(.notch(10)).foregroundStyle(Theme.tertiary).lineLimit(1)
@@ -373,5 +404,41 @@ struct ToolMark: View {
             .foregroundStyle(Theme.secondary)
             .help(tool.label)
             .accessibilityLabel(tool.label)
+    }
+}
+
+/// The name of a session typed in place, like a file renamed in the Finder: Return keeps it, Escape leaves it as it was,
+/// and clicking elsewhere keeps it too. An empty name brings the project back.
+struct SessionNameField: View {
+    struct Editing {
+        let text: Binding<String>
+        let commit: () -> Void
+        let cancel: () -> Void
+    }
+
+    let editing: Editing
+    let placeholder: String
+    @FocusState private var focused: Bool
+    /// Return, then the focus leaving the field: one rename only.
+    @State private var done = false
+
+    var body: some View {
+        TextField("", text: editing.text, prompt: Text(placeholder).foregroundStyle(Theme.textFaint))
+            .textFieldStyle(.plain)
+            .font(.notch(12, weight: .semibold))
+            .padding(.horizontal, 4)
+            .background(RoundedRectangle(cornerRadius: 4).fill(Theme.ink.opacity(0.1)))
+            .focused($focused)
+            .onAppear { focused = true }
+            .onSubmit { finish(keep: true) }
+            .onExitCommand { finish(keep: false) }
+            .onChange(of: focused) { _, now in if !now { finish(keep: true) } }
+            .layoutPriority(1)
+    }
+
+    private func finish(keep: Bool) {
+        guard !done else { return }
+        done = true
+        if keep { editing.commit() } else { editing.cancel() }
     }
 }

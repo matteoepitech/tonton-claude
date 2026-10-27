@@ -12,6 +12,7 @@ import {
   decodePermissionDetail,
   decodeSessionInfo,
   decodeSessionMeta,
+  decodeSessionName,
   decodeStartDetail,
   decodeStatusDetail,
 } from './payloads'
@@ -28,6 +29,7 @@ import type {
   Sealed,
   SealedEntry,
   SessionCommand,
+  SessionName,
   SessionRules,
   SessionSummary,
   SetupFix,
@@ -52,15 +54,19 @@ export interface OutgoingImage {
   data: string
 }
 
+/** Characters of a session name: a few words, well under what the relay keeps. */
+export const MAX_SESSION_NAME = 80
+
 export class Vault {
   constructor(private readonly key: AccountKey) {}
 
   async session(wire: SessionSummary, machines: readonly Machine[]): Promise<Session> {
-    const [info, meta, status, permissions] = await Promise.all([
+    const [info, meta, status, permissions, name] = await Promise.all([
       this.read(wire.info, decodeSessionInfo),
       this.read(wire.meta, decodeSessionMeta),
       this.read(wire.statusDetail, decodeStatusDetail),
       Promise.all((Array.isArray(wire.pendingPermissions) ? wire.pendingPermissions : []).map(p => this.permission(p))),
+      this.read(wire.name, decodeSessionName),
     ])
     return {
       id: wire.id,
@@ -69,6 +75,8 @@ export class Vault {
       platform: info?.platform ?? null,
       cwd: info?.cwd ?? '',
       project: info?.project ?? 'Encrypted session',
+      // A name sealed for another session is one the relay moved: ignored.
+      name: name?.sessionId === wire.id && name.name.trim() ? name.name.trim() : null,
       title: meta?.title ?? null,
       status: wire.status,
       statusText: status?.text ?? null,
@@ -148,6 +156,16 @@ export class Vault {
 
   startDetail(blob: Sealed | null | undefined): Promise<StartDetail | null> {
     return this.read(blob, decodeStartDetail)
+  }
+
+  /** The user's own name for a session, cut like the app cuts it; an empty one brings the project back. */
+  sealSessionName(sessionId: string, name: string, issuedAt = new Date()): Promise<Sealed> {
+    const payload: SessionName = {
+      sessionId,
+      name: [...name.trim()].slice(0, MAX_SESSION_NAME).join('').trim(),
+      issuedAt: issuedAt.toISOString(),
+    }
+    return seal(this.key, payload)
   }
 
   /** Asks a machine for the end of its agent log. It names the machine, and agents refuse old ones. */

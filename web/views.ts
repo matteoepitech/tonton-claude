@@ -37,7 +37,7 @@ export function renderList(list: HTMLElement, current: ClientState, onPick: (ses
         dot(session.status),
         element(
           'span',
-          element('strong', session.project),
+          element('strong', session.name ?? session.project),
           element('small', needsAttention(session.status) ? displayStatusText(session) : (session.title ?? STATUS_LABELS[session.status])),
         ),
       )
@@ -81,7 +81,7 @@ export function renderChat(chat: HTMLElement, current: ClientState, client: Rela
     'div',
     back,
     dot(session.status),
-    element('span', element('strong', session.project), element('small', details.filter(Boolean).join(' · '))),
+    element('span', element('strong', session.name ?? session.project), element('small', details.filter(Boolean).join(' · '))),
     element('em', needsAttention(session.status) ? displayStatusText(session) : STATUS_LABELS[session.status]),
     ...commandButtons(session, client),
   )
