@@ -35,7 +35,8 @@ minutes costs more than one session doing everything. The orchestrator:
 |---|---|---|
 | Pools | id, owner, created at, paused or not, key version | name, goal |
 | Members | account id, role, joined at | display name |
-| Member keys | account id | the pool key, wrapped with that member's account key |
+| Member keys | account id, key version | the pool key it joined with, and its P-256 private key, both sealed with that member's account key; its public key, sealed with each version of the pool key it saw |
+| Key wraps | account id, version, who made it | a later version of the pool key, wrapped for that member (see Keys) |
 | Invites | id, role, token hash, uses left, expiry | — |
 | Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, orchestrator); the order, sealed with the account key |
 | Tasks | id, revision, updated at, who changed it last | goal, criteria, area, state, assignee, dependencies, branch, summary |
@@ -59,11 +60,16 @@ The account's REST routes (`relay/src/pool-routes.ts`):
 | Route | Who | Does |
 |---|---|---|
 | `POST /api/pools` | any account | Creates a pool. The client picks its id, so that the owner's key grant names it. |
-| `GET /api/pools` | members | The pools of the account, with its role and its key grant |
+| `GET /api/pools` | members | The pools of the account, with its role, its key grant, its private key and the wraps made for it |
 | `DELETE /api/pools/<id>` | owner | Deletes the pool for everyone |
 | `POST /api/pools/<id>/leave` | members but the owner | Leaves, with the account's sessions |
 | `POST`, `GET /api/pools/<id>/invites`, `DELETE …/invites/<invite>` | owner, admins | Invites: 1 to 100 uses, 1 to 720 hours; only the owner invites admins |
-| `POST /api/pools/join` | any account | Joins with an invite token and its own key grant |
+| `POST /api/pools/join` | any account | Joins with an invite token, its own key grant and its key pair |
+| `GET /api/pools/<id>/members` | members | Members, roles and sealed public keys |
+| `POST /api/pools/<id>/members/<account>/role` | owner, admins | Owner: anyone but itself to admin, member or viewer. Admins: members and viewers only |
+| `POST /api/pools/<id>/owner` | owner | Hands the pool to another member; the previous owner stays as an admin |
+| `POST /api/pools/<id>/members/<account>/kick` | owner, admins | Kicks a member and rotates the key in one step. Only the owner kicks admins; nobody kicks the owner |
+| `POST /api/pools/<id>/rotate` | owner, admins | Rotates the key without kicking, after someone left for instance |
 
 On the app socket (`relay/src/pool-sockets.ts`, types in `shared/pool-protocol.ts`): `pool_subscribe` answers with a
 `pool_snapshot` (the latest 200 messages and 500 events), then every change. Members post `pool_task`, `pool_notes`,
@@ -71,6 +77,11 @@ On the app socket (`relay/src/pool-sockets.ts`, types in `shared/pool-protocol.t
 the relay keeps the sealed order and hands it to the session's agent (`pool_join`) now and whenever it connects. The
 agent opens it, checks that it names its session and pool, and answers `pool_ack`; then it gets the snapshot, follows
 the pool, and posts as its session. The members see each session online, and ready once it acknowledged.
+
+A member publishes its public key again with each new version of the pool key (`pool_member_key`, from its apps or its
+sessions' agents). After a rotation, each member left gets `pool_key` with its own wrap, and everyone gets `pool_info`
+with the new key version. The kicked member gets `pool_removed`: its apps stop following the pool and its sessions'
+agents get `pool_left`. Its app sockets stay open, since they carry its own sessions.
 
 ## Keys
 
@@ -80,10 +91,22 @@ the pool, and posts as its session. The members see each session online, and rea
   lets the new member read the pool.
 - Each member keeps the pool key on the relay **wrapped with its own account key**, so its other Macs, its browser and
   the agents of its machines get it without another invite. Agents already hold the account key.
-- **Kicking a member rotates the key.** Each member publishes a P-256 public key for the pool (its private key wrapped
-  with its account key, like the pool key). The admin who kicks makes key version n+1 and wraps it for each remaining
-  member with ECDH (P-256, HKDF-SHA256, AES-GCM). The kicked member never gets it. Blobs say which version sealed them;
-  older ones stay readable with older keys. P-256 because WebCrypto and CryptoKit both have it.
+- **Kicking a member rotates the key.** Each member makes a P-256 key pair for the pool when it creates or joins it
+  (`shared/pool-keys.ts`, `PoolKeys.swift`): its private key is sealed with its account key, its public key with the
+  pool key and bound to its account, so the relay can neither swap it nor move it to another member.
+- The admin who kicks makes key version n+1 and wraps it for each member left: ECDH between **the admin's private key**
+  and the member's public key, HKDF-SHA256 (salt `tonton/pool`, info `tonton/pool-key/v1|<pool>|<version>|<from>|<to>`),
+  then AES-256-GCM. Since the admin's key takes part, only that admin could have made the wrap: a relay cannot slip in
+  a key of its own. The member checks the wrap names this pool, this version, that admin and itself.
+- The relay checks the version follows the current one and that the wraps go to members left, one each, the admin
+  among them. A member whose public key the admin could not read gets none and needs a new invite. Every open invite is
+  revoked, since they hold the previous key: the kicked member cannot come back with one.
+- Blobs sealed with version 2 or later start with `2:`; version 1 has none, so older blobs read as they did. A member
+  keeps every version it was given and opens each blob with the one that sealed it. Wraps open in order, each with the
+  admin's public key sealed with a version already held: that is why members publish their public key again under
+  each new version. Someone who joins later holds the key from its invite onward, not older ones.
+- P-256 because WebCrypto and CryptoKit both have it. The same layout on both sides, checked both ways with
+  `shared/test/swift-vectors.json` and `shared/test/pool-keys-ts.json`.
 - Sealing is the same AES-256-GCM as the rest (`shared/crypto.ts`, `E2E.swift`).
 
 ## Who said what
@@ -132,7 +155,8 @@ tokens and cost), notes, settings. It decrypts in the browser and keeps the same
 | Threat | Answer |
 |---|---|
 | The relay reads the project | It sees ids, roles, sizes and timing; content is sealed with a key it never gets. |
-| A malicious member | Reads what the pool reads, as long as it is in it. Kick rotates the key. It cannot speak as another member, nor drive a machine beyond pool tasks, which still ask its owner's permission prompts. |
+| A malicious member | Reads what the pool reads, as long as it is in it. Kick rotates the key and revokes the invites. It cannot speak as another member, nor drive a machine beyond pool tasks, which still ask its owner's permission prompts. |
+| A kicked member and the relay together | Could forge a public key blob with an old pool key. Out of scope for now: signing with each member's key is the answer. |
 | Prompt injection between Claudes | Pool messages are marked as such and never count as the user. Permission prompts and rules stay with each machine owner. |
 | A leaked invite | Single use or short-lived, revocable; after it, rotate the key. |
 | A runaway pool | Budgets, pause, stop all, and each owner can leave. |

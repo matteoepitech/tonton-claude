@@ -1,0 +1,27 @@
+{
+  "about": "Made by shared/test/pool-keys.test.ts (TONTON_WRITE_VECTORS=1), read by app/Tests/TontonCoreTests/VectorTests.swift.",
+  "key": "__Sa4hdj6VpUdS0zu89yjjbIvjUYzSIwZfhQMaU3vAM",
+  "poolId": "pool00000001",
+  "v1": "21R9piXGYTO7RsLB3rfsJLadTTcFnljUonYapjFDKhQ",
+  "admin": {
+    "account": "admin0000001",
+    "secret": "hVOPCuJNx5NY0gdr61RVIzeLqHLRIvofM+xdJnW2dJbVdB4nDIpgr0ci6hk3+JZbdt3HiyZTKqw17j31x/v8uRkk4JpNo3m+sIGIhtEqCYEZOn3lXzg9x9Ch2Tmk/bdWrpxWqcW+hQB28vpmeU4o1QM2ITQbq1IUbC3XBVfakMSYPmuZngg3vYpXrh54swLafedB7q4VADMTVIt4nIdc2WKd6gjHbpeVwqM5qilNUSnYuikTaygGemCUkocVSWFpfK6uHnr06Cu0rPM=",
+    "publicKeys": [
+      "90OcGWeQBNJ8zoRigZL5LAATrDTLjgLE+7nMewSD2mg3UTJ+Lh8lqeUwwam+6zrtN8HEsThvwDC6PujqwALG6IFDGtAW2R1H81qRM2soGYJYook1Mod+MalltnX18mIJ06PO6g0eSQBjSOMK6Sr+q5YAiA2cn2Lw0UkroAUpA7PcgHQluNJwRZOPcXz3VTvi0i4mELUnfWpxgXIf4cdro/fg8mBRmCTrNyU5VFg+"
+    ]
+  },
+  "member": {
+    "account": "member000001",
+    "secret": "9lTUL0m5r8ItOXG7wSwTH48MLBHkS8WxUSZeACjd7FoVaBABlJY7CglUrge4BBRfaTNT9XNv5DmLmiIzgN87hub53kgWJT5sTlDCQGpVOzUnT7OESBLzPC1b4v6zfUGaMhnih1UPAt/Eghr0DWqn1oqDIHYbpFt3L8PtrIk+Vyl87nfKrya+AlXYgZTHMN8/35uXDUp2HwUntfgx1aIJcUq4jcmQwskfybAIX9cveP0dD8YgLj/rPJ+8LG4IDB2SBCrt5S9DD7L+6uU=",
+    "publicKeys": [
+      "H9EPcOTdrazGrRrb9ekqGucpY3fhyMc4wEvXnR7Mv8WAUlKJM32cbQb7xbMvwv7VLzmlxyDPPvXSZIKLv8LzFomZ8j1FfD0+RqFJCZ5YPm6axfdOdiAOsYZJMJYm/9SpKuOWBuN44O/fqiGjH2Y/B4oNVWnARuMjZ9ovSxmMO1EMkyfIN1MTINXSLMuwpLkrmCuDAs82W3bQ8Mf9tercs7/FTrmqLQZTZBirUVjg"
+    ]
+  },
+  "wrap": {
+    "version": 2,
+    "from": "admin0000001",
+    "blob": "a7jJVKTDpYQtUyVyuL+wVNGEJdf59LBv38efWhbaXwEjq7jvWakrAod8EvrEc+B6YkOFmuE7V+jBLLTTrF/lQHFnwACV1gV3SzY0hrhG0QhZAaSyuzvruuOJbJf72peops0eHIo2IoNHEQgxG4KcQusmLGjnAu6yIU79XKOH4AoxRh3Ozgx9BU4DId4vSyRJMKPoItmP/sMjGCxKrhkb"
+  },
+  "sealedV2": "2:8K9RmpnKArQz20uGqNbZ97t5QaI+GvPLA/wdIoJGyPMkEKPxVJf9AoBDjbQn5L8jOrK4PmJMqJnsIlj4IOm4Yg==",
+  "plaintext": "Sealed after the kick ✅"
+}

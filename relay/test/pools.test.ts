@@ -27,8 +27,8 @@ interface Client {
   send(message: object): void
 }
 
-async function api(path: string, token: string, method = 'GET', body?: object) {
-  const headers = { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }
+async function api(path: string, token: string, method = 'GET', body?: object, extra: Record<string, string> = {}) {
+  const headers = { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}), ...extra }
   const response = await fetch(base + path, { method, headers, body: body ? JSON.stringify(body) : undefined })
   return { status: response.status, body: await response.json() }
 }
@@ -68,17 +68,33 @@ const poolId = () => `pool${String(++ids).padStart(8, '0')}`
 
 async function pool(owner: { token: string }) {
   const id = poolId()
-  const created = await api('/api/pools', owner.token, 'POST', { id, info: 'sealed-info', key: 'sealed-grant', profile: 'sealed-owner' })
+  const created = await api('/api/pools', owner.token, 'POST', {
+    id,
+    info: 'sealed-info',
+    key: 'sealed-grant',
+    profile: 'sealed-owner',
+    ...keys('owner'),
+  })
   expect(created.status).toBe(200)
   return id
 }
+
+/** The key pair a member publishes, sealed: opaque to the relay. */
+const keys = (who: string) => ({ publicKey: `public-${who}`, secret: `secret-${who}` })
 
 async function invite(token: string, id: string, body: object = { uses: 1, hours: 1 }) {
   return api(`/api/pools/${id}/invites`, token, 'POST', body)
 }
 
 async function joinPool(token: string, inviteToken: string) {
-  return api('/api/pools/join', token, 'POST', { invite: inviteToken, key: 'sealed-grant-2', profile: 'sealed-member' })
+  // Joins are rate limited per address, as attempts to guess an invite.
+  return api(
+    '/api/pools/join',
+    token,
+    'POST',
+    { invite: inviteToken, key: 'sealed-grant-2', profile: 'sealed-member', ...keys('member') },
+    fromNewAddress(),
+  )
 }
 
 describe('pools on the relay', () => {
@@ -96,11 +112,15 @@ describe('pools on the relay', () => {
         info: 'sealed-info',
         key: 'sealed-grant',
         members: 1,
+        secret: 'secret-owner',
+        wraps: [],
       },
     ])
     // An id in use, or a bad one, is refused.
-    expect((await api('/api/pools', owner.token, 'POST', { id, info: 'x', key: 'y' })).status).toBe(409)
-    expect((await api('/api/pools', owner.token, 'POST', { id: 'short', info: 'x', key: 'y' })).status).toBe(400)
+    expect((await api('/api/pools', owner.token, 'POST', { id, info: 'x', key: 'y', ...keys('x') })).status).toBe(409)
+    expect((await api('/api/pools', owner.token, 'POST', { id: 'short', info: 'x', key: 'y', ...keys('x') })).status).toBe(400)
+    // A member publishes its key pair with the pool.
+    expect((await api('/api/pools', owner.token, 'POST', { id: poolId(), info: 'x', key: 'y' })).status).toBe(400)
     // Another account does not see it.
     const stranger = await account()
     expect((await api('/api/pools', stranger.token)).body).toEqual([])
@@ -319,5 +339,118 @@ describe('pools on the relay', () => {
     expect((await api('/api/account', owner.token, 'DELETE')).status).toBe(200)
     await eventually(() => find(memberApp, 'pool_removed'), 'removed')
     expect((await api('/api/pools', member.token)).body).toEqual([])
+  })
+})
+
+describe('roles, kick and key rotation', () => {
+  /** An account that joined the pool, and its app following it. */
+  async function joined(owner: { token: string }, id: string, role = 'member') {
+    const who = await account()
+    expect((await joinPool(who.token, (await invite(owner.token, id, { uses: 1, hours: 1, role })).body.token)).status).toBe(200)
+    const app = await connect('/ws/app', who.token)
+    app.send({ t: 'pool_subscribe', poolId: id })
+    await eventually(() => find(app, 'pool_snapshot'), 'its snapshot')
+    return { ...who, app }
+  }
+
+  test('the owner changes roles and hands the pool over; admins only change members and viewers', async () => {
+    const owner = await account()
+    const id = await pool(owner)
+    const admin = await joined(owner, id, 'admin')
+    const member = await joined(owner, id)
+    const role = (who: { token: string }, target: string, value: string) =>
+      api(`/api/pools/${id}/members/${target}/role`, who.token, 'POST', { role: value })
+
+    expect((await role(admin, member.id, 'viewer')).status).toBe(200)
+    await eventually(() => find(member.app, 'pool_member', m => m.member.role === 'viewer'), 'the new role')
+    expect((await role(admin, member.id, 'admin')).status).toBe(403)
+    expect((await role(admin, owner.id, 'member')).status).toBe(403)
+    expect((await role(member, admin.id, 'viewer')).status).toBe(403)
+    expect((await role(owner, admin.id, 'member')).status).toBe(200)
+    expect((await role(owner, owner.id, 'member')).status).toBe(403)
+    expect((await role(owner, member.id, 'owner')).status).toBe(400)
+    expect((await role(owner, 'nobody000001', 'member')).status).toBe(404)
+
+    // Handing the pool over: the new owner can delete it, the previous one stays as an admin.
+    expect((await api(`/api/pools/${id}/owner`, admin.token, 'POST', { account: member.id })).status).toBe(403)
+    expect((await api(`/api/pools/${id}/owner`, owner.token, 'POST', { account: member.id })).status).toBe(200)
+    const members = (await api(`/api/pools/${id}/members`, member.token)).body as { account: string; role: string }[]
+    expect(Object.fromEntries(members.map(m => [m.account, m.role]))).toEqual({
+      [owner.id]: 'admin',
+      [admin.id]: 'member',
+      [member.id]: 'owner',
+    })
+    expect((await api(`/api/pools/${id}`, owner.token, 'DELETE')).status).toBe(403)
+  })
+
+  test('kicking rotates the key: each member left gets its own wrap, the kicked one nothing, invites are revoked', async () => {
+    const owner = await account()
+    const id = await pool(owner)
+    const ownerApp = await connect('/ws/app', owner.token)
+    ownerApp.send({ t: 'pool_subscribe', poolId: id })
+    await eventually(() => find(ownerApp, 'pool_snapshot'), 'the snapshot')
+    const bob = await joined(owner, id)
+    const kicked = await joined(owner, id)
+    const pending = (await invite(owner.token, id, { uses: 5, hours: 1 })).body
+    const kick = (who: { token: string }, target: string, body: object) =>
+      api(`/api/pools/${id}/members/${target}/kick`, who.token, 'POST', body)
+    const wraps = [
+      { account: owner.id, blob: 'wrap-owner' },
+      { account: bob.id, blob: 'wrap-bob' },
+    ]
+
+    // A member cannot kick, nobody kicks the owner, and the wraps must go to members left, the author among them.
+    expect((await kick(bob, kicked.id, { version: 2, wraps })).status).toBe(403)
+    expect((await kick(bob, owner.id, { version: 2, wraps })).status).toBe(403)
+    expect((await kick(owner, kicked.id, { version: 3, wraps })).status).toBe(409)
+    expect((await kick(owner, kicked.id, { version: 2, wraps: [...wraps, { account: kicked.id, blob: 'x' }] })).status).toBe(400)
+    expect((await kick(owner, kicked.id, { version: 2, wraps: [wraps[1]] })).status).toBe(400)
+    expect((await kick(owner, kicked.id, { version: 2, wraps: [wraps[0], wraps[0]] })).status).toBe(400)
+
+    expect((await kick(owner, kicked.id, { version: 2, wraps })).body).toEqual({ ok: true, keyVersion: 2 })
+    await eventually(() => find(kicked.app, 'pool_removed'), 'the kicked member out')
+    // Each member gets its own wrap, never another's.
+    const bobKey = await eventually(() => find(bob.app, 'pool_key'), 'bob gets its wrap')
+    expect(bobKey.wrap).toEqual({ version: 2, from: owner.id, blob: 'wrap-bob' })
+    expect(bob.app.messages.some(m => m.t === 'pool_key' && m.wrap.blob === 'wrap-owner')).toBe(false)
+    expect(find(kicked.app, 'pool_key')).toBeUndefined()
+    await eventually(() => find(bob.app, 'pool_info', m => m.keyVersion === 2), 'the new version for everyone')
+    await eventually(() => find(bob.app, 'pool_member_left', m => m.account === kicked.id), 'the others told')
+    // The list and the snapshot carry each member's own wraps only.
+    const listed = ((await api('/api/pools', bob.token)).body as { id: string; wraps: unknown[]; keyVersion: number }[]).find(
+      p => p.id === id,
+    )
+    expect(listed).toMatchObject({ keyVersion: 2, wraps: [{ version: 2, from: owner.id, blob: 'wrap-bob' }] })
+    const later = await connect('/ws/app', bob.token)
+    later.send({ t: 'pool_subscribe', poolId: id })
+    const snapshot = await eventually(() => find(later, 'pool_snapshot'), 'a fresh snapshot')
+    expect(snapshot.pool.own).toEqual({ secret: 'secret-member', wraps: [{ version: 2, from: owner.id, blob: 'wrap-bob' }] })
+    expect(JSON.stringify(snapshot.pool)).not.toContain('wrap-owner')
+
+    // The kicked member is out for good: its old invite link, and every other one, is revoked.
+    expect((await api('/api/pools', kicked.token)).body).toEqual([])
+    expect((await joinPool(kicked.token, pending.token)).status).toBe(401)
+    expect((await api(`/api/pools/${id}/invites`, owner.token)).body).toEqual([])
+  })
+
+  test('only the owner kicks admins; admins rotate; members publish their public key under each version', async () => {
+    const owner = await account()
+    const id = await pool(owner)
+    const admin = await joined(owner, id, 'admin')
+    const other = await joined(owner, id, 'admin')
+    const viewer = await joined(owner, id, 'viewer')
+    const everyone = [owner, admin, other, viewer].map(m => ({ account: m.id, blob: `wrap-${m.id}` }))
+    expect((await api(`/api/pools/${id}/members/${other.id}/kick`, admin.token, 'POST', { version: 2, wraps: everyone })).status).toBe(403)
+    expect((await api(`/api/pools/${id}/rotate`, viewer.token, 'POST', { version: 2, wraps: everyone })).status).toBe(403)
+    expect((await api(`/api/pools/${id}/rotate`, admin.token, 'POST', { version: 2, wraps: everyone })).status).toBe(200)
+    // Published again under version 2, kept next to version 1.
+    viewer.app.send({ t: 'pool_member_key', poolId: id, publicKey: '2:public-viewer', secret: 'secret-viewer-2' })
+    const updated = await eventually(
+      () => find(admin.app, 'pool_member', m => m.member.account === viewer.id && m.member.publicKeys.length === 2),
+      'the republished key',
+    )
+    expect(updated.member.publicKeys).toEqual(['public-member', '2:public-viewer'])
+    const own = ((await api('/api/pools', viewer.token)).body as { id: string; secret: string }[]).find(p => p.id === id)
+    expect(own?.secret).toBe('secret-viewer-2')
   })
 })

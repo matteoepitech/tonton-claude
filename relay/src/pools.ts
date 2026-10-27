@@ -4,6 +4,7 @@
 
 import type { Database } from 'bun:sqlite'
 import type {
+  PoolKeyWrapWire,
   PoolMemberWire,
   PoolNotesWire,
   PoolPostWire,
@@ -16,6 +17,7 @@ import type {
 import {
   MAX_POOL_EVENTS,
   MAX_POOL_INVITES,
+  MAX_POOL_KEY_VERSIONS,
   MAX_POOL_MEMBERS,
   MAX_POOL_MESSAGES,
   MAX_POOL_SESSIONS,
@@ -27,6 +29,12 @@ import {
 import { issueToken, parseToken, safeEqual } from './tokens'
 
 export type PostKind = 'message' | 'event'
+
+/** A member's keys for a pool, as it publishes them on creating or joining it. */
+export interface MemberKeys {
+  publicKey: string
+  secret: string
+}
 
 export interface PoolInviteRow {
   id: string
@@ -50,6 +58,17 @@ export interface Author {
   sessionId: string | null
 }
 
+/** Why a rotation was refused, for the route to say. */
+export type RotateResult =
+  | { ok: true; kicked: PoolSessionOrderRow[] | null; remaining: string[] }
+  | { ok: false; reason: 'version' | 'wraps' | 'target' | 'limit' }
+
+/** The member's own keys for the pool, sent to that member only. */
+export interface OwnKeys {
+  secret: string | null
+  wraps: PoolKeyWrapWire[]
+}
+
 export type Put<T> = { ok: true; value: T } | { ok: false; reason: 'conflict'; current: T | null } | { ok: false; reason: 'limit' }
 
 interface MemberRow {
@@ -57,6 +76,14 @@ interface MemberRow {
   role: string
   joined_at: string
   profile_blob: string | null
+}
+
+const MEMBER_COLUMNS = 'account_id, role, joined_at, profile_blob'
+
+/** The version of the pool key a blob says sealed it: the number before `:`, or 1 (shared/pool-keys.ts). */
+export const blobVersion = (blob: string): number => {
+  const match = /^(\d{1,6}):/.exec(blob)
+  return match ? Number(match[1]) : 1
 }
 
 interface PoolRow {
@@ -89,11 +116,12 @@ interface PostRow {
 const now = () => new Date().toISOString()
 const toRole = (role: string): PoolRole => (role === 'owner' || role === 'admin' || role === 'viewer' ? role : 'member')
 
-const toMember = (row: MemberRow): PoolMemberWire => ({
+const toMember = (row: MemberRow, publicKeys: string[]): PoolMemberWire => ({
   account: row.account_id,
   role: toRole(row.role),
   joinedAt: row.joined_at,
   profile: row.profile_blob,
+  publicKeys,
 })
 
 const toTask = (row: ItemRow): PoolTaskWire => ({
@@ -128,15 +156,18 @@ export class PoolStore {
   // MARK: Pools and members
 
   /** A new pool with its creator as owner. Null when the id is taken or the account is in too many pools. */
-  create(accountId: string, id: string, info: string, keyGrant: string, profile: string | null): PoolSummary | null {
+  create(accountId: string, id: string, info: string, keyGrant: string, profile: string | null, keys: MemberKeys): PoolSummary | null {
     return this.db.transaction(() => {
       if (this.poolCount(accountId) >= MAX_POOLS_PER_ACCOUNT) return null
       if (this.db.query('SELECT 1 FROM pools WHERE id = ?').get(id)) return null
       const createdAt = now()
       this.db.query('INSERT INTO pools (id, owner_account, created_at, info_blob) VALUES (?, ?, ?, ?)').run(id, accountId, createdAt, info)
       this.db
-        .query('INSERT INTO pool_members (pool_id, account_id, role, joined_at, profile_blob, key_blob) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(id, accountId, 'owner', createdAt, profile, keyGrant)
+        .query(
+          'INSERT INTO pool_members (pool_id, account_id, role, joined_at, profile_blob, key_blob, secret_blob) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(id, accountId, 'owner', createdAt, profile, keyGrant, keys.secret)
+      this.addMemberKey(id, accountId, keys.publicKey)
       return this.summary(id, accountId)
     })()
   }
@@ -157,6 +188,7 @@ export class PoolStore {
       )
       .get(poolId, accountId) as (PoolRow & { role: string; key_blob: string; members: number }) | null
     if (!row) return null
+    const own = this.own(poolId, accountId)
     return {
       id: row.id,
       role: toRole(row.role),
@@ -166,7 +198,123 @@ export class PoolStore {
       info: row.info_blob,
       key: row.key_blob,
       members: row.members,
+      secret: own.secret,
+      wraps: own.wraps,
     }
+  }
+
+  /** The member's private key for the pool and the pool keys wrapped for it, oldest first. */
+  own(poolId: string, accountId: string): OwnKeys {
+    const member = this.db.query('SELECT secret_blob FROM pool_members WHERE pool_id = ? AND account_id = ?').get(poolId, accountId) as {
+      secret_blob: string | null
+    } | null
+    const wraps = this.db
+      .query('SELECT version, from_account, blob FROM pool_key_wraps WHERE pool_id = ? AND account_id = ? ORDER BY version')
+      .all(poolId, accountId) as { version: number; from_account: string; blob: string }[]
+    return { secret: member?.secret_blob ?? null, wraps: wraps.map(w => ({ version: w.version, from: w.from_account, blob: w.blob })) }
+  }
+
+  /**
+   * Publishes the member's public key sealed with one version of the pool key, kept next to the versions before it: a
+   * member who only holds an older version still reads it. The private key, when given, replaces the one kept.
+   */
+  setMemberKeys(poolId: string, accountId: string, publicKey: string, secret: string | null) {
+    this.db.transaction(() => {
+      if (!this.role(poolId, accountId)) return
+      this.addMemberKey(poolId, accountId, publicKey)
+      if (secret !== null) {
+        this.db.query('UPDATE pool_members SET secret_blob = ? WHERE pool_id = ? AND account_id = ?').run(secret, poolId, accountId)
+      }
+    })()
+  }
+
+  private addMemberKey(poolId: string, accountId: string, blob: string) {
+    const version = blobVersion(blob)
+    if (version > MAX_POOL_KEY_VERSIONS) return
+    this.db
+      .query(
+        `INSERT INTO pool_member_keys (pool_id, account_id, version, blob) VALUES (?, ?, ?, ?)
+         ON CONFLICT (pool_id, account_id, version) DO UPDATE SET blob = excluded.blob`,
+      )
+      .run(poolId, accountId, version, blob)
+  }
+
+  /** A member's public key, sealed with each version it was published under, oldest first. */
+  private memberKeys(poolId: string, accountId: string): string[] {
+    const rows = this.db
+      .query('SELECT blob FROM pool_member_keys WHERE pool_id = ? AND account_id = ? ORDER BY version')
+      .all(poolId, accountId) as { blob: string }[]
+    return rows.map(row => row.blob)
+  }
+
+  private toMember(poolId: string, row: MemberRow): PoolMemberWire {
+    return toMember(row, this.memberKeys(poolId, row.account_id))
+  }
+
+  /** Changes a member's role. Never makes or unmakes the owner: that is `transferOwner`. */
+  setRole(poolId: string, accountId: string, role: Exclude<PoolRole, 'owner'>): boolean {
+    return (
+      this.db
+        .query("UPDATE pool_members SET role = ? WHERE pool_id = ? AND account_id = ? AND role != 'owner'")
+        .run(role, poolId, accountId).changes > 0
+    )
+  }
+
+  /** Hands the pool to another member, who becomes its owner; the previous owner stays as an admin. */
+  transferOwner(poolId: string, from: string, to: string): boolean {
+    return this.db.transaction(() => {
+      if (this.role(poolId, from) !== 'owner' || !this.role(poolId, to) || from === to) return false
+      this.db.query("UPDATE pool_members SET role = 'admin' WHERE pool_id = ? AND account_id = ?").run(poolId, from)
+      this.db.query("UPDATE pool_members SET role = 'owner' WHERE pool_id = ? AND account_id = ?").run(poolId, to)
+      this.db.query('UPDATE pools SET owner_account = ? WHERE id = ?').run(to, poolId)
+      return true
+    })()
+  }
+
+  /**
+   * Version `version` of the pool key, wrapped by `actor` for the members left, after taking `kick` out when given. The
+   * relay cannot check what a wrap holds: it checks the version follows the current one, and that the wraps go to
+   * members left, one each, the actor among them. A member left without one, whose public key the actor could not
+   * read, needs a new invite. Every open invite is revoked: they hold the previous key.
+   */
+  rotate(poolId: string, actor: string, version: number, wraps: { account: string; blob: string }[], kick: string | null): RotateResult {
+    return this.db.transaction((): RotateResult => {
+      const state = this.state(poolId)
+      if (!state || version !== state.keyVersion + 1) return { ok: false, reason: 'version' }
+      if (version > MAX_POOL_KEY_VERSIONS) return { ok: false, reason: 'limit' }
+      if (kick !== null && (!this.role(poolId, kick) || this.role(poolId, kick) === 'owner' || kick === actor)) {
+        return { ok: false, reason: 'target' }
+      }
+      const remaining = this.memberAccounts(poolId).filter(account => account !== kick)
+      const left = new Set(remaining)
+      const given = new Set(wraps.map(wrap => wrap.account))
+      const valid = given.size === wraps.length && [...given].every(account => left.has(account)) && given.has(actor)
+      if (!valid) return { ok: false, reason: 'wraps' }
+
+      const kicked = kick === null ? null : this.sessionOrders(poolId).filter(session => session.accountId === kick)
+      if (kick !== null) {
+        this.db.query('DELETE FROM pool_sessions WHERE pool_id = ? AND account_id = ?').run(poolId, kick)
+        this.db.query('DELETE FROM pool_members WHERE pool_id = ? AND account_id = ?').run(poolId, kick)
+      }
+      const insert = this.db.query('INSERT INTO pool_key_wraps (pool_id, account_id, version, from_account, blob) VALUES (?, ?, ?, ?, ?)')
+      for (const wrap of wraps) insert.run(poolId, wrap.account, version, actor, wrap.blob)
+      this.db.query('UPDATE pools SET key_version = ? WHERE id = ?').run(version, poolId)
+      this.db.query('DELETE FROM pool_invites WHERE pool_id = ?').run(poolId)
+      return { ok: true, kicked, remaining }
+    })()
+  }
+
+  /** One member's wrap of one version, to send it on. */
+  wrap(poolId: string, accountId: string, version: number): PoolKeyWrapWire | null {
+    const row = this.db
+      .query('SELECT version, from_account, blob FROM pool_key_wraps WHERE pool_id = ? AND account_id = ? AND version = ?')
+      .get(poolId, accountId, version) as { version: number; from_account: string; blob: string } | null
+    return row ? { version: row.version, from: row.from_account, blob: row.blob } : null
+  }
+
+  members(poolId: string): PoolMemberWire[] {
+    const rows = this.db.query(`SELECT ${MEMBER_COLUMNS} FROM pool_members WHERE pool_id = ? ORDER BY joined_at`).all(poolId) as MemberRow[]
+    return rows.map(row => this.toMember(poolId, row))
   }
 
   role(poolId: string, accountId: string): PoolRole | null {
@@ -184,9 +332,9 @@ export class PoolStore {
 
   member(poolId: string, accountId: string): PoolMemberWire | null {
     const row = this.db
-      .query('SELECT account_id, role, joined_at, profile_blob FROM pool_members WHERE pool_id = ? AND account_id = ?')
+      .query(`SELECT ${MEMBER_COLUMNS} FROM pool_members WHERE pool_id = ? AND account_id = ?`)
       .get(poolId, accountId) as MemberRow | null
-    return row ? toMember(row) : null
+    return row ? this.toMember(poolId, row) : null
   }
 
   setInfo(poolId: string, info: string) {
@@ -287,6 +435,7 @@ export class PoolStore {
     accountId: string,
     keyGrant: string,
     profile: string | null,
+    keys: MemberKeys,
   ): { ok: true; poolId: string; fresh: boolean } | { ok: false; reason: 'invalid' | 'full' } {
     return this.db.transaction((): ReturnType<PoolStore['join']> => {
       const parsed = parseToken(token, 'tp')
@@ -305,8 +454,11 @@ export class PoolStore {
       // An invite never makes an owner.
       const role = invite.role === 'admin' || invite.role === 'viewer' ? invite.role : 'member'
       this.db
-        .query('INSERT INTO pool_members (pool_id, account_id, role, joined_at, profile_blob, key_blob) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(invite.pool_id, accountId, role, now(), profile, keyGrant)
+        .query(
+          'INSERT INTO pool_members (pool_id, account_id, role, joined_at, profile_blob, key_blob, secret_blob) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(invite.pool_id, accountId, role, now(), profile, keyGrant, keys.secret)
+      this.addMemberKey(invite.pool_id, accountId, keys.publicKey)
       return { ok: true, poolId: invite.pool_id, fresh: true }
     })()
   }
@@ -472,24 +624,26 @@ export class PoolStore {
   // MARK: Snapshot
 
   /** Everything a member sees on subscribing. `live` tells whether a session's agent is connected and ready. */
-  snapshot(poolId: string, live: (accountId: string, sessionId: string) => { online: boolean; ready: boolean }): PoolSnapshot | null {
+  snapshot(
+    poolId: string,
+    live: (accountId: string, sessionId: string) => { online: boolean; ready: boolean },
+    forAccount: string | null = null,
+  ): PoolSnapshot | null {
     const pool = this.db.query('SELECT * FROM pools WHERE id = ?').get(poolId) as PoolRow | null
     if (!pool) return null
-    const members = this.db
-      .query('SELECT account_id, role, joined_at, profile_blob FROM pool_members WHERE pool_id = ? ORDER BY joined_at')
-      .all(poolId) as MemberRow[]
     return {
       id: pool.id,
       createdAt: pool.created_at,
       paused: pool.paused === 1,
       keyVersion: pool.key_version,
       info: pool.info_blob,
-      members: members.map(toMember),
+      members: this.members(poolId),
       sessions: this.sessions(poolId).map(session => ({ ...session, ...live(session.account, session.session) })),
       tasks: this.tasks(poolId),
       notes: this.notes(poolId),
       messages: this.posts('message', poolId, POOL_SNAPSHOT_MESSAGES),
       events: this.posts('event', poolId, POOL_SNAPSHOT_EVENTS),
+      ...(forAccount ? { own: this.own(poolId, forAccount) } : {}),
     }
   }
 

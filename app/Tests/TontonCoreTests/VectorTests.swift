@@ -33,6 +33,29 @@ final class VectorTests: XCTestCase {
         XCTAssertEqual(
             PoolInvite(string: invite.text),
             PoolInvite(relay: invite.relay, pool: invite.pool, token: invite.token, key: invite.key, version: invite.version))
+        try Self.checkPoolKeys(vectors.poolKeys, accountKey: vectors.key)
+    }
+
+    /// The pool keys the web made (shared/test/pool-keys-ts.json, written by shared/test/pool-keys.test.ts) open here too.
+    func testPoolKeysFromTheWebOpenHere() throws {
+        let file = Self.file.deletingLastPathComponent().appendingPathComponent("pool-keys-ts.json")
+        let fixture = try JSONDecoder().decode(Vectors.PoolKeys.self, from: Data(contentsOf: file))
+        try Self.checkPoolKeys(fixture, accountKey: try XCTUnwrap(fixture.key))
+    }
+
+    /// The member opens version 2 from the admin's wrap, and with it what was sealed after the rotation.
+    private static func checkPoolKeys(_ keys: Vectors.PoolKeys, accountKey: String) throws {
+        let vault = SessionVault(key: try E2E.key(fromBase64URL: accountKey))
+        let members = [keys.admin, keys.member].map {
+            PoolMemberWire(account: $0.account, role: .member, joinedAt: "", profile: nil, publicKeys: $0.publicKeys)
+        }
+        let keyring = PoolKeys.resolve(
+            joined: PoolKeyring(key: keys.v1), secret: vault.poolMemberSecret(keys.member.secret, poolId: keys.poolId), wraps: [keys.wrap],
+            members: members, poolId: keys.poolId, account: keys.member.account)
+        XCTAssertEqual(keyring.versions, [1, 2])
+        XCTAssertEqual(try keyring.open(keys.sealedV2, as: PoolNotes.self).text, keys.plaintext)
+        // The version 1 key alone reads nothing sealed after the rotation.
+        XCTAssertThrowsError(try PoolKeyring(key: keys.v1).open(keys.sealedV2, as: PoolNotes.self))
     }
 
     // MARK: Writing
@@ -146,6 +169,7 @@ final class VectorTests: XCTestCase {
         let share = ShareLink(
             relay: "https://relay.example.com/tonton", token: "ts_abcdefghijkl_" + String(repeating: "t", count: 43),
             key: String(repeating: "k", count: 43))
+        let poolKeys = try makePoolKeys(vault: vault)
         let account = Account(
             relay: "https://relay.example.com/tonton", accountId: "abcdefghijkl", token: "ta_unused", key: keyText,
             joinSecret: String(repeating: "s", count: 43))
@@ -160,7 +184,30 @@ final class VectorTests: XCTestCase {
             snapshot: snapshot, history: historyText, expected: try read(snapshot: snapshot, history: historyText, key: key),
             shareLink: Vectors.Share(text: share.string, relay: share.relay, token: share.token, key: share.key),
             poolInvite: Vectors.Invite(
-                text: invite.string, relay: invite.relay, pool: invite.pool, token: invite.token, key: invite.key, version: invite.version))
+                text: invite.string, relay: invite.relay, pool: invite.pool, token: invite.token, key: invite.key, version: invite.version),
+            poolKeys: poolKeys)
+    }
+
+    /// Two members' key pairs, an admin's wrap of version 2 for the member, and a blob sealed with version 2.
+    private static func makePoolKeys(vault: SessionVault) throws -> Vectors.PoolKeys {
+        let poolId = "pool00000001"
+        let v1 = E2E.newKey()
+        let v2 = E2E.newKey()
+        let keyring = PoolKeyring(key: v1)
+        let admin = try vault.newPoolMemberKeys(poolId: poolId, account: "admin0000001", keyring: keyring)
+        let member = try vault.newPoolMemberKeys(poolId: poolId, account: "member000001", keyring: keyring)
+        let adminSecret = try XCTUnwrap(vault.poolMemberSecret(admin.secret, poolId: poolId))
+        let memberSecret = try XCTUnwrap(vault.poolMemberSecret(member.secret, poolId: poolId))
+        let wrap = try PoolKeys.wrap(
+            PoolKeyWrap(poolId: poolId, version: 2, key: v2, from: "admin0000001", to: "member000001"), admin: adminSecret,
+            memberPublic: memberSecret.publicKey)
+        let plaintext = "Sealed after the kick ✅"
+        return Vectors.PoolKeys(
+            key: nil, poolId: poolId, v1: v1,
+            admin: .init(account: "admin0000001", secret: admin.secret, publicKeys: [admin.publicKey]),
+            member: .init(account: "member000001", secret: member.secret, publicKeys: [member.publicKey]),
+            wrap: PoolKeyWrapWire(version: 2, from: "admin0000001", blob: wrap),
+            sealedV2: try PoolKeyring(key: v2, version: 2).seal(PoolNotes(text: plaintext)), plaintext: plaintext)
     }
 
     private static func text(_ object: [String: Any]) throws -> String {
@@ -231,6 +278,23 @@ final class VectorTests: XCTestCase {
 
 private struct Vectors: Codable {
     struct Blob: Codable { let name: String; let blob: String; let plaintext: String }
+    /// Pool keys: the same shape in shared/test/pool-keys-ts.json, which the web writes, with its own account key.
+    struct PoolKeys: Codable {
+        struct Member: Codable {
+            let account: String
+            let secret: String
+            let publicKeys: [String]
+        }
+        /// Only in the web's file: the account key both members' private keys are sealed with.
+        let key: String?
+        let poolId: String
+        let v1: String
+        let admin: Member
+        let member: Member
+        let wrap: PoolKeyWrapWire
+        let sealedV2: String
+        let plaintext: String
+    }
     struct Share: Codable { let text: String; let relay: String; let token: String; let key: String }
     struct Invite: Codable {
         let text: String
@@ -315,4 +379,5 @@ private struct Vectors: Codable {
     let expected: Expected
     let shareLink: Share
     let poolInvite: Invite
+    let poolKeys: PoolKeys
 }

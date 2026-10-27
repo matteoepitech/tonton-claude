@@ -23,31 +23,32 @@ afterEach(() => {
 
 const id = (n: number) => `pool${String(n).padStart(8, '0')}`
 const author = (accountId: string) => ({ accountId, sessionId: null })
+const keys = { publicKey: 'public-v1', secret: 'secret' }
 
 test('an account is in a bounded number of pools, and a pool id is used once', () => {
   const owner = registry.createAccount().id
-  for (let i = 0; i < MAX_POOLS_PER_ACCOUNT; i++) expect(pools.create(owner, id(i), 'info', 'grant', null)).not.toBeNull()
-  expect(pools.create(owner, id(99), 'info', 'grant', null)).toBeNull()
+  for (let i = 0; i < MAX_POOLS_PER_ACCOUNT; i++) expect(pools.create(owner, id(i), 'info', 'grant', null, keys)).not.toBeNull()
+  expect(pools.create(owner, id(99), 'info', 'grant', null, keys)).toBeNull()
   const other = registry.createAccount().id
-  expect(pools.create(other, id(0), 'info', 'grant', null)).toBeNull()
+  expect(pools.create(other, id(0), 'info', 'grant', null, keys)).toBeNull()
 })
 
 test('an invite expires, runs out, and only so many can be open', () => {
   const owner = registry.createAccount().id
   const member = registry.createAccount().id
-  pools.create(owner, id(1), 'info', 'grant', null)
+  pools.create(owner, id(1), 'info', 'grant', null, keys)
   const expired = pools.createInvite(id(1), 'member', 5, Date.now() - 1)
   expect(expired).not.toBeNull()
-  expect(pools.join(expired?.token ?? '', member, 'grant', null)).toEqual({ ok: false, reason: 'invalid' })
+  expect(pools.join(expired?.token ?? '', member, 'grant', null, keys)).toEqual({ ok: false, reason: 'invalid' })
   for (let i = 0; i < MAX_POOL_INVITES; i++) expect(pools.createInvite(id(1), 'member', 1, Date.now() + 60_000)).not.toBeNull()
   expect(pools.createInvite(id(1), 'member', 1, Date.now() + 60_000)).toBeNull()
   // An invite token of another kind opens nothing.
-  expect(pools.join(registry.createAccount().token, member, 'grant', null)).toEqual({ ok: false, reason: 'invalid' })
+  expect(pools.join(registry.createAccount().token, member, 'grant', null, keys)).toEqual({ ok: false, reason: 'invalid' })
 })
 
 test('tasks are bounded, and a change over an older revision is refused with the current one', () => {
   const owner = registry.createAccount().id
-  pools.create(owner, id(1), 'info', 'grant', null)
+  pools.create(owner, id(1), 'info', 'grant', null, keys)
   const first = pools.putTask(id(1), 'task0001', 0, 'v1', author(owner))
   expect(first).toMatchObject({ ok: true, value: { rev: 1, blob: 'v1' } })
   expect(pools.putTask(id(1), 'task0001', 0, 'other', author(owner))).toMatchObject({ ok: false, reason: 'conflict', current: { rev: 1 } })
@@ -63,7 +64,7 @@ test('tasks are bounded, and a change over an older revision is refused with the
 
 test('messages go oldest first past the cap, and an id is posted once', () => {
   const owner = registry.createAccount().id
-  pools.create(owner, id(1), 'info', 'grant', null)
+  pools.create(owner, id(1), 'info', 'grant', null, keys)
   for (let i = 0; i < MAX_POOL_MESSAGES + 5; i++)
     pools.addPost('message', id(1), `message${String(i).padStart(5, '0')}`, 'm', author(owner))
   const kept = pools.posts('message', id(1), MAX_POOL_MESSAGES + 10)
@@ -77,10 +78,10 @@ test('messages go oldest first past the cap, and an id is posted once', () => {
 test('deleting an account deletes the pools it owns and its memberships, sessions included', () => {
   const owner = registry.createAccount().id
   const member = registry.createAccount().id
-  pools.create(owner, id(1), 'info', 'grant', null)
-  pools.create(member, id(2), 'info', 'grant', null)
+  pools.create(owner, id(1), 'info', 'grant', null, keys)
+  pools.create(member, id(2), 'info', 'grant', null, keys)
   const invite = pools.createInvite(id(2), 'member', 1, Date.now() + 60_000)
-  expect(pools.join(invite?.token ?? '', owner, 'grant', null)).toEqual({ ok: true, poolId: id(2), fresh: true })
+  expect(pools.join(invite?.token ?? '', owner, 'grant', null, keys)).toEqual({ ok: true, poolId: id(2), fresh: true })
   pools.addSession(id(2), owner, 'ses_1', 'order', 'profile')
   registry.deleteAccount(owner)
   expect(pools.summaries(owner)).toEqual([])

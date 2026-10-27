@@ -43,6 +43,10 @@ export const MAX_POOL_INVITE_USES = 100
 export const MAX_POOL_INVITE_HOURS = 30 * 24
 /** Sealed pool name and goal, a member's or a session's profile, a key grant, a session order. */
 export const MAX_POOL_INFO_BYTES = 8192
+/** How many times a pool's key can be rotated: each one keeps a wrapped key per member. */
+export const MAX_POOL_KEY_VERSIONS = 200
+/** A member's public key or private key for a pool, sealed, or one wrap of the pool key. */
+export const MAX_POOL_KEY_BYTES = 2048
 export const MAX_POOL_NOTES_BYTES = 256 * 1024
 /** One sealed task, message or event. */
 export const MAX_POOL_TASK_BYTES = 64 * 1024
