@@ -14,6 +14,10 @@ final class LocalizationTests: XCTestCase {
         let french: [String: String]
         let untranslated: Bool
         let substitutions: Bool
+        /// False for what has no words to translate, such as the hidden label of a control ("").
+        let translate: Bool
+        /// The code gives the English as a `defaultValue`, to tell two meanings of one English word apart.
+        let englishInCode: Bool
     }
 
     private func entries(_ name: String = "Localizable") throws -> [Entry] {
@@ -36,9 +40,11 @@ final class LocalizationTests: XCTestCase {
                 for (category, unit) in plural { read(unit, as: category) }
                 return values
             }
+            let state = entry["extractionState"] as? String
             return Entry(
-                key: key, stale: entry["extractionState"] as? String == "stale", english: values("en"), french: values("fr"),
-                untranslated: untranslated, substitutions: localizations.values.contains { $0["substitutions"] != nil })
+                key: key, stale: state == "stale", english: values("en"), french: values("fr"), untranslated: untranslated,
+                substitutions: localizations.values.contains { $0["substitutions"] != nil },
+                translate: entry["shouldTranslate"] as? Bool != false, englishInCode: state == "extracted_with_value")
         }
         .sorted { $0.key < $1.key }
     }
@@ -52,7 +58,8 @@ final class LocalizationTests: XCTestCase {
             let entries = try entries(catalog)
             XCTAssertFalse(entries.isEmpty)
             check(entries.filter(\.stale).map(\.key), "strings the code no longer has, to delete from \(catalog).xcstrings")
-            check(entries.filter { $0.french.values.allSatisfy(\.isEmpty) || $0.untranslated }.map(\.key), "strings to translate")
+            let missing = entries.filter { $0.translate && ($0.french.values.allSatisfy(\.isEmpty) || $0.untranslated) }
+            check(missing.map(\.key), "strings to translate")
         }
     }
 
@@ -79,7 +86,7 @@ final class LocalizationTests: XCTestCase {
         var problems: [String] = []
         for entry in try entries() where !entry.english.isEmpty {
             let english = entry.english.mapValues { $0.replacing(#/%\d+\$/#, with: "%") }
-            if let text = english[""], text != entry.key {
+            if let text = english[""], text != entry.key, !entry.englishInCode {
                 problems.append("\(entry.key): the English is \(text), change the code instead")
             }
             let plural = english.filter { !$0.key.isEmpty }
