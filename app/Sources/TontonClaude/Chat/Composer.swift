@@ -69,6 +69,20 @@ struct Composer: View {
         }
         .onChange(of: text) { _, value in state.drafts[session.id] = value }
         .onChange(of: attachments.map(\.id)) { _, _ in state.draftAttachments[session.id] = attachments.isEmpty ? nil : attachments }
+        // A message taken back with Undo returns to its session's draft, before whatever was typed since.
+        .onReceive(HeldMessages.shared.undone) { message in
+            let images = message.images.compactMap(Attachment.init)
+            guard message.sessionId == session.id else {
+                let draft = [message.text, state.drafts[message.sessionId] ?? ""].filter { !$0.isEmpty }.joined(separator: "\n")
+                state.drafts[message.sessionId] = draft
+                let files = images + (state.draftAttachments[message.sessionId] ?? [])
+                state.draftAttachments[message.sessionId] = files.isEmpty ? nil : files
+                return
+            }
+            text = [message.text, text].filter { !$0.isEmpty }.joined(separator: "\n")
+            attachments = images + attachments
+            focused = true
+        }
         .onChange(of: state.pushToTalk) { _, held in held ? startDictation() : dictation.stop() }
         .onChange(of: dictation.transcript) { _, words in text = DictationText.merge(typed: typedBeforeDictation, transcript: words) }
         .onDisappear { dictation.stop() }

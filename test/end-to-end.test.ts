@@ -43,6 +43,8 @@ let machine: { machineId: string; token: string }
 let claude: Client
 const notifications: { method: string; params?: Record<string, unknown> }[] = []
 let app: App
+/** What the channel and the hooks run with. */
+let agentEnv: Record<string, string>
 let stranger: App
 
 const api = (path: string, init: RequestInit & { token?: string } = {}) =>
@@ -98,10 +100,11 @@ beforeAll(async () => {
     transcript,
     line({ type: 'user', uuid: 'u1', message: { content: 'SECRET prompt' } }) + line({ type: 'ai-title', aiTitle: 'SECRET title' }),
   )
-  writeFileSync(
-    join(home, 'run', `${process.pid}.json`),
-    JSON.stringify({ sessionId, transcriptPath: transcript, cwd: '/home/x/SecretProject' }),
-  )
+  // A git repository on a branch, for the header.
+  const project = join(dir, 'SecretProject')
+  mkdirSync(join(project, '.git'), { recursive: true })
+  writeFileSync(join(project, '.git', 'HEAD'), 'ref: refs/heads/SECRET-branch\n')
+  writeFileSync(join(home, 'run', `${process.pid}.json`), JSON.stringify({ sessionId, transcriptPath: transcript, cwd: project }))
 
   const { CLAUDE_CONFIG_DIR: _claude, ...developer } = process.env
   const env = {
@@ -118,6 +121,7 @@ beforeAll(async () => {
   claude.fallbackNotificationHandler = async notification => {
     notifications.push(notification)
   }
+  agentEnv = env
   await claude.connect(new StdioClientTransport({ command: 'bun', args: [AGENT, 'channel'], env }))
   const hook = {
     hook_event_name: 'Notification',
@@ -179,7 +183,7 @@ describe('end to end', () => {
   test('a slash command for a session outside tmux comes back as a note in the conversation, not as a message', async () => {
     const meta = await eventually(() => latestSession(app)?.meta, 'the meta')
     // Outside tmux nothing can be typed: the agent offers no command, and refuses one sent anyway.
-    expect(await open(key, meta)).toMatchObject({ terminal: false, commands: [] })
+    expect(await open(key, meta)).toMatchObject({ terminal: false, commands: [], branch: 'SECRET-branch' })
     const before = app.messages.length
     const delivered = notifications.length
     const command = { name: 'compact', sessionId, id: `command-${Date.now()}`, issuedAt: new Date().toISOString() }
@@ -210,6 +214,24 @@ describe('end to end', () => {
     const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'live entries')
     if (live.t !== 'entries') throw new Error('unexpected message')
     expect(await open<{ text: string }>(key, live.entries[0].blob)).toMatchObject({ text: 'done' })
+  })
+
+  test('the last answer of a turn, landing after its Stop, leaves the session done', async () => {
+    const hook = (hook_event_name: string) =>
+      Bun.spawn(['bun', AGENT, 'hook'], {
+        env: agentEnv,
+        stdin: new Blob([JSON.stringify({ hook_event_name, session_id: sessionId, transcript_path: transcript })]),
+      }).exited
+    await hook('UserPromptSubmit')
+    await eventually(() => latestSession(app)?.status === 'working', 'the turn to start')
+    // The Stop hook goes over HTTP, the transcript over the channel's socket: here the answer comes last.
+    await hook('Stop')
+    await eventually(() => latestSession(app)?.status === 'idle', 'the turn to end')
+    const before = app.messages.length
+    appendFileSync(transcript, line({ type: 'assistant', uuid: 'late', message: { content: [{ type: 'text', text: 'All done.' }] } }))
+    await eventually(() => app.messages.slice(before).some(m => m.t === 'entries'), 'the late answer')
+    await eventually(() => app.messages.slice(before).some(m => m.t === 'session'), 'the session update')
+    expect(latestSession(app)?.status).toBe('idle')
   })
 
   test('what Claude wrote while the Mac was away is waiting when it comes back', async () => {

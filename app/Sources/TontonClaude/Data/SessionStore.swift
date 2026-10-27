@@ -68,6 +68,8 @@ final class SessionStore: ObservableObject {
     let limitLifted = PassthroughSubject<[SessionSummary], Never>()
     /// Sessions that get `continue` when a usage limit that stopped them resets. Kept while the app runs.
     @Published private(set) var autoContinue: Set<String> = []
+    /// Sessions whose alerts are muted for a while (Snooze alerts in the session list). See SessionStore+Snooze.swift.
+    @Published var snoozes = AlertSnoozes()
     /// Requests can still be refused right at the reset: wait a little, as Claude Code does.
     private static let continueDelay: Duration = .seconds(30)
     /// The user allowed a permission request from the notch.
@@ -363,10 +365,14 @@ final class SessionStore: ObservableObject {
         }
         guard !settings.hiddenMachines.contains(session.machine) else { return }
         let changed = previous?.status != session.status || previous?.pendingPermissions != session.pendingPermissions
-        if session.status.needsAttention && changed { attention.send(session) }
+        if session.status.needsAttention && changed && snoozes.allows(.needsYou(session.status), for: session.id) {
+            attention.send(session)
+        }
+        // Permission requests come through a snooze: they wait for the user.
         let asked = PermissionRequest.added(session.pendingPermissions, since: previous?.pendingPermissions ?? [])
         if !asked.isEmpty { permissionsAsked.send((session, asked)) }
-        if previous?.status == .working && session.status == .idle { finished.send(session) }
+        if previous?.status == .working && session.status == .idle && snoozes.allows(.finished, for: session.id) { finished.send(session) }
+        if session.status == .ended && snoozes.isSnoozed(session.id) { snoozes.wake(session.id) }
         if let worked = workTimer.update(session, previous: previous?.status) { taskDone.send((session, worked)) }
     }
 
@@ -776,7 +782,11 @@ final class SessionStore: ObservableObject {
         guard let account = account ?? settings.account else { return }
         settings.accounts.remove(account)
         settings.parkedPins[AccountList.id(of: account)] = nil
-        if isConnected(account) { settings.account = nil }
+        if isConnected(account) {
+            // Messages held for Undo send go first, to the account they were written for.
+            HeldMessages.shared.flush()
+            settings.account = nil
+        }
     }
 
     /// Connects to another account signed in on this Mac. The one connected now stays in the list, and its pins wait for
@@ -790,6 +800,9 @@ final class SessionStore: ObservableObject {
         let parked = settings.parkedPins.removeValue(forKey: AccountList.id(of: account)) ?? []
         settings.pinnedSessions = settings.pinnedSessions.filter { here.contains($0) } + parked
         selectedId = nil
+        // Messages held for Undo send go first, to the account they were written for: the socket only moves to the next one
+        // a moment later.
+        HeldMessages.shared.flush()
         settings.account = account
     }
 }

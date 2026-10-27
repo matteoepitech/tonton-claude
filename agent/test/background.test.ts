@@ -53,7 +53,34 @@ const agent = (id: string) =>
     },
   })
 
+/** A notification that arrived while Claude worked: Claude Code queues it as an attachment, not as a message. */
+const queued = (id: string, status: string) =>
+  JSON.stringify({
+    type: 'attachment',
+    timestamp: at(0),
+    attachment: {
+      type: 'queued_command',
+      prompt: `<task-notification>\n<task-id>${id}</task-id>\n<tool-use-id>toolu_9</tool-use-id>\n<status>${status}</status>\n</task-notification>`,
+      commandMode: 'task-notification',
+    },
+  })
+/** And the queue says so too. */
+const enqueued = (id: string, status: string) =>
+  JSON.stringify({
+    type: 'queue-operation',
+    operation: 'enqueue',
+    timestamp: at(0),
+    content: `<task-notification>\n<task-id>${id}</task-id>\n<status>${status}</status>\n</task-notification>`,
+  })
+
 describe('runningTasks', () => {
+  test('a notification queued while Claude worked ends the task too', () => {
+    expect(runningTasks([agent('ab249dac865b63e60'), queued('ab249dac865b63e60', 'completed')], now)).toEqual([])
+    expect(runningTasks([shell('bi8o5pw7k'), enqueued('bi8o5pw7k', 'completed')], now)).toEqual([])
+    // A queued notification that is not over leaves it running.
+    expect(runningTasks([shell('bi8o5pw7k'), queued('bi8o5pw7k', 'running')], now)).toEqual(['bi8o5pw7k'])
+  })
+
   test('a background shell runs until its notification says it is over', () => {
     expect(runningTasks([shell('bi8o5pw7k')], now)).toEqual(['bi8o5pw7k'])
     expect(runningTasks([shell('bi8o5pw7k'), notification('bi8o5pw7k', 'completed')], now)).toEqual([])

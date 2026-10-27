@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { open, seal } from '../../../shared/crypto'
 import type { Entry, PermissionRule, PromptPayload, RelayToAgent, SealedEntry, SessionCommand, SessionInfo } from '../../../shared/protocol'
 import { withAttachments } from '../channel'
-import { projectOf } from '../channel/conversation'
+import { branchOf, projectOf } from '../channel/conversation'
 import { RelayConnection } from '../channel/relay-connection'
 import { SessionShares } from '../channel/shares'
 import { claimCommand, whyInvalid } from '../channel/terminal'
@@ -82,7 +82,7 @@ class Link {
   }
 
   postMeta() {
-    const meta = this.tracker.meta(this.sessionId)
+    const meta = { ...this.tracker.meta(this.sessionId), ...branchOf(this.cwd() ?? process.cwd()) }
     this.relay.post(async () => ({ t: 'meta', sessionId: this.sessionId, meta: await seal(this.config.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd() ?? process.cwd()), title: meta.title, tool: 'opencode' })
   }

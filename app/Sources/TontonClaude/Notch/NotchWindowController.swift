@@ -331,6 +331,7 @@ final class NotchWindowController {
             .store(in: &subscriptions)
         store.taskDone
             .filter { [settings] _, worked in settings.confettiAfterMinutes > 0 && worked >= Double(settings.confettiAfterMinutes) * 60 }
+            .filter { [store] session, _ in !store.snoozes.isSnoozed(session.id) }
             .sink { [weak self] _ in self?.celebrate() }
             .store(in: &subscriptions)
         store.finished
@@ -342,6 +343,8 @@ final class NotchWindowController {
             .store(in: &subscriptions)
         store.limitLifted
             .filter { [settings] _ in settings.alertOnLimitReset }
+            // Auto-continue still runs for a snoozed session (SessionStore); only the alert is muted.
+            .map { [store] sessions in sessions.filter { store.snoozes.allows(.limitReset, for: $0.id) } }
             .sink { [weak self] sessions in self?.limitLifted(sessions) }
             .store(in: &subscriptions)
         let shown = store.sessionsPublisher.combineLatest(settings.$hiddenMachines)

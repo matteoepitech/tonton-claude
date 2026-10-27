@@ -6,6 +6,8 @@ struct ChatPanel: View {
     let session: SessionSummary
     @EnvironmentObject var store: SessionStore
     @EnvironmentObject var state: NotchState
+    @EnvironmentObject var settings: AppSettings
+    @ObservedObject private var held = HeldMessages.shared
     @State private var pendingTexts: [String] = []
     @State private var dropTargeted = false
     /// The item a search jumped to, highlighted for a moment.
@@ -30,6 +32,9 @@ struct ChatPanel: View {
                         ForEach(Array(pendingTexts.enumerated()), id: \.offset) { _, text in
                             UserBubble(text: text, images: [], pending: true)
                         }
+                        ForEach(held.items(for: session.id)) { message in
+                            HeldBubble(message: message) { held.undo(message.id) }
+                        }
                         if session.status == .working { ThinkingWave(lastEntry: lastEntry) }
                         Color.clear.frame(height: 1).id("bottom")
                     }
@@ -51,7 +56,12 @@ struct ChatPanel: View {
                     pendingTexts.removeFirst(min(max(new - old, 0), pendingTexts.count))
                 }
                 .onChange(of: pendingTexts.count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+                .onChange(of: held.items(for: session.id).count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+                .onReceive(held.sent) { message in
+                    if message.sessionId == session.id { pendingTexts.append(pendingLabel(message.text, images: message.images.count)) }
+                }
             }
+            .overlay { ChangedFilesPanel(session: session) }
             ForEach(session.pendingPermissions) { req in
                 PermissionCard(
                     request: req, sessionRule: store.sessionRule(for: req, in: session),
@@ -61,8 +71,10 @@ struct ChatPanel: View {
                 .padding(.bottom, 6)
             }
             Composer(session: session) { text, images in
-                store.sendPrompt(text, images: images, to: session.id)
-                pendingTexts.append(text.isEmpty ? "(\(images.count) attachment\(images.count == 1 ? "" : "s"))" : text)
+                // Held for Undo send, or gone right away and waiting for the transcript.
+                if !held.send(text, images: images, to: session.id, delay: settings.undoSendDelay) {
+                    pendingTexts.append(pendingLabel(text, images: images.count))
+                }
             }
         }
         // Files dropped anywhere on the conversation join the message being written.
@@ -216,9 +228,11 @@ struct ChatHeader: View {
                         .help("Estimated by \(session.codingTool.label) at list price")
                 }
                 Text(session.status.label).font(.notch(11)).foregroundStyle(Color(nsColor: session.status.color)).fixedSize()
+                NoteButton(session: session)
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
                 if session.accepts(.interrupt) { interrupt }
                 if session.canChat && !session.menuCommands.isEmpty { commands }
+                ChangedFilesButton(session: session)
                 Menu {
                     Button("Markdown…") { export(.markdown) }
                     Button("HTML page…") { export(.html) }
@@ -245,6 +259,7 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(1)
                 Spacer()
+                if let branch = session.branch { BranchLabel(branch: branch) }
                 if let model = session.modelName {
                     Text(model).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
                         .help("The model Claude Code uses in this session")

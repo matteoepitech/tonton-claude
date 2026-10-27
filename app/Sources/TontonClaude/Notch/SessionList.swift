@@ -14,7 +14,7 @@ struct SessionListView: View {
     @State private var draft = ""
 
     var body: some View {
-        let sessions = store.visibleSessions.filter { $0.matches(query) }
+        let sessions = store.visibleSessions.filter { $0.matches(query) || NotesStore.shared.notes.matches($0.id, query) }
         // The tool of each session only says something when both are listed.
         let mixed = store.visibleSessions.mixesTools
         let sections = SessionLayout.sections(
@@ -49,6 +49,7 @@ struct SessionListView: View {
                             SessionRow(
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
                                 continues: store.autoContinue.contains(s.id),
+                                snoozed: store.isSnoozed(s.id),
                                 machine: section.mixesMachines ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
                                 machineStyle: settings.machineStyles[s.machineId],
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
@@ -70,6 +71,7 @@ struct SessionListView: View {
                                 if s.canChat {
                                     Toggle("Continue when the limit resets", isOn: autoContinue(s.id))
                                 }
+                                SnoozeMenu(sessionId: s.id)
                                 Menu("Sound when \(s.project) finishes") {
                                     Toggle("Event sound", isOn: projectSound(s.project, nil))
                                     Divider()
@@ -391,6 +393,8 @@ struct SessionRow: View {
     var showCost = false
     /// Gets `continue` when the limit that stopped it resets.
     var continues = false
+    /// Its alerts are muted for a while.
+    var snoozed = false
     /// Shown in the pinned section, where sessions from every machine sit together.
     var machine: String?
     var machineStyle: MachineStyle?
@@ -419,6 +423,7 @@ struct SessionRow: View {
                         Text(session.displayName).font(.notch(12, weight: .semibold)).lineLimit(1).layoutPriority(1)
                             .help(session.name == nil ? "" : "Renamed. Its project is \(session.project).")
                     }
+                    NoteMark(sessionId: session.id)
                     if let machine {
                         if let machineStyle { MachineBadge(style: machineStyle, size: 9).accessibilityHidden(true) }
                         Text(machine).font(.notch(10)).foregroundStyle(Theme.tertiary).lineLimit(1)
@@ -426,6 +431,11 @@ struct SessionRow: View {
                     Spacer(minLength: 4)
                     if let shortcut {
                         Text("⌘\(shortcut)").font(.notch(9, weight: .medium)).foregroundStyle(Theme.tertiary)
+                    }
+                    if snoozed {
+                        Image(systemName: "bell.slash").font(.notch(9)).foregroundStyle(Theme.tertiary)
+                            .help("Alerts snoozed: permission requests still come through")
+                            .accessibilityLabel("Alerts snoozed")
                     }
                     if !session.pendingPermissions.isEmpty {
                         Image(systemName: "lock.fill").font(.notch(9)).foregroundStyle(Theme.accent)

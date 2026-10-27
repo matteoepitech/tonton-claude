@@ -27,6 +27,24 @@ final class BackgroundTasksTests: XCTestCase {
         try line("<task-notification>\n<task-id>\(id)</task-id>\n<status>\(status)</status>\n<summary>Done</summary>\n</task-notification>")
     }
 
+    /// A notification that arrived while Claude worked: Claude Code queues it as an attachment, not as a message.
+    func testANotificationQueuedWhileClaudeWorkedEndsTheTaskToo() throws {
+        let notification = "<task-notification>\n<task-id>bi8o5pw7k</task-id>\n<status>completed</status>\n</task-notification>"
+        let json = { (object: [String: Any]) in String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self) }
+        var queued = BackgroundTasks()
+        try queued.read(shell("bi8o5pw7k"), now: now)
+        try queued.read(
+            json([
+                "type": "attachment", "timestamp": ISO8601DateFormatter().string(from: now),
+                "attachment": ["type": "queued_command", "prompt": notification, "commandMode": "task-notification"],
+            ]), now: now)
+        XCTAssertEqual(queued.count(at: now), 0)
+        var enqueued = BackgroundTasks()
+        try enqueued.read(shell("bi8o5pw7k"), now: now)
+        try enqueued.read(json(["type": "queue-operation", "operation": "enqueue", "content": notification]), now: now)
+        XCTAssertEqual(enqueued.count(at: now), 0)
+    }
+
     func testTasksRunUntilTheyReportBack() throws {
         var tasks = BackgroundTasks()
         try tasks.read(shell("bi8o5pw7k"), now: now)

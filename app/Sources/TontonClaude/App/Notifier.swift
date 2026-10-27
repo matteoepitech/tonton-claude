@@ -5,13 +5,18 @@ import UserNotifications
 enum Notifier {
     /// `denied` turns off the setting that asked, the notifications of Settings › Notch by default.
     static func requestAccess(denied: @escaping @MainActor () -> Void = { AppSettings.shared.systemNotifications = false }) {
+        UNUserNotificationCenter.current().setNotificationCategories(PermissionNotifications.categories)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
             if !granted { Task { @MainActor in denied() } }
         }
     }
 
+    /// A permission request gets Allow and Deny buttons (PermissionNotifications).
     @MainActor
     static func post(_ session: SessionSummary, body: String) {
+        if session.status == .permission, let request = session.pendingPermissions.first, let store = AppDelegate.shared?.store {
+            return PermissionNotifications.shared.post(session, request: request, store: store)
+        }
         post(title: "\(session.machine) · \(session.displayName)", body: body, sessionId: session.id)
     }
 

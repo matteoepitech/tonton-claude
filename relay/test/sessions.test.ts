@@ -40,6 +40,28 @@ describe('SessionStore', () => {
     expect(store.list('acc')[0]).toMatchObject({ status: 'ended', canChat: false })
   })
 
+  test('entries that come after Stop do not bring the wave back: the hooks keep the status', () => {
+    const { store } = createStore()
+    const hook = (hook_event_name: string) => store.applyHook('acc', 'm1', { event: { hook_event_name, session_id: 's1' } })
+    store.agentConnected('acc', 'm1', 's1', 'info', true)
+    hook('UserPromptSubmit')
+    store.addEntries('acc', 's1', [entry('a1')], false)
+    // The hook goes over HTTP, the entries over the agent's socket: the last answer can land after Stop.
+    hook('Stop')
+    store.addEntries('acc', 's1', [entry('a2')], false)
+    expect(store.list('acc')[0].status).toBe('idle')
+    // A new turn still shows: its prompt hook says so.
+    hook('UserPromptSubmit')
+    expect(store.list('acc')[0].status).toBe('working')
+  })
+
+  test('without any hook yet, new entries still mean the session works', () => {
+    const { store } = createStore()
+    store.agentConnected('acc', 'm1', 's1', 'info', true)
+    store.addEntries('acc', 's1', [entry('a1')], false)
+    expect(store.list('acc')[0].status).toBe('working')
+  })
+
   test('accounts are isolated', () => {
     const { store } = createStore()
     store.agentConnected('alice', 'm1', 's1', 'info', true)

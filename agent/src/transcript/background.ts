@@ -20,14 +20,14 @@ const TAIL_BYTES = 4 * 1024 * 1024
 export function runningTasks(lines: string[], now = Date.now()): string[] {
   const running = new Map<string, number>()
   for (const line of lines) {
-    let parsed: { timestamp?: unknown; message?: { content?: unknown } }
+    let parsed: LineFields
     try {
       parsed = JSON.parse(line)
     } catch {
       continue
     }
     const at = typeof parsed.timestamp === 'string' ? Date.parse(parsed.timestamp) || now : now
-    for (const text of texts(parsed.message?.content)) {
+    for (const text of lineTexts(parsed)) {
       const started = STARTED.test(text) ? STARTED_ID.exec(text) : null
       if (started) running.set(started[1], at)
       const stopped = STOPPED.exec(text)
@@ -55,6 +55,26 @@ export function runningTasksIn(transcript: string, now = Date.now()): string[] {
   } finally {
     if (fd !== null) closeSync(fd)
   }
+}
+
+interface LineFields {
+  type?: unknown
+  timestamp?: unknown
+  message?: { content?: unknown }
+  attachment?: { type?: unknown; prompt?: unknown }
+  content?: unknown
+}
+
+/**
+ * Where a line can say a task started or ended. A notification that arrives while Claude works is not a message: Claude
+ * Code queues it as an attachment, and writes the queue's own line too.
+ */
+function lineTexts(line: LineFields): string[] {
+  return [
+    ...texts(line.message?.content),
+    ...(line.attachment?.type === 'queued_command' ? texts(line.attachment.prompt) : []),
+    ...(line.type === 'queue-operation' ? texts(line.content) : []),
+  ]
 }
 
 /** The text of a message: a string, or its text blocks and tool results. */
