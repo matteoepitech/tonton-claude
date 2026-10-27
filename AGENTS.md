@@ -23,7 +23,7 @@ opencode ─ Tonton plugin ──────▶ agent
 | `ios/` | The iPhone app (`TontonClaude.xcodeproj`, Xcode 16 or later), its Live Activity (`TontonWidgets`) and the extension that opens permission alerts (`TontonNotifications`), on `TontonCore`. | Swift 5, iOS 17+ |
 | `raycast/` | A Raycast extension that lists the sessions and messages them through the app's AppleScript dictionary (`app/Resources/TontonClaude.sdef`). | TypeScript (React) |
 | `web/` | The web app: one HTML file (`bun run web`, released as `tonton-web.html`) built on the client core in `shared/`, which decrypts in the browser. | TypeScript |
-| `desktop/` | The island for Windows: an Electron window at the top of the screen with the web app's views (`web/views.ts`), a tray icon, and the account in the system's keyring. Its own `package.json`. | TypeScript (Electron) |
+| `desktop/` | The island for Windows and Linux: an Electron window at the top of the screen with the web app's views (`web/views.ts`), a tray icon, and the account in the system's keyring. Its own `package.json`. | TypeScript (Electron) |
 | `scripts/` | Release builds and the install scripts published with each release (`install.sh`, `install.ps1`, `install-relay.sh`). | TS, sh, PowerShell |
 | `test/` | Tests that run a real relay with a real agent. Unit tests live next to each part (`agent/test`, `relay/test`, `app/Tests`). | TypeScript |
 
@@ -48,15 +48,16 @@ cd desktop
 bun install && bun run check  # Electron and electron-builder, then tsc
 bun run start                 # the island from source; TONTON_ISLAND_HOME=<temp dir> keeps its account apart
 bun run package:windows       # out/TontonClaude-Setup-<version>.exe, unsigned (builds from macOS and Linux too)
+bun run package:linux         # out/TontonClaude-<version>-x86_64.AppImage and -amd64.deb, unsigned
 ```
 
 The iOS project uses folders Xcode keeps in sync: a new `.swift` file in `ios/TontonClaude`, `TontonWidgets`,
 `TontonNotifications`, `Shared` or `SharedUI` is built without touching `project.pbxproj`.
 
 CI (`.github/workflows/ci.yml`) runs `check`, `test` and the Swift lint, build and tests, plus syntax checks of the install
-scripts, a build of the macOS tray, a Simulator build of the iPhone app, and the island on a Windows runner: a run
-against a relay (`desktop/test/smoke`) and its installer. Run the ones for the parts you touched before saying you are
-done.
+scripts, a build of the macOS tray, a Simulator build of the iPhone app, and the island on Windows and Linux runners: runs
+against a relay (`desktop/test/smoke`: on Windows, X11, and GNOME's compositor on Wayland) and its packages. Run the
+ones for the parts you touched before saying you are done.
 
 ## Rules that are easy to break
 

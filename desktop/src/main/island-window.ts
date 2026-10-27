@@ -26,6 +26,9 @@ export class IslandWindow {
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
+      // Electron skips the taskbar on Windows only. On Linux, a toolbar window is kept out of the taskbar and the window
+      // switcher by GNOME and KDE, and still takes the keyboard.
+      ...(process.platform === 'linux' ? { type: 'toolbar' } : {}),
       alwaysOnTop: true,
       title: 'Tonton Claude',
       webPreferences: { preload, sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false },
