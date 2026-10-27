@@ -96,6 +96,7 @@ export class Vault {
       commands: meta?.commands ? COMMANDS.filter(name => meta.commands?.includes(name)) : meta?.terminal ? [...ORIGINAL_COMMANDS] : [],
       model: meta?.model ?? null,
       tool: info?.tool ?? null,
+      branch: meta?.branch ?? null,
     }
   }
 

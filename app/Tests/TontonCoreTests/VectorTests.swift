@@ -48,7 +48,7 @@ final class VectorTests: XCTestCase {
             fiveHourLimit: WireUsageLimit(usedPercent: 83.5, resetsAt: "2026-10-25T12:00:00.000Z"),
             tokens: TokenCounts(input: 1200, output: 340, cacheRead: 250_000, cacheWrite: 9000),
             context: WireContext(usedTokens: 250_000, windowTokens: nil), terminal: true, commands: ["compact", "model", "future"],
-            model: "us.anthropic.claude-opus-4-5-20251101-v1:0")
+            model: "us.anthropic.claude-opus-4-5-20251101-v1:0", branch: "feat/rate-limit")
         let machines: [[String: Any]] = [
             [
                 "id": "m1", "name": try sealed(MachineName(name: "PC-Studio", platform: "win32")), "createdAt": "2026-10-25T10:00:00.000Z",
@@ -198,7 +198,7 @@ final class VectorTests: XCTestCase {
             startedAt: milliseconds(s.startedAt), lastActivity: milliseconds(s.lastActivity), lastMessage: s.lastMessage,
             fiveHourLimit: limit(s.fiveHourLimit), sevenDayLimit: limit(s.sevenDayLimit), terminal: s.terminal,
             commands: s.commands.map(\.rawValue).sorted(), model: s.model, modelName: s.modelName, modelFamily: s.modelFamily?.rawValue,
-            acceptsCommands: s.acceptsCommands, name: s.name)
+            acceptsCommands: s.acceptsCommands, branch: s.branch, name: s.name)
     }
 
     /// Dates the app could not read are `distantPast`; TypeScript has null for them.
@@ -264,6 +264,7 @@ private struct Vectors: Codable {
         let modelName: String?
         let modelFamily: String?
         let acceptsCommands: Bool
+        let branch: String?
         let name: String?
     }
     struct ChatRow: Codable, Equatable { let kind: String; let id: String; let result: String? }

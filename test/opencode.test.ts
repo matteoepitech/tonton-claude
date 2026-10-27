@@ -259,6 +259,21 @@ describe('OpenCode through the relay', () => {
     expect(commands).toContainEqual({ op: 'history', sessionID: started, directory: '/Users/me/code/new' })
   })
 
+  test('the meta says the git branch of the session folder, as for Claude Code', async () => {
+    const started = 'ses_startedingit01'
+    const folder = join(dir, 'repo')
+    mkdirSync(join(folder, '.git'), { recursive: true })
+    writeFileSync(join(folder, '.git', 'HEAD'), 'ref: refs/heads/feat/opencode-branch\n')
+    writeFileSync(join(home, 'run', 'opencode', `${started}.json`), JSON.stringify({ sessionId: started, cwd: folder }))
+    const meta = await eventually(() => {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const message = messages[i]
+        if (message.t === 'session' && message.session.id === started && message.session.meta) return message.session.meta
+      }
+    }, 'the started session meta')
+    expect(await open<SessionMeta>(key, meta)).toMatchObject({ branch: 'feat/opencode-branch' })
+  })
+
   test('a read-only share gets the conversation sealed with its own key, as for Claude Code', async () => {
     const body = JSON.stringify({ sessionId: SESSION, hours: 1 })
     const created = await (await api('/api/shares', { method: 'POST', token: accountToken, body })).json()

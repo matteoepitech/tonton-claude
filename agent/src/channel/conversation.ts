@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { seal } from '../../../shared/crypto'
 import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
+import { gitBranch } from '../git'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
@@ -250,6 +251,7 @@ export class Conversation {
       // Without tmux nothing can be typed: the notch offers no command.
       commands: this.link.tmux ? [...COMMANDS] : [],
       model: this.model,
+      ...branchOf(this.cwd()),
       turns: this.turns.length ? this.turns : undefined,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
@@ -274,6 +276,12 @@ export class Conversation {
   private sealEntries(entries: Entry[]): Promise<SealedEntry[]> {
     return Promise.all(entries.map(async entry => ({ id: entry.id, ts: entry.ts, blob: await seal(this.key, entry) })))
   }
+}
+
+/** Read again with each meta: the branch can change in the terminal at any time. */
+export function branchOf(cwd: string): { branch?: string } {
+  const branch = gitBranch(cwd)
+  return branch ? { branch } : {}
 }
 
 export const projectOf = (cwd: string) => basename(cwd.replace(/\\/g, '/').replace(/\/+$/, '')) || cwd

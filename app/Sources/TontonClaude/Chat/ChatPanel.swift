@@ -245,6 +245,7 @@ struct ChatHeader: View {
             HStack {
                 Text(session.title ?? session.cwd).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(1)
                 Spacer()
+                if let branch = session.branch { BranchLabel(branch: branch) }
                 if let model = session.modelName {
                     Text(model).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
                         .help("The model Claude Code uses in this session")

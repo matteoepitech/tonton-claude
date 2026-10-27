@@ -98,10 +98,11 @@ beforeAll(async () => {
     transcript,
     line({ type: 'user', uuid: 'u1', message: { content: 'SECRET prompt' } }) + line({ type: 'ai-title', aiTitle: 'SECRET title' }),
   )
-  writeFileSync(
-    join(home, 'run', `${process.pid}.json`),
-    JSON.stringify({ sessionId, transcriptPath: transcript, cwd: '/home/x/SecretProject' }),
-  )
+  // A git repository on a branch, for the header.
+  const project = join(dir, 'SecretProject')
+  mkdirSync(join(project, '.git'), { recursive: true })
+  writeFileSync(join(project, '.git', 'HEAD'), 'ref: refs/heads/SECRET-branch\n')
+  writeFileSync(join(home, 'run', `${process.pid}.json`), JSON.stringify({ sessionId, transcriptPath: transcript, cwd: project }))
 
   const { CLAUDE_CONFIG_DIR: _claude, ...developer } = process.env
   const env = {
@@ -179,7 +180,7 @@ describe('end to end', () => {
   test('a slash command for a session outside tmux comes back as a note in the conversation, not as a message', async () => {
     const meta = await eventually(() => latestSession(app)?.meta, 'the meta')
     // Outside tmux nothing can be typed: the agent offers no command, and refuses one sent anyway.
-    expect(await open(key, meta)).toMatchObject({ terminal: false, commands: [] })
+    expect(await open(key, meta)).toMatchObject({ terminal: false, commands: [], branch: 'SECRET-branch' })
     const before = app.messages.length
     const delivered = notifications.length
     const command = { name: 'compact', sessionId, id: `command-${Date.now()}`, issuedAt: new Date().toISOString() }
