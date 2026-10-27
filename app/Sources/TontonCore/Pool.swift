@@ -74,6 +74,8 @@ struct PoolSessionOrder: Codable, Equatable {
     let key: String
     let version: Int
     let issuedAt: String
+    /// Start a pool task as soon as it is assigned, or tell the user first and wait. Nil: ask first.
+    var autoStart: Bool? = nil
 }
 
 extension SessionVault {
@@ -93,12 +95,13 @@ extension SessionVault {
     /// Puts one of the account's sessions in a pool: its agent takes it only if it opens with the account key and names
     /// that session.
     public func sealPoolSessionOrder(
-        poolId: String, sessionId: String, key poolKey: String, version: Int, issuedAt: Date = Date()
+        poolId: String, sessionId: String, key poolKey: String, version: Int, autoStart: Bool = false, issuedAt: Date = Date()
     )
         throws -> String
     {
         let order = PoolSessionOrder(
-            poolId: poolId, sessionId: sessionId, key: poolKey, version: version, issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+            poolId: poolId, sessionId: sessionId, key: poolKey, version: version, issuedAt: ISO8601DateFormatter().string(from: issuedAt),
+            autoStart: autoStart ? true : nil)
         return try E2E.seal(order, with: key)
     }
 }
@@ -181,6 +184,9 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
     public var kind: String
     public var text: String?
     public var taskId: String?
+    /// `session` events: `claude` or `opencode`, and the model, as the session's agent last posted them.
+    public var tool: String?
+    public var model: String?
 }
 
 /// Seals with the latest pool key it holds and opens with whichever version sealed a blob. What another member sealed

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { RelayClient, type SocketLike } from '../client'
 import { newAccountKey, seal } from '../crypto'
 import {
+  decodePoolEventBody,
   decodePoolMessageBody,
   decodePoolSessionProfile,
   decodePoolTask,
@@ -221,4 +222,26 @@ test('the relay client hands pool messages over unopened, and subscribes again a
   sockets[1].receive({ t: 'snapshot', sessions: [], machines: [] })
   await eventually(() => sockets[1].sent.some(m => m.t === 'pool_subscribe'), 'the subscription again')
   client.stop()
+})
+
+test("the machine owner's choice to start pool tasks at once comes with the order; a session event says its tool and model", async () => {
+  const accountKey = newAccountKey()
+  const order = { poolId: 'pool12345678', sessionId: 'ses_1', key: newAccountKey(), version: 1 }
+  expect(
+    (await openPoolSessionOrder(accountKey, await sealPoolSessionOrder(accountKey, order), 'ses_1', 'pool12345678'))?.autoStart,
+  ).toBeUndefined()
+  const started = await openPoolSessionOrder(
+    accountKey,
+    await sealPoolSessionOrder(accountKey, { ...order, autoStart: true }),
+    'ses_1',
+    'pool12345678',
+  )
+  expect(started?.autoStart).toBe(true)
+  expect(decodePoolEventBody({ kind: 'session', tool: 'opencode', model: 'gpt-5' })).toEqual({
+    kind: 'session',
+    tool: 'opencode',
+    model: 'gpt-5',
+  })
+  // An unknown tool is dropped, the event stays.
+  expect(decodePoolEventBody({ kind: 'session', tool: 'vim', model: 3 })).toEqual({ kind: 'session' })
 })

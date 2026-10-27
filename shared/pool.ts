@@ -72,7 +72,8 @@ export async function openPoolSessionOrder(
   const order = await open<Partial<PoolSessionOrder>>(accountKey, sealed).catch(() => null)
   if (!order || order.sessionId !== sessionId || order.poolId !== poolId) return null
   if (typeof order.key !== 'string' || !KEY.test(order.key) || !isVersion(order.version) || typeof order.issuedAt !== 'string') return null
-  return { poolId, sessionId, key: order.key, version: order.version, issuedAt: order.issuedAt }
+  const autoStart = order.autoStart === true ? { autoStart: true } : {}
+  return { poolId, sessionId, key: order.key, version: order.version, issuedAt: order.issuedAt, ...autoStart }
 }
 
 const isVersion = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1
@@ -147,7 +148,9 @@ export function decodePoolMessageBody(value: unknown): PoolMessageBody | null {
 export function decodePoolEventBody(value: unknown): PoolEventBody | null {
   const f = fields(value)
   const kind = text(f?.kind)
-  return f && kind !== undefined ? defined({ kind, text: text(f.text), taskId: text(f.taskId) }) : null
+  if (!f || kind === undefined) return null
+  const tool: PoolEventBody['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
+  return defined({ kind, text: text(f.text), taskId: text(f.taskId), tool, model: text(f.model) })
 }
 
 // MARK: The pool's state

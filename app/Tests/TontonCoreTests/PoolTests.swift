@@ -70,4 +70,16 @@ final class PoolTests: XCTestCase {
         let plaintext = String(decoding: try E2E.plaintext(sealed, with: try E2E.key(fromBase64URL: poolKey)), as: UTF8.self)
         XCTAssertTrue(plaintext.contains(#""state":"in_progress""#))
     }
+
+    func testTheOrderCarriesTheOwnersChoiceAndSessionEventsTheirToolAndModel() throws {
+        let accountKey = try E2E.key(fromBase64URL: E2E.newKey())
+        let vault = SessionVault(key: accountKey)
+        let poolKey = E2E.newKey()
+        let asks = try vault.sealPoolSessionOrder(poolId: "pool12345678", sessionId: "ses_1", key: poolKey, version: 1)
+        XCTAssertNil(try E2E.open(asks, as: PoolSessionOrder.self, with: accountKey).autoStart)
+        let starts = try vault.sealPoolSessionOrder(poolId: "pool12345678", sessionId: "ses_1", key: poolKey, version: 1, autoStart: true)
+        XCTAssertEqual(try E2E.open(starts, as: PoolSessionOrder.self, with: accountKey).autoStart, true)
+        let event = try JSONDecoder().decode(PoolEventBody.self, from: Data(#"{"kind":"session","tool":"opencode","model":"gpt-5"}"#.utf8))
+        XCTAssertEqual([event.kind, event.tool, event.model], ["session", "opencode", "gpt-5"])
+    }
 }

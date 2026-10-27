@@ -7,6 +7,7 @@ import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
+import { PoolWork } from './pool-work'
 import { SessionPools } from './pools'
 import type { SessionLink } from './session-link'
 import { SessionShares } from './shares'
@@ -56,6 +57,8 @@ export class Conversation {
   readonly shares: SessionShares
   /** The pools this session works for, with their keys. */
   readonly pools: SessionPools
+  /** Claude's pool tools, and the tasks and messages the pool sends it. */
+  readonly work: PoolWork
 
   constructor(
     readonly link: SessionLink,
@@ -63,6 +66,8 @@ export class Conversation {
     private readonly key: string,
     private readonly canChat: boolean,
     private readonly post: Post,
+    /** Hands Claude what its pools send it, and tells Claude Code the pool tools changed. */
+    pool: { deliver(text: string): void; toolsChanged(): void } = { deliver: () => {}, toolsChanged: () => {} },
   ) {
     this.shares = new SessionShares(
       () => link.sessionId,
@@ -71,6 +76,14 @@ export class Conversation {
       () => withoutOldImages(this.entries),
     )
     this.pools = new SessionPools(() => link.sessionId, key, post)
+    this.work = new PoolWork(
+      this.pools,
+      () => link.sessionId,
+      post,
+      text => pool.deliver(text),
+      () => ({ tool: 'claude', model: this.model }),
+      () => pool.toolsChanged(),
+    )
     this.tailer = link.transcriptPath
       ? new Tailer(link.transcriptPath, {
           lines: (lines, initial) => this.onLines(lines, initial),
@@ -262,6 +275,7 @@ export class Conversation {
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd()), title: this.title })
+    this.work.descriptionChanged()
   }
 
   private cwd(): string {

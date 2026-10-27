@@ -72,10 +72,13 @@ export interface PoolMessageBody {
 }
 
 export interface PoolEventBody {
-  /** `joined`, `task_moved`, `merged`, `blocked`… */
+  /** `joined`, `task_moved`, `merged`, `blocked`… `session`: what a pool session runs on, posted by its agent. */
   kind: string
   text?: string
   taskId?: string
+  /** `session` events: the coding tool and the model, so the orchestrator assigns by capability. */
+  tool?: 'claude' | 'opencode'
+  model?: string
 }
 
 // Sealed with the account key: what a member keeps for itself.
@@ -95,6 +98,11 @@ export interface PoolSessionOrder {
   key: string
   version: number
   issuedAt: string
+  /**
+   * The machine owner's choice: start a pool task as soon as it is assigned, or tell the user first and wait for them.
+   * Missing: ask first.
+   */
+  autoStart?: boolean
 }
 
 // What the relay sends: clear fields and sealed blobs.

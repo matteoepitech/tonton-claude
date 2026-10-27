@@ -23,7 +23,10 @@ const PARENT_CHECK_MS = 5000
  */
 export async function runChannel() {
   let conversation: Conversation | null = null
-  const mcp = new ChannelServer((requestId, detail) => conversation?.addPermission(requestId, detail))
+  const mcp = new ChannelServer((requestId, detail) => conversation?.addPermission(requestId, detail), {
+    list: () => conversation?.work.tools() ?? [],
+    call: (name, args) => conversation?.work.call(name, args) ?? Promise.resolve('This session is not in a pool.'),
+  })
   await mcp.connect()
   exitWithParent()
 
@@ -86,7 +89,10 @@ export async function runChannel() {
   const follow = (link: SessionLink) => {
     log('following session', link)
     conversation?.stop()
-    conversation = new Conversation(link, config.machine, config.key, canChat, build => relay.post(build))
+    conversation = new Conversation(link, config.machine, config.key, canChat, build => relay.post(build), {
+      deliver: text => void mcp.inject(text, 'pool'),
+      toolsChanged: () => void mcp.toolsChanged(),
+    })
     conversation.start()
   }
 

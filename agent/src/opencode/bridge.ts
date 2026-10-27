@@ -5,6 +5,7 @@ import type { Entry, PermissionRule, PromptPayload, RelayToAgent, SealedEntry, S
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { withAttachments } from '../channel'
 import { branchOf, isTodoWrite, projectOf } from '../channel/conversation'
+import { PoolWork } from '../channel/pool-work'
 import { SessionPools } from '../channel/pools'
 import { RelayConnection } from '../channel/relay-connection'
 import { SessionShares } from '../channel/shares'
@@ -33,6 +34,8 @@ export type PluginCommand =
   | { op: 'interrupt'; sessionID: string; directory?: string }
   | { op: 'history'; sessionID: string; directory?: string }
   | { op: 'models' }
+  /** The answer to a pool tool OpenCode called (`tonton.tool`). */
+  | { op: 'tool_result'; callID: string; output: string }
 
 type Send = (command: PluginCommand) => void
 
@@ -51,6 +54,8 @@ class Link {
   private readonly shares: SessionShares
   /** The pools this session works for, as for Claude Code. */
   readonly pools: SessionPools
+  /** Claude's pool tools for this session, and what the pool sends it, as for Claude Code. */
+  readonly work: PoolWork
 
   constructor(
     readonly sessionId: string,
@@ -73,6 +78,15 @@ class Link {
       () => sessionId,
       config.key,
       build => this.relay.post(build),
+    )
+    // A task or a message from the pool goes in like a message from the notch. OpenCode's tool list is the plugin's: it
+    // does not change while OpenCode runs.
+    this.work = new PoolWork(
+      this.pools,
+      () => sessionId,
+      build => this.relay.post(build),
+      text => this.send({ op: 'prompt', sessionID: sessionId, directory: this.cwd(), text, ...this.chosenModel }),
+      () => ({ tool: 'opencode', model: this.tracker.meta(sessionId).model }),
     )
     this.relay.connect()
   }
@@ -104,6 +118,7 @@ class Link {
     }
     this.relay.post(async () => ({ t: 'meta', sessionId: this.sessionId, meta: await seal(this.config.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd() ?? process.cwd()), title: meta.title, tool: 'opencode' })
+    this.work.descriptionChanged()
   }
 
   /** Shows a request in the notch, unless an auto-approve rule from the app answers it. */
@@ -300,6 +315,14 @@ export async function runOpenCode() {
     } catch {
       continue
     }
+    const tool = poolToolCall(event)
+    if (tool) {
+      const link = links.get(tool.sessionID)
+      void (link ? link.work.call(tool.name, tool.args) : Promise.resolve('This session is not in a pool.')).then(output =>
+        send({ op: 'tool_result', callID: tool.callID, output }),
+      )
+      continue
+    }
     for (const update of tracker.handle(event)) apply(update)
   }
 
@@ -315,6 +338,16 @@ export async function runOpenCode() {
     }),
   )
   process.exit(0)
+}
+
+/** A pool tool OpenCode called through the plugin: `{ type: 'tonton.tool', data: { callID, sessionID, name, args } }`. */
+export function poolToolCall(event: unknown): { callID: string; sessionID: string; name: string; args: Record<string, unknown> } | null {
+  const fields = event as { type?: unknown; data?: Record<string, unknown> } | null
+  if (fields?.type !== 'tonton.tool' || !fields.data) return null
+  const { callID, sessionID, name, args } = fields.data
+  if (typeof callID !== 'string' || typeof sessionID !== 'string' || typeof name !== 'string') return null
+  const plain = args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {}
+  return { callID, sessionID, name, args: plain }
 }
 
 /** The sessions the launcher left for a bridge, each taken once. */
