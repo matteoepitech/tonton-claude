@@ -20,22 +20,23 @@ struct NewSessionPanel: View {
         let machine = machines.first { $0.id == machineId && canStart($0) }
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("New session").font(.system(size: 13, weight: .semibold))
+                Text("New session").font(.notch(13, weight: .semibold))
                 Spacer()
                 Button {
                     state.showNewSession = false
                 } label: {
-                    Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                    Image(systemName: "xmark").font(.notch(10, weight: .semibold))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
                 .help("Close (esc)")
+                .accessibilityLabel("Close")
             }
             .padding(.bottom, 10)
             if machines.isEmpty {
                 Text("No machine is linked to the account yet. Add one in Settings › Machines.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .font(.notch(12))
+                    .foregroundStyle(Theme.secondary)
             } else {
                 machinePicker(machines)
                 if let machine, machine.startableTools.count > 1 { toolPicker(machine) }
@@ -68,8 +69,10 @@ struct NewSessionPanel: View {
                         focused = true
                     } label: {
                         HStack(spacing: 5) {
-                            if let style = settings.machineStyles[machine.id] { MachineBadge(style: style, size: 10) }
-                            Text(store.thisMac == machine.id ? "This Mac" : machine.name).font(.system(size: 11, weight: .medium))
+                            if let style = settings.machineStyles[machine.id] {
+                                MachineBadge(style: style, size: 10).accessibilityHidden(true)
+                            }
+                            Text(store.thisMac == machine.id ? "This Mac" : machine.name).font(.notch(11, weight: .medium))
                         }
                         .padding(.horizontal, 10)
                         .frame(height: 24)
@@ -80,6 +83,7 @@ struct NewSessionPanel: View {
                     .disabled(!canStart(machine))
                     .opacity(canStart(machine) ? 1 : 0.4)
                     .help(why(machine) ?? "Start a session on \(machine.name)")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
         }
@@ -97,8 +101,8 @@ struct NewSessionPanel: View {
                     focused = true
                 } label: {
                     HStack(spacing: 5) {
-                        ToolMark(tool: choice, size: 10)
-                        Text(choice.label).font(.system(size: 11, weight: .medium))
+                        ToolMark(tool: choice, size: 10).accessibilityHidden(true)
+                        Text(choice.label).font(.notch(11, weight: .medium))
                     }
                     .padding(.horizontal, 10)
                     .frame(height: 24)
@@ -107,6 +111,7 @@ struct NewSessionPanel: View {
                 }
                 .buttonStyle(.plain)
                 .help("Start \(choice.command) on \(machine.name)")
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
         .padding(.bottom, 8)
@@ -121,16 +126,17 @@ struct NewSessionPanel: View {
     private func folderField(_ machine: MachineInfo?) -> some View {
         let startable = machine != nil && RecentFolders.isStartable(folder) && store.connection == .connected
         return HStack(spacing: 8) {
-            Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(.secondary)
-            TextField("", text: $folder, prompt: Text("~/code/project").foregroundStyle(Theme.ink.opacity(0.35)))
+            Image(systemName: "folder").font(.notch(11)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
+            TextField("", text: $folder, prompt: Text("~/code/project").foregroundStyle(Theme.textFaint))
+                .accessibilityLabel("Folder")
                 .textFieldStyle(.plain)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.notch(12, design: .monospaced))
                 .focused($focused)
                 .onSubmit { if startable, let machine { start(machine) } }
             Button {
                 if let machine { start(machine) }
             } label: {
-                Text("Start").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).frame(height: 22)
+                Text("Start").font(.notch(11, weight: .semibold)).padding(.horizontal, 10).frame(height: 22)
                     .foregroundStyle(startable ? Theme.onAccent : Theme.text)
                     .background(Capsule().fill(startable ? Theme.accent : Theme.ink.opacity(0.1)))
             }
@@ -146,11 +152,11 @@ struct NewSessionPanel: View {
     @ViewBuilder private func recentFolders(_ machine: MachineInfo) -> some View {
         let folders = store.recentFolders(on: machine.id)
         if !folders.isEmpty {
-            Text("RECENT").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).padding(.top, 10).padding(.bottom, 2)
+            Text("RECENT").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).padding(.top, 10).padding(.bottom, 2)
             ForEach(folders, id: \.self) { recent in
                 HStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 10)).foregroundStyle(.tertiary)
-                    Text(recent).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.head)
+                    Image(systemName: "clock.arrow.circlepath").font(.notch(10)).foregroundStyle(Theme.tertiary).accessibilityHidden(true)
+                    Text(recent).font(.notch(11, design: .monospaced)).lineLimit(1).truncationMode(.head)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 6)
@@ -163,6 +169,13 @@ struct NewSessionPanel: View {
                 }
                 .onTapGesture { folder = recent }
                 .help("Click to pick, double-click to start")
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { folder = recent }
+                .accessibilityAction(named: "Start here") {
+                    folder = recent
+                    start(machine)
+                }
             }
         }
     }
@@ -196,20 +209,21 @@ private struct LaunchCard: View {
             HStack(spacing: 8) {
                 switch launch.state {
                 case .sending, .starting, .started: ProgressView().controlSize(.mini)
-                case .asking: Image(systemName: "questionmark.circle.fill").foregroundStyle(Theme.accent)
-                case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.danger)
+                case .asking: Image(systemName: "questionmark.circle.fill").foregroundStyle(Theme.accent).accessibilityLabel("Question")
+                case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.danger).accessibilityLabel("Failed")
                 }
-                Text("\(launch.cwd) on \(machine)").font(.system(size: 11, weight: .medium)).lineLimit(1).truncationMode(.head)
+                Text("\(launch.cwd) on \(machine)").font(.notch(11, weight: .medium)).lineLimit(1).truncationMode(.head)
                 Spacer(minLength: 0)
                 if launch.state == .failed {
                     Button {
                         store.dismissLaunch(launch.id)
                     } label: {
-                        Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                        Image(systemName: "xmark").font(.notch(9, weight: .semibold))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.secondary)
                     .help("Dismiss")
+                    .accessibilityLabel("Dismiss")
                 }
             }
             switch launch.state {
@@ -217,7 +231,7 @@ private struct LaunchCard: View {
             case .starting, .started: caption("Starting \(launch.tool.command)…")
             case .asking, .failed:
                 if let headline = launch.headline {
-                    Text(headline).font(.system(size: 12)).foregroundStyle(launch.state == .failed ? Theme.danger : .primary)
+                    Text(headline).font(.notch(12)).foregroundStyle(launch.state == .failed ? Theme.danger : .primary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -238,14 +252,14 @@ private struct LaunchCard: View {
                     Button("Cancel") { store.answerStart(launch, confirm: false) }
                         .disabled(!armed)
                         .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.notch(11, weight: .medium))
                         .padding(.horizontal, 12)
                         .frame(height: 24)
                         .background(Capsule().fill(Theme.ink.opacity(0.1)))
                     Button("Confirm") { store.answerStart(launch, confirm: true) }
                         .disabled(!armed)
                         .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.notch(11, weight: .semibold))
                         .foregroundStyle(Theme.onAccent)
                         .padding(.horizontal, 12)
                         .frame(height: 24)
@@ -264,14 +278,14 @@ private struct LaunchCard: View {
     }
 
     private func screenText(_ screen: String) -> some View {
-        Text(screen).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+        Text(screen).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
     }
 
     private func caption(_ text: String) -> some View {
-        Text(text).font(.system(size: 11)).foregroundStyle(.secondary)
+        Text(text).font(.notch(11)).foregroundStyle(Theme.secondary)
     }
 }
 

@@ -44,6 +44,8 @@ final class NotchWindowController {
     private var behindFloatingWindow = false
     private var peekTask: Task<Void, Never>?
     private var openedByHover = false
+    /// Waits a moment before the preview of a pill shows, so a pointer passing over the pills shows nothing.
+    private var previewTask: Task<Void, Never>?
     /// The last other app in front, given back the focus when the notch closes.
     private var previousApp: NSRunningApplication?
     /// ⌃ pressed alone: dictation starts unless another key comes first.
@@ -101,6 +103,22 @@ final class NotchWindowController {
 
     private var pointerOnPills: Bool { state.mode == .collapsed && state.pills.pillCount > 0 && pillsFrame.contains(NSEvent.mouseLocation) }
 
+    /// The pill under the pointer: a session's, or `sessions.count` for the `+N` one. Nil between pills.
+    private var pillUnderPointer: Int? {
+        pointerOnPills ? state.pills.pill(at: NSEvent.mouseLocation.x - pillsFrame.minX) : nil
+    }
+
+    /// Frame of the preview card while it shows, in screen coordinates, with the gap above it: the pointer crosses it on
+    /// the way from the pill to the card.
+    private var previewFrame: NSRect? {
+        guard state.mode == .collapsed, let index = state.previewPill else { return nil }
+        let x = panel.frame.minX + state.pills.previewX(for: index, within: panel.frame.width)
+        let height = PillRow.previewHeight + PillRow.previewGap
+        return NSRect(x: x, y: pillsFrame.minY - height, width: PillRow.previewWidth, height: height)
+    }
+
+    private var pointerOnPreview: Bool { previewFrame?.contains(NSEvent.mouseLocation) == true }
+
     /// Frame of the visible shape, in screen coordinates.
     private func shapeFrame(_ size: CGSize) -> NSRect {
         NSRect(x: panel.frame.midX - size.width / 2, y: panel.frame.maxY - size.height, width: size.width, height: size.height)
@@ -111,6 +129,7 @@ final class NotchWindowController {
     func expand(byHover: Bool = false) {
         peekTask?.cancel()
         collapseTask?.cancel()
+        hidePreview()
         if state.mode != .expanded { openedByHover = byHover }
         panel.level = NotchPanel.raisedLevel
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { state.mode = .expanded }
@@ -191,7 +210,7 @@ final class NotchWindowController {
     /// A session needs the user or just finished: sound, haptics, notification, then the banner or the open notch.
     private func alert(_ session: SessionSummary, finished: Bool) {
         guard !settings.isQuietNow else { return }
-        signal(.of(session.status, finished: finished))
+        signal(.of(session.status, finished: finished), project: session.project)
         if settings.systemNotifications { Notifier.post(session, body: finished ? "Claude is done." : session.displayStatusText) }
         if settings.openOnPermission && session.status == .permission {
             store.selectedId = session.id
@@ -199,6 +218,13 @@ final class NotchWindowController {
         } else {
             peek(session)
         }
+    }
+
+    /// VoiceOver reads it out at once, wherever its cursor is; without VoiceOver nothing happens.
+    private func announce(_ text: String) {
+        NSAccessibility.post(
+            element: panel, notification: .announcementRequested,
+            userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 
     /// Sessions a usage limit stopped can go again: the same sound and banner, once for all of them.
@@ -223,17 +249,22 @@ final class NotchWindowController {
         }
     }
 
-    private func signal(_ event: SoundEvent) {
-        if settings.soundOnAttention { SoundPlayer.play(settings.sound(for: event)) }
+    private func signal(_ event: SoundEvent, project: String? = nil) {
+        let sound = project.map { settings.sound(for: event, project: $0) } ?? settings.sound(for: event)
+        if settings.soundOnAttention { SoundPlayer.play(sound) }
         if settings.haptics { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
     }
 
     /// Today's spending went past the daily budget of Settings › General.
-    private func budgetExceeded(_ spent: Double) {
+    private func budgetExceeded(_ period: BudgetPeriod, _ spent: Double) {
         guard !settings.isQuietNow else { return }
         signal(.question)
-        let text = String(format: "Today's cost passed $%d: $%.2f so far", settings.dailyBudget, spent)
-        if settings.systemNotifications { Notifier.post(title: "Daily budget", body: text) }
+        let text =
+            switch period {
+            case .day: String(format: "Today's cost passed $%d: $%.2f so far", settings.dailyBudget, spent)
+            case .month: String(format: "This month's cost passed $%d: $%.2f so far", settings.monthlyBudget, spent)
+            }
+        if settings.systemNotifications { Notifier.post(title: period == .day ? "Daily budget" : "Monthly budget", body: text) }
         peek(nil, text: text)
     }
 
@@ -271,18 +302,21 @@ final class NotchWindowController {
             .sink { [weak self] app in self?.otherAppActivated(app) }
             .store(in: &subscriptions)
         store.sessionsPublisher.combineLatest(settings.$showPills, settings.$hiddenMachines, settings.$pinnedSessions)
-            .map { [store] sessions, on, hidden, pinned in
-                on
-                    ? PillRow(
-                        SessionLayout.ordered(sessions.filter { !hidden.contains($0.machine) }, pinned: pinned, thisMac: store.thisMachines)
-                    )
-                    : PillRow([])
+            .combineLatest(settings.$projectTags)
+            .map { [store] values, tags in
+                let (sessions, on, hidden, pinned) = values
+                let shown = sessions.filter { !hidden.contains($0.machine) }
+                return on ? PillRow(SessionLayout.ordered(shown, pinned: pinned, thisMac: store.thisMachines, tags: tags)) : PillRow([])
             }
             .removeDuplicates()
             .sink { [weak self] row in self?.state.pills = row }
             .store(in: &subscriptions)
         store.attention
             .sink { [weak self] session in self?.alert(session, finished: false) }
+            .store(in: &subscriptions)
+        store.permissionsAsked
+            .filter { [settings] _ in !settings.isQuietNow }
+            .sink { [weak self] asked in self?.announce(Spoken.permissions(asked.requests, session: asked.session.project)) }
             .store(in: &subscriptions)
         // The user started the session: its questions open the notch whatever the settings say.
         store.launchAsks
@@ -304,7 +338,7 @@ final class NotchWindowController {
             .sink { [weak self] session in self?.alert(session, finished: true) }
             .store(in: &subscriptions)
         store.usage.budgetExceeded
-            .sink { [weak self] spent in self?.budgetExceeded(spent) }
+            .sink { [weak self] alert in self?.budgetExceeded(alert.period, alert.spent) }
             .store(in: &subscriptions)
         store.limitLifted
             .filter { [settings] _ in settings.alertOnLimitReset }
@@ -357,6 +391,7 @@ final class NotchWindowController {
             NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
                 guard let self, event.window === self.panel else { return event }
                 if self.state.mode == .expanded { self.openedByHover = false }
+                if self.pointerOnPreview, let index = self.state.previewPill { return self.openPill(index) }
                 if self.pointerOnPills { return self.clickedPill() ? nil : event }
                 return event
             })
@@ -399,8 +434,10 @@ final class NotchWindowController {
         let pointer = NSEvent.mouseLocation
         switch state.mode {
         case .collapsed, .peek:
-            // The panel only takes the mouse over the pills, so they can be clicked and the menu bar stays usable.
-            panel.ignoresMouseEvents = !pointerOnPills
+            // The panel only takes the mouse over the pills and their preview, so they can be clicked and the menu bar stays
+            // usable.
+            updatePreview()
+            panel.ignoresMouseEvents = !(pointerOnPills || pointerOnPreview)
             // A little slack below the shape makes it easy to reach.
             if settings.openOnHover && shapeFrame(state.currentSize).insetBy(dx: -6, dy: -6).contains(pointer) {
                 expand(byHover: true)
@@ -427,9 +464,44 @@ final class NotchWindowController {
     /// Opens the notch on the session whose pill was clicked; the `+N` pill opens it as it was. Returns false between pills.
     private func clickedPill() -> Bool {
         guard let index = state.pills.pill(at: NSEvent.mouseLocation.x - pillsFrame.minX) else { return false }
+        _ = openPill(index)
+        return true
+    }
+
+    /// Always nil: the click is used up.
+    private func openPill(_ index: Int) -> NSEvent? {
         if index < state.pills.sessions.count { store.selectedId = state.pills.sessions[index].id }
         expand()
-        return true
+        return nil
+    }
+
+    /// Shows the preview of the session pill the pointer rests on, keeps it while the pointer is on the card, and hides it
+    /// otherwise.
+    private func updatePreview() {
+        if pointerOnPreview { return }
+        guard pointerOnPills else { return hidePreview() }
+        // Between two pills: whatever shows stays, so moving along the row doesn't flicker.
+        guard let index = pillUnderPointer else { return }
+        guard index < state.pills.sessions.count else { return hidePreview() }
+        if state.previewPill == index { return }
+        if state.previewPill != nil {
+            // Already showing one: moving along the pills switches at once.
+            withAnimation(.easeOut(duration: 0.12)) { state.previewPill = index }
+            return
+        }
+        previewTask?.cancel()
+        previewTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard let self, !Task.isCancelled, pillUnderPointer == index else { return }
+            withAnimation(.easeOut(duration: 0.12)) { self.state.previewPill = index }
+        }
+    }
+
+    private func hidePreview() {
+        previewTask?.cancel()
+        previewTask = nil
+        guard state.previewPill != nil else { return }
+        withAnimation(.easeOut(duration: 0.12)) { state.previewPill = nil }
     }
 
     /// Clicks in floating panels (launchers, Spotlight) are ignored: picking a clipboard item must not close the chat it pastes into.
@@ -453,6 +525,13 @@ final class NotchWindowController {
             } else {
                 collapse(force: true)
             }
+            return true
+        }
+        // Space over an attachment previews it, unless it would go into a message being typed.
+        if event.keyCode == UInt16(kVK_Space), event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+            let preview = state.quickLookUnderPointer, (state.drafts[store.selectedId ?? ""] ?? "").isEmpty
+        {
+            preview()
             return true
         }
         guard event.modifierFlags.contains(.command) else { return false }

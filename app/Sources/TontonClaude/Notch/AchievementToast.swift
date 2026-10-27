@@ -12,6 +12,7 @@ struct AchievementToast: View {
                 .foregroundStyle(Theme.warning)
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(Theme.warning.opacity(0.16)))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Achievement unlocked").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
                 Text(achievement.title).font(.system(size: 13, weight: .bold)).foregroundStyle(.white)

@@ -31,4 +31,14 @@ final class PillRowTests: XCTestCase {
         XCTAssertNil(row.pill(at: row.width + 1))
         XCTAssertNil(row.pill(at: -1))
     }
+
+    func testThePreviewSitsUnderItsPillInsideThePanel() {
+        // Three pills, 324 pt, centered in a 680 pt panel: the first starts at 178.
+        let row = PillRow(sessions(3))
+        XCTAssertEqual(row.previewX(for: 1, within: 680), 178 + 110 + 52 - 150)
+        // Six pills are wider than the cards: the first and last cards stop at the panel's edges.
+        let wide = PillRow(sessions(6))
+        XCTAssertEqual(wide.previewX(for: 0, within: 680), 0)
+        XCTAssertEqual(wide.previewX(for: 5, within: 680), 680 - PillRow.previewWidth)
+    }
 }

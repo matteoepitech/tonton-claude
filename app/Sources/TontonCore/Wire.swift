@@ -20,6 +20,8 @@ public struct WireSession: Decodable, Sendable {
     public let pendingPermissions: [WirePermission]
     public let startedAt: String
     public let lastActivity: String
+    /// Sealed `SessionName`. Missing from older relays, and until a Mac renames the session.
+    public var name: String? = nil
 }
 
 public struct WireEntry: Decodable, Sendable {
@@ -53,10 +55,17 @@ public enum RelayMessage: Decodable, Sendable {
     /// Where a start from the notch stands. `detail` is a sealed `StartDetail`, `reason` set when the relay could not
     /// reach the machine.
     case sessionStart(machineId: String, launchId: String, state: String, reason: String?, detail: String?)
+    /// A machine's answer to a request for its log: `logs` is a sealed `AgentLog`, `reason` set when the relay could not
+    /// reach the machine.
+    case agentLogs(machineId: String, requestId: String, reason: String?, logs: String?)
+    /// A machine's answer to a request for a diagnosis: `diagnosis` is a sealed `Diagnosis`, `reason` set when the relay
+    /// could not reach the machine.
+    case diagnosis(machineId: String, requestId: String, reason: String?, diagnosis: String?)
     case unknown
 
     private enum Keys: String, CodingKey {
         case t, sessions, machines, session, sessionId, entries, message, machineId, ok, reason, detail, launchId, state
+        case requestId, logs, diagnosis
     }
 
     public init(from decoder: Decoder) throws {
@@ -80,6 +89,12 @@ public enum RelayMessage: Decodable, Sendable {
             self = .sessionStart(
                 machineId: try value(.machineId), launchId: try value(.launchId), state: try value(.state), reason: reason,
                 detail: detail)
+        case "agent_logs":
+            let (reason, logs) = (try optional(.reason), try optional(.logs))
+            self = .agentLogs(machineId: try value(.machineId), requestId: try value(.requestId), reason: reason, logs: logs)
+        case "diagnosis":
+            let (reason, diagnosis) = (try optional(.reason), try optional(.diagnosis))
+            self = .diagnosis(machineId: try value(.machineId), requestId: try value(.requestId), reason: reason, diagnosis: diagnosis)
         default: self = .unknown
         }
     }
@@ -109,7 +124,10 @@ struct SessionMeta: Codable {
     var commands: [String]?
     /// The model's API id. Missing from older agents.
     var model: String?
+    /// The last turns that ended, oldest first. Missing from older agents.
+    var turns: [WireTurn]?
 }
+struct WireTurn: Codable { let end: String; let seconds: Double }
 struct WireContext: Codable { let usedTokens: Int; let windowTokens: Int? }
 struct WireUsageLimit: Codable { let usedPercent: Double; let resetsAt: String }
 struct StatusDetail: Codable { let text: String }
@@ -134,6 +152,14 @@ struct PromptPayload: Codable {
     var command: SessionCommand?
 }
 struct UpdateOrder: Codable { let version: String; let issuedAt: String }
+struct SessionName: Codable { let sessionId: String; let name: String; let issuedAt: String }
+struct LogRequest: Codable { let requestId: String; let machineId: String; let issuedAt: String }
+struct DiagnoseRequest: Codable {
+    let requestId: String
+    let machineId: String
+    let issuedAt: String
+    var fix: String?
+}
 struct StartOrder: Codable {
     let launchId: String
     let machineId: String

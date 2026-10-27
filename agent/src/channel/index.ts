@@ -3,8 +3,10 @@ import { basename, join } from 'node:path'
 import { open } from '../../../shared/crypto'
 import type { PromptPayload, RelayToAgent, SessionCommand } from '../../../shared/protocol'
 import { loadConfig, paths } from '../config'
+import { receiveDiagnoseRequest } from '../diagnose'
 import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
+import { handleLogRequest } from '../logs'
 import { addSessionRules, openSessionRules, receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { Conversation } from './conversation'
@@ -40,6 +42,8 @@ export async function runChannel() {
       else if (message.t === 'rules') void receiveRules(config.key, message.rules)
       else if (message.t === 'start_session') receiveStartOrder(config, message.launchId, message.order, relay)
       else if (message.t === 'start_answer') void handleStartAnswer(config, message.launchId, message.answer)
+      else if (message.t === 'agent_logs') void handleLogRequest(config, message.requestId, message.request, relay)
+      else if (message.t === 'diagnose') void receiveDiagnoseRequest(config, message.requestId, message.request, relay, 'channel')
       else if (conversation && message.sessionId === conversation.link.sessionId) {
         if (message.t === 'share') conversation.shares.receive(message.shareId, message.order)
         else if (message.t === 'unshare') conversation.shares.remove(message.shareId)

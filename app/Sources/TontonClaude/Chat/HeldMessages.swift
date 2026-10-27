@@ -99,7 +99,7 @@ struct HeldBubble: View {
             Spacer(minLength: 60)
             VStack(alignment: .trailing, spacing: 4) {
                 Text(pendingLabel(message.text, images: message.images.count))
-                    .font(.system(size: 12))
+                    .font(.notch(12))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
                     .foregroundStyle(Theme.onAccent)
@@ -108,11 +108,11 @@ struct HeldBubble: View {
                     TimelineView(.periodic(from: .now, by: 0.25)) { context in
                         Text("sending in \(message.secondsLeft(at: context.date)) s").monospacedDigit()
                     }
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
+                    .font(.notch(9))
+                    .foregroundStyle(Theme.tertiary)
                     Button("Undo", action: undo)
                         .buttonStyle(.plain)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.notch(10, weight: .semibold))
                         .foregroundStyle(Theme.accent)
                         .help("Take the message back to the message field")
                         .accessibilityLabel("Undo send")

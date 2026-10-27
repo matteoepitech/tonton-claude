@@ -34,11 +34,12 @@ struct LocalFolderActions: View {
             switch style {
             case .icons:
                 Button(action: action.run) {
-                    Image(systemName: action.icon).font(.system(size: 11))
+                    Image(systemName: action.icon).font(.notch(11))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
                 .help(action.label)
+                .accessibilityLabel(action.label)
             case .menu:
                 Button(action.label, action: action.run)
             }

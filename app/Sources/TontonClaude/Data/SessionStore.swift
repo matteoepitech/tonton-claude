@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import TontonCore
+import TontonMac
 
 /// Live state of the account's sessions and machines, fed by the relay socket and decrypted with the account key, plus
 /// the sessions of this Mac read from Claude Code's files, which need neither an account nor an agent.
@@ -35,6 +36,12 @@ final class SessionStore: ObservableObject {
     /// Machines asked to update that have not answered yet.
     @Published private(set) var updatingMachines: Set<String> = []
     @Published private(set) var updateErrors: [String: String] = [:]
+    /// Requests for agent logs, by machine, while their panel is open in Settings › Machines.
+    @Published private(set) var agentLogs: [String: AgentLogRequest] = [:]
+    /// Requests for diagnoses, by machine, while their panel is open in Settings › Machines.
+    @Published private(set) var diagnoses: [String: DiagnosisRequest] = [:]
+    /// The repair each machine is running, until its diagnosis comes back.
+    @Published private(set) var repairing: [String: String] = [:]
     @Published private var relayEntries: [String: [Entry]] = [:]
     @Published private var localEntries: [String: [Entry]] = [:]
     /// The relay's history once it arrived, this Mac's transcript until then.
@@ -48,10 +55,14 @@ final class SessionStore: ObservableObject {
 
     /// A session started needing the user: permission, question or error.
     let attention = PassthroughSubject<SessionSummary, Never>()
+    /// Permission requests that just arrived, for VoiceOver to read out.
+    let permissionsAsked = PassthroughSubject<(session: SessionSummary, requests: [PermissionRequest]), Never>()
     /// A session went from working to done.
     let finished = PassthroughSubject<SessionSummary, Never>()
     /// A session finished a task, with how long it worked on it.
     let taskDone = PassthroughSubject<(session: SessionSummary, worked: TimeInterval), Never>()
+    /// When the 5-hour windows run out at the current pace. Not published: the rows read it with their countdown.
+    private(set) var forecast = LimitForecast()
     private var workTimer = WorkTimer()
     /// Sessions a usage limit stopped, the moment it resets.
     let limitLifted = PassthroughSubject<[SessionSummary], Never>()
@@ -77,12 +88,18 @@ final class SessionStore: ObservableObject {
     private let openCodeWatcher = OpenCodeLocalWatcher()
     private var claudeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
     private var openCodeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
+    /// Finished conversations kept on this Mac (Settings › Archive).
+    let archive = ArchiveStore()
+    /// Relay sessions that ended while not followed: archived once their whole history has come.
+    private var archiveOnHistory: Set<String> = []
     /// Cost and tokens per day and the monthly recap, for Settings › Usage.
     private(set) lazy var usage = UsageRecorder(
-        sessions: sessionsPublisher, tasks: taskDone.eraseToAnyPublisher(),
-        entries: $localEntries.combineLatest($relayEntries).map { local, relay in LocalSessions.entries(local: local, relay: relay) }
-            .eraseToAnyPublisher(),
-        settings: settings)
+        sessions: sessionsPublisher, tasks: taskDone.eraseToAnyPublisher(), entries: entriesPublisher, settings: settings)
+    /// The conversations of this Mac and of the relay, merged as `entries` merges them.
+    var entriesPublisher: AnyPublisher<[String: [Entry]], Never> {
+        $localEntries.combineLatest($relayEntries).map { local, relay in LocalSessions.entries(local: local, relay: relay) }
+            .eraseToAnyPublisher()
+    }
     /// One per reset time of the sessions a usage limit stopped.
     private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()
@@ -97,6 +114,10 @@ final class SessionStore: ObservableObject {
         socket.onMessage = { [weak self] message in self?.handle(message) }
         socket.onLatency = { [weak self] latency in self?.latency = latency }
         // The join secret does not change the connection.
+        // Each account has its archive. `$account` sends the new account before `settings.account` holds it.
+        settings.$account.removeDuplicates { $0.map(AccountList.id(of:)) == $1.map(AccountList.id(of:)) }
+            .sink { [weak self] account in self?.archive.use(account: account) }
+            .store(in: &subscriptions)
         settings.$account.map { $0.map { [$0.relay, $0.token, $0.key] } }.removeDuplicates()
             .combineLatest(settings.$connectionEnabled)
             .dropFirst()
@@ -122,6 +143,9 @@ final class SessionStore: ObservableObject {
             .store(in: &subscriptions)
         sessionsPublisher.combineLatest(settings.$hiddenMachines)
             .sink { [weak self] sessions, hidden in self?.scheduleLimitResets(sessions.filter { !hidden.contains($0.machine) }) }
+            .store(in: &subscriptions)
+        sessionsPublisher
+            .sink { [weak self] sessions in self?.forecast.record(sessions.filter(\.status.isLive).map(\.fiveHourLimit)) }
             .store(in: &subscriptions)
         limitLifted.sink { [weak self] sessions in self?.continueAfterLimit(sessions) }.store(in: &subscriptions)
         _ = usage
@@ -190,13 +214,18 @@ final class SessionStore: ObservableObject {
 
     func isOnThisMac(_ session: SessionSummary) -> Bool { thisMachines.contains(session.machineId) }
 
+    /// A session the relay reports, whose history it keeps.
+    func isRelaySession(_ sessionId: String) -> Bool { relaySessions.contains { $0.id == sessionId } }
+
     /// This Mac's sessions, whether they come from its agent or straight from its files.
     var thisMachines: Set<String> { Set([LocalSessions.machineId] + [thisMac].compactMap { $0 }) }
 
     /// The list as the notch shows it, pinned sessions first, then this Mac's.
-    var sections: [SessionSection] { SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines) }
+    var sections: [SessionSection] {
+        SessionLayout.sections(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines, tags: settings.projectTags)
+    }
     var orderedSessions: [SessionSummary] {
-        SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines)
+        SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines, tags: settings.projectTags)
     }
 
     func togglePin(_ sessionId: String) {
@@ -213,6 +242,7 @@ final class SessionStore: ObservableObject {
 
     func connect() {
         relaySessions = []
+        shares = []
         machines = []
         thisMac = nil
         relayEntries = [:]
@@ -220,6 +250,9 @@ final class SessionStore: ObservableObject {
         updateErrors = [:]
         launches = []
         launchSelection = nil
+        agentLogs = [:]
+        diagnoses = [:]
+        repairing = [:]
         guard settings.connectionEnabled else {
             socket.disconnect(to: .paused)
             return
@@ -236,7 +269,13 @@ final class SessionStore: ObservableObject {
     private func socketStateChanged(_ state: ConnectionState) {
         connection = state
         if state != .connected { catchUp.cancel() }
-        if state == .connected { subscribe() }
+        if state == .connected {
+            subscribe()
+            // Histories asked for the archive before the connection dropped: asked again.
+            for sessionId in archiveOnHistory {
+                if let first = catchUp.fetch(sessionId, selected: selectedId) { subscribe(to: first) }
+            }
+        }
     }
 
     private func handle(_ message: RelayMessage) {
@@ -265,6 +304,9 @@ final class SessionStore: ObservableObject {
             if selectedId == sessionId { selectedId = preferredSelection() }
         case .history(let sessionId, let wireEntries):
             relayEntries[sessionId] = vault.entries(wireEntries)
+            if archiveOnHistory.remove(sessionId) != nil, let session = relaySessions.first(where: { $0.id == sessionId }) {
+                archive.add(session, entries: entries[sessionId] ?? [])
+            }
             if catchUp.isRunning { subscribe(to: catchUp.received(sessionId)) }
         case .entries(let sessionId, let wireEntries):
             relayEntries[sessionId, default: []].append(contentsOf: vault.entries(wireEntries))
@@ -274,6 +316,10 @@ final class SessionStore: ObservableObject {
             updateFinished(machineId, ok: ok, reason: reason, detail: vault.detailText(detail))
         case .sessionStart(let machineId, let launchId, let state, let reason, let detail):
             launchReported(launchId, machineId: machineId, state: state, reason: reason, detail: vault.startDetail(detail))
+        case .agentLogs(let machineId, let requestId, let reason, let logs):
+            logReceived(machineId: machineId, requestId: requestId, reason: reason, log: vault.agentLog(logs))
+        case .diagnosis(let machineId, let requestId, let reason, let diagnosis):
+            diagnosisReceived(machineId: machineId, requestId: requestId, reason: reason, diagnosis: vault.diagnosis(diagnosis))
         case .unknown:
             break
         }
@@ -281,6 +327,7 @@ final class SessionStore: ObservableObject {
 
     private func update(_ session: SessionSummary) {
         let previous = sessions.first { $0.id == session.id }
+        if let pending = pendingNames[session.id], pending == session.name { pendingNames[session.id] = nil }
         if let index = relaySessions.firstIndex(where: { $0.id == session.id }) {
             relaySessions[index] = session
         } else {
@@ -308,11 +355,26 @@ final class SessionStore: ObservableObject {
 
     /// Alerts and sounds for a session that started needing the user, or finished working.
     private func notify(_ session: SessionSummary, previous: SessionSummary?) {
+        // Hidden machines have no alerts, but their conversations still go to the archive.
+        if session.status == .ended && previous != nil && previous?.status != .ended && settings.archiveFinished {
+            archiveConversation(session)
+        }
         guard !settings.hiddenMachines.contains(session.machine) else { return }
         let changed = previous?.status != session.status || previous?.pendingPermissions != session.pendingPermissions
         if session.status.needsAttention && changed { attention.send(session) }
+        let asked = PermissionRequest.added(session.pendingPermissions, since: previous?.pendingPermissions ?? [])
+        if !asked.isEmpty { permissionsAsked.send((session, asked)) }
         if previous?.status == .working && session.status == .idle { finished.send(session) }
         if let worked = workTimer.update(session, previous: previous?.status) { taskDone.send((session, worked)) }
+    }
+
+    /// Keeps the session's conversation in Settings › Archive. The app only follows the selected relay session: the
+    /// history of another one is fetched first, so the whole conversation is kept, not what was seen of it.
+    func archiveConversation(_ session: SessionSummary) {
+        let followed = session.id == selectedId || !relaySessions.contains { $0.id == session.id }
+        guard !followed, connection == .connected else { return archive.add(session, entries: entries[session.id] ?? []) }
+        archiveOnHistory.insert(session.id)
+        if let first = catchUp.fetch(session.id, selected: selectedId) { subscribe(to: first) }
     }
 
     private static func sorted(_ list: [SessionSummary]) -> [SessionSummary] {
@@ -404,6 +466,35 @@ final class SessionStore: ObservableObject {
             return
         }
         socket.send(["t": "dismiss", "sessionId": sessionId])
+    }
+
+    // MARK: Names
+
+    /// Names sent to the relay that have not come back with their session yet.
+    private var pendingNames: [String: String?] = [:]
+
+    /// Sessions the relay keeps: it holds the name for the other Macs. This Mac's sessions without an agent aren't there.
+    func canRename(_ session: SessionSummary) -> Bool {
+        connection == .connected && relaySessions.contains { $0.id == session.id }
+    }
+
+    /// Names the session on every Mac of the account, sealed like the rest. An empty name brings the project back.
+    func rename(_ session: SessionSummary, to name: String) {
+        let cut = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SessionVault.maxSessionName))
+        let trimmed = cut.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wanted: String? = trimmed.isEmpty || trimmed == session.project ? nil : trimmed
+        guard canRename(session), wanted != session.name, let sealed = try? vault?.sealSessionName(wanted ?? "", for: session.id) else {
+            return
+        }
+        pendingNames[session.id] = wanted
+        socket.send(["t": "rename", "sessionId": session.id, "name": sealed])
+        // A relay too old to keep names never sends the session back with it.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, let pending = self.pendingNames[session.id], pending == wanted else { return }
+            self.pendingNames[session.id] = nil
+            self.lastError = "The relay did not keep the name. It may be too old to rename sessions."
+        }
     }
 
     // MARK: Auto-approve rules
@@ -548,7 +639,8 @@ final class SessionStore: ObservableObject {
 
     func refreshShares() async {
         guard let account = settings.account else { return }
-        if let listed = try? await api.shares(of: account) { shares = listed }
+        // Another account may be connected by the time the relay answers.
+        if let listed = try? await api.shares(of: account), isConnected(account) { shares = listed }
     }
 
     /// Closes the teammates' pages at once, and the agent stops sealing for it.
@@ -556,6 +648,72 @@ final class SessionStore: ObservableObject {
         guard let account = settings.account else { return }
         try await api.revokeShare(id, of: account)
         shares.removeAll { $0.id == id }
+    }
+
+    // MARK: Agent logs
+
+    /// Asks the machine for the end of its agent log, sealed on the way back. A new request replaces the previous one.
+    func requestLog(of machine: MachineInfo) {
+        let request = AgentLogRequest(machineId: machine.id, previous: agentLogs[machine.id]?.answer)
+        guard connection == .connected, let sealed = try? vault?.sealLogRequest(requestId: request.id, machineId: machine.id) else {
+            agentLogs[machine.id] = request.failed("Not connected to the relay.")
+            return
+        }
+        agentLogs[machine.id] = request
+        socket.send(["t": "agent_logs", "machineId": machine.id, "requestId": request.id, "request": sealed])
+        // An agent or a relay too old to send logs never answers.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, let current = self.agentLogs[machine.id], current.id == request.id, current.isLoading else { return }
+            self.agentLogs[machine.id] = current.failed(
+                "No answer from \(machine.name). Its agent may be too old to send its log: update it.")
+        }
+    }
+
+    func closeLog(of machineId: String) {
+        agentLogs[machineId] = nil
+    }
+
+    private func logReceived(machineId: String, requestId: String, reason: String?, log: AgentLog?) {
+        guard let request = agentLogs[machineId], request.id == requestId else { return }
+        let name = machines.first { $0.id == machineId }?.name ?? "The machine"
+        agentLogs[machineId] = request.received(reason: reason, answer: log, machine: name)
+    }
+
+    // MARK: Diagnosis
+
+    /// Asks the machine's agent to check how the machine is set up, after the repair `fix` names if any.
+    func diagnose(_ machine: MachineInfo, fix: String? = nil) {
+        let request = DiagnosisRequest(machineId: machine.id, previous: diagnoses[machine.id]?.answer)
+        guard connection == .connected,
+            let sealed = try? vault?.sealDiagnoseRequest(requestId: request.id, machineId: machine.id, fix: fix)
+        else {
+            diagnoses[machine.id] = request.failed("Not connected to the relay.")
+            return
+        }
+        diagnoses[machine.id] = request
+        repairing[machine.id] = fix
+        socket.send(["t": "diagnose", "machineId": machine.id, "requestId": request.id, "request": sealed])
+        // An agent or a relay too old to diagnose never answers. Starting the service can take a few seconds.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(25))
+            guard let self, let current = self.diagnoses[machine.id], current.id == request.id, current.isLoading else { return }
+            self.diagnoses[machine.id] = current.failed(
+                "No answer from \(machine.name). Its agent may be too old to check itself: update it.")
+            self.repairing[machine.id] = nil
+        }
+    }
+
+    func closeDiagnosis(of machineId: String) {
+        diagnoses[machineId] = nil
+    }
+
+    private func diagnosisReceived(machineId: String, requestId: String, reason: String?, diagnosis: Diagnosis?) {
+        guard let request = diagnoses[machineId], request.id == requestId else { return }
+        let name = machines.first { $0.id == machineId }?.name ?? "The machine"
+        let next = request.received(reason: reason, answer: diagnosis, machine: name)
+        diagnoses[machineId] = next
+        if !next.isLoading { repairing[machineId] = nil }
     }
 
     // MARK: Account
@@ -576,7 +734,7 @@ final class SessionStore: ObservableObject {
     /// regenerate it here.
     func createMachineToken() async throws {
         guard let account = settings.account, account.joinSecret == nil else { return }
-        settings.account = account.with(joinSecret: try await api.joinSecret(for: account, regenerate: false))
+        updated(account.with(joinSecret: try await api.joinSecret(for: account, regenerate: false)))
     }
 
     /// A new token and a new encryption key: every machine is signed out until it gets the new token, and other Macs
@@ -584,7 +742,17 @@ final class SessionStore: ObservableObject {
     func regenerateMachineToken() async throws {
         guard let account = settings.account else { return }
         let secret = try await api.joinSecret(for: account, regenerate: true)
-        settings.account = account.with(key: E2E.newKey(), joinSecret: secret)
+        updated(account.with(key: E2E.newKey(), joinSecret: secret))
+    }
+
+    /// New keys for an account after a request to the relay: it may not be the connected one any more, but its saved copy
+    /// must get them.
+    private func updated(_ account: Account) {
+        if isConnected(account) { settings.account = account } else { settings.accounts.save(account) }
+    }
+
+    private func isConnected(_ account: Account) -> Bool {
+        settings.account.map(AccountList.id(of:)) == AccountList.id(of: account)
     }
 
     func revoke(_ machine: MachineInfo) async throws {
@@ -595,10 +763,38 @@ final class SessionStore: ObservableObject {
     func deleteAccount() async throws {
         guard let account = settings.account else { return }
         try await api.deleteAccount(account)
-        signOut()
+        archive.forget(account)
+        // The one deleted, even if the user switched to another meanwhile.
+        signOut(of: account)
     }
 
-    func signOut() {
-        settings.account = nil
+    /// Signs this Mac out of an account, the connected one by default: it leaves the list, with its keys. The others stay,
+    /// to switch to.
+    func signOut(of account: Account? = nil) {
+        guard let account = account ?? settings.account else { return }
+        settings.accounts.remove(account)
+        settings.parkedPins[AccountList.id(of: account)] = nil
+        if isConnected(account) {
+            // Messages held for Undo send go first, to the account they were written for.
+            HeldMessages.shared.flush()
+            settings.account = nil
+        }
+    }
+
+    /// Connects to another account signed in on this Mac. The one connected now stays in the list, and its pins wait for
+    /// it: the sessions of the next account would not include them, and they would be dropped.
+    func switchAccount(to account: Account) {
+        guard settings.accounts.entry(for: account) != nil, !isConnected(account) else { return }
+        let here = Set(localSessions.map(\.id))
+        if let current = settings.account {
+            settings.parkedPins[AccountList.id(of: current)] = settings.pinnedSessions.filter { !here.contains($0) }
+        }
+        let parked = settings.parkedPins.removeValue(forKey: AccountList.id(of: account)) ?? []
+        settings.pinnedSessions = settings.pinnedSessions.filter { here.contains($0) } + parked
+        selectedId = nil
+        // Messages held for Undo send go first, to the account they were written for: the socket only moves to the next one
+        // a moment later.
+        HeldMessages.shared.flush()
+        settings.account = account
     }
 }

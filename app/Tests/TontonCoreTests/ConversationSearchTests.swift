@@ -47,4 +47,17 @@ final class ConversationSearchTests: XCTestCase {
         XCTAssertTrue(snippet.contains("needle here"))
         XCTAssertLessThanOrEqual(snippet.count, 2 * 40 + "needle".count + 2)
     }
+
+    func testSubagentCallsAreLeftOutOfTheSearch() {
+        let entries = [
+            Entry(id: "t", ts: "2026-10-27T10:00:00Z", kind: .tool, toolUseId: "toolu_task", name: "Agent", summary: "Review"),
+            Entry(
+                id: "s", ts: "2026-10-27T10:00:01Z", kind: .subagentTool, toolUseId: "toolu_1", name: "Grep", summary: "needle",
+                parent: "toolu_task"),
+            Entry(
+                id: "r", ts: "2026-10-27T10:00:02Z", kind: .subagentResult, text: "needle", toolUseId: "toolu_1", isError: true,
+                parent: "toolu_task"),
+        ]
+        XCTAssertEqual(ConversationSearch.search("needle", sessions: [session("s1")], entries: ["s1": entries]), [])
+    }
 }

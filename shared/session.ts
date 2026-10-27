@@ -74,6 +74,8 @@ export interface Session {
   platform: string | null
   cwd: string
   project: string
+  /** The name a Mac of the account gave the session, shown instead of the project. */
+  name: string | null
   title: string | null
   status: SessionStatus
   statusText: string | null
@@ -158,6 +160,40 @@ export function sortSessions(sessions: readonly Session[]): Session[] {
 /** The session to show first: one that needs the user, or else a live one, or else the first. */
 export function preferredSession(sessions: readonly Session[]): Session | null {
   return sessions.find(s => needsAttention(s.status)) ?? sessions.find(s => isLive(s.status)) ?? sessions[0] ?? null
+}
+
+const ACTIVITY_RANK: Partial<Record<SessionStatus, number>> = { permission: 0, error: 1, waiting: 2, working: 3 }
+
+/**
+ * What a closed notch or island shows, like the Dynamic Island: the session that needs the user most, or else the most
+ * recently active one at work. Null when nothing is going on. Like `LiveActivity.pick` in the Mac app.
+ */
+export function liveActivity(sessions: readonly Session[]): Session | null {
+  let best: Session | null = null
+  for (const session of sessions) {
+    const rank = ACTIVITY_RANK[session.status]
+    if (rank === undefined) continue
+    const bestRank = best ? (ACTIVITY_RANK[best.status] ?? 9) : 10
+    const newer = (session.lastActivity ?? -Infinity) > (best?.lastActivity ?? -Infinity)
+    if (rank < bestRank || (rank === bestRank && newer)) best = session
+  }
+  return best
+}
+
+/** What it needs when it needs the user, otherwise what it is working on. Like `LiveActivity.text`. */
+export const liveActivityText = (session: Session): string =>
+  needsAttention(session.status) ? displayStatusText(session) : (session.title ?? session.lastMessage ?? STATUS_LABELS[session.status])
+
+/**
+ * Why a session's new version is worth telling the user about: it started needing them (or asks for something else), or
+ * it finished working. Like `SessionStore.notify` in the Mac app.
+ */
+export function sessionAlert(previous: Session | undefined, next: Session): 'attention' | 'finished' | null {
+  const requests = (s: Session | undefined) => s?.pendingPermissions.map(p => p.requestId).join(' ')
+  const changed = previous?.status !== next.status || requests(previous) !== requests(next)
+  if (needsAttention(next.status) && changed) return 'attention'
+  if (previous?.status === 'working' && next.status === 'idle') return 'finished'
+  return null
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/

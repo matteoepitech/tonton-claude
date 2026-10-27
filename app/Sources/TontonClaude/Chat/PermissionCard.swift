@@ -20,7 +20,8 @@ struct PermissionCard: View {
 
     var body: some View {
         ZStack {
-            hint
+            // What letting go of a swipe does: VoiceOver has the buttons.
+            hint.accessibilityHidden(true)
             card.offset(x: flyOff ?? swipe.offset)
         }
         // The card slides within its own frame, never over the session list.
@@ -42,14 +43,14 @@ struct PermissionCard: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Image(systemName: "lock.shield").foregroundStyle(Theme.accent)
-                Text("Allow \(request.toolName)?").font(.system(size: 12, weight: .bold))
+                Image(systemName: "lock.shield").foregroundStyle(Theme.accent).accessibilityHidden(true)
+                Text("Allow \(request.toolName)?").font(.notch(12, weight: .bold)).accessibilityAddTraits(.isHeader)
                 Spacer()
             }
-            Text(request.description).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(request.description).font(.notch(11)).foregroundStyle(Theme.secondary)
             if !request.inputPreview.isEmpty {
                 Text(request.inputPreview)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.notch(10, design: .monospaced))
                     .textSelection(.enabled)
                     .lineLimit(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,7 +88,7 @@ struct PermissionCard: View {
             .fill(color.opacity(0.08 + 0.22 * swipe.progress))
             .overlay(alignment: allow ? .leading : .trailing) {
                 Label(allow ? "Allow" : "Deny", systemImage: allow ? "checkmark" : "xmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.notch(12, weight: .semibold))
                     .foregroundStyle(color)
                     .padding(.horizontal, 14)
             }

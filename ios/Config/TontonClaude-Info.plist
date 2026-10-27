@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged with the keys the build settings generate (INFOPLIST_KEY_*): only what they can't express is here. -->
+<plist version="1.0">
+<dict>
+	<!-- tonton://session/<id>, from the Live Activity. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>tech.d3l.tontonclaude.ios</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tonton</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Self-hosted relays on the local network may be plain HTTP. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
