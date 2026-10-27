@@ -93,4 +93,38 @@ final class UsageHistoryTests: XCTestCase {
         XCTAssertFalse(DailyBudget.shouldAlert(spent: 19.99, budget: 20, lastAlertDay: "", today: today))
         XCTAssertFalse(DailyBudget.shouldAlert(spent: 500, budget: 0, lastAlertDay: "", today: today))
     }
+
+    func testTheMonthCountsItsOwnDaysOnly() {
+        // 31 October 23:30 and 1 November 00:30 in Paris: two months, an hour apart.
+        let october = Date(timeIntervalSince1970: 1_793_485_800)
+        let november = october.addingTimeInterval(3600)
+        var history = UsageHistory()
+        history.record(
+            [session("s1", cost: 40, startedAt: october), session("s2", cost: 5, startedAt: now)], at: october, calendar: calendar)
+        history.record(
+            [session("s1", cost: 40, startedAt: october), session("s3", project: "web", cost: 7, startedAt: november)], at: november,
+            calendar: calendar)
+        XCTAssertEqual(UsageHistory.month(october, calendar: calendar), "2026-10")
+        XCTAssertEqual(UsageHistory.month(november, calendar: calendar), "2026-11")
+        XCTAssertEqual(history.spentInMonth(of: october, calendar: calendar), 45, accuracy: 0.0001)
+        XCTAssertEqual(history.spentInMonth(of: november, calendar: calendar), 7, accuracy: 0.0001)
+    }
+
+    func testTheMonthlyBudgetAlertsOnceAMonthAndAgainWhenRaised() {
+        XCTAssertTrue(MonthlyBudget.shouldAlert(spent: 120, budget: 100, lastAlert: "", month: "2026-10"))
+        let mark = MonthlyBudget.mark(month: "2026-10", budget: 100)
+        XCTAssertEqual(mark, "2026-10@100")
+        // Once a month.
+        XCTAssertFalse(MonthlyBudget.shouldAlert(spent: 180, budget: 100, lastAlert: mark, month: "2026-10"))
+        XCTAssertTrue(MonthlyBudget.shouldAlert(spent: 120, budget: 100, lastAlert: mark, month: "2026-11"))
+        // Raised after the alert: armed again for the new amount. Lowered: the month was already flagged.
+        XCTAssertFalse(MonthlyBudget.shouldAlert(spent: 150, budget: 200, lastAlert: mark, month: "2026-10"))
+        XCTAssertTrue(MonthlyBudget.shouldAlert(spent: 210, budget: 200, lastAlert: mark, month: "2026-10"))
+        XCTAssertFalse(MonthlyBudget.shouldAlert(spent: 120, budget: 50, lastAlert: mark, month: "2026-10"))
+        // Under it, or no budget.
+        XCTAssertFalse(MonthlyBudget.shouldAlert(spent: 99.99, budget: 100, lastAlert: "", month: "2026-10"))
+        XCTAssertFalse(MonthlyBudget.shouldAlert(spent: 5000, budget: 0, lastAlert: "", month: "2026-10"))
+        // An unreadable mark never silences it.
+        XCTAssertTrue(MonthlyBudget.shouldAlert(spent: 120, budget: 100, lastAlert: "garbage", month: "2026-10"))
+    }
 }

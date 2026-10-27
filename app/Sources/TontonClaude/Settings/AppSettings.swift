@@ -43,6 +43,10 @@ final class AppSettings: ObservableObject {
     @Published var dailyBudget: Int
     /// The last day the budget alert went off, so it only does once a day.
     @Published var budgetAlertDay: String
+    /// In dollars, 0 for none: like the daily budget, for the calendar month.
+    @Published var monthlyBudget: Int
+    /// The month the monthly alert went off and the budget it was for (`MonthlyBudget.mark`).
+    @Published var monthlyBudgetAlert: String
     /// 0 keeps finished sessions until removed by hand.
     @Published var hideFinishedAfterHours: Int
     @Published var quickReplies: [String]
@@ -139,6 +143,8 @@ final class AppSettings: ObservableObject {
         whatsNewVersion = value("whatsNewVersion", "")
         dailyBudget = value("dailyBudget", 0)
         budgetAlertDay = value("budgetAlertDay", "")
+        monthlyBudget = value("monthlyBudget", 0)
+        monthlyBudgetAlert = value("monthlyBudgetAlert", "")
         hideFinishedAfterHours = value("hideFinishedAfterHours", 0)
         quickReplies = value("quickReplies", Self.defaultQuickReplies)
         promptTemplates =
@@ -195,6 +201,8 @@ final class AppSettings: ObservableObject {
         persist($whatsNewVersion, "whatsNewVersion")
         persist($dailyBudget, "dailyBudget")
         persist($budgetAlertDay, "budgetAlertDay")
+        persist($monthlyBudget, "monthlyBudget")
+        persist($monthlyBudgetAlert, "monthlyBudgetAlert")
         persist($hideFinishedAfterHours, "hideFinishedAfterHours")
         persist($quickReplies, "quickReplies")
         persist($promptTemplates.compactMap { try? JSONEncoder().encode($0) }, "promptTemplates")

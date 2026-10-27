@@ -84,6 +84,12 @@ public struct UsageHistory: Codable, Equatable, Sendable {
         return entries.filter { $0.day == day }.map(\.costUSD).reduce(0, +)
     }
 
+    /// What was spent in the calendar month of `date`, up to now.
+    public func spentInMonth(of date: Date = Date(), calendar: Calendar = .current) -> Double {
+        let month = Self.month(date, calendar: calendar)
+        return entries.filter { $0.day.hasPrefix("\(month)-") }.map(\.costUSD).reduce(0, +)
+    }
+
     private mutating func add(_ delta: UsageDelta, day: String, machine: String, project: String, tool: String?) {
         if let index = entries.firstIndex(where: { $0.day == day && $0.machine == machine && $0.project == project && $0.tool == tool }) {
             entries[index].costUSD += delta.costUSD
@@ -107,10 +113,32 @@ public struct UsageHistory: Codable, Equatable, Sendable {
     }
 }
 
+extension UsageHistory {
+    /// The key of `date`'s month: `2026-10`, the start of its days' keys.
+    public static func month(_ date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month], from: date)
+        return String(format: "%04d-%02d", parts.year ?? 0, parts.month ?? 0)
+    }
+}
+
 /// The daily budget of Settings › General: one alert, the first time a day's spending goes past it.
 public enum DailyBudget {
     public static func shouldAlert(spent: Double, budget: Double, lastAlertDay: String, today: String) -> Bool {
         budget > 0 && spent >= budget && lastAlertDay != today
+    }
+}
+
+/// The monthly budget of Settings › General: one alert a month, the first time the month's spending goes past it. Raising
+/// the budget after an alert arms it again for the new amount; lowering it does not, the month was already flagged.
+public enum MonthlyBudget {
+    /// `2026-10@200`: the month the alert went off and the budget it was for.
+    public static func mark(month: String, budget: Int) -> String { "\(month)@\(budget)" }
+
+    public static func shouldAlert(spent: Double, budget: Int, lastAlert: String, month: String) -> Bool {
+        guard budget > 0, spent >= Double(budget) else { return false }
+        let parts = lastAlert.split(separator: "@", maxSplits: 1).map(String.init)
+        guard parts.count == 2, parts[0] == month, let alerted = Int(parts[1]) else { return true }
+        return budget > alerted
     }
 }
 

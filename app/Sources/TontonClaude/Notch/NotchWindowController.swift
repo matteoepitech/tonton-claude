@@ -237,6 +237,15 @@ final class NotchWindowController {
         peek(nil, text: text)
     }
 
+    /// This month's spending went past the monthly budget of Settings › General.
+    private func monthlyBudgetExceeded(_ spent: Double) {
+        guard !settings.isQuietNow else { return }
+        signal(.question)
+        let text = String(format: "This month's cost passed $%d: $%.2f so far", settings.monthlyBudget, spent)
+        if settings.systemNotifications { Notifier.post(title: "Monthly budget", body: text) }
+        peek(nil, text: text)
+    }
+
     /// `text` replaces the session's status in the banner, or stands alone without a session.
     private func peek(_ session: SessionSummary?, text: String? = nil) {
         guard settings.showAlerts, state.mode != .expanded else { return }
@@ -305,6 +314,9 @@ final class NotchWindowController {
             .store(in: &subscriptions)
         store.usage.budgetExceeded
             .sink { [weak self] spent in self?.budgetExceeded(spent) }
+            .store(in: &subscriptions)
+        store.usage.monthlyBudgetExceeded
+            .sink { [weak self] spent in self?.monthlyBudgetExceeded(spent) }
             .store(in: &subscriptions)
         store.limitLifted
             .filter { [settings] _ in settings.alertOnLimitReset }

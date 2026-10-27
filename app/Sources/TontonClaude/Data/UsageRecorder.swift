@@ -13,6 +13,8 @@ final class UsageRecorder: ObservableObject {
     @Published private(set) var hours: BusyHours
     /// Today's spending went past the daily budget, with what was spent so far. Once a day.
     let budgetExceeded = PassthroughSubject<Double, Never>()
+    /// The month's spending went past the monthly budget, with what was spent so far. Once a month.
+    let monthlyBudgetExceeded = PassthroughSubject<Double, Never>()
     private let settings: AppSettings
     private var subscriptions = Set<AnyCancellable>()
 
@@ -63,6 +65,14 @@ final class UsageRecorder: ObservableObject {
         {
             settings.budgetAlertDay = today
             budgetExceeded.send(spentToday)
+        }
+        let month = UsageHistory.month(Date())
+        let spentThisMonth = history.spentInMonth(of: Date())
+        if MonthlyBudget.shouldAlert(
+            spent: spentThisMonth, budget: settings.monthlyBudget, lastAlert: settings.monthlyBudgetAlert, month: month)
+        {
+            settings.monthlyBudgetAlert = MonthlyBudget.mark(month: month, budget: settings.monthlyBudget)
+            monthlyBudgetExceeded.send(spentThisMonth)
         }
     }
 
