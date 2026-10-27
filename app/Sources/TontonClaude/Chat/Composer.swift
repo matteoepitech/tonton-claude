@@ -64,9 +64,11 @@ struct Composer: View {
         .onAppear {
             state.dropFiles = { providers in AttachmentReader.fromDrop(providers) { add($0) } }
             text = state.drafts[session.id] ?? ""
+            attachments = state.draftAttachments[session.id] ?? []
             focused = session.canChat
         }
         .onChange(of: text) { _, value in state.drafts[session.id] = value }
+        .onChange(of: attachments.map(\.id)) { _, _ in state.draftAttachments[session.id] = attachments.isEmpty ? nil : attachments }
         .onChange(of: state.pushToTalk) { _, held in held ? startDictation() : dictation.stop() }
         .onChange(of: dictation.transcript) { _, words in text = DictationText.merge(typed: typedBeforeDictation, transcript: words) }
         .onDisappear { dictation.stop() }
