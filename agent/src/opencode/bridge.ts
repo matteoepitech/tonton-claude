@@ -184,6 +184,7 @@ class Link {
 
   stop() {
     this.relay.stop()
+    this.work.stop()
   }
 
   flushed(): Promise<void> {

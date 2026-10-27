@@ -188,6 +188,9 @@ const MIGRATIONS = [
      PRIMARY KEY (pool_id, account_id, version),
      FOREIGN KEY (pool_id, account_id) REFERENCES pool_members(pool_id, account_id) ON DELETE CASCADE
    );`,
+  // The pool session that plans and assigns (docs/pools.md, The orchestrator): ids in clear, set by owners and admins.
+  `ALTER TABLE pools ADD COLUMN orchestrator_account TEXT;
+   ALTER TABLE pools ADD COLUMN orchestrator_session TEXT;`,
   // Pool safety (relay/src/pool-safety.ts): the rules and budgets the owner and admins set, sealed with the pool key;
   // each machine owner's acceptance of the rules for one of its sessions, sealed with its account key; and the audit
   // log, in clear, of what the relay enforced.

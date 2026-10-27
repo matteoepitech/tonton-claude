@@ -32,20 +32,21 @@ minutes costs more than one session doing everything. The orchestrator:
 A pool mixes Claude Code and OpenCode sessions, with nothing to change on either side. They are not equally capable:
 OpenCode sessions take the simpler, well-bounded tasks (tests, docs, small fixes, boilerplate, a page following an
 existing pattern), and Claude Code sessions take the features that need broad context. `pool_status` shows each
-session's coding tool and model for that. The machine owner can override it per session in its profile.
+session's coding tool and model for that, and the kind of task it takes (`takes`: `simple` or `large`). The machine owner
+picks it when the session joins; without a choice it follows the tool. The orchestrator's tools apply these rules: [pool-orchestrator.md](pool-orchestrator.md).
 
 ## What the relay keeps
 
 | Store | Clear to the relay | Sealed with the pool key |
 |---|---|---|
-| Pools | id, owner, created at, paused or not, key version | name, goal |
+| Pools | id, owner, created at, paused or not, key version, the orchestrator's account and session | name, goal |
 | Members | account id, role, joined at | display name |
 | Member keys | account id, key version | the pool key it joined with, and its P-256 private key, both sealed with that member's account key; its public key, sealed with each version of the pool key it saw |
 | Key wraps | account id, version, who made it | a later version of the pool key, wrapped for that member (see Keys) |
 | Invites | id, role, token hash, uses left, expiry | — |
-| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, orchestrator); the order, sealed with the account key |
-| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, state, assignee, dependencies, branch, summary |
-| Notes | revision, updated at, who changed them last | the notes |
+| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, tool, kind of task); the order, sealed with the account key |
+| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, size, paths, state, assignee, dependencies, branch, summary |
+| Notes | revision, updated at, who changed them last | free text, the sections (goal, stack, contracts, decisions), the areas and the paths each owns |
 | Messages | id, order, sender account and session, time | text, and who it is for (a session, an area or everyone) |
 | Events | id, order, sender account and session, time | what happened (task moved, merge, blocker…) |
 
@@ -75,6 +76,11 @@ The account's REST routes (`relay/src/pool-routes.ts`):
 | `POST /api/pools/<id>/owner` | owner | Hands the pool to another member; the previous owner stays as an admin |
 | `POST /api/pools/<id>/members/<account>/kick` | owner, admins | Kicks a member and rotates the key in one step. Only the owner kicks admins; nobody kicks the owner |
 | `POST /api/pools/<id>/rotate` | owner, admins | Rotates the key without kicking, after someone left for instance |
+
+Owners and admins choose the pool's orchestrator with `pool_orchestrator` (a pool session, or none); everyone gets
+`pool_orchestrator`, and the snapshot carries it. It is in clear, like every id, so that the relay attests it: no member
+can make its own session the orchestrator by writing it in a sealed profile. An orchestrator whose session leaves the
+pool is no orchestrator any more.
 
 On the app socket (`relay/src/pool-sockets.ts`, types in `shared/pool-protocol.ts`): `pool_subscribe` answers with a
 `pool_snapshot` (the latest 200 messages and 500 events), then every change. Members post `pool_task`, `pool_notes`,
@@ -135,8 +141,8 @@ The agent turns a pool session into tools, served by the MCP channel for Claude 
 | `pool_status` | all | The pool, its sessions, their areas, tasks and limits |
 | `pool_tasks`, `task_claim`, `task_update`, `task_done` | all | Read and move tasks; done means a summary, the branch, the tests run |
 | `pool_send`, `pool_inbox` | all | Messages to a session, a role or everyone |
-| `pool_notes_read`, `pool_notes_write` | all | The shared notes |
-| `plan_create`, `task_create`, `task_assign`, `task_reassign` | orchestrator | Plan and hand out work |
+| `pool_notes_read`, `pool_notes_write` | all | The shared notes, whole or one section at a time |
+| `pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign` | orchestrator | Plan and hand out work ([pool-orchestrator.md](pool-orchestrator.md)) |
 
 A task assigned to a session, or a message to it, arrives like a message from the notch, but marked as coming from the
 pool and from which member: `<pool kind="task" from="Ana · orchestrator" task="…">…</pool>`, or `kind="message"`. What
@@ -145,8 +151,10 @@ other members wrote cannot close that envelope or forge its attributes. The chan
 secrets outside the project, or acting on another repository.
 
 The machine owner chooses per session, in the join order sealed with the account key (`autoStart`): start pool tasks
-right away, or (the default) tell the user and wait until they agree. Until the notch has a button for it (#234), the
-user answers in the terminal or with a message from the notch.
+right away, or (the default) tell the user and wait until they agree. The notch shows such a task as a card in the
+session's conversation: **Accept** sends the session a message from its owner to claim it; **Refuse** puts the task back
+on the board (state `todo`, no assignee, a `refused` event) and tells the session to leave it. The user can also answer
+in the terminal.
 
 Details:
 
@@ -159,7 +167,22 @@ Details:
   says to read the task again. Claiming, blocking and finishing a task also post an event, for the timeline.
 - An agent sends 20 messages a minute at most, under the relay's own limit per member.
 - A paused pool still reads; nothing is posted to it and nothing is delivered from it.
-- Creating and assigning tasks is the orchestrator's (#221).
+- Creating and assigning tasks is the orchestrator's: Claude Code lists its tools to the orchestrator only, OpenCode's
+  plugin registers them for every session and they answer the others that only the orchestrator plans.
+- **Who hands out work.** A session takes a task assigned to it only from the orchestrator, from a person (a member's
+  app or the website), or from itself. The relay attests who wrote each task last, so another member's Claude cannot
+  hand work to the others' sessions.
+- **A branch per task.** The orchestrator's tasks get `pool/<id>-<slug>`. The task tells the session to pull main and
+  work there, never on main; the agent never runs git itself, Claude does through its permission prompts. `task_done`
+  needs the branch and the tests that pass (or "none" and why). A merge conflict is reported with `task_update`
+  (blocked), which tells the orchestrator.
+- **Shared notes.** Free text plus sections (goal, stack, contracts, decisions) and areas with the paths each owns.
+  `pool_notes_write` changes one part and keeps the others; each change posts a `notes_changed` event, so the timeline
+  says who changed what. A session is told, as a short `<pool kind="notes">` notice and never with the whole text, when
+  it joins a pool that has notes and whenever another session or a member changes them.
+- **The orchestrator's notices.** Its agent tells it, as `<pool kind="notice" from="Tonton">`, when to re-plan: a task
+  blocked, sent to review or done (with what that frees), its session gone or offline, a task in progress that has not
+  moved for 30 minutes. It also gets its guide once, as `<pool kind="role">`.
 
 ## Control
 
@@ -187,19 +210,48 @@ Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safe
   since it joined the pool, from its own meta (kept in `~/.tonton/pool-spend.json`, so a restart does not reset it), and
   posts it as a sealed `spend` event. A member's cap counts all its sessions. Past a cap the session posts
   `budget_reached` once, refuses `task_claim` and gets no new tasks; `pool_status` shows the spending and the caps.
+  The orchestrator hands nothing to a session past its member's or the pool's budget, not even with `force`, and its
+  tools refuse to hand out work while the pool is paused.
 - **Audit log.** The relay writes a line, in clear, for what it enforces: `created`, `joined`, `left`, `kicked`, `role`,
   `owner`, `rotated`, `invite_created`, `invite_revoked`, `session_joined`, `session_left`, `paused`, `resumed`,
   `stopped`, `rules_proposed`, `rules_accepted`, `budgets_set`. Each line has who, when, the member or session it was
   about, and the revision. It says nothing about what a task, a rule or a budget holds: those stay sealed. The latest
   lines come with the snapshot, new ones as `pool_audit`; 5000 per pool are kept.
 
+## The notch
+
+The Mac app lists the account's pools when it connects and follows each one on its socket (`app/Sources/TontonClaude/Data/PoolStore.swift`,
+the logic in `TontonCore/PoolState.swift` and `PoolJoin.swift`). A session joins from its context menu or the pool
+button of its chat header: the pool, its area, what it knows, its repository folder, the kind of task it takes, and
+whether it starts pool tasks right away. Only sessions an agent serves join, from an agent of 0.8.0 or later. The row and
+the header show its role, and the pool button its task, its agent's state and the pool's latest messages for it, with a
+link to the pool on the website (`<relay>/#pool=<id>`) and a way to leave. Pools are made and joined on the website.
+
 ## The website
 
-The relay serves a website at `/`, built on the client core like the web app: sign in with the recovery key, create a
-pool, invite with a link or a QR code, and watch it. Pages: pools, control center (members, machines, sessions, status,
-current task, limits, a graph of who talks to whom), task board, activity, leaderboard (tasks done, time, lines changed,
-tokens and cost), notes, settings. It decrypts in the browser and keeps the same Content-Security-Policy as
-`tonton-web.html`.
+The relay serves a website at `/`, built on the client core like the web app: sign in with the recovery key, then the
+**Pools** tab next to the sessions. It decrypts in the browser and keeps the relay's Content-Security-Policy.
+
+- Pools are on the relay's own website only: they take the relay's routes (`/api/pools…`) as well as its socket, and the
+  policy of `tonton-web.html` allows sockets only. Opened from disk, the page says where to go.
+- The list shows each pool's name, opened with the member's keys. **New pool** makes the pool and its key in the
+  browser; **Join** takes an invite pasted from a teammate (`tontonpool1.…`, for this relay only).
+- A pool's page has tabs, each a name and a function in `POOL_TABS` (`web/pools.ts`): **Tasks**, **Members**,
+  **Invites** (owner and admins) and **Settings**. The control center, the activity, the leaderboard and the notes come as
+  more tabs.
+- **Tasks** is the board: one column per state (to do, assigned, in progress, in review, done, blocked), live. A task
+  opens with its goal, criteria, area, assignee, dependencies, branch, summary and history (the `task_*` events each
+  change leaves). Members create, edit and move tasks; viewers read. A change over a revision someone else changed
+  meanwhile is refused by the relay: the board shows their version, marked "changed meanwhile".
+- **Members** lists the members and the pool's sessions (tool, machine, online or not). Roles change from a menu, by the
+  rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and says who could
+  not get the new one.
+- **Invites** makes an invite (uses, how long, which role) and shows its link and a QR code, drawn in the page
+  (`shared/qr.ts`, no dependency). Open invites are listed with **Revoke**.
+- Forms sit in a panel above the tab: live changes redraw the tab, never what is being typed.
+- What each role is offered comes from `shared/pool-board.ts`, and the page follows the pool through
+  `shared/pool-watch.ts`: the member's copy of the key, the wraps of later versions, a new snapshot after a rotation,
+  and its public key published again under the new version.
 
 ## Threats
 

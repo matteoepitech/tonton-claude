@@ -23,6 +23,11 @@ const isText = (value: unknown): value is string => typeof value === 'string'
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0
 const isNullableText = (value: unknown): value is string | null => value === null || isText(value)
 const isAuthor = (value: Fields) => isText(value.account) && isNullableText(value.session)
+const isSessionRef = (value: unknown): value is { account: string; session: string } =>
+  isFields(value) && isText(value.account) && isText(value.session)
+/** Null for none, undefined for a wrong shape. */
+const orchestrator = (value: unknown) =>
+  value === null ? null : isSessionRef(value) ? { account: value.account, session: value.session } : undefined
 
 const isMember = (value: unknown): value is PoolMemberWire =>
   isFields(value) &&
@@ -124,6 +129,8 @@ function snapshot(value: unknown): PoolSnapshot | null {
   const rules = policy(value.rules)
   const budgets = policy(value.budgets)
   const log = Array.isArray(value.audit) ? value.audit.map(audit).filter((entry): entry is PoolAuditWire => entry !== null) : undefined
+  // Older relays send none, and a wrong shape is left out rather than trusted: the state reads either as no orchestrator.
+  const lead = orchestrator(value.orchestrator)
   return {
     id,
     createdAt,
@@ -140,6 +147,7 @@ function snapshot(value: unknown): PoolSnapshot | null {
     ...(rules !== undefined ? { rules } : {}),
     ...(budgets !== undefined ? { budgets } : {}),
     ...(log ? { audit: log } : {}),
+    ...(lead !== undefined ? { orchestrator: lead } : {}),
   }
 }
 
@@ -165,6 +173,10 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
       return isText(value.info) && typeof value.paused === 'boolean' && isCount(value.keyVersion)
         ? { t: 'pool_info', poolId, info: value.info, paused: value.paused, keyVersion: value.keyVersion }
         : null
+    case 'pool_orchestrator': {
+      const lead = orchestrator(value.orchestrator)
+      return lead === undefined ? null : { t: 'pool_orchestrator', poolId, orchestrator: lead }
+    }
     case 'pool_member':
       return isMember(value.member) ? { t: 'pool_member', poolId, member: value.member } : null
     case 'pool_member_left':

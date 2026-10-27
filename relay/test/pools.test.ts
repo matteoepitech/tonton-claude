@@ -287,6 +287,60 @@ describe('pools on the relay', () => {
     await eventually(() => find(ownerApp, 'pool_session_left'), 'the session gone')
   })
 
+  test('only owners and admins make a pool session the orchestrator; it goes when its session leaves', async () => {
+    const owner = await account()
+    const created = await (await fetch(`${base}/api/accounts`, { method: 'POST', headers: fromNewAddress() })).json()
+    const { secret } = await (
+      await fetch(`${base}/api/account/token`, { method: 'POST', headers: { authorization: `Bearer ${created.token}` }, body: '{}' })
+    ).json()
+    const machine = await (
+      await fetch(`${base}/api/machines/join`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ account: created.accountId, secret, name: 'sealed-name' }),
+      })
+    ).json()
+    const member = { id: created.accountId as string, token: created.token as string }
+    const id = await pool(owner)
+    await joinPool(member.token, (await invite(owner.token, id)).body.token)
+    const agent = await connect('/ws/agent', machine.token)
+    agent.send({ t: 'hello', sessionId: 'ses_lead', info: 'sealed-info', channel: true })
+    const ownerApp = await connect('/ws/app', owner.token)
+    const memberApp = await connect('/ws/app', member.token)
+    ownerApp.send({ t: 'pool_subscribe', poolId: id })
+    memberApp.send({ t: 'pool_subscribe', poolId: id })
+    const first = await eventually(() => find(ownerApp, 'pool_snapshot'), 'the snapshot')
+    expect(first.pool.orchestrator).toBeNull()
+    memberApp.send({ t: 'pool_join_session', poolId: id, sessionId: 'ses_lead', order: 'sealed-order', profile: 'sealed-profile' })
+    await eventually(() => find(ownerApp, 'pool_session'), 'the session')
+
+    // Not a session of the pool; not from a member, even for its own session.
+    ownerApp.send({ t: 'pool_orchestrator', poolId: id, orchestrator: { account: member.id, session: 'ses_nope' } })
+    await eventually(() => find(ownerApp, 'pool_error', m => m.message.includes('orchestrator')), 'the refusal')
+    memberApp.send({ t: 'pool_orchestrator', poolId: id, orchestrator: { account: member.id, session: 'ses_lead' } })
+    await Bun.sleep(100)
+    expect(find(memberApp, 'pool_orchestrator')).toBeUndefined()
+
+    ownerApp.send({ t: 'pool_orchestrator', poolId: id, orchestrator: { account: member.id, session: 'ses_lead' } })
+    const set = await eventually(() => find(memberApp, 'pool_orchestrator'), 'the orchestrator for the members')
+    expect(set.orchestrator).toEqual({ account: member.id, session: 'ses_lead' })
+    ownerApp.send({ t: 'pool_subscribe', poolId: id })
+    await eventually(() => ownerApp.messages.filter(m => m.t === 'pool_snapshot').length === 2, 'a new snapshot')
+    const again = ownerApp.messages.filter(m => m.t === 'pool_snapshot').at(-1) as Extract<PoolUpdate, { t: 'pool_snapshot' }>
+    expect(again.pool.orchestrator).toEqual({ account: member.id, session: 'ses_lead' })
+
+    // Its session leaves: the pool has no orchestrator any more.
+    memberApp.send({ t: 'pool_leave_session', poolId: id, sessionId: 'ses_lead' })
+    await eventually(() => find(ownerApp, 'pool_session_left'), 'the session gone')
+    ownerApp.send({ t: 'pool_subscribe', poolId: id })
+    await eventually(() => ownerApp.messages.filter(m => m.t === 'pool_snapshot').length === 3, 'a third snapshot')
+    const last = ownerApp.messages.filter(m => m.t === 'pool_snapshot').at(-1) as Extract<PoolUpdate, { t: 'pool_snapshot' }>
+    expect(last.pool.orchestrator).toBeNull()
+    // None at all is allowed.
+    ownerApp.send({ t: 'pool_orchestrator', poolId: id, orchestrator: null })
+    await eventually(() => find(memberApp, 'pool_orchestrator', m => m.orchestrator === null), 'no orchestrator')
+  })
+
   test('a member leaves; the owner deletes the pool for everyone', async () => {
     const owner = await account()
     const member = await account()

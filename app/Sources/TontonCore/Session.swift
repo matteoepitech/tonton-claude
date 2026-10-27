@@ -343,7 +343,7 @@ public struct MachineInfo: Identifiable, Equatable, Sendable {
     public var keepsSessionRules: Bool { runs(atLeast: Self.sessionRulesSince) }
 
     /// Development builds report 0.0.0 and run the current code.
-    private func runs(atLeast version: String) -> Bool {
+    func runs(atLeast version: String) -> Bool {
         guard let agentVersion else { return false }
         return agentVersion == "0.0.0" || agentVersion.compare(version, options: .numeric) != .orderedAscending
     }

@@ -63,6 +63,11 @@ public struct RelayAPI: Sendable {
         try await request("GET", account.relay, "/api/shares", token: account.token, as: [ShareSummary].self)
     }
 
+    /// The account's pools, with its role and its keys for each. Relays before pools answer "not found".
+    public func pools(of account: Account) async throws -> [PoolSummary] {
+        try await request("GET", account.relay, "/api/pools", token: account.token, as: [PoolSummary].self)
+    }
+
     public func revokeShare(_ shareId: String, of account: Account) async throws {
         struct Done: Decodable { let ok: Bool }
         _ = try await request("DELETE", account.relay, "/api/shares/\(shareId)", token: account.token, as: Done.self)

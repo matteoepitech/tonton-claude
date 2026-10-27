@@ -82,4 +82,35 @@ final class PoolTests: XCTestCase {
         let event = try JSONDecoder().decode(PoolEventBody.self, from: Data(#"{"kind":"session","tool":"opencode","model":"gpt-5"}"#.utf8))
         XCTAssertEqual([event.kind, event.tool, event.model], ["session", "opencode", "gpt-5"])
     }
+
+    func testTheOrchestratorAndTheStructuredNotesDecodeAsTheClientCoreWritesThem() throws {
+        let decode = { (json: String) in try JSONDecoder().decode(RelayMessage.self, from: Data(json.utf8)) }
+        let set = #"{"t":"pool_orchestrator","poolId":"pool00000001","orchestrator":{"account":"acct","session":"ses_1"}}"#
+        guard case .pool(.orchestrator("pool00000001", let lead)) = try decode(set) else { return XCTFail("not an orchestrator") }
+        XCTAssertEqual(lead, PoolSessionRef(account: "acct", session: "ses_1"))
+        guard case .pool(.orchestrator(_, nil)) = try decode(#"{"t":"pool_orchestrator","poolId":"p","orchestrator":null}"#) else {
+            return XCTFail("not none")
+        }
+        let snapshot = #"""
+            {"t":"pool_snapshot","pool":{"id":"pool00000001","createdAt":"x","paused":false,"keyVersion":1,"info":"sealed",
+            "members":[],"sessions":[],"tasks":[],"notes":null,"messages":[],"events":[],
+            "orchestrator":{"account":"acct","session":"ses_1"}}}
+            """#
+        guard case .pool(.snapshot(let pool)) = try decode(snapshot) else { return XCTFail("not a snapshot") }
+        XCTAssertEqual(pool.orchestrator?.session, "ses_1")
+
+        // What shared/pool.ts seals for the notes, a task and a profile.
+        let vault = try PoolVault(key: E2E.newKey())
+        let notes = #"{"text":"","sections":{"goal":"A shop","contracts":"GET /v1/items"},"areas":[{"name":"front","paths":["web/"]}]}"#
+        let opened = try JSONDecoder().decode(PoolNotes.self, from: Data(notes.utf8))
+        XCTAssertEqual(opened.sections?["contracts"], "GET /v1/items")
+        XCTAssertEqual(opened.areas, [PoolArea(name: "front", paths: ["web/"])])
+        XCTAssertEqual(vault.open(try vault.seal(opened), as: PoolNotes.self), opened)
+        let task = try JSONDecoder().decode(
+            PoolTask.self, from: Data(#"{"title":"Page","state":"assigned","size":"small","paths":["web/"],"branch":"pool/abc-page"}"#.utf8)
+        )
+        XCTAssertEqual([task.size, task.branch], ["small", "pool/abc-page"])
+        let profile = try JSONDecoder().decode(PoolSessionProfile.self, from: Data(#"{"tool":"opencode","takes":"any"}"#.utf8))
+        XCTAssertEqual(profile.takes, "any")
+    }
 }

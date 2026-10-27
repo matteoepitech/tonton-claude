@@ -108,11 +108,13 @@ async function join(autoStart = false) {
         account: 'acc_ana',
         session: 'ses_ana',
         joinedAt: 'now',
-        profile: await vault.seal({ area: 'front', orchestrator: true }),
+        profile: await vault.seal({ area: 'front' }),
         online: true,
         ready: true,
       },
     ],
+    // The relay says who the orchestrator is: an owner or an admin chose it.
+    orchestrator: { account: 'acc_ana', session: 'ses_ana' },
     events: [
       {
         id: 'e0',
@@ -181,6 +183,9 @@ test('pool_status shows every session with its member, area, coding tool and mod
   // This session posted what it runs on when it joined.
   expect(sessions[ME]).toMatchObject({ member: 'Me', area: 'back', tool: 'claude', model: 'claude-opus-5-5', you: true })
   expect(sessions.ses_ana).toMatchObject({ member: 'Ana', tool: 'opencode', model: 'gpt-5', orchestrator: true })
+  // With no choice in their profiles: OpenCode takes the simpler tasks, Claude Code the larger ones.
+  expect(sessions[ME].takes).toBe('large')
+  expect(sessions.ses_ana.takes).toBe('simple')
 })
 
 test('a task assigned to the session is delivered once, marked, and says to ask the user first by default', async () => {

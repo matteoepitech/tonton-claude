@@ -139,6 +139,7 @@ export class Conversation {
     this.tailer?.stop()
     this.subagents?.stop()
     if (this.usageTimer) clearInterval(this.usageTimer)
+    this.work.stop()
   }
 
   /** Everything the relay needs after a (re)connection. */

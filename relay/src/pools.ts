@@ -9,6 +9,7 @@ import type {
   PoolNotesWire,
   PoolPostWire,
   PoolRole,
+  PoolSessionRef,
   PoolSessionWire,
   PoolSnapshot,
   PoolSummary,
@@ -93,6 +94,8 @@ interface PoolRow {
   paused: number
   key_version: number
   info_blob: string
+  orchestrator_account: string | null
+  orchestrator_session: string | null
 }
 
 interface ItemRow {
@@ -343,6 +346,29 @@ export class PoolStore {
 
   setProfile(poolId: string, accountId: string, profile: string) {
     this.db.query('UPDATE pool_members SET profile_blob = ? WHERE pool_id = ? AND account_id = ?').run(profile, poolId, accountId)
+  }
+
+  /**
+   * Makes one of the pool's sessions the orchestrator, or none. False when that session is not in the pool: only a
+   * pool session can plan for it.
+   */
+  setOrchestrator(poolId: string, orchestrator: PoolSessionRef | null): boolean {
+    if (orchestrator && !this.isPoolSession(poolId, orchestrator.account, orchestrator.session)) return false
+    this.db
+      .query('UPDATE pools SET orchestrator_account = ?, orchestrator_session = ? WHERE id = ?')
+      .run(orchestrator?.account ?? null, orchestrator?.session ?? null, poolId)
+    return true
+  }
+
+  /** The orchestrator, while its session is still in the pool: one that left or was kicked plans no more. */
+  orchestrator(poolId: string): PoolSessionRef | null {
+    const row = this.db.query('SELECT orchestrator_account, orchestrator_session FROM pools WHERE id = ?').get(poolId) as Pick<
+      PoolRow,
+      'orchestrator_account' | 'orchestrator_session'
+    > | null
+    if (!row?.orchestrator_account || !row.orchestrator_session) return null
+    const lead = { account: row.orchestrator_account, session: row.orchestrator_session }
+    return this.isPoolSession(poolId, lead.account, lead.session) ? lead : null
   }
 
   /** The pool's clear fields, as `pool_info` sends them. */
@@ -655,6 +681,7 @@ export class PoolStore {
       messages: this.posts('message', poolId, POOL_SNAPSHOT_MESSAGES),
       events: this.posts('event', poolId, POOL_SNAPSHOT_EVENTS),
       ...(forAccount ? { own: this.own(poolId, forAccount) } : {}),
+      orchestrator: this.orchestrator(poolId),
     }
   }
 
