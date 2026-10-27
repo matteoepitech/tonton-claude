@@ -218,7 +218,7 @@ struct ChatHeader: View {
         .accessibilityLabel("Interrupt")
     }
 
-    /// The model, the context and the tokens, on the right of the second line.
+    /// The branch, the model, the context and the tokens, on the right of the second line.
     private func figures(branch: Bool, model: Bool, tokens: Bool) -> some View {
         HStack {
             if branch, let name = session.branch { BranchLabel(branch: name) }

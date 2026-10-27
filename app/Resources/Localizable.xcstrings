@@ -669,6 +669,46 @@
         }
       }
     },
+    "%lld files changed" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file changed"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files changed"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld fichier modifié"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld fichiers modifiés"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld h %@" : {
       "localizations" : {
         "en" : {
@@ -901,6 +941,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld sur %2$lld appels"
+          }
+        }
+      }
+    },
+    "%lld seconds" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld second"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld seconds"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld seconde"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld secondes"
+                }
+              }
+            }
           }
         }
       }
@@ -1165,6 +1245,16 @@
         }
       }
     },
+    "15 minutes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "15 minutes"
+          }
+        }
+      }
+    },
     "5 sessions working at the same time." : {
       "localizations" : {
         "fr" : {
@@ -1337,6 +1427,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Une notification macOS le soir : combien de temps Claude a travaillé, dans combien de sessions, et le coût quand les coûts sont affichés."
+          }
+        }
+      }
+    },
+    "A message from the notch waits this long before it goes, with an Undo button." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un message envoyé depuis l’encoche attend ce délai avant de partir, avec un bouton Annuler."
           }
         }
       }
@@ -1521,6 +1621,16 @@
         }
       }
     },
+    "Add a note to this session, kept on this Mac" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une note à cette session, conservée sur ce Mac"
+          }
+        }
+      }
+    },
     "Add a quick reply" : {
       "localizations" : {
         "fr" : {
@@ -1537,6 +1647,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ajouter un compte…"
+          }
+        }
+      }
+    },
+    "Add note" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une note"
           }
         }
       }
@@ -1611,6 +1731,26 @@
         }
       }
     },
+    "Alerts snoozed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alertes suspendues"
+          }
+        }
+      }
+    },
+    "Alerts snoozed: permission requests still come through" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alertes suspendues : les demandes d’autorisation arrivent toujours"
+          }
+        }
+      }
+    },
     "All good" : {
       "localizations" : {
         "fr" : {
@@ -1667,6 +1807,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Autorisez Tonton Claude à utiliser le micro et la reconnaissance vocale dans Réglages Système › Confidentialité et sécurité."
+          }
+        }
+      }
+    },
+    "Allow for this session" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autoriser pour cette session"
           }
         }
       }
@@ -1861,6 +2011,16 @@
         }
       }
     },
+    "Back to the conversation" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revenir à la conversation"
+          }
+        }
+      }
+    },
     "Background task finished" : {
       "localizations" : {
         "fr" : {
@@ -1899,6 +2059,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Galet"
+          }
+        }
+      }
+    },
+    "Branch %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branche %@"
           }
         }
       }
@@ -2091,6 +2261,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Claude recevra « continue » quand la limite se réinitialisera. Cliquez pour annuler."
+          }
+        }
+      }
+    },
+    "Claude has not changed any file in this session." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude n’a modifié aucun fichier dans cette session."
           }
         }
       }
@@ -3027,6 +3207,16 @@
         }
       }
     },
+    "Edit note" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier la note"
+          }
+        }
+      }
+    },
     "Edit templates…" : {
       "localizations" : {
         "fr" : {
@@ -3183,6 +3373,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les fichiers que Claude lit ou modifie sur ce Mac s’ouvrent depuis la conversation."
+          }
+        }
+      }
+    },
+    "Files changed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers modifiés"
+          }
+        }
+      }
+    },
+    "Files changed in this session" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers modifiés dans cette session"
           }
         }
       }
@@ -3356,6 +3566,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retour haptique"
+          }
+        }
+      }
+    },
+    "Has a note" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contient une note"
           }
         }
       }
@@ -3709,6 +3929,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gardez un compte pro et un compte perso sur ce Mac, et passez de l’un à l’autre."
+          }
+        }
+      }
+    },
+    "Kept on this Mac only." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservée uniquement sur ce Mac."
           }
         }
       }
@@ -4411,6 +4641,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Taille de l’encoche"
+          }
+        }
+      }
+    },
+    "Note" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note"
           }
         }
       }
@@ -6068,6 +6308,16 @@
         }
       }
     },
+    "Snooze alerts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendre les alertes"
+          }
+        }
+      }
+    },
     "Sound" : {
       "localizations" : {
         "fr" : {
@@ -6424,6 +6674,16 @@
         }
       }
     },
+    "Take the message back to the message field" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remettre le message dans le champ de message"
+          }
+        }
+      }
+    },
     "Tell me when Claude finishes" : {
       "localizations" : {
         "fr" : {
@@ -6531,6 +6791,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le jeton actuel cesse de fonctionner immédiatement : chaque machine est déconnectée jusqu’à ce que vous lui donniez le nouveau. Les autres Mac connectés à ce compte ont besoin de la nouvelle clé de récupération."
+          }
+        }
+      }
+    },
+    "The git branch of the session's folder: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La branche git du dossier de la session : %@"
+          }
+        }
+      }
+    },
+    "The last change to this file failed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dernière modification de ce fichier a échoué"
           }
         }
       }
@@ -6984,6 +7264,16 @@
         }
       }
     },
+    "Undo send" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler l’envoi"
+          }
+        }
+      }
+    },
     "Unknown machine" : {
       "localizations" : {
         "fr" : {
@@ -7020,6 +7310,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Désépingler l’encoche"
+          }
+        }
+      }
+    },
+    "Unsnooze alerts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réactiver les alertes"
+          }
+        }
+      }
+    },
+    "Until it finishes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jusqu’à ce qu’elle se termine"
           }
         }
       }
@@ -7264,6 +7574,16 @@
         }
       }
     },
+    "What to check when Claude is done…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce qu’il faut vérifier quand Claude a fini…"
+          }
+        }
+      }
+    },
     "What your sessions cost, per day, machine and project." : {
       "localizations" : {
         "fr" : {
@@ -7420,6 +7740,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Écrit les réglages de la ligne d’état que le lanceur passe à claude."
+          }
+        }
+      }
+    },
+    "Your note on this session" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre note sur cette session"
           }
         }
       }
@@ -7686,6 +8016,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "épuisée dans ~%@"
+          }
+        }
+      }
+    },
+    "sending in %lld s" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "envoi dans %lld s"
           }
         }
       }

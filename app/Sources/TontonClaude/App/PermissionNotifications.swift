@@ -16,11 +16,12 @@ final class PermissionNotifications {
     /// Registered with the notification center along with the request for access.
     nonisolated static var categories: Set<UNNotificationCategory> {
         let allow = UNNotificationAction(
-            identifier: PermissionNotification.Action.allow.rawValue, title: "Allow", options: [.authenticationRequired])
+            identifier: PermissionNotification.Action.allow.rawValue, title: String(localized: "Allow"), options: [.authenticationRequired])
         let session = UNNotificationAction(
-            identifier: PermissionNotification.Action.allowForSession.rawValue, title: "Allow for this session",
+            identifier: PermissionNotification.Action.allowForSession.rawValue, title: String(localized: "Allow for this session"),
             options: [.authenticationRequired])
-        let deny = UNNotificationAction(identifier: PermissionNotification.Action.deny.rawValue, title: "Deny", options: [.destructive])
+        let deny = UNNotificationAction(
+            identifier: PermissionNotification.Action.deny.rawValue, title: String(localized: "Deny"), options: [.destructive])
         return [
             UNNotificationCategory(identifier: PermissionNotification.category, actions: [allow, deny], intentIdentifiers: []),
             UNNotificationCategory(
@@ -32,7 +33,7 @@ final class PermissionNotifications {
     func post(_ session: SessionSummary, request: PermissionRequest, store: SessionStore) {
         let content = UNMutableNotificationContent()
         content.title = "\(session.machine) · \(session.displayName)"
-        content.subtitle = "Allow \(request.toolName)?"
+        content.subtitle = String(localized: "Allow \(request.toolName)?")
         content.body = String(request.description.prefix(200))
         content.userInfo = PermissionNotification.userInfo(sessionId: session.id, requestId: request.requestId)
         content.threadIdentifier = session.id
