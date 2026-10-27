@@ -1,4 +1,5 @@
 import SwiftUI
+import TontonCore
 
 struct ExpandedView: View {
     @EnvironmentObject var state: NotchState
@@ -149,6 +150,14 @@ struct TodayCost: View {
     @ObservedObject var usage: UsageRecorder
     @EnvironmentObject var settings: AppSettings
 
+    /// The month too, against its budget when there is one.
+    private var help: String {
+        let month = usage.history.spent(inMonth: WrappedLog.month(Date()))
+        let budget = settings.monthlyBudget
+        let spent = budget > 0 ? String(format: "$%.2f of $%d", month, budget) : String(format: "$%.2f", month)
+        return "Spent today, as recorded on this Mac. This month: \(spent)."
+    }
+
     var body: some View {
         let spent = usage.history.spent()
         if spent > 0 {
@@ -157,7 +166,7 @@ struct TodayCost: View {
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(budget > 0 && spent >= Double(budget) ? Theme.warning : Theme.ink.opacity(0.5))
                 .padding(.trailing, 6)
-                .help("Spent today, as recorded on this Mac")
+                .help(help)
         }
     }
 }

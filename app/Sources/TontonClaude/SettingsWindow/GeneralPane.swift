@@ -61,6 +61,15 @@ struct GeneralPane: View {
                     }
                 }
                 Hairline()
+                Row(title: "Monthly budget", detail: "An alert the first time a month's cost goes past it.") {
+                    ChoiceMenu(
+                        selection: String(settings.monthlyBudget),
+                        options: [("0", "None")] + [50, 100, 200, 500, 1000, 2000].map { (String($0), "$\($0)") }
+                    ) {
+                        settings.monthlyBudget = Int($0) ?? 0
+                    }
+                }
+                Hairline()
                 Row(
                     title: "Hide finished sessions",
                     detail: "Closed and offline sessions leave the list. The eye above the list switches it in one click."
