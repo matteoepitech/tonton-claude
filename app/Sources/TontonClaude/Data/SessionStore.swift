@@ -269,6 +269,7 @@ final class SessionStore: ObservableObject {
         agentLogs = [:]
         diagnoses = [:]
         repairing = [:]
+        PoolStore.shared.reset()
         guard settings.connectionEnabled else {
             socket.disconnect(to: .paused)
             return
@@ -290,6 +291,9 @@ final class SessionStore: ObservableObject {
         }
         if state == .connected {
             subscribe()
+            if let account = settings.account, let vault {
+                PoolStore.shared.connected(account: account, vault: vault) { [weak self] message in self?.socket.send(message) }
+            }
             // Histories asked for the archive before the connection dropped: asked again.
             for sessionId in archiveOnHistory {
                 if let first = catchUp.fetch(sessionId, selected: selectedId) { fetch(first) }
@@ -345,8 +349,9 @@ final class SessionStore: ObservableObject {
             logReceived(machineId: machineId, requestId: requestId, reason: reason, log: vault.agentLog(logs))
         case .diagnosis(let machineId, let requestId, let reason, let diagnosis):
             diagnosisReceived(machineId: machineId, requestId: requestId, reason: reason, diagnosis: vault.diagnosis(diagnosis))
-        // Pools come with #234; until then the notch shows none.
-        case .pool, .unknown:
+        case .pool(let update):
+            PoolStore.shared.apply(update)
+        case .unknown:
             break
         }
     }

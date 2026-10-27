@@ -42,6 +42,11 @@ export interface PoolSessionProfile {
   tool?: 'claude' | 'opencode'
   /** The one session that plans and assigns. */
   orchestrator?: boolean
+  /**
+   * The kind of task its owner gives it: `simple` (tests, docs, small fixes, boilerplate) or `large` (features that need
+   * broad context). Missing: by its tool, simple for OpenCode and large for Claude Code (docs/pools.md, Sizes of work).
+   */
+  takes?: 'simple' | 'large'
 }
 
 export type PoolTaskState = 'todo' | 'assigned' | 'in_progress' | 'review' | 'done' | 'blocked'

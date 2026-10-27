@@ -36,6 +36,8 @@ final class NotchState: ObservableObject {
     @Published var jumpTo: String?
     /// The session whose changed files cover its conversation, from the header's files button.
     @Published var filesOf: String?
+    /// The session whose pool popover is open in the chat header, from its button or "Join pool…" in the list.
+    @Published var poolOf: String?
     /// Live sessions as pills under the collapsed notch (Settings › Notch › Session pills).
     @Published var pills = PillRow([])
     /// The pill whose session shows in a card under it, while the pointer rests on it.

@@ -108,6 +108,7 @@ export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | n
   const f = fields(value)
   if (!f) return null
   const tool: PoolSessionProfile['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
+  const takes: PoolSessionProfile['takes'] = f.takes === 'simple' || f.takes === 'large' ? f.takes : undefined
   return defined({
     area: text(f.area),
     skills: text(f.skills),
@@ -116,7 +117,13 @@ export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | n
     machine: text(f.machine),
     tool,
     orchestrator: f.orchestrator === true ? true : undefined,
+    takes,
   })
+}
+
+/** What kind of task a session takes: its owner's choice, or by its tool when it made none. */
+export function poolTaskSize(profile: PoolSessionProfile | null, tool: 'claude' | 'opencode'): 'simple' | 'large' {
+  return profile?.takes ?? (tool === 'opencode' ? 'simple' : 'large')
 }
 
 export function decodePoolTask(value: unknown): PoolTask | null {
