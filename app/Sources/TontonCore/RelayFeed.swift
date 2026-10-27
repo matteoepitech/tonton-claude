@@ -8,6 +8,8 @@ public struct RelayFeed: Sendable {
     /// The conversation of each session the app subscribed to.
     public private(set) var entries: [String: [Entry]] = [:]
     public private(set) var lastError: String?
+    /// Snapshots received so far: one comes with each new connection, so a count that grew means the feed is current.
+    public private(set) var snapshots = 0
     /// The sessions as the relay sent them, still sealed: the Live Activity carries them that way.
     private var wire: [String: WireSession] = [:]
 
@@ -20,6 +22,7 @@ public struct RelayFeed: Sendable {
     public mutating func apply(_ message: RelayMessage, vault: SessionVault) {
         switch message {
         case .snapshot(let wireSessions, let wireMachines):
+            snapshots += 1
             machines = vault.machines(wireMachines)
             wire = Dictionary(wireSessions.map { ($0.id, $0) }) { _, last in last }
             sessions = Self.sorted(wireSessions.map { vault.session($0, machines: machines) })
