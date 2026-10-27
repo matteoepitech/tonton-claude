@@ -44,6 +44,8 @@ final class NotchWindowController {
     private var behindFloatingWindow = false
     private var peekTask: Task<Void, Never>?
     private var openedByHover = false
+    /// Waits a moment before the preview of a pill shows, so a pointer passing over the pills shows nothing.
+    private var previewTask: Task<Void, Never>?
     /// The last other app in front, given back the focus when the notch closes.
     private var previousApp: NSRunningApplication?
     /// ⌃ pressed alone: dictation starts unless another key comes first.
@@ -101,6 +103,22 @@ final class NotchWindowController {
 
     private var pointerOnPills: Bool { state.mode == .collapsed && state.pills.pillCount > 0 && pillsFrame.contains(NSEvent.mouseLocation) }
 
+    /// The pill under the pointer: a session's, or `sessions.count` for the `+N` one. Nil between pills.
+    private var pillUnderPointer: Int? {
+        pointerOnPills ? state.pills.pill(at: NSEvent.mouseLocation.x - pillsFrame.minX) : nil
+    }
+
+    /// Frame of the preview card while it shows, in screen coordinates, with the gap above it: the pointer crosses it on
+    /// the way from the pill to the card.
+    private var previewFrame: NSRect? {
+        guard state.mode == .collapsed, let index = state.previewPill else { return nil }
+        let x = panel.frame.minX + state.pills.previewX(for: index, within: panel.frame.width)
+        let height = PillRow.previewHeight + PillRow.previewGap
+        return NSRect(x: x, y: pillsFrame.minY - height, width: PillRow.previewWidth, height: height)
+    }
+
+    private var pointerOnPreview: Bool { previewFrame?.contains(NSEvent.mouseLocation) == true }
+
     /// Frame of the visible shape, in screen coordinates.
     private func shapeFrame(_ size: CGSize) -> NSRect {
         NSRect(x: panel.frame.midX - size.width / 2, y: panel.frame.maxY - size.height, width: size.width, height: size.height)
@@ -111,6 +129,7 @@ final class NotchWindowController {
     func expand(byHover: Bool = false) {
         peekTask?.cancel()
         collapseTask?.cancel()
+        hidePreview()
         if state.mode != .expanded { openedByHover = byHover }
         panel.level = NotchPanel.raisedLevel
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { state.mode = .expanded }
@@ -357,6 +376,7 @@ final class NotchWindowController {
             NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
                 guard let self, event.window === self.panel else { return event }
                 if self.state.mode == .expanded { self.openedByHover = false }
+                if self.pointerOnPreview, let index = self.state.previewPill { return self.openPill(index) }
                 if self.pointerOnPills { return self.clickedPill() ? nil : event }
                 return event
             })
@@ -399,8 +419,10 @@ final class NotchWindowController {
         let pointer = NSEvent.mouseLocation
         switch state.mode {
         case .collapsed, .peek:
-            // The panel only takes the mouse over the pills, so they can be clicked and the menu bar stays usable.
-            panel.ignoresMouseEvents = !pointerOnPills
+            // The panel only takes the mouse over the pills and their preview, so they can be clicked and the menu bar stays
+            // usable.
+            updatePreview()
+            panel.ignoresMouseEvents = !(pointerOnPills || pointerOnPreview)
             // A little slack below the shape makes it easy to reach.
             if settings.openOnHover && shapeFrame(state.currentSize).insetBy(dx: -6, dy: -6).contains(pointer) {
                 expand(byHover: true)
@@ -427,9 +449,44 @@ final class NotchWindowController {
     /// Opens the notch on the session whose pill was clicked; the `+N` pill opens it as it was. Returns false between pills.
     private func clickedPill() -> Bool {
         guard let index = state.pills.pill(at: NSEvent.mouseLocation.x - pillsFrame.minX) else { return false }
+        _ = openPill(index)
+        return true
+    }
+
+    /// Always nil: the click is used up.
+    private func openPill(_ index: Int) -> NSEvent? {
         if index < state.pills.sessions.count { store.selectedId = state.pills.sessions[index].id }
         expand()
-        return true
+        return nil
+    }
+
+    /// Shows the preview of the session pill the pointer rests on, keeps it while the pointer is on the card, and hides it
+    /// otherwise.
+    private func updatePreview() {
+        if pointerOnPreview { return }
+        guard pointerOnPills else { return hidePreview() }
+        // Between two pills: whatever shows stays, so moving along the row doesn't flicker.
+        guard let index = pillUnderPointer else { return }
+        guard index < state.pills.sessions.count else { return hidePreview() }
+        if state.previewPill == index { return }
+        if state.previewPill != nil {
+            // Already showing one: moving along the pills switches at once.
+            withAnimation(.easeOut(duration: 0.12)) { state.previewPill = index }
+            return
+        }
+        previewTask?.cancel()
+        previewTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard let self, !Task.isCancelled, pillUnderPointer == index else { return }
+            withAnimation(.easeOut(duration: 0.12)) { self.state.previewPill = index }
+        }
+    }
+
+    private func hidePreview() {
+        previewTask?.cancel()
+        previewTask = nil
+        guard state.previewPill != nil else { return }
+        withAnimation(.easeOut(duration: 0.12)) { state.previewPill = nil }
     }
 
     /// Clicks in floating panels (launchers, Spotlight) are ignored: picking a clipboard item must not close the chat it pastes into.

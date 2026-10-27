@@ -65,6 +65,14 @@ struct NotchRootView: View {
                 SessionPills(row: state.pills).padding(.top, state.collapsedSize.height + NotchState.pillGap)
             }
         }
+        .overlay(alignment: .topLeading) {
+            if state.mode == .collapsed, let index = state.previewPill, state.pills.sessions.indices.contains(index) {
+                let top = state.collapsedSize.height + NotchState.pillGap + NotchState.pillHeight + PillRow.previewGap
+                PillPreview(session: state.pills.sessions[index])
+                    .offset(x: state.pills.previewX(for: index, within: NotchState.expandedSize.width), y: top)
+                    .transition(.opacity)
+            }
+        }
         // The closed notch, its pills and the banner are part of the camera housing: always dark.
         .environment(\.colorScheme, expanded ? Theme.palette.scheme : .dark)
         .id(settings.theme)
@@ -170,6 +178,41 @@ struct ConfettiBurst: View {
                 }
             }
         }
+        .allowsHitTesting(false)
+    }
+}
+
+/// The session of a pill the pointer rests on: where it runs, what it does and its last message. A click opens it, like a
+/// click on the pill; the window controller handles both.
+struct PillPreview: View {
+    let session: SessionSummary
+
+    private var text: String {
+        if session.status.needsAttention { return session.displayStatusText }
+        return session.lastMessage ?? session.title ?? session.status.label
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                StatusDot(status: session.status, size: 6)
+                Text(session.project).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                Text(session.machine).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 4)
+                Text(session.status.label).font(.system(size: 10)).foregroundStyle(Color(nsColor: session.status.color))
+            }
+            Text(text.trimmingCharacters(in: .whitespacesAndNewlines))
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.white)
+        .padding(10)
+        .frame(width: PillRow.previewWidth, height: PillRow.previewHeight, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.92)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.12)))
         .allowsHitTesting(false)
     }
 }
