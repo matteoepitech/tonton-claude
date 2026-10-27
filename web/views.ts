@@ -8,10 +8,12 @@ import {
   chatItems,
   displayStatusText,
   type Entry,
+  foldSummary,
   isLive,
   keepsSessionRules,
   latestTodos,
   type Machine,
+  machineFoldKey,
   menuCommands,
   modelName,
   needsAttention,
@@ -27,14 +29,22 @@ import { element, inline, renderMarkdown } from './markdown'
 
 // MARK: Sessions
 
-/** The sessions, grouped by machine. */
-export function renderList(list: HTMLElement, current: ClientState, onPick: (session: Session) => void) {
+/** A client that lets machines fold to their header: which are folded, and what a click on a header does. */
+export interface ListFolding {
+  folded: ReadonlySet<string>
+  toggle(key: string): void
+}
+
+/** The sessions, grouped by machine. With `fold`, a click on a machine folds its sessions, as in the notch. */
+export function renderList(list: HTMLElement, current: ClientState, onPick: (session: Session) => void, fold?: ListFolding) {
   const groups = new Map<string, Session[]>()
   for (const session of current.sessions) groups.set(session.machine, [...(groups.get(session.machine) ?? []), session])
   const children: HTMLElement[] = []
   if (!current.sessions.length) children.push(element('p', current.connection === 'connected' ? 'No sessions yet.' : 'Connecting…'))
   for (const [machine, sessions] of groups) {
-    children.push(element('h2', machine))
+    const folded = fold?.folded.has(machineFoldKey(machine)) ?? false
+    children.push(fold ? machineHeader(machine, sessions, folded, fold) : element('h2', machine))
+    if (folded) continue
     for (const session of sessions) {
       const row = element(
         'button',
@@ -54,6 +64,22 @@ export function renderList(list: HTMLElement, current: ClientState, onPick: (ses
     }
   }
   list.replaceChildren(...children)
+}
+
+function machineHeader(machine: string, sessions: Session[], folded: boolean, fold: ListFolding): HTMLElement {
+  const toggle = element('button', element('span', folded ? '▸' : '▾'), ` ${machine}`)
+  toggle.className = 'fold'
+  toggle.setAttribute('aria-expanded', String(!folded))
+  toggle.title = folded ? 'Show its sessions' : 'Fold its sessions'
+  toggle.onclick = () => fold.toggle(machineFoldKey(machine))
+  if (folded) {
+    const summary = foldSummary(sessions)
+    const badge = element('small', String(summary.hidden))
+    if (summary.attention) badge.prepend(dot(summary.attention))
+    badge.title = `${summary.hidden} session${summary.hidden === 1 ? '' : 's'} folded`
+    toggle.append(badge)
+  }
+  return element('h2', toggle)
 }
 
 function progress(tasks: TaskProgress): HTMLElement {

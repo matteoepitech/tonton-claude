@@ -41,8 +41,10 @@ struct SessionListView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2, pinnedViews: []) {
                     ForEach(sections, id: \.kind) { section in
-                        header(section)
-                        ForEach(Array(section.sessions.enumerated()), id: \.element.id) { index, s in
+                        // A search shows every match, folded or not.
+                        let folded = query.isEmpty && SessionFolding.isFolded(section, in: settings.foldedSections)
+                        header(section, folded: folded, searching: !query.isEmpty)
+                        ForEach(Array((folded ? [] : section.sessions).enumerated()), id: \.element.id) { index, s in
                             let pinned = section.kind == .pinned
                             SessionRow(
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
@@ -240,41 +242,110 @@ struct SessionListView: View {
         Binding(get: { store.autoContinue.contains(sessionId) }, set: { _ in store.toggleAutoContinue(sessionId) })
     }
 
-    @ViewBuilder private func header(_ section: SessionSection) -> some View {
+    /// A click folds the section to its header, or unfolds it. The agent update pill keeps its own click.
+    private func header(_ section: SessionSection, folded: Bool, searching: Bool) -> some View {
         HStack(spacing: 4) {
-            switch section.kind {
-            case .pinned:
-                Image(systemName: "pin.fill").font(.notch(8)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
-                Text("PINNED").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 4)
-            case .tag(let tag):
-                Image(systemName: "tag.fill").font(.notch(8)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
-                Text(tag.uppercased()).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 4)
-            case .thisMac:
-                if let style = store.thisMac.flatMap({ settings.machineStyles[$0] }), !style.isEmpty {
-                    MachineBadge(style: style, size: 9).accessibilityHidden(true)
-                } else {
-                    Image(systemName: "laptopcomputer").font(.notch(9)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    settings.foldedSections = SessionFolding.toggled(section.kind, in: settings.foldedSections)
                 }
-                Text("THIS MAC").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 4)
-                if let info = store.machines.first(where: { $0.id == store.thisMac }) { NotchAgentUpdate(machine: info) }
-            case .machine(let machine):
-                if let style = section.sessions.first.flatMap({ settings.machineStyles[$0.machineId] }) {
-                    MachineBadge(style: style, size: 9).accessibilityHidden(true)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.right").font(.notch(7, weight: .bold)).foregroundStyle(Theme.tertiary)
+                        .rotationEffect(.degrees(folded ? 0 : 90))
+                        .opacity(searching ? 0.4 : 1)
+                    headerTitle(section)
+                    if folded { FoldedSectionBadge(summary: SessionFolding.summary(section.sessions)) }
+                    Spacer(minLength: 4)
                 }
-                Text(machine.uppercased()).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 4)
-                if let info = store.machines.first(where: { $0.id == section.sessions.first?.machineId }) {
-                    NotchAgentUpdate(machine: info)
-                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            // A search shows every match: folding waits until it is cleared.
+            .disabled(searching)
+            .help(searching ? "" : folded ? "Show its sessions" : "Fold its sessions")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.title(section.kind))
+            .accessibilityValue(folded ? FoldedSectionBadge.text(SessionFolding.summary(section.sessions)) : "Unfolded")
+            .accessibilityHint(folded ? "Shows its sessions" : "Folds its sessions")
+            .accessibilityAddTraits([.isHeader, .isButton])
+            headerTrailing(section)
         }
         .padding(.horizontal, 8)
         .padding(.top, 8)
+    }
+
+    private static func title(_ kind: SessionSection.Kind) -> String {
+        switch kind {
+        case .pinned: "Pinned"
+        case .tag(let tag): tag
+        case .thisMac: "This Mac"
+        case .machine(let machine): machine
+        }
+    }
+
+    @ViewBuilder private func headerTitle(_ section: SessionSection) -> some View {
+        switch section.kind {
+        case .pinned:
+            Image(systemName: "pin.fill").font(.notch(8)).foregroundStyle(Theme.secondary)
+            Text("PINNED").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
+        case .tag(let tag):
+            Image(systemName: "tag.fill").font(.notch(8)).foregroundStyle(Theme.secondary)
+            Text(tag.uppercased()).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
+        case .thisMac:
+            if let style = store.thisMac.flatMap({ settings.machineStyles[$0] }), !style.isEmpty {
+                MachineBadge(style: style, size: 9)
+            } else {
+                Image(systemName: "laptopcomputer").font(.notch(9)).foregroundStyle(Theme.secondary)
+            }
+            Text("THIS MAC").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
+        case .machine(let machine):
+            if let style = section.sessions.first.flatMap({ settings.machineStyles[$0.machineId] }) {
+                MachineBadge(style: style, size: 9)
+            }
+            Text(machine.uppercased()).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
+        }
+    }
+
+    @ViewBuilder private func headerTrailing(_ section: SessionSection) -> some View {
+        switch section.kind {
+        case .thisMac:
+            if let info = store.machines.first(where: { $0.id == store.thisMac }) { NotchAgentUpdate(machine: info) }
+        case .machine:
+            if let info = store.machines.first(where: { $0.id == section.sessions.first?.machineId }) {
+                NotchAgentUpdate(machine: info)
+            }
+        case .pinned, .tag:
+            EmptyView()
+        }
+    }
+}
+
+/// On a folded header: how many sessions it hides, and a dot in the color of the most pressing one that needs you.
+struct FoldedSectionBadge: View {
+    let summary: SessionFolding.Summary
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let attention = summary.attention {
+                Circle().fill(Color(nsColor: attention.color)).frame(width: 6, height: 6)
+            }
+            Text("\(summary.hidden)").font(.notch(9, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.secondary)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1)
+        .background(Capsule().fill(Theme.ink.opacity(0.08)))
+        .help(Self.text(summary))
+    }
+
+    static func text(_ summary: SessionFolding.Summary) -> String {
+        let count = "\(summary.hidden) session\(summary.hidden == 1 ? "" : "s") folded"
+        switch summary.attention {
+        case .permission: return "\(count), one needs approval"
+        case .error: return "\(count), one has an error"
+        case .waiting: return "\(count), one is waiting for you"
+        default: return count
+        }
     }
 }
 

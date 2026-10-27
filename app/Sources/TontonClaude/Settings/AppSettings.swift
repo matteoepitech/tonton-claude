@@ -81,6 +81,8 @@ final class AppSettings: ObservableObject {
     @Published var pinnedSessions: [String]
     /// A tag per project, by project name: the list groups their sessions under it.
     @Published var projectTags: [String: String]
+    /// Sections of the session list folded to their header (`SessionFolding.key`).
+    @Published var foldedSections: Set<String>
     /// The pins of the accounts not connected, by `AccountList.id`, until the user switches back.
     @Published var parkedPins: [String: [String]]
     /// Folders sessions were started in from the notch, most recent first, per machine id.
@@ -208,6 +210,7 @@ final class AppSettings: ObservableObject {
         terminal = choice("terminal", .terminal)
         pinnedSessions = value("pinnedSessions", [String]())
         projectTags = value("projectTags", [String: String]())
+        foldedSections = Set(value("foldedSections", [String]()))
         parkedPins = value("parkedPins", [String: [String]]())
         startFolders = value("startFolders", [String: [String]]())
         openOnHover = value("openOnHover", true)
@@ -273,6 +276,7 @@ final class AppSettings: ObservableObject {
         persist($terminal.map(\.rawValue), "terminal")
         persist($pinnedSessions, "pinnedSessions")
         persist($projectTags, "projectTags")
+        persist($foldedSections.map { Array($0).sorted() }, "foldedSections")
         persist($parkedPins, "parkedPins")
         persist($startFolders, "startFolders")
         persist($openOnHover, "openOnHover")

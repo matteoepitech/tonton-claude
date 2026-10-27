@@ -238,6 +238,8 @@ final class SessionStore: ObservableObject {
     var orderedSessions: [SessionSummary] {
         SessionLayout.ordered(visibleSessions, pinned: settings.pinnedSessions, thisMac: thisMachines, tags: settings.projectTags)
     }
+    /// The sessions ⌘1…⌘9 and ⌘↑↓ go through: the list's, without those of a folded section.
+    var navigableSessions: [SessionSummary] { SessionFolding.shown(sections, folded: settings.foldedSections) }
 
     func togglePin(_ sessionId: String) {
         if settings.pinnedSessions.contains(sessionId) {
