@@ -17,11 +17,9 @@ public struct QRCode: Equatable, Sendable {
         guard let image = filter.outputImage else { return nil }
         let width = Int(image.extent.width)
         guard width > 2, Int(image.extent.height) == width else { return nil }
-        // RGBA on the CPU, without color management: the format every renderer writes, and a few black and white pixels
-        // need no GPU. Virtual machines without one, and gray formats there, left the bitmap blank.
+        // RGBA, though one channel would do: macOS 15 leaves a gray bitmap blank.
         var pixels = [UInt8](repeating: 255, count: width * width * 4)
-        let context = CIContext(options: [.useSoftwareRenderer: true, .workingColorSpace: NSNull()])
-        context.render(image, toBitmap: &pixels, rowBytes: width * 4, bounds: image.extent, format: .RGBA8, colorSpace: nil)
+        CIContext().render(image, toBitmap: &pixels, rowBytes: width * 4, bounds: image.extent, format: .RGBA8, colorSpace: nil)
         // CoreImage leaves a margin of one module: the view draws its own quiet zone.
         let size = width - 2
         let modules = (0..<size * size).map { pixels[(($0 / size + 1) * width + $0 % size + 1) * 4] < 128 }
