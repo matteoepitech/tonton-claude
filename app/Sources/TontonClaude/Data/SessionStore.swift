@@ -57,6 +57,8 @@ final class SessionStore: ObservableObject {
     let limitLifted = PassthroughSubject<[SessionSummary], Never>()
     /// Sessions that get `continue` when a usage limit that stopped them resets. Kept while the app runs.
     @Published private(set) var autoContinue: Set<String> = []
+    /// Sessions whose alerts are muted for a while (Snooze alerts in the session list). See SessionStore+Snooze.swift.
+    @Published var snoozes = AlertSnoozes()
     /// Requests can still be refused right at the reset: wait a little, as Claude Code does.
     private static let continueDelay: Duration = .seconds(30)
     /// The user allowed a permission request from the notch.
@@ -310,8 +312,11 @@ final class SessionStore: ObservableObject {
     private func notify(_ session: SessionSummary, previous: SessionSummary?) {
         guard !settings.hiddenMachines.contains(session.machine) else { return }
         let changed = previous?.status != session.status || previous?.pendingPermissions != session.pendingPermissions
-        if session.status.needsAttention && changed { attention.send(session) }
-        if previous?.status == .working && session.status == .idle { finished.send(session) }
+        if session.status.needsAttention && changed && snoozes.allows(.needsYou(session.status), for: session.id) {
+            attention.send(session)
+        }
+        if previous?.status == .working && session.status == .idle && snoozes.allows(.finished, for: session.id) { finished.send(session) }
+        if session.status == .ended && snoozes.isSnoozed(session.id) { snoozes.wake(session.id) }
         if let worked = workTimer.update(session, previous: previous?.status) { taskDone.send((session, worked)) }
     }
 
