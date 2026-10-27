@@ -40,7 +40,8 @@ public struct RelayFeed: Sendable {
             entries[sessionId, default: []] += vault.entries(wireEntries).filter { !known.contains($0.id) }
         case .error(let text):
             lastError = text
-        case .agentUpdate, .sessionStart, .unknown:
+        case .agentUpdate, .sessionStart, .agentLogs, .unknown:
+            // The Mac's business: updating agents, starting sessions, reading their logs.
             break
         }
     }
