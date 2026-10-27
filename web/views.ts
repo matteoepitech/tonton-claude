@@ -10,6 +10,7 @@ import {
   type Entry,
   isLive,
   keepsSessionRules,
+  latestTodos,
   type Machine,
   menuCommands,
   modelName,
@@ -21,7 +22,7 @@ import {
   sessionRuleFor,
   shownPath,
 } from '../shared'
-import type { SessionCommand, SessionStatus } from '../shared/protocol'
+import type { SessionCommand, SessionStatus, TaskProgress, TodoItem } from '../shared/protocol'
 import { element, inline, renderMarkdown } from './markdown'
 
 // MARK: Sessions
@@ -43,6 +44,7 @@ export function renderList(list: HTMLElement, current: ClientState, onPick: (ses
           element('strong', session.name ?? session.project),
           element('small', needsAttention(session.status) ? displayStatusText(session) : (session.title ?? STATUS_LABELS[session.status])),
         ),
+        ...(session.tasks ? [progress(session.tasks)] : []),
       )
       row.className = 'session'
       if (session.id === current.selectedId) row.classList.add('selected')
@@ -52,6 +54,13 @@ export function renderList(list: HTMLElement, current: ClientState, onPick: (ses
     }
   }
   list.replaceChildren(...children)
+}
+
+function progress(tasks: TaskProgress): HTMLElement {
+  const node = element('em', `${tasks.done}/${tasks.total}`)
+  node.className = 'tasks'
+  node.title = 'Tasks done in Claude’s list'
+  return node
 }
 
 export function dot(status: SessionStatus): HTMLElement {
@@ -111,7 +120,8 @@ export function renderChat(chat: HTMLElement, current: ClientState, client: Rela
   const typing =
     document.activeElement instanceof HTMLTextAreaElement && chat.contains(document.activeElement) ? document.activeElement : null
   const field = composer(session, client)
-  chat.replaceChildren(header, messages, field)
+  const todos = latestTodos(current.entries ?? [])
+  chat.replaceChildren(header, messages, ...(todos?.length ? [checklist(todos)] : []), field)
   if (stickToBottom) messages.scrollTop = messages.scrollHeight
   const input = field.querySelector('textarea')
   if (typing && input && !input.disabled) {
@@ -188,6 +198,28 @@ function message(item: ReturnType<typeof chatItems>[number]): HTMLElement {
     tool.append(diff)
   }
   return tool
+}
+
+/** Claude's latest task list, above the composer, in place of a TodoWrite row per update. */
+function checklist(todos: TodoItem[]): HTMLElement {
+  const counted = todos.filter(todo => todo.status !== 'cancelled')
+  const done = counted.filter(todo => todo.status === 'completed').length
+  const marks: Record<TodoItem['status'], string> = { completed: '✓', in_progress: '◐', cancelled: '✕', pending: '○' }
+  const items = todos.map(todo => {
+    const item = element(
+      'li',
+      element('i', marks[todo.status]),
+      todo.status === 'in_progress' ? (todo.activeForm ?? todo.content) : todo.content,
+    )
+    item.className = todo.status
+    return item
+  })
+  const summary = element('summary', element('strong', 'Tasks'), ` ${done === counted.length ? 'All done' : `${done}/${counted.length}`}`)
+  const list = element('details', summary, element('ul', ...items))
+  list.className = 'todos'
+  // A finished list starts folded: there is nothing left to follow.
+  list.open = done < counted.length
+  return list
 }
 
 function permission(

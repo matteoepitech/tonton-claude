@@ -76,6 +76,9 @@ struct ChatPanel: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 6)
             }
+            if let todos = TodoList.latest(in: store.entries[session.id] ?? []), !todos.isEmpty {
+                TodoChecklist(todos: todos).padding(.horizontal, 10).padding(.bottom, 6)
+            }
             Composer(session: session) { text, images in
                 // Held for Undo send, or gone right away and waiting for the transcript.
                 if !held.send(text, images: images, to: session.id, delay: settings.undoSendDelay) {

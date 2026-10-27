@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { seal } from '../../../shared/crypto'
 import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
+import { latestTodos, taskProgress } from '../../../shared/todos'
 import { gitBranch } from '../git'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
@@ -177,7 +178,7 @@ export class Conversation {
     const { sessionId } = this.link
     if (fresh.length) this.post(async () => ({ t: 'entries', sessionId, entries: await this.sealEntries(fresh), reset: false }))
     this.shares.entries(fresh)
-    if (metaChanged || fresh.some(e => e.kind === 'assistant' || e.kind === 'user')) this.postMeta()
+    if (metaChanged || fresh.some(e => e.kind === 'assistant' || e.kind === 'user' || isTodoWrite(e))) this.postMeta()
 
     // Once the tool ran or the turn moved on, a relayed prompt was answered (here or in the terminal).
     if (this.pending.size && fresh.some(e => e.kind === 'tool_result' || e.kind === 'user')) {
@@ -252,6 +253,7 @@ export class Conversation {
       commands: this.link.tmux ? [...COMMANDS] : [],
       model: this.model,
       ...branchOf(this.cwd()),
+      tasks: taskProgress(latestTodos(this.entries)) ?? undefined,
       turns: this.turns.length ? this.turns : undefined,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
@@ -283,6 +285,8 @@ export function branchOf(cwd: string): { branch?: string } {
   const branch = gitBranch(cwd)
   return branch ? { branch } : {}
 }
+/** A new task list changes the progress in the meta. */
+export const isTodoWrite = (entry: Entry) => entry.kind === 'tool' && entry.name === 'TodoWrite'
 
 export const projectOf = (cwd: string) => basename(cwd.replace(/\\/g, '/').replace(/\/+$/, '')) || cwd
 

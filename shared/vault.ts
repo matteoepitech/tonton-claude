@@ -97,6 +97,7 @@ export class Vault {
       model: meta?.model ?? null,
       tool: info?.tool ?? null,
       branch: meta?.branch ?? null,
+      tasks: meta?.tasks && meta.tasks.total > 0 ? meta.tasks : null,
     }
   }
 

@@ -1,4 +1,4 @@
-import type { Entry, FileEdit, ImageData, TokenCounts, TurnTime, UsageLimit } from '../../../shared/protocol'
+import type { Entry, FileEdit, ImageData, TodoItem, TokenCounts, TurnTime, UsageLimit } from '../../../shared/protocol'
 import { limit, modelName } from '../usage'
 
 // Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
@@ -9,6 +9,9 @@ const MAX_SUMMARY_CHARS = 300
 /** Per side of an edit, and edits per call: enough to read the change, not to resend whole files. */
 const MAX_EDIT_CHARS = 4000
 const MAX_EDITS = 20
+/** A task list longer than this is cut: the checklist is for following along, not for keeping a backlog. */
+const MAX_TODOS = 50
+const MAX_TODO_CHARS = 300
 /** Internal tools that would only add noise to the conversation. */
 const HIDDEN_TOOLS = new Set(['ToolSearch', 'SubagentHandback'])
 /** Wrapped user content that Claude Code adds and that should not appear as a message. */
@@ -174,6 +177,7 @@ function assistantEntries(id: string, ts: string, content: Block[]): Entry[] {
       }
       if (block.type === 'tool_use' && typeof block.name === 'string' && !HIDDEN_TOOLS.has(block.name)) {
         const edits = fileEdits(block.name, block.input)
+        const todos = todoItems(block.name, block.input)
         return {
           id: entryId,
           ts,
@@ -182,6 +186,7 @@ function assistantEntries(id: string, ts: string, content: Block[]): Entry[] {
           name: block.name,
           summary: toolSummary(block.name, block.input),
           ...(edits.length ? { edits } : {}),
+          ...(todos ? { todos } : {}),
         }
       }
       return null
@@ -251,6 +256,26 @@ export function fileEdits(name: string, input: unknown): FileEdit[] {
     .slice(0, MAX_EDITS)
     .map(edit => ({ oldText: cut(edit.old_string), newText: cut(edit.new_string) }))
 }
+
+/**
+ * The task list a TodoWrite call sets: `{ todos: [{ content, status, activeForm }] }` in Claude Code, `{ todos: [{ content,
+ * status, priority, id }] }` in OpenCode. Null for other tools, or when the input has no list.
+ */
+export function todoItems(name: string, input: unknown): TodoItem[] | null {
+  const todos = name === 'TodoWrite' && input && typeof input === 'object' ? (input as Record<string, unknown>).todos : undefined
+  if (!Array.isArray(todos)) return null
+  const cut = (text: string) => (text.length > MAX_TODO_CHARS ? `${text.slice(0, MAX_TODO_CHARS)}…` : text)
+  return todos
+    .filter((todo): todo is Record<string, unknown> => typeof todo?.content === 'string' && todo.content.trim().length > 0)
+    .slice(0, MAX_TODOS)
+    .map(todo => {
+      const status = TODO_STATUSES.find(known => known === todo.status) ?? 'pending'
+      const activeForm = typeof todo.activeForm === 'string' && todo.activeForm.trim() ? cut(todo.activeForm.trim()) : undefined
+      return { content: cut(String(todo.content).trim()), status, ...(activeForm ? { activeForm } : {}) }
+    })
+}
+
+const TODO_STATUSES: readonly TodoItem['status'][] = ['pending', 'in_progress', 'completed', 'cancelled']
 
 export function toolSummary(name: string, input: unknown): string {
   const fields = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>

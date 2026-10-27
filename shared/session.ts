@@ -1,7 +1,7 @@
 // Sessions and machines as a client shows them, once decrypted, with the rules the notch follows to label and order
 // them. The TypeScript twin of app/Sources/TontonCore/Session.swift, for the web, Windows and Linux apps.
 
-import type { MachineHealth, SessionCommand, SessionStatus, TokenCounts } from './protocol'
+import type { MachineHealth, SessionCommand, SessionStatus, TaskProgress, TokenCounts } from './protocol'
 
 export const STATUSES: readonly SessionStatus[] = ['starting', 'working', 'waiting', 'permission', 'idle', 'error', 'ended', 'offline']
 
@@ -103,6 +103,8 @@ export interface Session {
   tool: string | null
   /** The git branch it works on, or the short commit when detached. Null outside git and with older agents. */
   branch: string | null
+  /** How far its task list is, while it has unfinished tasks. Null with older agents. */
+  tasks: TaskProgress | null
 }
 
 /** What agents that type in a terminal knew before `model`, and do not list. */

@@ -131,6 +131,8 @@ struct SessionMeta: Codable {
     var model: String?
     /// The git branch of the session folder. Missing outside git and from older agents.
     var branch: String?
+    /// The latest task list's progress, while it has one. Missing from older agents.
+    var tasks: TaskProgress?
     /// The last turns that ended, oldest first. Missing from older agents.
     var turns: [WireTurn]?
 }

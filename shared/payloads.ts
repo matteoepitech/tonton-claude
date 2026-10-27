@@ -15,6 +15,7 @@ import type {
   SessionName,
   StartDetail,
   StatusDetail,
+  TodoItem,
   TokenCounts,
   UsageLimit,
 } from './protocol'
@@ -87,6 +88,15 @@ const edit = (value: unknown): FileEdit => {
   return { oldText: text(f.oldText), newText: text(f.newText) }
 }
 
+const TODO_STATUSES: readonly TodoItem['status'][] = ['pending', 'in_progress', 'completed', 'cancelled']
+
+const todo = (value: unknown): TodoItem => {
+  const f = fields(value)
+  // A status this client does not know reads as pending, as in the app.
+  const status = TODO_STATUSES.find(known => known === f.status) ?? 'pending'
+  return compact({ content: text(f.content), status, activeForm: optional(f.activeForm, text) })
+}
+
 const usageLimit = (value: unknown): UsageLimit => {
   const f = fields(value)
   return { usedPercent: number(f.usedPercent), resetsAt: text(f.resetsAt) }
@@ -130,6 +140,10 @@ export const decodeSessionMeta = decoder(
       commands: optional(f.commands, value => list(value, text)) as SessionMeta['commands'],
       model: optional(f.model, text),
       branch: optional(f.branch, text),
+      tasks: optional(f.tasks, value => {
+        const t = fields(value)
+        return { done: integer(t.done), total: integer(t.total) }
+      }),
     }),
 )
 
@@ -233,6 +247,7 @@ export const decodeEntry = decoder((f): Entry => {
   const summary = optional(f.summary, text)
   const isError = optional(f.isError, flag)
   const edits = optional(f.edits, value => list(value, edit))
+  const todos = optional(f.todos, value => list(value, todo))
   switch (f.kind) {
     case 'user':
       return compact({ ...base, kind: 'user', text: body ?? '', images, viaNotch })
@@ -241,7 +256,7 @@ export const decodeEntry = decoder((f): Entry => {
     case 'system':
       return { ...base, kind: 'system', text: body ?? '' }
     case 'tool':
-      return compact({ ...base, kind: 'tool', toolUseId, name: name ?? '', summary: summary ?? '', edits })
+      return compact({ ...base, kind: 'tool', toolUseId, name: name ?? '', summary: summary ?? '', edits, todos })
     case 'tool_result':
       return compact({ ...base, kind: 'tool_result', toolUseId, text: body ?? '', isError: isError ?? false, images })
     default:

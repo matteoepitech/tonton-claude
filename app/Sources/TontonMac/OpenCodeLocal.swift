@@ -125,7 +125,7 @@ public enum OpenCodeLocal {
                 entries.append(
                     Entry(
                         id: call, ts: ts, kind: .tool, toolUseId: call, name: name, summary: Transcript.toolSummary(name, input),
-                        edits: edits.isEmpty ? nil : edits))
+                        edits: edits.isEmpty ? nil : edits, todos: TodoList.items(name, input)))
                 let status = state["status"] as? String
                 guard status == "completed" || status == "error" else { continue }
                 let output =
@@ -173,7 +173,8 @@ public enum OpenCodeLocal {
             pendingPermissions: permissions, costUSD: listed.costUSD, startedAt: listed.created, lastActivity: listed.updated,
             lastMessage: last?.text.map { String($0.prefix(200)) }, tokens: listed.tokens,
             context: conversation.contextTokens.map { ContextUsage(usedTokens: $0, windowTokens: nil) }, terminal: false,
-            commands: [.compact], model: listed.model, tool: "opencode")
+            commands: [.compact], model: listed.model, tool: "opencode",
+            tasks: TodoList.progress(TodoList.latest(in: conversation.entries)))
     }
 
     /// OpenCode's tools under Claude Code's names, as the agent's bridge maps them.
