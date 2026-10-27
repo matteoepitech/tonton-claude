@@ -3,7 +3,7 @@
 // key, which the members share and the relay never gets. Mirrors app/Sources/TontonCore/Pool.swift.
 
 import type { PoolKeyWrapWire } from './pool-keys'
-import type { Sealed } from './protocol'
+import type { Sealed, SessionStatus } from './protocol'
 
 export type { PoolKeyWrapWire } from './pool-keys'
 
@@ -72,13 +72,28 @@ export interface PoolMessageBody {
 }
 
 export interface PoolEventBody {
-  /** `joined`, `task_moved`, `merged`, `blocked`… `session`: what a pool session runs on, posted by its agent. */
+  /**
+   * `joined`, `task_moved`, `merged`, `blocked`… `session`: what a pool session runs on, posted by its agent. `usage`:
+   * what the session spent and how much of its account's windows is left, posted by its agent when it changes.
+   */
   kind: string
   text?: string
   taskId?: string
   /** `session` events: the coding tool and the model, so the orchestrator assigns by capability. */
   tool?: 'claude' | 'opencode'
   model?: string
+  /** `usage` events. */
+  usage?: PoolUsage
+}
+
+/** A pool session's spending and its account's windows, for the control center, the leaderboard and the orchestrator. */
+export interface PoolUsage {
+  /** Spent by the session so far, at list price. */
+  costUSD?: number
+  tokens?: { input: number; output: number }
+  /** Claude Code only: OpenCode has no plan limits. */
+  fiveHour?: { usedPercent: number; resetsAt?: string }
+  sevenDay?: { usedPercent: number; resetsAt?: string }
 }
 
 // Sealed with the account key: what a member keeps for itself.
@@ -148,6 +163,8 @@ export interface PoolSessionWire {
   online: boolean
   /** Its agent took the order and holds the pool key. */
   ready: boolean
+  /** The session's status, which the relay sees anyway. Missing from older relays, and while it has none. */
+  status?: SessionStatus
 }
 
 /** A task: its revision goes up with every change, so two members never overwrite each other unknowingly. */

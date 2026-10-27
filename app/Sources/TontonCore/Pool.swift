@@ -187,6 +187,25 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
     /// `session` events: `claude` or `opencode`, and the model, as the session's agent last posted them.
     public var tool: String?
     public var model: String?
+    /// `usage` events: what the session spent and how much of its account's windows is left.
+    public var usage: PoolUsage?
+}
+
+/// A pool session's spending and its account's windows, as its agent shares them with the pool (`usage` events).
+public struct PoolUsage: Codable, Equatable, Sendable {
+    public struct Tokens: Codable, Equatable, Sendable {
+        public var input: Double
+        public var output: Double
+    }
+    public struct Window: Codable, Equatable, Sendable {
+        public var usedPercent: Double
+        public var resetsAt: String?
+    }
+    public var costUSD: Double?
+    public var tokens: Tokens?
+    /// Claude Code only: OpenCode has no plan limits.
+    public var fiveHour: Window?
+    public var sevenDay: Window?
 }
 
 /// Seals with the latest pool key it holds and opens with whichever version sealed a blob. What another member sealed
@@ -279,6 +298,8 @@ public struct PoolSessionWire: Codable, Equatable, Sendable {
     public let profile: String?
     public let online: Bool
     public let ready: Bool
+    /// The session's status, which the relay sees anyway. Nil from older relays.
+    public var status: String? = nil
 }
 
 /// A task, the notes, a message or an event: who wrote it, when, and the sealed blob.

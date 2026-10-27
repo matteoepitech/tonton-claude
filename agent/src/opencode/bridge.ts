@@ -5,6 +5,7 @@ import type { Entry, PermissionRule, PromptPayload, RelayToAgent, SealedEntry, S
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { withAttachments } from '../channel'
 import { branchOf, isTodoWrite, projectOf } from '../channel/conversation'
+import { poolUsage } from '../channel/pool-usage'
 import { PoolWork } from '../channel/pool-work'
 import { SessionPools } from '../channel/pools'
 import { RelayConnection } from '../channel/relay-connection'
@@ -86,7 +87,10 @@ class Link {
       () => sessionId,
       build => this.relay.post(build),
       text => this.send({ op: 'prompt', sessionID: sessionId, directory: this.cwd(), text, ...this.chosenModel }),
-      () => ({ tool: 'opencode', model: this.tracker.meta(sessionId).model }),
+      () => {
+        const meta = this.tracker.meta(sessionId)
+        return { tool: 'opencode', model: meta.model, usage: poolUsage(meta) }
+      },
     )
     this.relay.connect()
   }

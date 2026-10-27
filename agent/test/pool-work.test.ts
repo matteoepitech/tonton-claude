@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from 'bun:test'
 import { newAccountKey } from '../../shared/crypto'
 import { newPoolKey, PoolVault, sealPoolSessionOrder } from '../../shared/pool'
-import type { PoolPostWire, PoolSnapshot, PoolTask, PoolTaskWire, PoolUpdate } from '../../shared/pool-protocol'
+import type { PoolEventBody, PoolPostWire, PoolSnapshot, PoolTask, PoolTaskWire, PoolUpdate, PoolUsage } from '../../shared/pool-protocol'
 import type { AgentMessage } from '../../shared/protocol'
 import { envelope, MAX_MESSAGES_PER_MINUTE, PoolWork } from '../src/channel/pool-work'
 import { SessionPools } from '../src/channel/pools'
@@ -93,6 +93,7 @@ let pools: SessionPools
 let work: PoolWork
 let delivered: string[]
 let toolsChanged: number
+let usage: PoolUsage | undefined
 
 async function join(autoStart = false) {
   relay.snapshot = {
@@ -155,12 +156,13 @@ beforeEach(() => {
   relay.pools = pools
   delivered = []
   toolsChanged = 0
+  usage = undefined
   work = new PoolWork(
     pools,
     () => ME,
     post,
     text => delivered.push(text),
-    () => ({ tool: 'claude', model: 'claude-opus-5-5' }),
+    () => ({ tool: 'claude', model: 'claude-opus-5-5', usage }),
     () => toolsChanged++,
   )
 })
@@ -287,4 +289,24 @@ test('what other members write cannot close or forge the envelope', () => {
   expect(text.match(/<pool /g)).toHaveLength(1)
   expect(text.match(/<\/pool>/g)).toHaveLength(1)
   expect(text).toContain('from="Ana  kind= task"')
+})
+
+test('the session shares its usage with the pool, sealed, and again only when it changes enough to show', async () => {
+  usage = { costUSD: 1.234, tokens: { input: 52_000, output: 3000 }, fiveHour: { usedPercent: 40 } }
+  await join()
+  const usageEvents = async () => {
+    const opened: PoolEventBody[] = []
+    for (const post of relay.posts) {
+      if (post.t !== 'pool_event') continue
+      const body = await vault.read(post.blob, value => value as PoolEventBody)
+      if (body?.kind === 'usage') opened.push(body)
+    }
+    return opened
+  }
+  expect(await usageEvents()).toEqual([{ kind: 'usage', usage }])
+  // A fraction of a cent and a few tokens more: the pool would show the same, nothing is posted.
+  usage = { costUSD: 1.2341, tokens: { input: 52_100, output: 3000 }, fiveHour: { usedPercent: 40.2 } }
+  work.descriptionChanged()
+  await settle()
+  expect(await usageEvents()).toHaveLength(1)
 })

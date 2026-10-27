@@ -3,7 +3,7 @@
 // OpenCode plugin (the bridge's pipes). Messages go both ways, either session takes and finishes a task, and the relay
 // only ever carries sealed blobs.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -18,6 +18,7 @@ import { PoolApi } from '../shared/pool-api'
 import { PoolKeyring } from '../shared/pool-keys'
 import { formatPoolInvite, parsePoolInvite } from '../shared/pool-link'
 import type { PoolTask, PoolUpdate } from '../shared/pool-protocol'
+import { controlCenter, leaderboard, talkGraph, timeline } from '../shared/pool-stats'
 import { Vault } from '../shared/vault'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
@@ -45,6 +46,7 @@ let bridge: ReturnType<typeof Bun.spawn>
 const commands: PluginCommand[] = []
 let poolId: string
 let poolKey: string
+let transcript: string
 
 async function eventually<T>(read: () => T | undefined | false | Promise<T | undefined | false>, label: string): Promise<T> {
   for (let i = 0; i < 160; i++) {
@@ -131,7 +133,7 @@ beforeAll(async () => {
   // Claude Code, on the back end, on the first account's machine.
   const first = await account('Mac')
   back = first.app
-  const transcript = join(dir, 'transcript.jsonl')
+  transcript = join(dir, 'transcript.jsonl')
   writeFileSync(
     transcript,
     [
@@ -292,6 +294,47 @@ describe('pool tools end to end', () => {
     expect(await callClaude('task_claim', { task: id })).toStartWith('Started.')
     expect(await callClaude('task_done', { task: id, summary: 'API done', tests: 'bun test' })).toBe('Done: the pool sees it.')
     await eventually(async () => (await stateOf(front))?.tasks.find(t => t.id === id)?.task?.state === 'done', 'the task done')
+  })
+
+  test("the website's control center, activity and leaderboard read the same pool from its events", async () => {
+    // Claude Code answers once more, with its usage: its agent shares it with the pool.
+    const usage = { input_tokens: 1200, output_tokens: 300, cache_read_input_tokens: 40_000, cache_creation_input_tokens: 0 }
+    appendFileSync(
+      transcript,
+      `${JSON.stringify({ sessionId: CLAUDE, type: 'assistant', uuid: 'a2', requestId: 'req_2', message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: 'more' }], usage } })}\n`,
+    )
+    const state = await eventually(async () => {
+      const read = await stateOf(front)
+      return read?.events.some(event => event.body?.kind === 'usage' && event.session === CLAUDE) && read
+    }, 'the usage of the Claude Code session')
+
+    const cards = controlCenter(state)
+    expect(cards.map(card => card.name).sort()).toEqual(['Ana', 'Bob'])
+    const claudeCard = cards.flatMap(card => card.sessions).find(session => session.session === CLAUDE)
+    const openCodeCard = cards.flatMap(card => card.sessions).find(session => session.session === OPENCODE)
+    expect(claudeCard).toMatchObject({ tool: 'claude', model: 'claude-opus-5-5', area: 'back', online: true })
+    expect(claudeCard?.usage?.tokens).toEqual({ input: 41_200, output: 300 })
+    expect(openCodeCard).toMatchObject({ tool: 'opencode', area: 'front', online: true })
+    // The relay tells the pool each session's status.
+    expect(claudeCard?.status).not.toBeNull()
+    expect(openCodeCard?.status).not.toBeNull()
+
+    const { edges } = talkGraph(state)
+    expect(edges).toContainEqual({ from: `s:${back.accountId}/${CLAUDE}`, to: `s:${front.accountId}/${OPENCODE}`, count: 1 })
+    expect(edges).toContainEqual({ from: `s:${front.accountId}/${OPENCODE}`, to: 'a:back', count: 1 })
+
+    const items = timeline(state)
+    expect(items.filter(item => item.kind === 'message').map(item => item.text)).toEqual([
+      'SECRET the API is at /v1',
+      'SECRET the page is ready',
+    ])
+    expect(items.filter(item => item.kind === 'session_joined')).toHaveLength(2)
+    expect(items.some(item => item.kind === 'task_moved' && item.taskTitle === 'SECRET login page')).toBe(true)
+
+    const board = leaderboard(state, 'all')
+    expect(board.sessions.find(row => row.session === OPENCODE)).toMatchObject({ tasksDone: 1, tool: 'opencode' })
+    expect(board.sessions.find(row => row.session === CLAUDE)).toMatchObject({ tasksDone: 1, tool: 'claude', tokens: 41_500 })
+    expect(board.members.map(row => row.tasksDone)).toEqual([1, 1])
   })
 
   test('the relay only ever carried sealed blobs', () => {

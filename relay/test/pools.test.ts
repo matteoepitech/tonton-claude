@@ -287,6 +287,51 @@ describe('pools on the relay', () => {
     await eventually(() => find(ownerApp, 'pool_session_left'), 'the session gone')
   })
 
+  test("a pool session's status reaches the members, once per change", async () => {
+    const owner = await account()
+    const created = await (await fetch(`${base}/api/accounts`, { method: 'POST', headers: fromNewAddress() })).json()
+    const { secret } = await (
+      await fetch(`${base}/api/account/token`, { method: 'POST', headers: { authorization: `Bearer ${created.token}` }, body: '{}' })
+    ).json()
+    const machine = await (
+      await fetch(`${base}/api/machines/join`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ account: created.accountId, secret, name: 'sealed-name' }),
+      })
+    ).json()
+    const id = await pool(owner)
+    await joinPool(created.token, (await invite(owner.token, id)).body.token)
+    const agent = await connect('/ws/agent', machine.token)
+    agent.send({ t: 'hello', sessionId: 'ses_status', info: 'sealed-info', channel: true })
+    const memberApp = await connect('/ws/app', created.token)
+    memberApp.send({ t: 'pool_join_session', poolId: id, sessionId: 'ses_status', order: 'sealed-order', profile: 'sealed-profile' })
+    await eventually(() => agent.messages.find(m => (m as { t: string }).t === 'pool_join'), 'the order')
+    agent.send({ t: 'pool_ack', sessionId: 'ses_status', poolId: id })
+
+    const ownerApp = await connect('/ws/app', owner.token)
+    ownerApp.send({ t: 'pool_subscribe', poolId: id })
+    const snapshot = await eventually(() => find(ownerApp, 'pool_snapshot'), 'the snapshot')
+    expect(snapshot.pool.sessions[0]).toMatchObject({ session: 'ses_status', online: true, ready: true, status: 'idle' })
+
+    const hook = (hook_event_name: string) =>
+      fetch(`${base}/api/hook`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${machine.token}` },
+        body: JSON.stringify({ event: { hook_event_name, session_id: 'ses_status' } }),
+      })
+    await hook('UserPromptSubmit')
+    await eventually(() => find(ownerApp, 'pool_session', m => m.session.status === 'working'), 'working')
+    // New entries while it works change nothing the pool is told.
+    const before = ownerApp.messages.filter(m => m.t === 'pool_session').length
+    agent.send({ t: 'entries', sessionId: 'ses_status', entries: [{ id: 'e1', ts: 'now', blob: 'sealed-entry' }], reset: false })
+    await hook('UserPromptSubmit')
+    await Bun.sleep(150)
+    expect(ownerApp.messages.filter(m => m.t === 'pool_session')).toHaveLength(before)
+    await hook('Stop')
+    await eventually(() => find(ownerApp, 'pool_session', m => m.session.status === 'idle'), 'idle again')
+  })
+
   test('a member leaves; the owner deletes the pool for everyone', async () => {
     const owner = await account()
     const member = await account()

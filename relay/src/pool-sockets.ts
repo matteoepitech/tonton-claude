@@ -43,7 +43,7 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
   switch (message.t) {
     case 'pool_subscribe': {
       ctx.hub.subscribePool(socket, poolId)
-      const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.hub.poolSessionState(poolId, account, session), accountId)
+      const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.poolLive(poolId, account, session), accountId)
       if (pool) ctx.hub.send(socket, { t: 'pool_snapshot', pool })
       break
     }
@@ -116,7 +116,7 @@ export function handleAgentPoolMessage(ctx: RelayContext, socket: Socket, messag
   const { poolId } = message
   if (message.t === 'pool_ack') {
     ctx.hub.setPoolSessionReady(poolId, accountId, sessionId, true)
-    const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.hub.poolSessionState(poolId, account, session), accountId)
+    const pool = ctx.pools.snapshot(poolId, (account, session) => ctx.poolLive(poolId, account, session), accountId)
     if (pool) ctx.hub.send(socket, { t: 'pool_snapshot', pool })
     ctx.poolSessionChanged(poolId, accountId, sessionId)
     return true

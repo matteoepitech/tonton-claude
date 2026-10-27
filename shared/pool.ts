@@ -19,12 +19,14 @@ import type {
   PoolTask,
   PoolTaskState,
   PoolUpdate,
+  PoolUsage,
 } from './pool-protocol'
-import type { Sealed } from './protocol'
+import type { Sealed, SessionStatus } from './protocol'
 
 const KEY = /^[A-Za-z0-9_-]{43}$/
 const TASK_STATES: readonly PoolTaskState[] = ['todo', 'assigned', 'in_progress', 'review', 'done', 'blocked']
 const ROLES: readonly PoolRole[] = ['owner', 'admin', 'member', 'viewer']
+const STATUSES: readonly SessionStatus[] = ['starting', 'working', 'waiting', 'permission', 'idle', 'error', 'ended', 'offline']
 /** The longest text kept from a field another member wrote. */
 const MAX_TEXT = 64 * 1024
 
@@ -150,8 +152,35 @@ export function decodePoolEventBody(value: unknown): PoolEventBody | null {
   const kind = text(f?.kind)
   if (!f || kind === undefined) return null
   const tool: PoolEventBody['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
-  return defined({ kind, text: text(f.text), taskId: text(f.taskId), tool, model: text(f.model) })
+  return defined({ kind, text: text(f.text), taskId: text(f.taskId), tool, model: text(f.model), usage: decodePoolUsage(f.usage) })
 }
+
+const amount = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+
+function decodeWindow(value: unknown): { usedPercent: number; resetsAt?: string } | undefined {
+  const f = fields(value)
+  const usedPercent = amount(f?.usedPercent)
+  return f && usedPercent !== undefined ? defined({ usedPercent: Math.min(usedPercent, 100), resetsAt: text(f.resetsAt) }) : undefined
+}
+
+/** What a session spent, as its agent posted it: a field of the wrong type is left out. Undefined when nothing is left. */
+export function decodePoolUsage(value: unknown): PoolUsage | undefined {
+  const f = fields(value)
+  if (!f) return undefined
+  const tokens = fields(f.tokens)
+  const input = amount(tokens?.input)
+  const output = amount(tokens?.output)
+  const usage = defined({
+    costUSD: amount(f.costUSD),
+    tokens: input !== undefined && output !== undefined ? { input, output } : undefined,
+    fiveHour: decodeWindow(f.fiveHour),
+    sevenDay: decodeWindow(f.sevenDay),
+  })
+  return Object.keys(usage).length ? usage : undefined
+}
+
+const isSessionStatus = (value: unknown): value is SessionStatus => STATUSES.includes(value as SessionStatus)
 
 // MARK: The pool's state
 
@@ -171,6 +200,8 @@ export interface PoolSession {
   profile: PoolSessionProfile | null
   online: boolean
   ready: boolean
+  /** As the relay sees it; null from older relays. */
+  status: SessionStatus | null
 }
 
 export interface PoolTaskItem extends PoolAuthor {
@@ -324,6 +355,7 @@ export class PoolVault {
       joinedAt,
       online,
       ready,
+      status: isSessionStatus(session.status) ? session.status : null,
       profile: await this.read(session.profile, decodePoolSessionProfile),
     }
   }

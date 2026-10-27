@@ -82,4 +82,20 @@ final class PoolTests: XCTestCase {
         let event = try JSONDecoder().decode(PoolEventBody.self, from: Data(#"{"kind":"session","tool":"opencode","model":"gpt-5"}"#.utf8))
         XCTAssertEqual([event.kind, event.tool, event.model], ["session", "opencode", "gpt-5"])
     }
+
+    func testUsageEventsAndSessionStatusReadAsTheAgentAndTheRelaySendThem() throws {
+        let json =
+            #"{"kind":"usage","usage":{"costUSD":1.25,"tokens":{"input":120000,"output":4000},"fiveHour":{"usedPercent":42,"resetsAt":"2026-10-27T18:00:00.000Z"}}}"#
+        let event = try JSONDecoder().decode(PoolEventBody.self, from: Data(json.utf8))
+        XCTAssertEqual(event.usage?.costUSD, 1.25)
+        XCTAssertEqual(event.usage?.tokens, PoolUsage.Tokens(input: 120_000, output: 4000))
+        XCTAssertEqual(event.usage?.fiveHour?.usedPercent, 42)
+        XCTAssertNil(event.usage?.sevenDay)
+        let session =
+            #"{"account":"acc","session":"ses_1","joinedAt":"2026-10-27T10:00:00Z","profile":null,"online":true,"ready":true,"status":"working"}"#
+        XCTAssertEqual(try JSONDecoder().decode(PoolSessionWire.self, from: Data(session.utf8)).status, "working")
+        // Older relays send no status.
+        let older = #"{"account":"acc","session":"ses_1","joinedAt":"2026-10-27T10:00:00Z","profile":null,"online":false,"ready":false}"#
+        XCTAssertNil(try JSONDecoder().decode(PoolSessionWire.self, from: Data(older.utf8)).status)
+    }
 }
