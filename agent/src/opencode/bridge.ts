@@ -5,6 +5,7 @@ import type { Entry, PermissionRule, PromptPayload, RelayToAgent, SealedEntry, S
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { withAttachments } from '../channel'
 import { branchOf, isTodoWrite, projectOf } from '../channel/conversation'
+import { SessionPools } from '../channel/pools'
 import { RelayConnection } from '../channel/relay-connection'
 import { SessionShares } from '../channel/shares'
 import { claimCommand, whyInvalid } from '../channel/terminal'
@@ -48,6 +49,8 @@ class Link {
   private readonly sessionRules: PermissionRule[] = []
   /** Read-only shares of this session, as for Claude Code. */
   private readonly shares: SessionShares
+  /** The pools this session works for, as for Claude Code. */
+  readonly pools: SessionPools
 
   constructor(
     readonly sessionId: string,
@@ -55,12 +58,21 @@ class Link {
     private readonly tracker: OpenCodeTracker,
     private readonly send: Send,
   ) {
-    this.relay = new RelayConnection(config, 'channel', { connected: () => this.announce(), message: message => this.onRelay(message) })
+    this.relay = new RelayConnection(config, 'channel', {
+      connected: () => this.announce(),
+      message: message => this.onRelay(message),
+      pool: update => this.pools.apply(update),
+    })
     this.shares = new SessionShares(
       () => sessionId,
       config.key,
       build => this.relay.post(build),
       () => this.entries,
+    )
+    this.pools = new SessionPools(
+      () => sessionId,
+      config.key,
+      build => this.relay.post(build),
     )
     this.relay.connect()
   }
@@ -143,6 +155,8 @@ class Link {
     if (!('sessionId' in message) || message.sessionId !== this.sessionId) return
     if (message.t === 'share') this.shares.receive(message.shareId, message.order)
     else if (message.t === 'unshare') this.shares.remove(message.shareId)
+    else if (message.t === 'pool_join') this.pools.receive(message.poolId, message.order)
+    else if (message.t === 'pool_left') this.pools.remove(message.poolId)
     else if (message.t === 'verdict') {
       const permission = [...this.pending.values()].find(item => shortId(item.requestId) === message.requestId)
       if (!permission) return

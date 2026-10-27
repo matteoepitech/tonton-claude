@@ -8,6 +8,9 @@ import type { PluginCommand } from '../agent/src/opencode/bridge'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { newAccountKey, open, seal } from '../shared/crypto'
+import { PoolVault, sealPoolSessionOrder } from '../shared/pool'
+import { PoolApi } from '../shared/pool-api'
+import type { PoolUpdate } from '../shared/pool-protocol'
 import type { Entry, RelayToApp, RelayToViewer, SessionInfo, SessionMeta, SessionSummary, SharedInfo } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
@@ -317,6 +320,22 @@ describe('OpenCode through the relay', () => {
     if (info.t !== 'shared_info') throw new Error('unexpected message')
     expect(await open<SharedInfo>(shareKey, info.info)).toEqual({ project: 'shop', title: 'Probe title', tool: 'opencode' })
     viewer.close()
+  })
+
+  test('the session joins a pool: the bridge checks the order and takes the pool key, as for Claude Code', async () => {
+    const created = await new PoolApi({ relay: base, token: accountToken }).create(key, { name: 'Pool' })
+    const poolId = created.pool.id
+    app.send(JSON.stringify({ t: 'pool_subscribe', poolId }))
+    const profile = await new PoolVault(created.key).seal({ area: 'front', tool: 'opencode' })
+    const order = await sealPoolSessionOrder(key, { poolId, sessionId: SESSION, key: created.key, version: 1 })
+    app.send(JSON.stringify({ t: 'pool_join_session', poolId, sessionId: SESSION, order, profile }))
+    await eventually(
+      () =>
+        (messages as unknown as PoolUpdate[]).some(
+          m => m.t === 'pool_session' && m.poolId === poolId && m.session.session === SESSION && m.session.ready,
+        ),
+      'the OpenCode session ready in the pool',
+    )
   })
 
   test('its sessions end with OpenCode', async () => {

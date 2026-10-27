@@ -29,6 +29,10 @@ final class VectorTests: XCTestCase {
         XCTAssertEqual(try Self.read(snapshot: vectors.snapshot, history: vectors.history, key: key), vectors.expected)
         let share = vectors.shareLink
         XCTAssertEqual(ShareLink(string: share.text), ShareLink(relay: share.relay, token: share.token, key: share.key))
+        let invite = vectors.poolInvite
+        XCTAssertEqual(
+            PoolInvite(string: invite.text),
+            PoolInvite(relay: invite.relay, pool: invite.pool, token: invite.token, key: invite.key, version: invite.version))
     }
 
     // MARK: Writing
@@ -129,7 +133,16 @@ final class VectorTests: XCTestCase {
                     shareId: "abcdefghijkl", sessionId: "s1", shareKey: String(repeating: "k", count: 43),
                     expiresAt: "2026-10-26T10:00:00.000Z")
             ),
+            ("pool key grant", try vault.sealPoolKeyGrant(poolId: "pool00000001", key: String(repeating: "k", count: 43), version: 1)),
+            (
+                "pool session order",
+                try vault.sealPoolSessionOrder(
+                    poolId: "pool00000001", sessionId: "s1", key: String(repeating: "k", count: 43), version: 1, issuedAt: issuedAt)
+            ),
         ]
+        let invite = PoolInvite(
+            relay: "https://relay.example.com/tonton", pool: "pool00000001", token: "tp_abcdefghijkl_" + String(repeating: "t", count: 43),
+            key: String(repeating: "k", count: 43), version: 2)
         let share = ShareLink(
             relay: "https://relay.example.com/tonton", token: "ts_abcdefghijkl_" + String(repeating: "t", count: 43),
             key: String(repeating: "k", count: 43))
@@ -145,7 +158,9 @@ final class VectorTests: XCTestCase {
                 token: try XCTUnwrap(account.machineToken), relay: account.relay, account: account.accountId,
                 secret: try XCTUnwrap(account.joinSecret), key: keyText),
             snapshot: snapshot, history: historyText, expected: try read(snapshot: snapshot, history: historyText, key: key),
-            shareLink: Vectors.Share(text: share.string, relay: share.relay, token: share.token, key: share.key))
+            shareLink: Vectors.Share(text: share.string, relay: share.relay, token: share.token, key: share.key),
+            poolInvite: Vectors.Invite(
+                text: invite.string, relay: invite.relay, pool: invite.pool, token: invite.token, key: invite.key, version: invite.version))
     }
 
     private static func text(_ object: [String: Any]) throws -> String {
@@ -217,6 +232,14 @@ final class VectorTests: XCTestCase {
 private struct Vectors: Codable {
     struct Blob: Codable { let name: String; let blob: String; let plaintext: String }
     struct Share: Codable { let text: String; let relay: String; let token: String; let key: String }
+    struct Invite: Codable {
+        let text: String
+        let relay: String
+        let pool: String
+        let token: String
+        let key: String
+        let version: Int
+    }
     struct Token: Codable {
         let token: String
         let relay: String
@@ -291,4 +314,5 @@ private struct Vectors: Codable {
     let history: String
     let expected: Expected
     let shareLink: Share
+    let poolInvite: Invite
 }

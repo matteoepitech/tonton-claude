@@ -1,3 +1,5 @@
+import type { PoolUpdate } from '../../../shared/pool-protocol'
+import { parsePoolUpdate } from '../../../shared/pool-wire'
 import type { AgentMessage, RelayToAgent } from '../../../shared/protocol'
 import { type AgentConfig, installedVersion } from '../config'
 import { log } from '../log'
@@ -10,6 +12,8 @@ const REVOKED = 4001
 export interface RelayConnectionEvents {
   connected(): void
   message(message: RelayToAgent): void
+  /** What changed in a pool this session is in (`pool_join` and `pool_left` come through `message`). */
+  pool?(update: PoolUpdate): void
   disconnected?(): void
   revoked?(): void
 }
@@ -55,7 +59,14 @@ export class RelayConnection {
     }
     socket.onmessage = event => {
       try {
-        this.events.message(JSON.parse(String(event.data)) as RelayToAgent)
+        const message = JSON.parse(String(event.data)) as RelayToAgent | PoolUpdate
+        const order = message.t === 'pool_join' || message.t === 'pool_left'
+        if (order || !message.t.startsWith('pool_')) this.events.message(message as RelayToAgent)
+        else {
+          // A pool's change, checked like anything else from the relay: a wrong shape is dropped.
+          const update = parsePoolUpdate(message)
+          if (update) this.events.pool?.(update)
+        }
       } catch (error) {
         log('unreadable relay message', String(error))
       }

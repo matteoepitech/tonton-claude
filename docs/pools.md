@@ -33,22 +33,44 @@ minutes costs more than one session doing everything. The orchestrator:
 
 | Store | Clear to the relay | Sealed with the pool key |
 |---|---|---|
-| Pools | id, created at, paused or not, key version | name, goal, settings |
+| Pools | id, owner, created at, paused or not, key version | name, goal |
 | Members | account id, role, joined at | display name |
-| Member keys | account id, key version | the pool key, wrapped for that member |
-| Invites | id, token hash, uses left, expiry | — |
-| Pool sessions | account id, session id, joined at | profile (area, skills, repo) |
-| Tasks | id, revision, updated at | goal, criteria, area, state, assignee, dependencies, branch, history |
-| Notes | revision | the notes |
-| Messages | id, sender account and session, to (a session, a role or everyone), time | text |
-| Events | id, sender account and session, time | what happened (task moved, merge, blocker…) |
+| Member keys | account id | the pool key, wrapped with that member's account key |
+| Invites | id, role, token hash, uses left, expiry | — |
+| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, orchestrator); the order, sealed with the account key |
+| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, state, assignee, dependencies, branch, summary |
+| Notes | revision, updated at, who changed them last | the notes |
+| Messages | id, order, sender account and session, time | text, and who it is for (a session, an area or everyone) |
+| Events | id, order, sender account and session, time | what happened (task moved, merge, blocker…) |
 
 Like everything else: ids, roles, states the relay must enforce, sizes and timing in clear, the rest sealed. Pool data
 lives in SQLite (new `MIGRATIONS` entries) with caps in `limits.ts`: 50 members, 100 sessions, 500 tasks, 2000 messages
 and 5000 events per pool (oldest first), 256 KB of notes, 10 pools per account.
 
-The relay sends pool changes to every connected member: apps, the website, and the agents of pool sessions. Pools are
-small: a broadcast is simpler and says less than routing by assignee, which stays sealed.
+The relay sends pool changes to every member that follows the pool: apps, the website, and the agents of pool sessions.
+Pools are small: a broadcast is simpler and says less than routing by recipient, which stays sealed. A task or the notes
+carry a revision: a change sent over an older one is refused with the current one (`pool_conflict`), so two members
+never overwrite each other unknowingly. A member posts at most 240 times a minute to a pool.
+
+### Routes and messages
+
+The account's REST routes (`relay/src/pool-routes.ts`):
+
+| Route | Who | Does |
+|---|---|---|
+| `POST /api/pools` | any account | Creates a pool. The client picks its id, so that the owner's key grant names it. |
+| `GET /api/pools` | members | The pools of the account, with its role and its key grant |
+| `DELETE /api/pools/<id>` | owner | Deletes the pool for everyone |
+| `POST /api/pools/<id>/leave` | members but the owner | Leaves, with the account's sessions |
+| `POST`, `GET /api/pools/<id>/invites`, `DELETE …/invites/<invite>` | owner, admins | Invites: 1 to 100 uses, 1 to 720 hours; only the owner invites admins |
+| `POST /api/pools/join` | any account | Joins with an invite token and its own key grant |
+
+On the app socket (`relay/src/pool-sockets.ts`, types in `shared/pool-protocol.ts`): `pool_subscribe` answers with a
+`pool_snapshot` (the latest 200 messages and 500 events), then every change. Members post `pool_task`, `pool_notes`,
+`pool_message`, `pool_event`; viewers only read. `pool_join_session` puts one of the account's own sessions in the pool:
+the relay keeps the sealed order and hands it to the session's agent (`pool_join`) now and whenever it connects. The
+agent opens it, checks that it names its session and pool, and answers `pool_ack`; then it gets the snapshot, follows
+the pool, and posts as its session. The members see each session online, and ready once it acknowledged.
 
 ## Keys
 

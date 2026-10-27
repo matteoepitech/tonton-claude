@@ -4,6 +4,8 @@
 // `Sealed` string: AES-256-GCM encrypted with the account key, which only the Mac app and the enrolled machines hold.
 // The relay routes and stores these blobs without being able to read them.
 
+import type { PoolAgentMessage, PoolAppMessage, PoolToAgent } from './pool-protocol'
+
 export type Sealed = string // base64(nonce[12] | ciphertext | tag[16])
 
 export type SessionStatus = 'starting' | 'working' | 'waiting' | 'permission' | 'idle' | 'error' | 'ended' | 'offline'
@@ -362,8 +364,10 @@ export type AgentMessage =
   | { t: 'agent_logs'; requestId: string; logs: Sealed }
   // The answer to a `DiagnoseRequest`: a sealed `Diagnosis`.
   | { t: 'diagnosis'; requestId: string; diagnosis: Sealed }
+  // What a pool session posts, and its answer to a join order (shared/pool-protocol.ts).
+  | PoolAgentMessage
 
-// relay -> agent
+// relay -> agent. A pool session also gets the pool's `PoolUpdate`s.
 export type RelayToAgent =
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   // `rule`: a `SessionRules` sealed by the app, when the user allowed this kind of call for the rest of the session.
@@ -381,6 +385,8 @@ export type RelayToAgent =
   | { t: 'agent_logs'; requestId: string; request: Sealed }
   // A sealed `DiagnoseRequest`.
   | { t: 'diagnose'; requestId: string; request: Sealed }
+  // The session joins or leaves a pool: `order` is a `PoolSessionOrder` sealed with the account key.
+  | PoolToAgent
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -388,7 +394,7 @@ export interface HookPost {
   detail?: Sealed
 }
 
-// relay -> app
+// relay -> app. The pool messages (`PoolUpdate` in shared/pool-protocol.ts) come on the same socket.
 export type RelayToApp =
   | { t: 'snapshot'; sessions: SessionSummary[]; machines: MachineSummary[] }
   | { t: 'session'; session: SessionSummary }
@@ -432,6 +438,7 @@ export type AppMessage =
   | { t: 'share'; sessionId: string; shareId: string; order: Sealed }
   | { t: 'agent_logs'; machineId: string; requestId: string; request: Sealed }
   | { t: 'diagnose'; machineId: string; requestId: string; request: Sealed }
+  | PoolAppMessage
 
 // relay -> viewer (/ws/share, with a share token): one session, read only.
 export type RelayToViewer =

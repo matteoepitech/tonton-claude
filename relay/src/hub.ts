@@ -1,4 +1,5 @@
 import type { ServerWebSocket } from 'bun'
+import type { PoolUpdate } from '../../shared/pool-protocol'
 import type { RelayToAgent, RelayToApp, RelayToViewer } from '../../shared/protocol'
 import { type Role, Traffic } from './metrics'
 
@@ -16,6 +17,8 @@ export interface SocketData {
   shareId?: string
   /** App: the install of the iPhone app it is, from `X-Tonton-Device`. Missing for the Mac and older apps. */
   device?: string | null
+  /** App: the pools it subscribed to. */
+  pools?: Set<string>
 }
 
 export type Socket = ServerWebSocket<SocketData>
@@ -26,6 +29,10 @@ export class Hub {
   private readonly viewers = new Map<string, Set<Socket>>()
   private readonly agents = new Map<string, Socket>()
   private readonly machines = new Map<string, Set<Socket>>()
+  /** App sockets per pool they subscribed to. */
+  private readonly poolApps = new Map<string, Set<Socket>>()
+  /** `pool/account/session` of the pool sessions whose agent took its order since it connected. */
+  private readonly readyPoolSessions = new Set<string>()
   /** Every message goes through `send`, so that it is counted. */
   readonly traffic = new Traffic()
 
@@ -35,6 +42,51 @@ export class Hub {
 
   removeApp(socket: Socket) {
     removeFrom(this.apps, socket.data.accountId, socket)
+    for (const poolId of socket.data.pools ?? []) removeFrom(this.poolApps, poolId, socket)
+  }
+
+  subscribePool(socket: Socket, poolId: string) {
+    socket.data.pools ??= new Set()
+    socket.data.pools.add(poolId)
+    addTo(this.poolApps, poolId, socket)
+  }
+
+  unsubscribePool(socket: Socket, poolId: string) {
+    socket.data.pools?.delete(poolId)
+    removeFrom(this.poolApps, poolId, socket)
+  }
+
+  /** The account is no longer in the pool: its apps stop getting it. */
+  dropPoolAccount(poolId: string, accountId: string) {
+    for (const socket of [...(this.poolApps.get(poolId) ?? [])])
+      if (socket.data.accountId === accountId) this.unsubscribePool(socket, poolId)
+  }
+
+  /** To the apps that subscribed to the pool and to the agents of `sessions`, the pool's sessions. */
+  sendToPool(poolId: string, message: PoolUpdate, sessions: readonly { accountId: string; sessionId: string }[]) {
+    const raw = JSON.stringify(message)
+    const bytes = Buffer.byteLength(raw)
+    for (const socket of this.poolApps.get(poolId) ?? []) this.sendRaw(socket, raw, bytes)
+    for (const { accountId, sessionId } of sessions) {
+      const agent = this.agents.get(sessionKey(accountId, sessionId))
+      if (agent) this.sendRaw(agent, raw, bytes)
+    }
+  }
+
+  /** The agent serving this session, if it is connected. */
+  agentOf(accountId: string, sessionId: string): Socket | null {
+    return this.agents.get(sessionKey(accountId, sessionId)) ?? null
+  }
+
+  setPoolSessionReady(poolId: string, accountId: string, sessionId: string, ready: boolean) {
+    const key = `${poolId}/${sessionKey(accountId, sessionId)}`
+    if (ready) this.readyPoolSessions.add(key)
+    else this.readyPoolSessions.delete(key)
+  }
+
+  poolSessionState(poolId: string, accountId: string, sessionId: string): { online: boolean; ready: boolean } {
+    const online = this.agents.has(sessionKey(accountId, sessionId))
+    return { online, ready: online && this.readyPoolSessions.has(`${poolId}/${sessionKey(accountId, sessionId)}`) }
   }
 
   addMachineSocket(socket: Socket) {
@@ -86,7 +138,7 @@ export class Hub {
     }
   }
 
-  send(socket: Socket, message: RelayToAgent | RelayToApp | RelayToViewer) {
+  send(socket: Socket, message: RelayToAgent | RelayToApp | RelayToViewer | PoolUpdate) {
     const raw = JSON.stringify(message)
     this.sendRaw(socket, raw, Buffer.byteLength(raw))
   }
@@ -138,7 +190,7 @@ export class Hub {
     for (const socket of this.machines.get(machineId) ?? []) this.sendRaw(socket, raw, bytes)
   }
 
-  sendToApps(accountId: string, message: RelayToApp, filter?: (socket: Socket) => boolean) {
+  sendToApps(accountId: string, message: RelayToApp | PoolUpdate, filter?: (socket: Socket) => boolean) {
     const sockets = this.apps.get(accountId)
     if (!sockets?.size) return
     const raw = JSON.stringify(message)

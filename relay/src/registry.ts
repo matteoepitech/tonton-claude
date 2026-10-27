@@ -98,6 +98,76 @@ const MIGRATIONS = [
    );`,
   // The name a Mac gave a session, sealed like the rest.
   `ALTER TABLE sessions ADD COLUMN name TEXT;`,
+  // Pools (relay/src/pools.ts, docs/pools.md): ids, roles, revisions and times in clear, everything else sealed with the
+  // pool key, except each member's copy of that key, sealed with its own account key.
+  `CREATE TABLE pools (
+     id TEXT PRIMARY KEY,
+     owner_account TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+     created_at TEXT NOT NULL,
+     paused INTEGER NOT NULL DEFAULT 0,
+     key_version INTEGER NOT NULL DEFAULT 1,
+     info_blob TEXT NOT NULL
+   );
+   CREATE TABLE pool_members (
+     pool_id TEXT NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
+     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+     role TEXT NOT NULL,
+     joined_at TEXT NOT NULL,
+     profile_blob TEXT,
+     key_blob TEXT NOT NULL,
+     PRIMARY KEY (pool_id, account_id)
+   );
+   CREATE INDEX pool_members_account ON pool_members(account_id);
+   CREATE TABLE pool_invites (
+     id TEXT PRIMARY KEY,
+     pool_id TEXT NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
+     secret_hash BLOB NOT NULL,
+     role TEXT NOT NULL,
+     uses_left INTEGER NOT NULL,
+     created_at TEXT NOT NULL,
+     expires_at INTEGER NOT NULL
+   );
+   CREATE INDEX pool_invites_pool ON pool_invites(pool_id);
+   CREATE TABLE pool_sessions (
+     pool_id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT NOT NULL,
+     joined_at TEXT NOT NULL,
+     profile_blob TEXT,
+     order_blob TEXT NOT NULL,
+     PRIMARY KEY (pool_id, account_id, session_id),
+     FOREIGN KEY (pool_id, account_id) REFERENCES pool_members(pool_id, account_id) ON DELETE CASCADE
+   );
+   CREATE INDEX pool_sessions_session ON pool_sessions(account_id, session_id);
+   CREATE TABLE pool_tasks (
+     pool_id TEXT NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
+     id TEXT NOT NULL,
+     rev INTEGER NOT NULL,
+     updated_at TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (pool_id, id)
+   );
+   CREATE TABLE pool_notes (
+     pool_id TEXT PRIMARY KEY REFERENCES pools(id) ON DELETE CASCADE,
+     rev INTEGER NOT NULL,
+     updated_at TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT,
+     blob TEXT NOT NULL
+   );
+   CREATE TABLE pool_posts (
+     seq INTEGER PRIMARY KEY,
+     pool_id TEXT NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL,
+     id TEXT NOT NULL,
+     ts TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT,
+     blob TEXT NOT NULL
+   );
+   CREATE INDEX pool_posts_pool ON pool_posts(pool_id, kind, seq);`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */
