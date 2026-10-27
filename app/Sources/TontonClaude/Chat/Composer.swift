@@ -66,6 +66,13 @@ struct Composer: View {
             focused = session.canChat
         }
         .onChange(of: text) { _, value in state.drafts[session.id] = value }
+        // A message taken back with Undo returns here, before whatever was typed since.
+        .onReceive(HeldMessages.shared.undone) { message in
+            guard message.sessionId == session.id else { return }
+            text = [message.text, text].filter { !$0.isEmpty }.joined(separator: "\n")
+            attachments = message.images.compactMap(Attachment.init) + attachments
+            focused = true
+        }
         .onChange(of: state.pushToTalk) { _, held in held ? startDictation() : dictation.stop() }
         .onChange(of: dictation.transcript) { _, words in text = DictationText.merge(typed: typedBeforeDictation, transcript: words) }
         .onDisappear { dictation.stop() }

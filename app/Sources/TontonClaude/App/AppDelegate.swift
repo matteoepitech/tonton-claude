@@ -26,11 +26,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingLinks: [DeepLink] = []
     private var subscriptions = Set<AnyCancellable>()
 
+    /// Messages still held for Undo send go before the app quits, with a moment for the socket to send them.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard HeldMessages.shared.flush() else { return .terminateNow }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { sender.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
         MainMenu.install()
         notch = NotchWindowController(store: store, settings: settings)
         MessageQueues.shared.attach(store)
+        HeldMessages.shared.attach(store)
+        // Messages held for Undo send go once the notch closes: their Undo button is gone with it.
+        notch?.state.$mode.filter { $0 == .collapsed }.sink { _ in HeldMessages.shared.flush() }.store(in: &subscriptions)
         webhooks = WebhookNotifier(store: store, settings: settings)
         if let notch { achievements = AchievementTracker(store: store, notch: notch.state, settings: settings) }
         UNUserNotificationCenter.current().delegate = self

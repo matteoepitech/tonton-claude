@@ -96,6 +96,10 @@ final class AppSettings: ObservableObject {
     @Published var quietStart: Int
     @Published var quietEnd: Int
 
+    /// Undo send: seconds a message from the notch waits before it goes (UndoSendDelay), 0 for right away.
+    @Published var undoSendSeconds: Int
+    var undoSendDelay: UndoSendDelay { UndoSendDelay(rawValue: undoSendSeconds) ?? .off }
+
     /// Webhooks (https only, see Webhook); empty is off.
     @Published var webhookFinished: String
     @Published var webhookNeedsYou: String
@@ -178,6 +182,7 @@ final class AppSettings: ObservableObject {
         quietHours = value("quietHours", false)
         quietStart = value("quietStart", 22 * 60)
         quietEnd = value("quietEnd", 8 * 60)
+        undoSendSeconds = value("undoSendSeconds", 0)
         webhookFinished = value("webhookFinished", "")
         webhookNeedsYou = value("webhookNeedsYou", "")
         webhookIncludeNames = value("webhookIncludeNames", false)
@@ -226,6 +231,7 @@ final class AppSettings: ObservableObject {
         persist($quietHours, "quietHours")
         persist($quietStart, "quietStart")
         persist($quietEnd, "quietEnd")
+        persist($undoSendSeconds, "undoSendSeconds")
         persist($webhookFinished, "webhookFinished")
         persist($webhookNeedsYou, "webhookNeedsYou")
         persist($webhookIncludeNames, "webhookIncludeNames")

@@ -76,6 +76,15 @@ struct GeneralPane: View {
                     }
                 }
                 Hairline()
+                Row(title: "Undo send", detail: "A message from the notch waits this long before it goes, with an Undo button.") {
+                    ChoiceMenu(
+                        selection: String(settings.undoSendSeconds),
+                        options: UndoSendDelay.allCases.map { (String($0.rawValue), $0.label) }
+                    ) {
+                        settings.undoSendSeconds = Int($0) ?? 0
+                    }
+                }
+                Hairline()
                 Row(title: "Open files in", detail: "Files Claude reads or edits on this Mac open from the conversation.") {
                     ChoiceMenu(
                         selection: settings.editor.available.rawValue, options: EditorChoice.installed.map { ($0.rawValue, $0.label) }
