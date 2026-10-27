@@ -205,17 +205,3 @@ extension ToolRow {
         }
     }
 }
-
-/// The fixed lines the agents write in English into a conversation, in the app's language. Others, such as why a command
-/// from the notch did not run, show as the agent wrote them.
-enum AgentText {
-    static func localized(_ text: String) -> String {
-        switch text {
-        case "Conversation compacted": String(localized: "Conversation compacted")
-        case "Interrupted by user": String(localized: "Interrupted by user")
-        case "Background task finished": String(localized: "Background task finished")
-        case "Updated the task list": String(localized: "Updated the task list")
-        default: text
-        }
-    }
-}

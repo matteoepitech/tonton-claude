@@ -73,7 +73,9 @@ struct SessionListView: View {
                                 Menu("Sound when \(s.project) finishes") {
                                     Toggle("Event sound", isOn: projectSound(s.project, nil))
                                     Divider()
-                                    ForEach(SoundPlayer.names, id: \.self) { name in Toggle(name, isOn: projectSound(s.project, name)) }
+                                    ForEach(SoundPlayer.names, id: \.self) { name in
+                                        Toggle(SoundPlayer.label(name), isOn: projectSound(s.project, name))
+                                    }
                                 }
                                 if store.isOnThisMac(s) { LocalFolderActions(session: s, style: .menu) }
                                 if store.canRename(s) {

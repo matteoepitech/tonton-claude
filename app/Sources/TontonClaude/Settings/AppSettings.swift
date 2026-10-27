@@ -28,29 +28,6 @@ final class AppSettings: ObservableObject {
     /// macOS sounds by file name, which is also what the settings keep.
     static let alertSounds = ["Glass", "Tink", "Ping", "Pop", "Purr", "Hero", "Submarine", "Funk", "Bottle", "Frog", "Basso"]
 
-    /// What the sound pickers show for a sound: in English its file name, in French the name System Settings gives it.
-    static func soundLabel(_ name: String) -> String {
-        switch name {
-        case "Glass": String(localized: "Glass", comment: "A macOS alert sound")
-        case "Tink": String(localized: "Tink", comment: "A macOS alert sound")
-        case "Ping": String(localized: "Ping", comment: "A macOS alert sound")
-        case "Pop": String(localized: "Pop", comment: "A macOS alert sound")
-        case "Purr": String(localized: "Purr", comment: "A macOS alert sound")
-        case "Hero": String(localized: "Hero", comment: "A macOS alert sound")
-        case "Submarine": String(localized: "Submarine", comment: "A macOS alert sound")
-        case "Funk": String(localized: "Funk", comment: "A macOS alert sound")
-        case "Bottle": String(localized: "Bottle", comment: "A macOS alert sound")
-        case "Frog": String(localized: "Frog", comment: "A macOS alert sound")
-        case "Basso": String(localized: "Basso", comment: "A macOS alert sound")
-        case "8-bit Coin": String(localized: "8-bit Coin", comment: "A sound of the 8-bit pack")
-        case "8-bit Power-up": String(localized: "8-bit Power-up", comment: "A sound of the 8-bit pack")
-        case "8-bit Alert": String(localized: "8-bit Alert", comment: "A sound of the 8-bit pack")
-        case "8-bit Blip": String(localized: "8-bit Blip", comment: "A sound of the 8-bit pack")
-        case "8-bit Error": String(localized: "8-bit Error", comment: "A sound of the 8-bit pack")
-        default: name
-        }
-    }
-
     /// Relay
     @Published var serverURL: String
     @Published var account: Account?

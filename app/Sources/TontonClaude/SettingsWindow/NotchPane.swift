@@ -177,7 +177,7 @@ struct NotchPane: View {
 
     private var mixed: [(id: String, label: String)] { currentPack == "custom" ? [("custom", String(localized: "Custom"))] : [] }
 
-    private static var sounds: [(id: String, label: String)] { SoundPlayer.names.map { ($0, AppSettings.soundLabel($0)) } }
+    private static var sounds: [(id: String, label: String)] { SoundPlayer.names.map { ($0, SoundPlayer.label($0)) } }
 
     private static func title(_ event: SoundEvent) -> String {
         switch event {
