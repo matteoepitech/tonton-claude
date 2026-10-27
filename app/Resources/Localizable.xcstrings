@@ -239,13 +239,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$@ de travail en %2$lld session, %3$@."
+                  "value" : "%1$@ de travail sur %2$lld session, %3$@."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$@ de travail en %2$lld sessions, %3$@."
+                  "value" : "%1$@ de travail sur %2$lld sessions, %3$@."
                 }
               }
             }
@@ -279,13 +279,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$@ de travail en %2$lld session."
+                  "value" : "%1$@ de travail sur %2$lld session."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$@ de travail en %2$lld sessions."
+                  "value" : "%1$@ de travail sur %2$lld sessions."
                 }
               }
             }
@@ -925,13 +925,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld spectateur"
+                  "value" : "%lld lecteur"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld spectateurs"
+                  "value" : "%lld lecteurs"
                 }
               }
             }
@@ -1832,7 +1832,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le plus actif : %@"
+            "value" : "Pic d’activité : %@"
           }
         }
       }
@@ -2468,7 +2468,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le coût et les jetons s’additionnent ici pendant que des sessions tournent et que Tonton Claude est ouvert."
+            "value" : "Le coût et les jetons s’additionnent ici pendant que des sessions sont en cours et que Tonton Claude est ouvert."
           }
         }
       }
@@ -2550,7 +2550,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compté sur ce Mac à partir de ce que les sessions transmettent pendant que Tonton Claude tourne. Les coûts sont les estimations de Claude Code au prix catalogue ; les jetons comprennent ce qui a été lu dans le cache des prompts et écrit dedans. Wrapped et les heures comptent la durée des tâches vues se terminer, et Wrapped les appels d’outils des conversations ouvertes dans l’encoche ou gardées sur ce Mac."
+            "value" : "Compté sur ce Mac à partir de ce que les sessions transmettent pendant que Tonton Claude est ouvert. Les coûts sont les estimations de Claude Code au prix catalogue ; les jetons comprennent ce qui a été lu dans le cache des prompts et écrit dedans. Wrapped et les heures comptent la durée des tâches que l’app a vues se terminer, et Wrapped les appels d’outils des conversations ouvertes dans l’encoche ou gardées sur ce Mac."
           }
         }
       }
@@ -3848,7 +3848,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avancer"
+            "value" : "Monter"
           }
         }
       }
@@ -3858,7 +3858,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reculer"
+            "value" : "Descendre"
           }
         }
       }
@@ -3958,7 +3958,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oiseau de nuit"
+            "value" : "Couche-tard"
           }
         }
       }
@@ -4119,13 +4119,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Aucune tâche terminée en %1$lld session, %2$@."
+                  "value" : "Aucune tâche terminée sur %1$lld session, %2$@."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Aucune tâche terminée en %1$lld sessions, %2$@."
+                  "value" : "Aucune tâche terminée sur %1$lld sessions, %2$@."
                 }
               }
             }
@@ -4159,13 +4159,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Aucune tâche terminée en %lld session."
+                  "value" : "Aucune tâche terminée sur %lld session."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Aucune tâche terminée en %lld sessions."
+                  "value" : "Aucune tâche terminée sur %lld sessions."
                 }
               }
             }
@@ -4409,7 +4409,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ouvrir aux demandes d’autorisation"
+            "value" : "Ouvrir lors des demandes d’autorisation"
           }
         }
       }
@@ -4853,7 +4853,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lecture seule : cliquez sur Mettre à jour l’agent pour cette machine pour écrire à ses sessions OpenCode."
+            "value" : "Lecture seule : cliquez sur Mettre à jour l’agent de cette machine pour écrire à ses sessions OpenCode."
           }
         }
       }
@@ -5453,7 +5453,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Envoi de l’ordre…"
+            "value" : "Envoi de la demande…"
           }
         }
       }
@@ -5771,7 +5771,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Affichent l’état le plus urgent et le nombre de sessions en cours à côté de la caméra."
+            "value" : "Affiche l’état le plus urgent et le nombre de sessions en cours à côté de la caméra."
           }
         }
       }
@@ -5891,7 +5891,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Son quand %@ termine"
+            "value" : "Son quand %@ se termine"
           }
         }
       }
@@ -6095,7 +6095,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Démarrer des sessions demande tmux, que Windows n’a pas"
+            "value" : "Démarrer des sessions nécessite tmux, que Windows n’a pas"
           }
         }
       }
