@@ -27,7 +27,7 @@ public enum TodoList {
 
     /// The task list a TodoWrite call sets, as the agent reads it (agent/src/transcript/parser.ts): Claude Code's
     /// `{ todos: [{ content, status, activeForm }] }` and OpenCode's `{ todos: [{ content, status, priority, id }] }`.
-    static func items(_ name: String, _ input: Any?) -> [TodoItem]? {
+    public static func items(_ name: String, _ input: Any?) -> [TodoItem]? {
         guard name == "TodoWrite", let todos = (input as? [String: Any])?["todos"] as? [Any] else { return nil }
         func cut(_ text: String) -> String {
             text.utf16.count > maxChars ? "\(String(decoding: Array(text.utf16.prefix(maxChars)), as: UTF16.self))…" : text

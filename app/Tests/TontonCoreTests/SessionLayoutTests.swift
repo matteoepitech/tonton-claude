@@ -35,6 +35,25 @@ final class SessionLayoutTests: XCTestCase {
         XCTAssertEqual(SessionLayout.ordered(sessions, pinned: ["c"], thisMac: ["mac"]).map(\.id), ["c", "b", "a"])
     }
 
+    func testTaggedProjectsGroupWhateverTheirMachineAfterPinned() {
+        let sessions = [
+            session("api", on: "server"), session("web", on: "mac"), session("docs", on: "mac", .ended), session("cli", on: "laptop"),
+        ]
+        let tags = ["api": "Acme", "web": "Acme", "docs": "Internal"]
+        let sections = SessionLayout.sections(sessions, pinned: ["web"], thisMac: ["mac"], tags: tags)
+        // A pinned session stays pinned; tags with a live session come first.
+        XCTAssertEqual(sections.map(\.kind), [.pinned, .tag("Acme"), .tag("Internal"), .machine("laptop")])
+        XCTAssertEqual(sections.map { $0.sessions.map(\.id) }, [["web"], ["api"], ["docs"], ["cli"]])
+        XCTAssertEqual(
+            SessionLayout.ordered(sessions, pinned: ["web"], thisMac: ["mac"], tags: tags).map(\.id), ["web", "api", "docs", "cli"])
+    }
+
+    func testTagNamesAreCleanAndListedOnce() {
+        XCTAssertEqual(ProjectTags.clean("  Client Acme  "), "Client Acme")
+        XCTAssertEqual(ProjectTags.clean(String(repeating: "x", count: 40)).count, 24)
+        XCTAssertEqual(ProjectTags.names(["a": "beta", "b": "Alpha", "c": "beta"]), ["Alpha", "beta"])
+    }
+
     func testTheNotchGlowsWhileASessionWorksInTheMostUrgentColor() {
         XCTAssertEqual(SessionStatus.mostUrgent([.idle, .working, .waiting]), .waiting)
         XCTAssertNil(SessionStatus.mostUrgent([]))

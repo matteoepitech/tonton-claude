@@ -322,7 +322,8 @@ main > p {
   text-decoration: none;
   white-space: pre-wrap;
 }
-.permission {
+/* The card, not the status dot of a session that asks: both have the class. */
+.messages > .permission {
   border: 1px solid var(--accent);
   border-radius: 10px;
   padding: 10px 12px;
@@ -330,12 +331,12 @@ main > p {
   flex-direction: column;
   gap: 6px;
 }
-.permission pre {
+.messages > .permission pre {
   margin: 0;
   white-space: pre-wrap;
   color: var(--dim);
 }
-.permission div {
+.messages > .permission div {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -372,6 +373,27 @@ main > p {
 .sign-in .error {
   color: var(--danger);
   min-height: 1.5em;
+}
+.sign-in .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.scanner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.scanner[hidden] {
+  display: none;
+}
+.scanner video {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #000;
 }
 
 .todos {

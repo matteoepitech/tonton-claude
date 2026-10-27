@@ -16,15 +16,15 @@ struct TodoChecklist: View {
                 withAnimation(.easeOut(duration: 0.15)) { open.toggle() }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "checklist").font(.system(size: 10)).foregroundStyle(Theme.accent)
-                    Text("Tasks").font(.system(size: 11, weight: .semibold))
-                    Text(progress == nil ? "All done" : "\(done)/\(counted)").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Image(systemName: "checklist").font(.notch(10)).foregroundStyle(Theme.accent)
+                    Text("Tasks").font(.notch(11, weight: .semibold))
+                    Text(progress == nil ? "All done" : "\(done)/\(counted)").font(.notch(10)).foregroundStyle(Theme.secondary)
                         .monospacedDigit()
                     if !open, let running = todos.first(where: { $0.state == .inProgress }) {
-                        Text(running.activeForm ?? running.content).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        Text(running.activeForm ?? running.content).font(.notch(10)).foregroundStyle(Theme.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.notch(9)).foregroundStyle(Theme.tertiary)
                 }
                 .contentShape(Rectangle())
             }
@@ -53,17 +53,17 @@ struct TodoChecklist: View {
     private static let rows = 8
 
     private func more(_ count: Int, done: Bool) -> some View {
-        Text(done ? "\(count) done" : "\(count) more").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.leading, 18)
+        Text(done ? "\(count) done" : "\(count) more").font(.notch(10)).foregroundStyle(Theme.tertiary).padding(.leading, 18)
     }
 
     private func row(_ todo: TodoItem) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: icon(todo.state))
-                .font(.system(size: 10))
+                .font(.notch(10))
                 .foregroundStyle(color(todo.state))
                 .frame(width: 12)
             Text(todo.state == .inProgress ? todo.activeForm ?? todo.content : todo.content)
-                .font(.system(size: 11, weight: todo.state == .inProgress ? .semibold : .regular))
+                .font(.notch(11, weight: todo.state == .inProgress ? .semibold : .regular))
                 .strikethrough(todo.state == .completed || todo.state == .cancelled, color: .secondary)
                 .foregroundStyle(todo.state == .pending || todo.state == .inProgress ? Theme.text : Theme.textDim)
                 .fixedSize(horizontal: false, vertical: true)
@@ -105,10 +105,10 @@ struct TaskProgressBadge: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: "checklist").font(.system(size: 8))
-            Text("\(progress.done)/\(progress.total)").font(.system(size: 9, weight: .medium)).monospacedDigit()
+            Image(systemName: "checklist").font(.notch(8))
+            Text("\(progress.done)/\(progress.total)").font(.notch(9, weight: .medium)).monospacedDigit()
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Theme.secondary)
         .help("Tasks done in Claude's list")
         .accessibilityLabel("\(progress.done) of \(progress.total) tasks done")
     }

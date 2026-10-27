@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { parseAccountToken } from '../../../shared/account-token'
 import { defaultMachineName, loadConfig, paths, saveConfig, VERSION } from '../config'
 import { PLUGIN_FILE } from '../opencode/plugin'
@@ -8,10 +7,19 @@ import { proxyFor, shownProxy } from '../proxy'
 import { registerAutostart, restartService, runningServicePid, stopService } from '../service/control'
 import { installTrayFiles } from '../service/tray'
 import { useToken } from '../token'
-import { type ClaudeSettings, launcherSettings, withoutTontonHooks, withTontonHooks } from './claude-settings'
+import { withoutTontonHooks } from './claude-settings'
 import { hasOpenCode, installOpenCodePlugin, openCodeConfigDir, removeOpenCodePlugin } from './opencode'
-import { removeLauncher, withLauncher } from './shell-profile'
-import { IS_WINDOWS, installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
+import {
+  currentSetup,
+  readClaudeSettings,
+  type Setup,
+  writeClaudeSettings,
+  writeHooks,
+  writeLauncherSettings,
+  writeLaunchers,
+} from './setup'
+import { removeLauncher } from './shell-profile'
+import { installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
 
 const done = (message: string) => console.log(`  \x1b[32m✓\x1b[0m ${message}`)
 const warn = (message: string) => console.log(`  \x1b[33m!\x1b[0m ${message}`)
@@ -53,10 +61,11 @@ export async function install(args: string[]) {
 
   const binary = installBinary()
   done(`binary installed: ${binary}`)
-  installHooks(binary)
+  const setup = { ...currentSetup(), binary }
+  installHooks(setup)
   if (registerMcpServer(binary)) done('MCP server "tonton" registered for Claude Code')
   else warn(`could not run "claude mcp add". Run it by hand: claude mcp add --scope user tonton -- "${binary}" channel`)
-  installLaunchers(binary)
+  installLaunchers(setup)
   if (hasOpenCode()) {
     // OpenCode reads its plugins when it starts: sessions already open show up once it restarts.
     done(
@@ -77,52 +86,24 @@ On first launch, Claude Code asks you to confirm the development channel: pick "
 `)
 }
 
-function readClaudeSettings(): { settings: ClaudeSettings; raw: string | null } | null {
-  if (!existsSync(paths.claudeSettings)) return { settings: {}, raw: null }
-  const raw = readFileSync(paths.claudeSettings, 'utf8')
-  try {
-    return { settings: JSON.parse(raw) as ClaudeSettings, raw }
-  } catch {
-    return null
-  }
+function installHooks(setup: Setup) {
+  if (writeHooks(setup)) done('hooks added to ~/.claude/settings.json')
+  else warn(`${setup.claudeSettings} is not valid JSON, hooks not installed. Fix it and run the install again.`)
 }
 
-function writeClaudeSettings(settings: ClaudeSettings) {
-  mkdirSync(dirname(paths.claudeSettings), { recursive: true })
-  writeFileSync(paths.claudeSettings, `${JSON.stringify(settings, null, 2)}\n`)
-}
-
-function installHooks(binary: string) {
-  const current = readClaudeSettings()
-  if (!current) {
-    warn(`${paths.claudeSettings} is not valid JSON, hooks not installed. Fix it and run the install again.`)
-    return
-  }
-  const backup = `${paths.claudeSettings}.tonton-backup`
-  if (current.raw !== null && !existsSync(backup)) writeFileSync(backup, current.raw)
-  writeClaudeSettings(withTontonHooks(current.settings, binary))
-  done('hooks added to ~/.claude/settings.json')
-}
-
-function installLaunchers(binary: string) {
-  writeFileSync(paths.launcherSettings, `${JSON.stringify(launcherSettings(binary, homedir(), IS_WINDOWS), null, 2)}\n`)
-  const profiles = shellProfiles()
-  if (!profiles.length) warn('no shell profile found: start claude with --dangerously-load-development-channels server:tonton')
-  for (const { file, shell } of profiles) {
-    mkdirSync(dirname(file), { recursive: true })
-    const current = existsSync(file) ? readFileSync(file, 'utf8') : ''
-    writeFileSync(file, withLauncher(current, shell, paths.launcherSettings))
-    done(`claude launcher added to ${file}`)
-  }
+function installLaunchers(setup: Setup) {
+  writeLauncherSettings(setup)
+  if (!setup.profiles.length) warn('no shell profile found: start claude with --dangerously-load-development-channels server:tonton')
+  for (const file of writeLaunchers(setup)) done(`claude launcher added to ${file}`)
 }
 
 export async function uninstall() {
   console.log('\nUninstalling Tonton Claude\n')
   stopService()
   done('background service stopped and removed from login items')
-  const current = readClaudeSettings()
+  const current = readClaudeSettings(paths.claudeSettings)
   if (current?.raw) {
-    writeClaudeSettings(withoutTontonHooks(current.settings))
+    writeClaudeSettings(paths.claudeSettings, withoutTontonHooks(current.settings))
     done('hooks removed from ~/.claude/settings.json')
   }
   unregisterMcpServer()

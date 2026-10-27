@@ -22,6 +22,10 @@ final class NotchState: ObservableObject {
     /// Unsent text per session, kept when the notch closes or the selection changes. Not published: a keystroke must only
     /// redraw the composer, not the whole notch.
     var drafts: [String: String] = [:]
+    /// Opens the attachment or image under the pointer in Quick Look, for Space.
+    var quickLookUnderPointer: (() -> Void)?
+    /// The files and images attached to each draft, kept the same way until the message goes.
+    var draftAttachments: [String: [Attachment]] = [:]
     /// Optional activity dots beside the camera (Settings › Notch); off means the notch is fully hidden at rest.
     @Published var showWings = false
     /// Set by the open session's composer: files dropped anywhere on the conversation go to it.
@@ -32,6 +36,8 @@ final class NotchState: ObservableObject {
     @Published var jumpTo: String?
     /// Live sessions as pills under the collapsed notch (Settings › Notch › Session pills).
     @Published var pills = PillRow([])
+    /// The pill whose session shows in a card under it, while the pointer rests on it.
+    @Published var previewPill: Int?
     static let pillHeight: CGFloat = 20
     /// Between the notch and its pills.
     static let pillGap: CGFloat = 8

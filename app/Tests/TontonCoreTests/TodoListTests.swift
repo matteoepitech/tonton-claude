@@ -82,18 +82,13 @@ final class TodoListTests: XCTestCase {
         XCTAssertEqual(entry.todos?.first?.state, .pending)
     }
 
-    func testProgressComesWithTheMetaAndThisMacsSessions() throws {
+    func testProgressComesWithTheMeta() throws {
         let key = SymmetricKey(size: .bits256)
         let meta = try E2E.seal(["tasks": ["done": 1, "total": 4]], with: key)
         let wire = WireSession(
             id: "s1", machineId: "m1", status: .working, agentOnline: true, canChat: true, info: nil, meta: meta, statusDetail: nil,
             pendingPermissions: [], startedAt: ts, lastActivity: ts)
         XCTAssertEqual(SessionVault(key: key).session(wire, machines: []).tasks, TaskProgress(done: 1, total: 4))
-        // OpenCode 2 on this Mac, without the agent.
-        let listed = try XCTUnwrap(OpenCodeLocal.listed(["id": "ses_1", "location": ["directory": "/x"], "time": ["created": 1]]))
-        var conversation = OpenCodeLocal.Conversation()
-        conversation.entries = [todoWrite("t1", [.completed, .pending])]
-        XCTAssertEqual(OpenCodeLocal.summary(listed, conversation, permissions: []).tasks, TaskProgress(done: 1, total: 2))
     }
 
     func testALongListShowsWhatRuns() {

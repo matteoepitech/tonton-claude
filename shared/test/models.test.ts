@@ -6,10 +6,13 @@ import type { SessionSummary } from '../protocol'
 import {
   contextWindow,
   displayStatusText,
+  liveActivity,
+  liveActivityText,
   mostUrgent,
   parseDate,
   preferredSession,
   type Session,
+  sessionAlert,
   sortSessions,
   usageLevel,
 } from '../session'
@@ -22,6 +25,7 @@ const session = (fields: Partial<Session>): Session => ({
   platform: null,
   cwd: '/x',
   project: 'x',
+  name: null,
   title: null,
   status: 'idle',
   statusText: null,
@@ -160,6 +164,34 @@ describe('sessions', () => {
     expect(preferredSession([])).toBeNull()
     expect(mostUrgent(['idle', 'working', 'error'])).toBe('error')
     expect(mostUrgent(['ended'])).toBeNull()
+  })
+
+  test('the live activity is the session that needs the user most, or the latest at work, like LiveActivity.swift', () => {
+    const busy = session({ id: 'busy', status: 'working', lastActivity: 20, title: 'Fix the tests' })
+    const newer = session({ id: 'newer', status: 'working', lastActivity: 30, lastMessage: 'Running bun test' })
+    const waits = session({ id: 'waits', status: 'waiting', lastActivity: 5 })
+    const asks = session({ id: 'asks', status: 'permission', lastActivity: 1, statusText: 'Claude needs your permission to use Bash' })
+    expect(liveActivity([busy, newer])?.id).toBe('newer')
+    expect(liveActivity([busy, waits, newer])?.id).toBe('waits')
+    expect(liveActivity([waits, asks, session({ id: 'error', status: 'error' })])?.id).toBe('asks')
+    expect(liveActivity([session({ status: 'idle' }), session({ status: 'ended' })])).toBeNull()
+    expect(liveActivityText(asks)).toBe('Wants to use Bash')
+    expect(liveActivityText(busy)).toBe('Fix the tests')
+    expect(liveActivityText(newer)).toBe('Running bun test')
+    expect(liveActivityText(session({ status: 'working' }))).toBe('Working')
+  })
+
+  test('a session alerts when it starts needing the user or asks again, and when it finishes, like SessionStore.notify', () => {
+    const request = { requestId: 'r1', toolName: 'Bash', description: 'ls', inputPreview: '{}', ts: '' }
+    const working = session({ status: 'working' })
+    const asks = session({ status: 'permission', pendingPermissions: [request] })
+    expect(sessionAlert(working, asks)).toBe('attention')
+    expect(sessionAlert(asks, asks)).toBeNull()
+    expect(sessionAlert(asks, { ...asks, pendingPermissions: [request, { ...request, requestId: 'r2' }] })).toBe('attention')
+    expect(sessionAlert(undefined, session({ status: 'waiting' }))).toBe('attention')
+    expect(sessionAlert(working, session({ status: 'idle' }))).toBe('finished')
+    expect(sessionAlert(session({ status: 'waiting' }), session({ status: 'idle' }))).toBeNull()
+    expect(sessionAlert(undefined, working)).toBeNull()
   })
 
   test('usage windows and context fill', () => {

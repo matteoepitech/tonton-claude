@@ -16,6 +16,7 @@ struct ChatPanel: View {
     var body: some View {
         let entries = store.entries[session.id] ?? []
         let items = ChatItem.build(from: entries)
+        let steps = ChatItem.subagentSteps(in: entries)
         let delivered = entries.filter { $0.viaNotch == true }.count
         VStack(spacing: 0) {
             ChatHeader(session: session)
@@ -23,7 +24,7 @@ struct ChatPanel: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(items) { item in
-                            ChatItemView(item: item, sessionWorking: session.status == .working)
+                            ChatItemView(item: item, sessionWorking: session.status == .working, steps: steps)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.accent.opacity(item.id == highlighted ? 0.18 : 0)))
                         }
                         ForEach(Array(pendingTexts.enumerated()), id: \.offset) { _, text in
@@ -36,7 +37,8 @@ struct ChatPanel: View {
                     .padding(.vertical, 8)
                 }
                 .onAppear { if !jump(proxy, items) { proxy.scrollTo("bottom", anchor: .bottom) } }
-                .onChange(of: entries.count) { _, _ in
+                // Subagent calls fold under their task: they neither move the view nor make the wave jump.
+                .onChange(of: entries.filter { !$0.kind.isSubagent }.count) { _, _ in
                     lastEntry = Date()
                     // The history of a session picked in the search may arrive after the panel opened.
                     if jump(proxy, items) { return }
@@ -77,7 +79,7 @@ struct ChatPanel: View {
                 RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.accent.opacity(0.08)))
-                    .overlay(Label("Drop to attach to this session", systemImage: "paperclip").font(.system(size: 13, weight: .semibold)))
+                    .overlay(Label("Drop to attach to this session", systemImage: "paperclip").font(.notch(13, weight: .semibold)))
                     .padding(6)
                     .allowsHitTesting(false)
             }
@@ -125,7 +127,7 @@ struct ChatHeader: View {
     /// Saves the conversation as Markdown or as a standalone HTML page, images included (see ConversationExport).
     private func export(_ format: ConversationExport.Format) {
         let text = ConversationExport.render(
-            format, title: session.title ?? session.project, subtitle: "\(session.machine) · \(session.cwd)",
+            format, title: session.name ?? session.title ?? session.project, subtitle: "\(session.machine) · \(session.cwd)",
             entries: store.entries[session.id] ?? [])
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.init(filenameExtension: format.fileExtension)].compactMap { $0 }
@@ -141,8 +143,8 @@ struct ChatHeader: View {
             store.toggleAutoContinue(session.id)
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 9))
-                Text("Continue at \(reset.formatted(date: .omitted, time: .shortened))").font(.system(size: 9, weight: .semibold))
+                Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.notch(9)).accessibilityHidden(true)
+                Text("Continue at \(reset.formatted(date: .omitted, time: .shortened))").font(.notch(9, weight: .semibold))
             }
             .foregroundStyle(on ? Theme.accent : .secondary)
             .padding(.horizontal, 6)
@@ -151,6 +153,7 @@ struct ChatHeader: View {
         }
         .buttonStyle(.plain)
         .help(on ? "Claude gets “continue” when the limit resets. Click to cancel." : "Send “continue” when the limit resets")
+        .accessibilityValue(on ? "On" : "Off")
     }
 
     /// Slash commands its agent runs: Claude Code sessions in tmux and OpenCode sessions, while the session waits for you.
@@ -175,15 +178,16 @@ struct ChatHeader: View {
                 }
             }
         } label: {
-            Image(systemName: "terminal").font(.system(size: 11))
+            Image(systemName: "terminal").font(.notch(11))
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Theme.secondary)
         .disabled(!session.acceptsCommands)
         .help(session.acceptsCommands ? "Run a command in the session" : "Commands wait until the session is done")
+        .accessibilityLabel("Commands")
     }
 
     /// Stops the turn, like Escape in the terminal.
@@ -191,28 +195,30 @@ struct ChatHeader: View {
         Button {
             store.sendCommand(.interrupt, to: session.id)
         } label: {
-            Image(systemName: "stop.circle").font(.system(size: 11))
+            Image(systemName: "stop.circle").font(.notch(11))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Theme.secondary)
         .help("Interrupt, like Escape in the terminal (⌘.)")
+        .accessibilityLabel("Interrupt")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 StatusDot(status: session.status, limit: session.fiveHourLimit)
-                Text(session.project).font(.system(size: 13, weight: .bold))
-                Text("·").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(session.displayName).font(.notch(13, weight: .bold)).lineLimit(1)
+                Text("·").font(.notch(12)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
                 ToolMark(tool: session.codingTool, size: 10)
-                if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11) }
-                Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.system(size: 12)).foregroundStyle(.secondary)
+                if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11).accessibilityHidden(true) }
+                Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.notch(12)).foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
-                    Text(String(format: "$%.2f", cost)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                    Text(String(format: "$%.2f", cost)).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary)
                         .help("Estimated by \(session.codingTool.label) at list price")
                 }
-                Text(session.status.label).font(.system(size: 11)).foregroundStyle(Color(nsColor: session.status.color))
+                Text(session.status.label).font(.notch(11)).foregroundStyle(Color(nsColor: session.status.color)).fixedSize()
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
                 if session.accepts(.interrupt) { interrupt }
                 if session.canChat && !session.menuCommands.isEmpty { commands }
@@ -229,28 +235,29 @@ struct ChatHeader: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "square.and.arrow.up").font(.system(size: 11))
+                    Image(systemName: "square.and.arrow.up").font(.notch(11))
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
                 .menuIndicator(.hidden)
                 .fixedSize()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondary)
                 .help("Export the conversation, images included, or share it read-only")
+                .accessibilityLabel("Export or share")
             }
             HStack {
-                Text(session.title ?? session.cwd).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                Text(session.title ?? session.cwd).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(1)
                 Spacer()
                 if let branch = session.branch { BranchLabel(branch: branch) }
                 if let model = session.modelName {
-                    Text(model).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                    Text(model).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
                         .help("The model Claude Code uses in this session")
                 }
                 if let context = session.context { ContextGauge(context: context) }
                 if settings.showCosts, let tokens = session.tokens {
                     Text("\(TokenCounts.short(tokens.allInput)) in · \(TokenCounts.short(tokens.output)) out")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .font(.notch(10, design: .monospaced))
+                        .foregroundStyle(Theme.secondary)
                         .fixedSize()
                         .help(
                             "\(tokens.input.formatted()) input, \(tokens.cacheRead.formatted()) read from the cache, "
@@ -258,10 +265,10 @@ struct ChatHeader: View {
                 }
                 if session.canChat, let reset = session.stoppedUntil() { autoContinueToggle(until: reset) }
                 if let shareNote {
-                    Text(shareNote).font(.system(size: 10)).foregroundStyle(Theme.accent).lineLimit(1)
+                    Text(shareNote).font(.notch(10)).foregroundStyle(Theme.accent).lineLimit(1)
                 }
                 if let err = store.lastError {
-                    Text(err).font(.system(size: 10)).foregroundStyle(.red).lineLimit(1)
+                    Text(err).font(.notch(10)).foregroundStyle(.red).lineLimit(1)
                         .onTapGesture { store.lastError = nil }
                 }
             }
@@ -286,18 +293,18 @@ struct ClearConfirmation: View {
     var body: some View {
         HStack(spacing: 8) {
             Text("Clear the conversation? Claude starts over without what was said so far.")
-                .font(.system(size: 11))
+                .font(.notch(11))
                 .lineLimit(2)
             Spacer(minLength: 8)
             Button("Cancel", action: cancel)
                 .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .medium))
+                .font(.notch(11, weight: .medium))
                 .padding(.horizontal, 10)
                 .frame(height: 22)
                 .background(Capsule().fill(Theme.ink.opacity(0.1)))
             Button("Clear", action: clear)
                 .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.notch(11, weight: .semibold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
                 .frame(height: 22)
@@ -321,10 +328,11 @@ struct ContextGauge: View {
             }
             .frame(width: 32, height: 4)
             Text(near ? "\(percent) · compacts soon" : "\(percent) context")
-                .font(.system(size: 10, design: .monospaced))
+                .font(.notch(10, design: .monospaced))
                 .foregroundStyle(near ? Color(nsColor: .systemOrange) : .secondary)
         }
         .fixedSize()
+        .accessibilityElement(children: .combine)
         .help(
             "Context: \(TokenCounts.short(context.usedTokens)) of \(TokenCounts.short(context.windowTokens)) tokens. "
                 + "Claude Code compacts it at about \(TokenCounts.short(context.autoCompactAt)).")

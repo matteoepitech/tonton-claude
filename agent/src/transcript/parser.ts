@@ -1,4 +1,4 @@
-import type { Entry, FileEdit, ImageData, TodoItem, TokenCounts, UsageLimit } from '../../../shared/protocol'
+import type { Entry, FileEdit, ImageData, TodoItem, TokenCounts, TurnTime, UsageLimit } from '../../../shared/protocol'
 import { limit, modelName } from '../usage'
 
 // Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
@@ -13,7 +13,7 @@ const MAX_EDITS = 20
 const MAX_TODOS = 50
 const MAX_TODO_CHARS = 300
 /** Internal tools that would only add noise to the conversation. */
-const HIDDEN_TOOLS = new Set(['ToolSearch'])
+const HIDDEN_TOOLS = new Set(['ToolSearch', 'SubagentHandback'])
 /** Wrapped user content that Claude Code adds and that should not appear as a message. */
 const INTERNAL_USER_TAGS = /^\s*<(local-command-stdout|local-command-caveat|command-message|system-reminder)/
 
@@ -47,6 +47,8 @@ export interface ParsedLine {
   contextWindow?: number
   /** Claude Code compacted the conversation: the context starts over. */
   compacted?: boolean
+  /** A turn ended, with how long it took. */
+  turn?: TurnTime
   /** The model that wrote this response, such as `claude-opus-4-5-20251101`. */
   model?: string
 }
@@ -68,13 +70,16 @@ interface TranscriptLine {
   totalCostUSD?: number
   requestId?: string
   requestedModel?: string
+  /** On the line Claude Code writes when a turn ends. */
+  durationMs?: unknown
   /** On the error message Claude Code writes when the plan's limit refuses a request. */
   quotaLimits?: { status?: string; rateLimitType?: string; resetsAt?: unknown }
   message?: { id?: string; model?: string; content?: string | Block[]; usage?: Record<string, unknown> }
   attachment?: { type?: string; commandMode?: string; origin?: { kind?: string }; prompt?: string | Block[] }
 }
 
-export function parseLine(raw: string): ParsedLine {
+/** `sidechain` reads the lines of a subagent's transcript, which the session's own skips. */
+export function parseLine(raw: string, { sidechain = false }: { sidechain?: boolean } = {}): ParsedLine {
   const result: ParsedLine = { entries: [] }
   let line: TranscriptLine
   try {
@@ -82,7 +87,7 @@ export function parseLine(raw: string): ParsedLine {
   } catch {
     return result
   }
-  if (!line || typeof line !== 'object' || line.isSidechain) return result
+  if (!line || typeof line !== 'object' || (line.isSidechain && !sidechain)) return result
 
   if (line.type === 'ai-title' && typeof line.aiTitle === 'string') result.title = line.aiTitle
   if (line.type === 'cost-state' && typeof line.totalCostUSD === 'number') result.costUSD = line.totalCostUSD
@@ -99,6 +104,7 @@ export function parseLine(raw: string): ParsedLine {
 
   const id = line.uuid ?? `${line.type}-${line.timestamp}`
   const ts = line.timestamp ?? new Date().toISOString()
+  if (line.type === 'system' && line.subtype === 'turn_duration') result.turn = turnTime(line)
   if (line.type === 'system' && line.subtype === 'compact_boundary') {
     result.compacted = true
     result.entries.push({ id, ts, kind: 'system', text: 'Conversation compacted' })
@@ -122,6 +128,14 @@ export function parseLine(raw: string): ParsedLine {
   if (line.type === 'user') result.entries.push(...userEntries(id, ts, content))
   else if (Array.isArray(content)) result.entries.push(...assistantEntries(id, ts, content))
   return result
+}
+
+/** A turn's end needs its own time: a made-up one would differ at each read and count the turn again. */
+function turnTime(line: TranscriptLine): TurnTime | undefined {
+  const { durationMs, timestamp } = line
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) return undefined
+  if (typeof timestamp !== 'string' || Number.isNaN(Date.parse(timestamp))) return undefined
+  return { end: timestamp, seconds: Math.round(durationMs / 100) / 10 }
 }
 
 /** Messages Claude Code makes up itself, such as API errors, are `<synthetic>` and cost nothing. */

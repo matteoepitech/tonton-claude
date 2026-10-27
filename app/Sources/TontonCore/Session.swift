@@ -86,6 +86,10 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let branch: String?
     /// How far its task list is, while it has unfinished tasks. Nil with older agents.
     public let tasks: TaskProgress?
+    /// The last turns that ended, as the agent read them in the transcript. Nil with older agents and before a turn ends.
+    public let turns: [Turn]?
+    /// The name the user gave the session on a Mac of the account, shown instead of the project.
+    public let name: String?
 
     public init(
         id: String, machineId: String, machine: String, platform: String?, cwd: String, project: String, title: String?,
@@ -94,7 +98,7 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         startedAt: Date, lastActivity: Date, lastMessage: String?, fiveHourLimit: UsageLimit? = nil,
         sevenDayLimit: UsageLimit? = nil, tokens: TokenCounts? = nil, context: ContextUsage? = nil, terminal: Bool = false,
         commands: Set<SessionCommandName>? = nil, model: String? = nil, tool: String? = nil, branch: String? = nil,
-        tasks: TaskProgress? = nil
+        tasks: TaskProgress? = nil, turns: [Turn]? = nil, name: String? = nil
     ) {
         self.id = id
         self.machineId = machineId
@@ -123,7 +127,12 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
         self.tool = tool
         self.branch = branch
         self.tasks = tasks.flatMap { $0.total > 0 ? $0 : nil }
+        self.turns = turns
+        self.name = name
     }
+
+    /// What the notch calls the session: the user's name for it, or else its project.
+    public var displayName: String { name ?? project }
 
     /// The window worth a countdown: the one that stopped the session (the last to reset when both did), or else the
     /// fullest one past 80 %. Nil while there is room.
@@ -141,7 +150,10 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     }
 
     /// Claude Code's notification texts, shortened for the notch.
-    public var displayStatusText: String {
+    public var displayStatusText: String { Self.statusText(statusText, status: status) }
+
+    /// A status text from Claude Code shortened, or the status when there is none.
+    public static func statusText(_ statusText: String?, status: SessionStatus) -> String {
         guard let text = statusText, !text.isEmpty else { return status.label }
         if let range = text.range(of: "needs your permission to use ") { return "Wants to use \(text[range.upperBound...])" }
         if text.contains("waiting for your input") { return "Waiting for you" }
@@ -247,8 +259,11 @@ public struct UsageLimit: Equatable, Sendable {
     }
 
     /// `1 h 42`, `42 min` or `2 d 5 h` until the reset, at least a minute.
-    public func timeLeft(at now: Date = Date()) -> String {
-        let minutes = max(1, Int((resetsAt.timeIntervalSince(now) / 60).rounded(.up)))
+    public func timeLeft(at now: Date = Date()) -> String { Self.duration(from: now, to: resetsAt) }
+
+    /// `1 h 42`, `42 min` or `2 d 5 h` from one time to another, at least a minute.
+    public static func duration(from now: Date, to end: Date) -> String {
+        let minutes = max(1, Int((end.timeIntervalSince(now) / 60).rounded(.up)))
         if minutes < 60 { return "\(minutes) min" }
         if minutes < 24 * 60 { return "\(minutes / 60) h \(String(format: "%02d", minutes % 60))" }
         let hours = minutes / 60

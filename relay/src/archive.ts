@@ -15,6 +15,7 @@ export interface ArchivedSession {
   statusDetail: Sealed | null
   startedAt: string
   lastActivity: string
+  name: Sealed | null
   history: SealedEntry[]
 }
 
@@ -28,6 +29,7 @@ interface SessionRow {
   status_detail: string | null
   started_at: string
   last_activity: string
+  name: string | null
 }
 
 interface EntryRow {
@@ -74,6 +76,7 @@ export class SessionArchive {
         statusDetail: row.status_detail,
         startedAt: row.started_at,
         lastActivity: row.last_activity,
+        name: row.name,
         history: [],
       })
     }
@@ -130,17 +133,17 @@ export class SessionArchive {
     this.pending = []
     this.dirty.clear()
     const upsert = this.db.query(
-      `INSERT INTO sessions (account_id, id, machine_id, status, info, meta, status_detail, started_at, last_activity)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO sessions (account_id, id, machine_id, status, info, meta, status_detail, started_at, last_activity, name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (account_id, id) DO UPDATE SET machine_id = excluded.machine_id, status = excluded.status,
          info = excluded.info, meta = excluded.meta, status_detail = excluded.status_detail,
-         started_at = excluded.started_at, last_activity = excluded.last_activity`,
+         started_at = excluded.started_at, last_activity = excluded.last_activity, name = excluded.name`,
     )
     try {
       this.db.transaction(() => {
         for (const write of pending) write()
         for (const { accountId, session: s } of dirty) {
-          upsert.run(accountId, s.id, s.machineId, s.status, s.info, s.meta, s.statusDetail, s.startedAt, s.lastActivity)
+          upsert.run(accountId, s.id, s.machineId, s.status, s.info, s.meta, s.statusDetail, s.startedAt, s.lastActivity, s.name ?? null)
         }
       })()
     } catch (error) {

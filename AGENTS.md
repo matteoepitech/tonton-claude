@@ -19,9 +19,11 @@ opencode ─ Tonton plugin ──────▶ agent
 | `agent/` | One binary per machine: a background service, Claude Code hooks, an MCP channel that streams the transcript and relays prompts and permissions. Tray icons in `agent/tray/` (Swift on macOS, PowerShell on Windows). | TypeScript (Bun) |
 | `relay/` | Accounts, machines and sealed session history in SQLite, live sessions in memory, WebSocket routing. Never sees plaintext. | TypeScript (Bun) |
 | `shared/` | The client core: wire protocol, end-to-end crypto, account token, session models and a relay client. Used by the agent, the relay and the client apps, and runs in browsers. Versions, for the agent and the relay. | TypeScript |
-| `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
+| `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown) and also builds for iOS, `TontonMac` what reads this Mac's own files (local Claude Code and OpenCode sessions, the local agent), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
+| `ios/` | The iPhone app (`TontonClaude.xcodeproj`, Xcode 16 or later), its Live Activity (`TontonWidgets`) and the extension that opens permission alerts (`TontonNotifications`), on `TontonCore`. | Swift 5, iOS 17+ |
 | `raycast/` | A Raycast extension that lists the sessions and messages them through the app's AppleScript dictionary (`app/Resources/TontonClaude.sdef`). | TypeScript (React) |
 | `web/` | The web app: one HTML file (`bun run web`, released as `tonton-web.html`) built on the client core in `shared/`, which decrypts in the browser. | TypeScript |
+| `desktop/` | The island for Windows and Linux: an Electron window at the top of the screen with the web app's views (`web/views.ts`), a tray icon, and the account in the system's keyring. Its own `package.json`. | TypeScript (Electron) |
 | `scripts/` | Release builds and the install scripts published with each release (`install.sh`, `install.ps1`, `install-relay.sh`). | TS, sh, PowerShell |
 | `test/` | Tests that run a real relay with a real agent. Unit tests live next to each part (`agent/test`, `relay/test`, `app/Tests`). | TypeScript |
 
@@ -35,13 +37,27 @@ bun test                      # all TypeScript tests, including test/end-to-end.
 bun run relay                 # a relay on :7777 with its data in ./data
 
 cd app
-swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos
+swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos ../ios
 swift build && swift test
 ./scripts/build-app.sh        # build/TontonClaude.app (--install copies it to /Applications and launches it)
+
+cd ios                        # the iPhone app, for the Simulator, unsigned
+xcodebuild -project TontonClaude.xcodeproj -scheme TontonClaude -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+cd desktop
+bun install && bun run check  # Electron and electron-builder, then tsc
+bun run start                 # the island from source; TONTON_ISLAND_HOME=<temp dir> keeps its account apart
+bun run package:windows       # out/TontonClaude-Setup-<version>.exe, unsigned (builds from macOS and Linux too)
+bun run package:linux         # out/TontonClaude-<version>-x86_64.AppImage and -amd64.deb, unsigned
 ```
 
+The iOS project uses folders Xcode keeps in sync: a new `.swift` file in `ios/TontonClaude`, `TontonWidgets`,
+`TontonNotifications`, `Shared` or `SharedUI` is built without touching `project.pbxproj`.
+
 CI (`.github/workflows/ci.yml`) runs `check`, `test` and the Swift lint, build and tests, plus syntax checks of the install
-scripts and a build of the macOS tray. Run the ones for the parts you touched before saying you are done.
+scripts, a build of the macOS tray, a Simulator build of the iPhone app, and the island on Windows and Linux runners: runs
+against a relay (`desktop/test/smoke`: on Windows, X11, and GNOME's compositor on Wayland) and its packages. Run the
+ones for the parts you touched before saying you are done.
 
 ## Rules that are easy to break
 
@@ -58,6 +74,7 @@ needs a value to route or limit, it must be something it can see today (ids, sta
 | `shared/crypto.ts` | `app/Sources/TontonCore/E2E.swift` (same layout and additional data, `tonton/v1`) |
 | `shared/account-token.ts` | `app/Sources/TontonCore/Account.swift` |
 | `shared/session.ts`, `shared/vault.ts`, `shared/payloads.ts` | `app/Sources/TontonCore/Session.swift`, `SessionVault.swift` |
+| `IslandState`, `PermissionPush`, `PushDevice` in `shared/protocol.ts`; `islandState` in `relay/src/push.ts` | `app/Sources/TontonCore/Island.swift`, `Push.swift` (the iPhone's Live Activity and alerts) |
 
 `shared/test/swift-vectors.json` holds blobs and relay messages made by the Swift side, with what it reads from them; both
 test suites check it. After a change to what either side seals or reads, write it again with
@@ -105,7 +122,9 @@ repository's secrets.
   goes in `TontonCore`; views stay thin.
 - Writing (docs, UI strings, PRs): plain, short English sentences. User-facing names follow the app: Settings › Machines,
   **Update agent**, the notch.
-- No new dependency without a reason in the PR. The TypeScript side has two runtime dependencies; the app has none.
+- No new dependency without a reason in the PR. The agent has two runtime dependencies and the web app bundles one, jsQR,
+  its QR scanner. The app has one, Sparkle, for its own updates, and `TontonCore` has none. The island in `desktop/` has
+  Electron, and electron-builder to package it, in its own `package.json`.
 
 ## Tests
 

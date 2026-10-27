@@ -1,9 +1,10 @@
 import { basename } from 'node:path'
 import { seal } from '../../../shared/crypto'
-import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts } from '../../../shared/protocol'
+import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { gitBranch } from '../git'
 import { type ParsedLine, parseLine } from '../transcript/parser'
+import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import type { SessionLink } from './session-link'
@@ -11,6 +12,10 @@ import { SessionShares } from './shares'
 import { COMMANDS } from './terminal'
 
 const BACKLOG_SIZE = 400
+/** Subagents' calls are kept apart, so a busy one can't push the conversation itself out of the backlog. */
+const SUBAGENT_BACKLOG_SIZE = 300
+/** Turns that ended while the Mac was away: more than this many before it comes back, and the oldest go uncounted. */
+const KEPT_TURNS = 20
 /** On reconnect only the latest entries keep their images, the rest is sent as text. */
 const BACKLOG_IMAGES = 40
 /** How often the usage left by the status line is checked. */
@@ -35,12 +40,17 @@ export class Conversation {
   private windowFromStatusLine = false
   private usage: SessionUsage = {}
   private model: string | undefined
+  private turns: TurnTime[] = []
   /** Only a change of the status line's model counts, so a reading it left earlier never hides a newer response. */
   private statusLineModel: string | undefined
   private lastUsage: string | null = null
   private usageTimer: Timer | null = null
   private readonly pending = new Map<string, PendingPermission>()
   private readonly tailer: Tailer | null
+  private readonly subagents: Subagents | null
+  private subEntries: Entry[] = []
+  /** Every subagent entry sent, so a transcript read again doesn't send one twice, even after it left the backlog. */
+  private readonly sentSubIds = new Set<string>()
   /** Read-only shares of this session: each gets its own sealed copy. */
   readonly shares: SessionShares
 
@@ -68,9 +78,14 @@ export class Conversation {
           },
         })
       : null
+    this.subagents = link.transcriptPath
+      ? new Subagents(link.transcriptPath, (entries, backlog) => this.onSubEntries(entries, backlog))
+      : null
   }
 
   start() {
+    // Subagents first: what they wrote before goes out with the session's backlog, not as news.
+    this.subagents?.start()
     if (this.tailer) this.tailer.start()
     else this.announce()
     this.usageTimer = setInterval(() => this.readUsage(), USAGE_POLL_MS)
@@ -78,6 +93,7 @@ export class Conversation {
 
   stop() {
     this.tailer?.stop()
+    this.subagents?.stop()
     if (this.usageTimer) clearInterval(this.usageTimer)
   }
 
@@ -85,12 +101,26 @@ export class Conversation {
   announce() {
     const { sessionId } = this.link
     const cwd = this.cwd()
-    const backlog = withoutOldImages(this.entries)
+    const backlog = [...withoutOldImages(this.entries), ...this.subEntries]
     const info = { machine: this.machine, platform: process.platform, cwd, project: projectOf(cwd) }
     this.post(async () => ({ t: 'hello', sessionId, info: await seal(this.key, info), channel: this.canChat }))
     this.post(async () => ({ t: 'entries', sessionId, entries: await this.sealEntries(backlog), reset: true }))
     this.postMeta()
     for (const requestId of this.pending.keys()) this.postPermission(requestId)
+  }
+
+  /**
+   * Calls of a subagent, under the Task call that started it. The backlog, written before the session was followed,
+   * waits for the announce: sent as news, it would evict the conversation from the relay and mark an idle session as
+   * working.
+   */
+  private onSubEntries(entries: Entry[], backlog: boolean) {
+    const fresh = entries.filter(entry => !this.sentSubIds.has(entry.id))
+    if (!fresh.length) return
+    for (const entry of fresh) this.sentSubIds.add(entry.id)
+    this.subEntries = [...this.subEntries, ...fresh].slice(-SUBAGENT_BACKLOG_SIZE)
+    if (backlog) return
+    this.post(async () => ({ t: 'entries', sessionId: this.link.sessionId, entries: await this.sealEntries(fresh), reset: false }))
   }
 
   /** A line from the agent in the conversation, such as why a command from the notch was not typed. */
@@ -128,6 +158,12 @@ export class Conversation {
       if (this.updateContext(parsed)) metaChanged = true
       if (parsed.model && parsed.model !== this.model) {
         this.model = parsed.model
+        metaChanged = true
+      }
+      // A transcript read again (replaced, or after a reset) brings back turns already kept.
+      const turn = parsed.turn
+      if (turn && !this.turns.some(kept => kept.end === turn.end)) {
+        this.turns = [...this.turns, turn].slice(-KEPT_TURNS)
         metaChanged = true
       }
       if (parsed.usage && !this.countedRequests.has(parsed.usage.requestId)) {
@@ -218,6 +254,7 @@ export class Conversation {
       model: this.model,
       ...branchOf(this.cwd()),
       tasks: taskProgress(latestTodos(this.entries)) ?? undefined,
+      turns: this.turns.length ? this.turns : undefined,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd()), title: this.title })

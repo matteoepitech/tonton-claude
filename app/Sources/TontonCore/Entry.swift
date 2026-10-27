@@ -43,6 +43,11 @@ public struct TodoItem: Codable, Equatable, Sendable {
 public enum EntryKind: String, Codable, Sendable {
     case user, assistant, tool, system
     case toolResult = "tool_result"
+    /// A call of a subagent, and its result, under the Task call that started it (`parent`).
+    case subagentTool = "sub_tool"
+    case subagentResult = "sub_result"
+
+    public var isSubagent: Bool { self == .subagentTool || self == .subagentResult }
 }
 
 /// One element of a conversation, as produced by the agent's transcript parser.
@@ -61,11 +66,13 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
     public var edits: [FileEdit]?
     /// The task list a TodoWrite call sets, from agents that send it.
     public var todos: [TodoItem]?
+    /// For a subagent's call or result: the Task call that started the subagent.
+    public var parent: String?
 
     public init(
         id: String, ts: String, kind: EntryKind, text: String? = nil, images: [ImageData]? = nil, viaNotch: Bool? = nil,
         toolUseId: String? = nil, name: String? = nil, summary: String? = nil, isError: Bool? = nil, edits: [FileEdit]? = nil,
-        todos: [TodoItem]? = nil
+        todos: [TodoItem]? = nil, parent: String? = nil
     ) {
         self.id = id
         self.ts = ts
@@ -79,6 +86,7 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
         self.isError = isError
         self.edits = edits
         self.todos = todos
+        self.parent = parent
     }
 
     /// The file a Read, Write or Edit call works on, when its summary holds the whole absolute path. The agent cuts long
@@ -121,8 +129,22 @@ public enum ChatItem: Identifiable, Equatable, Sendable {
             case .assistant: .assistant(entry)
             case .system: .system(entry)
             case .tool: .tool(call: entry, result: entry.toolUseId.flatMap { results[$0] })
-            case .toolResult: nil
+            case .toolResult, .subagentTool, .subagentResult: nil
             }
         }
+    }
+
+    /// The calls of the subagents, with their results, in order, by the Task call that started them.
+    public static func subagentSteps(in entries: [Entry]) -> [String: [(call: Entry, result: Entry?)]] {
+        let results = Dictionary(
+            entries.filter { $0.kind == .subagentResult }.compactMap { entry in entry.toolUseId.map { ($0, entry) } },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        var steps: [String: [(call: Entry, result: Entry?)]] = [:]
+        for entry in entries where entry.kind == .subagentTool {
+            guard let parent = entry.parent else { continue }
+            steps[parent, default: []].append((entry, entry.toolUseId.flatMap { results[$0] }))
+        }
+        return steps
     }
 }

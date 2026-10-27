@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case machines, usage, notch, general, server
+    case machines, usage, notch, general, archive, server
     var id: String { rawValue }
 
     var title: String {
@@ -10,6 +10,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .usage: "Usage"
         case .notch: "Notch"
         case .general: "General"
+        case .archive: "Archive"
         case .server: "Relay"
         }
     }
@@ -20,6 +21,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .usage: "What your sessions cost, per day, machine and project."
         case .notch: "How the notch opens and lets you know when a session needs you."
         case .general: "Startup, menu bar and keyboard shortcuts."
+        case .archive: "Finished conversations kept on this Mac, encrypted, to read later."
         case .server: "The relay server that connects your machines to this Mac."
         }
     }
@@ -30,6 +32,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .usage: "chart.bar.xaxis"
         case .notch: "macbook"
         case .general: "gearshape"
+        case .archive: "archivebox"
         case .server: "point.3.connected.trianglepath.dotted"
         }
     }
@@ -60,6 +63,7 @@ struct SettingsView: View {
                         case .usage: UsagePane(usage: store.usage)
                         case .notch: NotchPane()
                         case .general: GeneralPane()
+                        case .archive: ArchivePane(archive: store.archive)
                         case .server: RelayPane()
                         }
                     }
@@ -83,7 +87,7 @@ struct SettingsView: View {
         }
         .foregroundStyle(Theme.text)
         .environment(\.colorScheme, Theme.palette.scheme)
-        .id(settings.theme)
+        .id(Theme.palette)
         .ignoresSafeArea()
     }
 }
