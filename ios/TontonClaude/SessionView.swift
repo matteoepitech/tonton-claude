@@ -74,7 +74,10 @@ struct SessionView: View {
         VStack(spacing: 10) {
             if let session {
                 ForEach(session.pendingPermissions) { request in
-                    PermissionCardView(request: request) { allow in store.answer(request, allow: allow, in: sessionId) }
+                    PermissionCardView(
+                        request: request, sessionRule: store.sessionRule(for: request, in: session),
+                        answer: { allow in store.answer(request, allow: allow, in: sessionId) },
+                        allowForSession: { rule in store.allowForSession(request, rule: rule, in: sessionId) })
                 }
                 if session.canChat {
                     composer
@@ -121,7 +124,10 @@ struct SessionView: View {
 /// A permission request: what Claude wants to run, Deny and Allow.
 struct PermissionCardView: View {
     let request: PermissionRequest
+    /// Offered when the session's agent keeps rules until the session ends.
+    var sessionRule: SessionRule?
     let answer: (Bool) -> Void
+    var allowForSession: (SessionRule) -> Void = { _ in }
     @State private var answered: Bool?
 
     var body: some View {
@@ -158,6 +164,19 @@ struct PermissionCardView: View {
             }
             .controlSize(.large)
             .disabled(answered != nil)
+            if let sessionRule {
+                Button {
+                    answered = true
+                    allowForSession(sessionRule)
+                } label: {
+                    // The meaning first: only the end of a long command is cut.
+                    Text("Allow for this session: \(sessionRule.label)").lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
+                .disabled(answered != nil)
+                .accessibilityHint("Calls like this one are allowed without asking until the session ends.")
+            }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.orange.opacity(0.1)))

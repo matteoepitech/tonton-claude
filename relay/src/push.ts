@@ -142,11 +142,16 @@ export class PushService {
     const previous = this.deps.registry.pushDevices(accountId).find(stored => stored.device === device.device)
     this.deps.registry.savePushDevice(accountId, device)
     // The phone reports its Live Activity: the relay may start the next one once this one is gone.
-    if (previous?.activity !== device.activity) this.started.delete(deviceKey(accountId, device.device))
+    if (previous?.activity !== device.activity) {
+      this.started.delete(deviceKey(accountId, device.device))
+      if (previous?.activity) this.islands.delete(previous.activity)
+    }
     if (device.activity) this.sessionsChanged(accountId)
   }
 
   unregister(accountId: string, deviceId: string) {
+    const previous = this.deps.registry.pushDevices(accountId).find(stored => stored.device === deviceId)
+    if (previous?.activity) this.islands.delete(previous.activity)
     this.deps.registry.removePushDevice(accountId, deviceId)
     this.started.delete(deviceKey(accountId, deviceId))
   }

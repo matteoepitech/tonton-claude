@@ -18,6 +18,8 @@ final class IslandController {
     @ObservationIgnored var onToken: (String?) -> Void = { _ in }
     @ObservationIgnored var onStartToken: (String?) -> Void = { _ in }
     @ObservationIgnored private var watched: Set<String> = []
+    /// Going to the background changes the stale date even when the sessions don't change.
+    @ObservationIgnored private var wasForeground = true
     /// Without relay pushes, how long the activity stays trustworthy.
     private static let staleAfter: TimeInterval = 15 * 60
 
@@ -48,19 +50,19 @@ final class IslandController {
             // With the app open and nothing to follow, the Dynamic Island is left free.
             if foreground && !state.isActive {
                 await activity.end(content, dismissalPolicy: .immediate)
-            } else {
+            } else if activity.content.state != state || foreground != wasForeground {
                 await activity.update(content)
             }
         } else if foreground && state.isActive {
-            // Only the app in the foreground may start one.
-            do {
-                let activity = try Activity.request(
-                    attributes: SessionsActivityAttributes(), content: content, pushType: relayPushes ? .token : nil)
-                watch(activity)
-            } catch {
-                // Live Activities turned off for the app, or too many running: the list in the app still works.
-            }
+            // Only the app in the foreground may start one. With a push token whenever the build can get one: the relay
+            // may only say later that it pushes.
+            if let activity = (try? request(content, pushType: .token)) ?? (try? request(content, pushType: nil)) { watch(activity) }
         }
+        wasForeground = foreground
+    }
+
+    private func request(_ content: ActivityContent<IslandState>, pushType: PushType?) throws -> Activity<SessionsActivityAttributes> {
+        try Activity.request(attributes: SessionsActivityAttributes(), content: content, pushType: pushType)
     }
 
     func end() async {

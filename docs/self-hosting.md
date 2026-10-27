@@ -167,6 +167,32 @@ A share lets a teammate follow one session from the web app, without the account
 - An account holds 10 shares at most, and a share 20 viewers. Sessions only on this Mac, read without the agent, cannot
   be shared: there is no agent to seal the copy.
 
+## The iPhone app
+
+`ios/` is a native iPhone app (iOS 17 or later) built on `TontonCore`, the Mac app's Swift package: the same models,
+crypto and relay client.
+
+- It signs in to the account of the Mac: **Settings › Relay › Show QR code** on the Mac shows the recovery key as a
+  `tonton://signin#…` link, which the iPhone's Camera opens in the app. The key is in the fragment, which no server
+  receives. Pasting the recovery key works too. The phone keeps the account in its Keychain, on this device only.
+- While it is open, it reads the relay's socket like the Mac app: the sessions, their conversation, messages, permission
+  requests, `/compact` and `/clear`.
+- **Live Activity.** The sessions that need you, then those at work, on the Lock Screen and in the Dynamic Island. Its
+  state is ids, states and the agents' sealed blobs (`IslandState` in `shared/protocol.ts`); the widget opens them with
+  the key the app shares with it through an app group.
+- **Push notifications**, from a relay that holds an APNs key (below):
+  - a permission request is an alert whose text is the same for every request ("A Claude Code session is waiting for
+    your approval"), with the sealed request and the sealed session next to it. The app's notification service
+    extension opens them on the phone and writes the real text: the project, the machine, the tool and its command.
+  - the Live Activity is pushed while the app is closed: at most every 10 seconds, at once when a session starts
+    needing you. The relay ends it once nothing has run for 15 minutes, and starts the next one (iOS 17.2 and later)
+    when a session starts working again.
+  - Apple sees the device and Live Activity tokens, ids, states, timing and sealed blobs, like the relay.
+- The phone registers its tokens with `POST /api/push/devices` (at most 10 phones per account, kept in the relay's
+  database) and removes them when it signs out. While its socket is open, the relay leaves the Live Activity to the app.
+- A relay without an APNs key answers `{ "enabled": false }` and keeps nothing; older relays answer 404. The app then
+  works while it is open, and its Live Activity says it may be out of date after 15 minutes.
+
 ## Running your own relay
 
 The relay is a single executable behind any HTTPS reverse proxy with WebSocket support. It only needs updating when its own
@@ -189,6 +215,7 @@ sandbox; data goes to `/var/lib/tonton`. Configuration lives in `/etc/tonton/ton
 | `TONTON_TRUST_PROXY` | `1` to read the client IP from `X-Forwarded-For`. Only behind a reverse proxy that sets it. |
 | `TONTON_REGION` | Optional: where the relay runs (e.g. `Paris`), shown in the app next to the latency. On Fly.io, `FLY_REGION` is used. |
 | `TONTON_METRICS_TOKEN` | Optional: turns on `/metrics` for this bearer token (24+ characters). See [Monitoring](#monitoring). |
+| `TONTON_APNS_KEY_ID`, `TONTON_APNS_TEAM_ID`, `TONTON_APNS_KEY` or `TONTON_APNS_KEY_FILE`, `TONTON_APNS_TOPIC` | Optional: push notifications to the iPhone app. See [Pushes to the iPhone](#pushes-to-the-iphone). |
 
 **Docker**: the image `ghcr.io/matteoepitech/tonton-claude-relay` is published with each release, for amd64 and arm64.
 `docker compose up -d` with the `docker-compose.yml` of this repository; data is kept in the `tonton-data` volume. Add
@@ -196,6 +223,23 @@ sandbox; data goes to `/var/lib/tonton`. Configuration lives in `/etc/tonton/ton
 around `ufw`.
 
 Then in the app: Settings › Relay › Self-hosted, enter your URL and create an account.
+
+### Pushes to the iPhone
+
+Off by default. Apple only accepts pushes signed with a key of the team that publishes the app, so a relay can push to
+the iPhone app published from this repository only with the maintainer's key, and to an app you build and sign yourself
+with your own.
+
+| Variable | Value |
+|---|---|
+| `TONTON_APNS_KEY_ID` | The key's 10-character id (Certificates, Identifiers & Profiles › Keys, with Apple Push Notifications service) |
+| `TONTON_APNS_TEAM_ID` | The team's 10-character id |
+| `TONTON_APNS_KEY_FILE` | Path to the `AuthKey_<id>.p8` file. Or `TONTON_APNS_KEY`: its content, line breaks written `\n`, which suits `/etc/tonton/tonton.env` since the service cannot read files outside its data directory |
+| `TONTON_APNS_TOPIC` | The app's bundle id, `tech.d3l.tontonclaude.ios` by default |
+
+The relay refuses to start with only some of them. It uses Apple's sandbox for development builds and production for
+TestFlight and the App Store, as each phone says when it registers. It never logs a token or a payload, and forgets the
+tokens Apple says are no longer valid.
 
 ### Monitoring
 
@@ -239,7 +283,13 @@ bun run check                  # Biome (format + lint) and the TypeScript compil
 bun test                       # unit tests and the end-to-end test
 cd app && swift test           # TontonCore tests (crypto, wire format, models)
 cd app && ./scripts/build-app.sh --install    # the macOS app
+open ios/TontonClaude.xcodeproj                # the iPhone app: pick your team in Signing & Capabilities, then Run
 ```
+
+The iPhone app also builds without signing, for the Simulator:
+`xcodebuild -project ios/TontonClaude.xcodeproj -scheme TontonClaude -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`.
+Without signing it has no app group, so the Live Activity and the notifications show placeholders instead of the
+sessions' names.
 
 `TONTON_HOME` runs an agent with an isolated config directory, and `TONTON_SERVICE=off` keeps it away from your login items.
 The macOS tray icon is a separate Swift program: `swiftc -O agent/tray/macos/main.swift -o ~/.tonton/bin/tonton-tray`.

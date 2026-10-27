@@ -145,6 +145,17 @@ final class PhoneStore {
         socket.send(["t": "verdict", "sessionId": sessionId, "requestId": request.requestId, "behavior": allow ? "allow" : "deny"])
     }
 
+    /// What "Allow for this session" offers, when the session's agent keeps such rules, like on the Mac.
+    func sessionRule(for request: PermissionRequest, in session: SessionSummary) -> SessionRule? {
+        guard feed.machines.first(where: { $0.id == session.machineId })?.keepsSessionRules == true else { return nil }
+        return SessionRule.suggested(tool: request.toolName, inputPreview: request.inputPreview)
+    }
+
+    func allowForSession(_ request: PermissionRequest, rule: SessionRule, in sessionId: String) {
+        guard let sealed = try? vault?.sealSessionRules(rule.rules, for: sessionId, requestId: request.requestId) else { return }
+        socket.send(["t": "verdict", "sessionId": sessionId, "requestId": request.requestId, "behavior": "allow", "rule": sealed])
+    }
+
     /// Removes a closed session from the list, for every app of the account.
     func dismiss(_ sessionId: String) {
         socket.send(["t": "dismiss", "sessionId": sessionId])
