@@ -82,6 +82,10 @@ struct SessionListView: View {
                                     }
                                     if s.name != nil { Button("Show the project name") { store.rename(s, to: "") } }
                                 }
+                                // A relay session not opened yet has its history fetched first.
+                                if !(store.entries[s.id] ?? []).isEmpty || store.isRelaySession(s.id) {
+                                    Button("Archive conversation") { store.archiveConversation(s) }
+                                }
                                 Divider()
                                 Button("Remove from list") { store.dismiss(s.id) }
                             }
@@ -97,6 +101,8 @@ struct SessionListView: View {
         .onChange(of: query.count >= ConversationSearch.minimumQueryLength) { _, searching in
             if searching { store.catchUpHistories() }
         }
+        .onChange(of: query) { _, query in store.archive.search(query) }
+        .onDisappear { store.archive.endSearch() }
     }
 
     /// Hides the closed and offline sessions at once, or brings back the delay chosen in Settings › General.
@@ -159,6 +165,8 @@ struct SessionListView: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { show(match) }
         }
+        // Its own view, watching the archive: its results come after the search, from the background.
+        ArchiveResults(archive: store.archive, query: query) { failure in store.lastError = failure }
     }
 
     /// Opens the session of a message found by the search, on that message.
@@ -457,5 +465,32 @@ struct SessionNameField: View {
         guard !done else { return }
         done = true
         if keep { editing.commit() } else { editing.cancel() }
+    }
+}
+
+/// Matches in the archived conversations, found in the background: a click opens the conversation as a page.
+struct ArchiveResults: View {
+    @ObservedObject var archive: ArchiveStore
+    let query: String
+    let failed: (String) -> Void
+
+    var body: some View {
+        let matches = archive.searchQuery == query ? archive.matches : []
+        if !matches.isEmpty {
+            let projects = Dictionary(archive.summaries.map { ($0.id, $0.project) }) { first, _ in first }
+            Text("ARCHIVE").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
+                .padding(.horizontal, 8).padding(.top, 10)
+            ForEach(matches) { match in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(projects[match.sessionId] ?? "").font(.notch(11, weight: .semibold)).lineLimit(1)
+                    Text(match.snippet).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .contentShape(Rectangle())
+                .onTapGesture { if let failure = archive.open(match.sessionId) { failed(failure) } }
+            }
+        }
     }
 }

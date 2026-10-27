@@ -63,6 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         widgets?.stop()
+        // Pages opened from the archive are plain text.
+        store.archive.removePages()
     }
 
     /// Reopening the app (Spotlight, Finder, Dock) shows the settings: the way back when the menu bar icon is hidden.
