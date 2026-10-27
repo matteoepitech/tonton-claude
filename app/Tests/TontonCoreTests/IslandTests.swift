@@ -65,6 +65,21 @@ final class IslandTests: XCTestCase {
         XCTAssertEqual(other.lines(state).first?.project, "Session")
     }
 
+    func testTheSummaryCountsWhatNeedsTheUserThenWhatWorks() {
+        func state(_ working: Int, _ attention: Int, sessions: Int = 1) -> IslandState {
+            IslandState(
+                sessions: Array(repeating: .init(id: "a", status: .idle, info: nil, detail: nil), count: sessions), working: working,
+                attention: attention)
+        }
+        XCTAssertEqual(state(2, 1).summary, "1 needs you · 2 working")
+        XCTAssertEqual(state(0, 2).summary, "2 need you")
+        XCTAssertEqual(state(3, 0).summary, "3 working")
+        XCTAssertEqual(state(0, 0).summary, "All done")
+        XCTAssertEqual(state(0, 0, sessions: 0).summary, "Nothing running")
+        XCTAssertEqual(state(3, 1).count, 1)
+        XCTAssertEqual(state(3, 0).count, 3)
+    }
+
     func testTheStateRoundTripsThroughJSON() throws {
         let state = IslandState(sessions: [.init(id: "a", status: .error, info: nil, detail: "x")], working: 0, attention: 1)
         XCTAssertEqual(try JSONDecoder().decode(IslandState.self, from: JSONEncoder().encode(state)), state)

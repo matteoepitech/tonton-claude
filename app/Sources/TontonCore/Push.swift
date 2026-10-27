@@ -28,6 +28,28 @@ public struct PermissionPush: Codable, Equatable, Sendable {
     }
 }
 
+/// What one install of the iPhone app wants pushed (`PushDevice` in shared/protocol.ts). Tokens are hex.
+public struct PushDevice: Codable, Equatable, Sendable {
+    public enum Environment: String, Codable, Sendable { case sandbox, production }
+
+    public let device: String
+    public let environment: Environment
+    /// Permission requests are pushed to it.
+    public var alert: String?
+    /// The running Live Activity.
+    public var activity: String?
+    /// Lets the relay start a Live Activity.
+    public var activityStart: String?
+
+    public init(device: String, environment: Environment, alert: String? = nil, activity: String? = nil, activityStart: String? = nil) {
+        (self.device, self.environment) = (device, environment)
+        (self.alert, self.activity, self.activityStart) = (alert, activity, activityStart)
+    }
+
+    /// APNs hands tokens over as bytes.
+    public static func hex(_ token: Data) -> String { token.map { String(format: "%02x", $0) }.joined() }
+}
+
 /// A permission alert once opened.
 public struct PermissionAlert: Equatable, Sendable {
     public let title: String

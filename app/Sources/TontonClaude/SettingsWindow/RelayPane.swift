@@ -217,6 +217,8 @@ struct AccountView: View {
                         }
                         .buttonStyle(ThemeButtonStyle())
                     }
+                    Hairline()
+                    PhoneSignIn(account: account)
                 }
                 .padding(16)
             }

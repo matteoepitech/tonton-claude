@@ -73,6 +73,24 @@ final class RelayFeedTests: XCTestCase {
     }
 }
 
+final class PhoneLinkTests: XCTestCase {
+    func testSessionLinksRoundTrip() throws {
+        let url = try XCTUnwrap(PhoneLink.session("1b6f-42").url)
+        XCTAssertEqual(url.absoluteString, "tonton://session/1b6f-42")
+        XCTAssertEqual(PhoneLink(url: url), .session("1b6f-42"))
+        XCTAssertNil(PhoneLink(url: try XCTUnwrap(URL(string: "tonton://session/"))))
+        XCTAssertNil(PhoneLink(url: try XCTUnwrap(URL(string: "tonton://session/a/b"))))
+        XCTAssertNil(PhoneLink(url: try XCTUnwrap(URL(string: "https://session/a"))))
+    }
+
+    func testSignInLinksCarryTheAccount() throws {
+        let account = Account(relay: "https://tonton.d3l.tech", accountId: "acc", token: "ta_x", key: E2E.newKey())
+        XCTAssertEqual(PhoneLink(url: try XCTUnwrap(URL(string: account.signInLink))), .signIn(account))
+        XCTAssertNil(PhoneLink(url: try XCTUnwrap(URL(string: "tonton://signin#nope"))))
+        XCTAssertNil(PhoneLink.signIn(account).url)
+    }
+}
+
 final class SignInLinkTests: XCTestCase {
     func testTheLinkCarriesTheRecoveryKeyInItsFragment() throws {
         let account = Account(relay: "https://tonton.d3l.tech", accountId: "acc", token: "ta_x", key: E2E.newKey())

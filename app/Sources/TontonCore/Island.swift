@@ -55,6 +55,18 @@ public struct IslandState: Codable, Hashable, Sendable {
 
     /// The status the island shows for all of them.
     public var status: SessionStatus? { SessionStatus.mostUrgent(sessions.map(\.status)) }
+
+    /// `1 needs you · 2 working`, `3 working`, `All done`.
+    public var summary: String {
+        let needs = attention == 0 ? nil : attention == 1 ? "1 needs you" : "\(attention) need you"
+        let busy = working == 0 ? nil : "\(working) working"
+        let parts = [needs, busy].compactMap { $0 }
+        if !parts.isEmpty { return parts.joined(separator: " · ") }
+        return sessions.isEmpty ? "Nothing running" : "All done"
+    }
+
+    /// What the compact Dynamic Island counts: those that need the user, or else those at work.
+    public var count: Int { attention > 0 ? attention : working }
 }
 
 /// One session of the island, opened with the account key.
@@ -65,6 +77,13 @@ public struct IslandLine: Equatable, Sendable {
     public let machine: String?
     /// What it needs when it needs the user, otherwise its status.
     public let text: String
+
+    /// Without the key: the states alone.
+    public static func placeholders(_ state: IslandState) -> [IslandLine] {
+        state.sessions.map {
+            IslandLine(id: $0.id, status: $0.status, project: "Session", machine: nil, text: SessionSummary.statusText(nil, status: $0.status))
+        }
+    }
 }
 
 extension SessionVault {
