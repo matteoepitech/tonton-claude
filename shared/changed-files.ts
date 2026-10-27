@@ -1,5 +1,6 @@
 // The files Claude changed in a session, from its Write, Edit, MultiEdit and NotebookEdit calls, the most recently changed
-// first. OpenCode's edit and write tools arrive under the same names. Mirrors app/Sources/TontonCore/ChangedFiles.swift.
+// first, a subagent's included. OpenCode's edit and write tools arrive under the same names. Mirrors
+// app/Sources/TontonCore/ChangedFiles.swift.
 
 import type { Entry, FileEdit } from './protocol'
 
@@ -21,10 +22,11 @@ export interface ChangedFile {
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
 export function changedFiles(entries: readonly Entry[]): ChangedFile[] {
-  const failed = new Set(entries.flatMap(e => (e.kind === 'tool_result' && e.isError ? [e.toolUseId] : [])))
+  const failed = new Set(entries.flatMap(e => ((e.kind === 'tool_result' || e.kind === 'sub_result') && e.isError ? [e.toolUseId] : [])))
   const files = new Map<string, ChangedFile & { order: number }>()
   entries.forEach((entry, order) => {
-    if (entry.kind !== 'tool' || !FILE_TOOLS.has(entry.name)) return
+    // A subagent's calls count too; the agent sends them without their diffs.
+    if ((entry.kind !== 'tool' && entry.kind !== 'sub_tool') || !FILE_TOOLS.has(entry.name)) return
     const path = pathOf(entry.summary)
     if (!path) return
     const file = files.get(path) ?? {
@@ -43,7 +45,7 @@ export function changedFiles(entries: readonly Entry[]): ChangedFile[] {
     file.order = order
     if (!didFail) {
       file.changes++
-      file.edits.push(...(entry.edits ?? []))
+      if (entry.kind === 'tool') file.edits.push(...(entry.edits ?? []))
       if (entry.name === 'Write') file.written = true
     }
     files.set(path, file)

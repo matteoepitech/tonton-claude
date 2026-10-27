@@ -1,4 +1,5 @@
 import Foundation
+import TontonCore
 
 /// The OpenCode 2 sessions of this Mac, read from OpenCode's own background service: like `LocalSessions` for Claude Code,
 /// they show up in the notch without an agent, an account or a relay. The service also takes messages, answers to

@@ -16,8 +16,8 @@ struct ChangedFilesButton: View {
                 state.filesOf = open ? nil : session.id
             } label: {
                 HStack(spacing: 2) {
-                    Image(systemName: "doc.text").font(.system(size: 11))
-                    Text("\(count)").font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                    Image(systemName: "doc.text").font(.notch(11))
+                    Text("\(count)").font(.notch(10, weight: .semibold)).monospacedDigit()
                 }
             }
             .buttonStyle(.plain)
@@ -41,13 +41,13 @@ struct ChangedFilesPanel: View {
             let files = ChangedFiles.list(store.entries[session.id] ?? [])
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("Files changed").font(.system(size: 12, weight: .semibold))
-                    Text("\(files.count)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                    Text("Files changed").font(.notch(12, weight: .semibold))
+                    Text("\(files.count)").font(.notch(11)).foregroundStyle(.secondary).monospacedDigit()
                     Spacer()
                     Button {
                         state.filesOf = nil
                     } label: {
-                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "xmark").font(.notch(10, weight: .semibold))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
@@ -66,7 +66,7 @@ struct ChangedFilesPanel: View {
                                     set: { if $0 { expanded.insert(file.id) } else { expanded.remove(file.id) } }))
                         }
                         if files.isEmpty {
-                            Text("Claude has not changed any file in this session.").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text("Claude has not changed any file in this session.").font(.notch(11)).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -94,22 +94,22 @@ struct ChangedFileRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: hasDetails ? (expanded ? "chevron.down" : "chevron.right") : "circle.fill")
-                    .font(.system(size: hasDetails ? 8 : 4, weight: .semibold))
+                    .font(.notch(hasDetails ? 8 : 4, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 10)
-                Image(systemName: file.written && file.edits.isEmpty ? "doc.badge.plus" : "pencil").font(.system(size: 10)).frame(width: 14)
+                Image(systemName: file.written && file.edits.isEmpty ? "doc.badge.plus" : "pencil").font(.notch(10)).frame(width: 14)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(file.name).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                    Text(file.name).font(.notch(11, weight: .semibold)).lineLimit(1)
                     let shown = file.shownPath(in: cwd)
                     if shown != file.name {
-                        Text(shown).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        Text(shown).font(.notch(10, design: .monospaced)).foregroundStyle(.secondary)
                             .lineLimit(1).truncationMode(.middle)
                     }
                 }
                 Spacer(minLength: 4)
-                Text(summary).font(.system(size: 10)).foregroundStyle(.secondary).fixedSize()
+                Text(summary).font(.notch(10)).foregroundStyle(.secondary).fixedSize()
                 if file.lastFailed {
-                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(Theme.warning)
+                    Image(systemName: "exclamationmark.triangle.fill").font(.notch(10)).foregroundStyle(Theme.warning)
                         .help("The last change to this file failed")
                 }
                 if local, FileManager.default.fileExists(atPath: file.path) {
@@ -117,7 +117,7 @@ struct ChangedFileRow: View {
                     Button {
                         editor.open(file.path)
                     } label: {
-                        Image(systemName: "arrow.up.forward.square").font(.system(size: 10))
+                        Image(systemName: "arrow.up.forward.square").font(.notch(10))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)

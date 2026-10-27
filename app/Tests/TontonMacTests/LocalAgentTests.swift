@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import TontonCore
+@testable import TontonMac
 
 final class LocalAgentTests: XCTestCase {
     private func config(_ json: String) -> Data { Data(json.utf8) }

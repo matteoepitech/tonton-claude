@@ -32,6 +32,30 @@ test('files come most recently changed first, failed calls add no diff', () => {
   expect(files[0].name).toBe('main.go')
 })
 
+test("a subagent's file calls count, without diffs, and its failed ones are marked", () => {
+  const sub = (id: string, name: string, summary: string): Entry => ({
+    id,
+    ts: 't',
+    kind: 'sub_tool',
+    parent: 'task1',
+    toolUseId: id,
+    name,
+    summary,
+  })
+  const files = changedFiles([
+    sub('s1', 'Edit', '/srv/api/auth.ts'),
+    sub('s2', 'Write', '/srv/api/auth.test.ts'),
+    { id: 's2:r', ts: 't', kind: 'sub_result', parent: 'task1', toolUseId: 's2', text: '', isError: true },
+    // The line that says a subagent made more calls than shown.
+    sub('task1:more', '', 'More calls not shown'),
+  ])
+  expect(files.map(f => [f.path, f.changes, f.lastFailed])).toEqual([
+    ['/srv/api/auth.test.ts', 0, true],
+    ['/srv/api/auth.ts', 1, false],
+  ])
+  expect(files[1].edits).toEqual([])
+})
+
 test('paths show under the session folder', () => {
   expect(shownPath('/srv/api/src/app.ts', '/srv/api')).toBe('src/app.ts')
   expect(shownPath('/srv/api/src/app.ts', '/srv/api/')).toBe('src/app.ts')

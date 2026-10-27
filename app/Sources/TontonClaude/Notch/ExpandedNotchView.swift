@@ -1,4 +1,5 @@
 import SwiftUI
+import TontonCore
 
 struct ExpandedView: View {
     @EnvironmentObject var state: NotchState
@@ -27,7 +28,7 @@ struct ExpandedView: View {
                 } else {
                     HStack(spacing: 0) {
                         SessionListView().frame(width: 236)
-                        Rectangle().fill(Theme.ink.opacity(0.08)).frame(width: 1)
+                        Rectangle().fill(Theme.line(0.08)).frame(width: 1)
                         if let s = store.selected {
                             ChatPanel(session: s).id(s.id)
                         } else {
@@ -52,8 +53,8 @@ struct ExpandedView: View {
 
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 8) {
-            TontonGlyph(size: 16)
-            Text("Tonton Claude").font(.system(size: 12, weight: .semibold))
+            TontonGlyph(size: 16).accessibilityHidden(true)
+            Text("Tonton Claude").font(.notch(12, weight: .semibold))
             connectionBadge.padding(.leading, 4)
             Spacer(minLength: 12)
             if settings.showCosts { TodayCost(usage: store.usage) }
@@ -61,29 +62,32 @@ struct ExpandedView: View {
                 Button {
                     state.showNewSession.toggle()
                 } label: {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .medium))
+                    Image(systemName: "plus").font(.notch(12, weight: .medium))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(state.showNewSession ? Theme.accent : Theme.ink.opacity(0.7))
                 .help("Start a session on a machine (⌘N)")
+                .accessibilityLabel("New session")
             }
             Button {
                 state.pinned.toggle()
             } label: {
-                Image(systemName: state.pinned ? "pin.fill" : "pin").font(.system(size: 12))
+                Image(systemName: state.pinned ? "pin.fill" : "pin").font(.notch(12))
             }
             .buttonStyle(.plain)
             .foregroundStyle(state.pinned ? Theme.accent : Theme.ink.opacity(0.7))
             .help(state.pinned ? "Unpin (closes when the pointer leaves)" : "Pin open")
-            Button(action: onSettings) { Image(systemName: "gearshape").font(.system(size: 12)) }
+            .accessibilityLabel(state.pinned ? "Unpin" : "Pin open")
+            Button(action: onSettings) { Image(systemName: "gearshape").font(.notch(12)) }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.ink.opacity(0.7))
                 .help("Settings")
+                .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 14)
         // One band from the divider to the bottom edge, content centered in it.
         .frame(height: 46)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.ink.opacity(0.07)).frame(height: 1) }
+        .overlay(alignment: .top) { Rectangle().fill(Theme.line(0.07)).frame(height: 1) }
     }
 
     @ViewBuilder private var connectionBadge: some View {
@@ -91,16 +95,17 @@ struct ExpandedView: View {
         case .connected:
             HStack(spacing: 5) {
                 Circle().fill(Theme.success).frame(width: 6, height: 6)
-                Text("connected").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("connected").font(.notch(10)).foregroundStyle(Theme.secondary)
             }
+            .accessibilityElement(children: .combine)
         case .connecting:
-            Text("connecting…").font(.system(size: 10)).foregroundStyle(.secondary)
+            Text("connecting…").font(.notch(10)).foregroundStyle(Theme.secondary)
         case .notConfigured:
-            Text("this Mac only").font(.system(size: 10)).foregroundStyle(.secondary)
+            Text("this Mac only").font(.notch(10)).foregroundStyle(Theme.secondary)
         case .paused:
-            Text("disconnected").font(.system(size: 10)).foregroundStyle(.secondary)
+            Text("disconnected").font(.notch(10)).foregroundStyle(Theme.secondary)
         case .failed(let why):
-            Text(why).font(.system(size: 10)).foregroundStyle(Theme.danger).lineLimit(1).truncationMode(.tail)
+            Text(why).font(.notch(10)).foregroundStyle(Theme.danger).lineLimit(1).truncationMode(.tail)
         }
     }
 }
@@ -119,24 +124,25 @@ struct CenteredMessage: View {
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 26, weight: .medium))
+                .font(.notch(26, weight: .medium))
                 .foregroundStyle(Theme.ink.opacity(0.85))
                 .frame(width: 58, height: 58)
                 .background(Circle().fill(Theme.ink.opacity(0.08)))
-                .overlay(Circle().stroke(Theme.ink.opacity(0.12)))
-            Text(title).font(.system(size: 15, weight: .semibold))
+                .overlay(Circle().stroke(Theme.line(0.12)))
+                .accessibilityHidden(true)
+            Text(title).font(.notch(15, weight: .semibold))
             Text(detail)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .font(.notch(12))
+                .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
             if let action, let perform {
                 Button(action: perform) {
-                    Text(action).font(.system(size: 12, weight: .medium)).padding(.horizontal, 14).padding(.vertical, 6)
+                    Text(action).font(.notch(12, weight: .medium)).padding(.horizontal, 14).padding(.vertical, 6)
                 }
                 .buttonStyle(.plain)
                 .background(Capsule().fill(Theme.ink.opacity(0.14)))
-                .overlay(Capsule().stroke(Theme.ink.opacity(0.18)))
+                .overlay(Capsule().stroke(Theme.line(0.18)))
                 .padding(.top, 4)
             }
         }
@@ -149,15 +155,23 @@ struct TodayCost: View {
     @ObservedObject var usage: UsageRecorder
     @EnvironmentObject var settings: AppSettings
 
+    /// The month too, against its budget when there is one.
+    private var help: String {
+        let month = usage.history.spent(inMonth: WrappedLog.month(Date()))
+        let budget = settings.monthlyBudget
+        let spent = budget > 0 ? String(format: "$%.2f of $%d", month, budget) : String(format: "$%.2f", month)
+        return "Spent today, as recorded on this Mac. This month: \(spent)."
+    }
+
     var body: some View {
         let spent = usage.history.spent()
         if spent > 0 {
             let budget = settings.dailyBudget
             Text(budget > 0 ? String(format: "Today $%.2f of $%d", spent, budget) : String(format: "Today $%.2f", spent))
-                .font(.system(size: 11, design: .monospaced))
+                .font(.notch(11, design: .monospaced))
                 .foregroundStyle(budget > 0 && spent >= Double(budget) ? Theme.warning : Theme.ink.opacity(0.5))
                 .padding(.trailing, 6)
-                .help("Spent today, as recorded on this Mac")
+                .help(help)
         }
     }
 }

@@ -36,11 +36,15 @@ public enum ChangedFiles {
 
     /// The files the session changed, the most recently changed first.
     public static func list(_ entries: [Entry]) -> [ChangedFile] {
-        let failed = Set(entries.filter { $0.kind == .toolResult && $0.isError == true }.compactMap(\.toolUseId))
+        let failed = Set(
+            entries.filter { ($0.kind == .toolResult || $0.kind == .subagentResult) && $0.isError == true }.compactMap(\.toolUseId))
         var files: [String: ChangedFile] = [:]
         var order: [String: Int] = [:]
         for (index, entry) in entries.enumerated() {
-            guard entry.kind == .tool, let name = entry.name, tools.contains(name), let path = path(of: entry) else { continue }
+            // A subagent's calls count too; the agent sends them without their diffs.
+            guard entry.kind == .tool || entry.kind == .subagentTool, let name = entry.name, tools.contains(name),
+                let path = path(of: entry)
+            else { continue }
             var file = files[path] ?? ChangedFile(path: path, lastChange: entry.ts)
             let didFail = entry.toolUseId.map(failed.contains) ?? false
             file.lastFailed = didFail

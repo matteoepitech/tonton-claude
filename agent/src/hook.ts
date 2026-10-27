@@ -28,9 +28,10 @@ interface HookInput {
  * auto-approve rule prints something.
  */
 export async function runHook() {
+  const event = await readInput()
+  if (!event) return log('hook: unreadable input')
   try {
-    const event = JSON.parse(await Bun.stdin.text()) as HookInput
-    if (!event?.session_id) return
+    if (!event.session_id) return
     linkSession(event)
     if (event.hook_event_name === 'PermissionRequest') return approveByRule(event)
     if (event.hook_event_name === 'SessionEnd') clearSessionRules(event.session_id)
@@ -56,6 +57,15 @@ export async function postHook(config: AgentConfig, event: HookPost['event'], te
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(event.hook_event_name === 'SessionEnd' ? 1000 : 2000),
   })
+}
+
+/** The input holds the user's prompt or the tool's input: a parse error could quote it, so it is never logged. */
+async function readInput(): Promise<HookInput | null> {
+  try {
+    return JSON.parse(await Bun.stdin.text()) as HookInput | null
+  } catch {
+    return null
+  }
 }
 
 /**

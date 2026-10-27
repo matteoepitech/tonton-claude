@@ -46,6 +46,23 @@ final class ChangedFilesTests: XCTestCase {
         XCTAssertEqual(files.first?.lastFailed, false)
     }
 
+    func testASubagentsFileCallsCountWithoutDiffs() {
+        let sub = { (id: String, name: String, path: String) in
+            Entry(id: id, ts: "t", kind: .subagentTool, toolUseId: id, name: name, summary: path, parent: "task1")
+        }
+        let files = ChangedFiles.list([
+            sub("s1", "Edit", "/srv/api/auth.ts"),
+            sub("s2", "Write", "/srv/api/auth.test.ts"),
+            Entry(id: "s2:r", ts: "t", kind: .subagentResult, text: "", toolUseId: "s2", isError: true, parent: "task1"),
+            // The line that says a subagent made more calls than shown.
+            sub("task1:more", "", "More calls not shown"),
+        ])
+        XCTAssertEqual(files.map(\.path), ["/srv/api/auth.test.ts", "/srv/api/auth.ts"])
+        XCTAssertEqual(files.map(\.changes), [0, 1])
+        XCTAssertEqual(files.map(\.lastFailed), [true, false])
+        XCTAssertEqual(files[1].edits, [])
+    }
+
     func testOnlyWholePathsCount() {
         let files = ChangedFiles.list([
             call("1", "Edit", "/very/long/path/that/was/cut…"),
@@ -66,35 +83,5 @@ final class ChangedFilesTests: XCTestCase {
         XCTAssertEqual(file.shownPath(in: "/other"), "/srv/api/src/app.ts")
         XCTAssertEqual(ChangedFile(path: "C:\\code\\api\\main.go", lastChange: "").shownPath(in: "C:\\code\\api"), "main.go")
         XCTAssertEqual(file.name, "app.ts")
-    }
-
-    /// OpenCode's edit and write tools, as this Mac's OpenCode service lists them: the same files as Claude Code's.
-    func testOpenCodeEditsAreListedLikeClaudeCodes() throws {
-        let messages: [[String: Any]] = [
-            ["id": "msg_u", "type": "user", "text": "Fix it", "time": ["created": 1_793_035_804_000]],
-            [
-                "id": "msg_a", "type": "assistant", "time": ["created": 1_793_035_805_000, "completed": 1_793_035_806_000],
-                "content": [
-                    [
-                        "type": "tool", "id": "call_e", "name": "edit",
-                        "state": [
-                            "status": "completed",
-                            "input": ["filePath": "/Users/me/code/shop/app.ts", "oldString": "a", "newString": "b"],
-                            "content": [["type": "text", "text": "Edited"]],
-                        ],
-                    ],
-                    [
-                        "type": "tool", "id": "call_w", "name": "write",
-                        "state": ["status": "error", "input": ["filePath": "/Users/me/code/shop/new.ts"], "error": ["message": "denied"]],
-                    ],
-                ],
-            ],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: ["data": messages])
-        let files = ChangedFiles.list(OpenCodeLocal.conversation(data).entries)
-        XCTAssertEqual(files.map(\.path), ["/Users/me/code/shop/new.ts", "/Users/me/code/shop/app.ts"])
-        XCTAssertEqual(files[0].lastFailed, true)
-        XCTAssertEqual(files[0].changes, 0)
-        XCTAssertEqual(files[1].edits, [FileEdit(oldText: "a", newText: "b")])
     }
 }

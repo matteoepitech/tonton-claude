@@ -1,7 +1,11 @@
 node_modules/
 /dist/
+desktop/dist/
+desktop/out/
 app/.build/
 app/build/
+ios/build/
+xcuserdata/
 .env
 *.log
 *.bun-build

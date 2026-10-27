@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["bun"]
+  },
+  "include": ["src/main", "src/bridge.ts", "src/preload.ts", "scripts", "test"]
+}
