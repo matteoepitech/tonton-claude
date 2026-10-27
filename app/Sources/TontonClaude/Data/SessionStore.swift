@@ -79,10 +79,12 @@ final class SessionStore: ObservableObject {
     private var openCodeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
     /// Cost and tokens per day and the monthly recap, for Settings › Usage.
     private(set) lazy var usage = UsageRecorder(
-        sessions: sessionsPublisher, tasks: taskDone.eraseToAnyPublisher(),
-        entries: $localEntries.combineLatest($relayEntries).map { local, relay in LocalSessions.entries(local: local, relay: relay) }
-            .eraseToAnyPublisher(),
-        settings: settings)
+        sessions: sessionsPublisher, tasks: taskDone.eraseToAnyPublisher(), entries: entriesPublisher, settings: settings)
+    /// The conversations of this Mac and of the relay, merged as `entries` merges them.
+    var entriesPublisher: AnyPublisher<[String: [Entry]], Never> {
+        $localEntries.combineLatest($relayEntries).map { local, relay in LocalSessions.entries(local: local, relay: relay) }
+            .eraseToAnyPublisher()
+    }
     /// One per reset time of the sessions a usage limit stopped.
     private var resetTimers: [Date: Task<Void, Never>] = [:]
     private var subscriptions = Set<AnyCancellable>()

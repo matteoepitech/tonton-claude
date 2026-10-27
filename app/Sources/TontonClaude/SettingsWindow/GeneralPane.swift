@@ -200,6 +200,25 @@ struct GeneralPane: View {
     }
 }
 
+/// How far a locked achievement is: `42/100` over a thin bar.
+private struct GoalGauge: View {
+    let goal: AchievementGoal
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text("\(goal.done.formatted())/\(goal.target.formatted())")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Theme.textDim)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.ink.opacity(0.1))
+                Capsule().fill(Theme.warning.opacity(0.8)).frame(width: 64 * goal.fraction)
+            }
+            .frame(width: 64, height: 4)
+        }
+        .fixedSize()
+    }
+}
+
 /// Every badge, unlocked ones in color.
 private struct AchievementsList: View {
     @ObservedObject private var store = AchievementStore.shared
@@ -220,6 +239,7 @@ private struct AchievementsList: View {
                         Text(achievement.detail).font(.system(size: 12)).foregroundStyle(Theme.textDim)
                     }
                     Spacer()
+                    if let goal = store.progress.goal(achievement) { GoalGauge(goal: goal) }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
