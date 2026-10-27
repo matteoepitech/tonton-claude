@@ -1,4 +1,5 @@
 import Foundation
+import TontonCore
 
 /// The `claude` sessions running on this Mac, read straight from Claude Code's files: they show up in the notch without
 /// an agent, an account or a relay. Read only, since replies and approvals go through the agent's channel.

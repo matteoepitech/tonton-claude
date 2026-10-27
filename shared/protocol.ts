@@ -26,6 +26,12 @@ export type Entry =
   | { id: string; ts: string; kind: 'tool'; toolUseId: string; name: string; summary: string; edits?: FileEdit[] }
   | { id: string; ts: string; kind: 'tool_result'; toolUseId: string; text: string; isError: boolean; images?: ImageData[] }
   | { id: string; ts: string; kind: 'system'; text: string }
+  /**
+   * A call made by a subagent, and its result: `parent` is the Task (Agent) call that started the subagent. New kinds
+   * rather than `tool` with a parent, so apps from before them drop these instead of showing them as the session's own.
+   */
+  | { id: string; ts: string; kind: 'sub_tool'; parent: string; toolUseId: string; name: string; summary: string }
+  | { id: string; ts: string; kind: 'sub_result'; parent: string; toolUseId: string; text: string; isError: boolean }
 
 // Plaintext payloads, sealed before leaving the machine.
 export interface SessionInfo {
@@ -78,6 +84,16 @@ export interface SessionMeta {
   model?: string
   /** The git branch of its folder, or the short commit when detached. Missing outside git and from older agents. */
   branch?: string
+  /**
+   * The last turns that ended, oldest first, as Claude Code writes them in the transcript: the app counts the ones it
+   * didn't see end, while the Mac was away. Missing from older agents, and until a turn ends.
+   */
+  turns?: TurnTime[]
+}
+/** A turn of Claude, from the prompt to the answer: when it ended and how long it took. */
+export interface TurnTime {
+  end: string
+  seconds: number
 }
 export interface StatusDetail {
   text: string
@@ -203,10 +219,72 @@ export interface ShareSummary {
   expiresAt: string
   viewers: number
 }
+/**
+ * Sealed by the app: the user's own name for a session, shown instead of its project on every Mac of the account. It names
+ * its session, so the relay can't move it to another. An empty name brings the project back.
+ */
+export interface SessionName {
+  sessionId: string
+  name: string
+  issuedAt: string
+}
 /** Sealed by the app, so only the account owner can make a machine update itself, not the relay. */
 export interface UpdateOrder {
   version: string
   issuedAt: string
+}
+/** Sealed by the app: send the end of your log. It names its machine and is recent, like start orders. */
+export interface LogRequest {
+  requestId: string
+  machineId: string
+  issuedAt: string
+}
+/** Sealed by the agent: the end of its log, for the request it names. Never what Claude wrote, and without secrets. */
+export interface AgentLog {
+  requestId: string
+  machineId: string
+  /** The last lines, oldest first. */
+  lines: string[]
+  /** Earlier lines were left out. */
+  truncated: boolean
+  /** Of the whole log file, in bytes. */
+  size: number
+  at: string
+  /** Why the agent sent no lines. */
+  error?: string
+}
+/** What the app can ask a machine to repair, from Settings › Machines: each one redoes a part of the install step. */
+export type SetupFix = 'service' | 'hooks' | 'mcp' | 'launcher' | 'statusline' | 'opencode'
+/** Sealed by the app: check how this machine is set up, after one repair if `fix` names it. Recent, and names its machine. */
+export interface DiagnoseRequest {
+  requestId: string
+  machineId: string
+  issuedAt: string
+  fix?: SetupFix
+}
+/** One line of a diagnosis. */
+export interface SetupCheck {
+  /** `agent`, `service`, `relay`, `hooks`, `mcp`, `launcher`, `statusline` or `opencode`. Newer agents may add others. */
+  id: string
+  /** Shown as is, so an app can show a check it does not know. */
+  label: string
+  ok: boolean
+  detail: string
+  /** A repair the app can ask for. */
+  fix?: SetupFix
+}
+/** Sealed by the agent: how the machine is set up, for the request it names. */
+export interface Diagnosis {
+  requestId: string
+  machineId: string
+  at: string
+  /** The agent installed on the machine. */
+  version: string
+  checks: SetupCheck[]
+  /** What the repair the request asked for did. */
+  fixed?: { fix: SetupFix; ok: boolean; text: string }
+  /** Why the agent ran no check. */
+  error?: string
 }
 
 export interface SealedEntry {
@@ -232,6 +310,8 @@ export interface SessionSummary {
   pendingPermissions: SealedPermission[]
   startedAt: string
   lastActivity: string
+  /** Sealed `SessionName`, once a Mac renamed the session. Older relays leave it out. */
+  name?: Sealed | null
 }
 
 export interface MachineSummary {
@@ -262,6 +342,10 @@ export type AgentMessage =
   // A read-only share of the session: `info` is a `SharedInfo`, it and the entries sealed with the share key.
   | { t: 'share_info'; sessionId: string; shareId: string; info: Sealed }
   | { t: 'share_entries'; sessionId: string; shareId: string; entries: SealedEntry[]; reset: boolean }
+  // The answer to a `LogRequest`: a sealed `AgentLog`.
+  | { t: 'agent_logs'; requestId: string; logs: Sealed }
+  // The answer to a `DiagnoseRequest`: a sealed `Diagnosis`.
+  | { t: 'diagnosis'; requestId: string; diagnosis: Sealed }
 
 // relay -> agent
 export type RelayToAgent =
@@ -277,6 +361,10 @@ export type RelayToAgent =
   | { t: 'share'; sessionId: string; shareId: string; order: Sealed }
   // The share was revoked or expired: stop sealing for it.
   | { t: 'unshare'; sessionId: string; shareId: string }
+  // A sealed `LogRequest`.
+  | { t: 'agent_logs'; requestId: string; request: Sealed }
+  // A sealed `DiagnoseRequest`.
+  | { t: 'diagnose'; requestId: string; request: Sealed }
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -304,6 +392,10 @@ export type RelayToApp =
       reason?: 'offline'
       detail?: Sealed | null
     }
+  // The sealed `AgentLog` of a machine, or `reason` when the relay could not reach it.
+  | { t: 'agent_logs'; machineId: string; requestId: string; reason?: 'offline'; logs?: Sealed | null }
+  // The sealed `Diagnosis` of a machine, or `reason` when the relay could not reach it.
+  | { t: 'diagnosis'; machineId: string; requestId: string; reason?: 'offline'; diagnosis?: Sealed | null }
 
 // app -> relay
 export type AppMessage =
@@ -311,12 +403,16 @@ export type AppMessage =
   | { t: 'prompt'; sessionId: string; payload: Sealed }
   | { t: 'verdict'; sessionId: string; requestId: string; behavior: 'allow' | 'deny'; rule?: Sealed }
   | { t: 'dismiss'; sessionId: string }
+  // A sealed `SessionName`: the relay keeps it with the session and sends it to every app of the account.
+  | { t: 'rename'; sessionId: string; name: Sealed }
   | { t: 'update_agent'; machineId: string; order: Sealed }
   | { t: 'rules'; machineId: string; rules: Sealed }
   | { t: 'start_session'; machineId: string; launchId: string; order: Sealed }
   | { t: 'start_answer'; machineId: string; launchId: string; answer: Sealed }
   // After `POST /api/shares` made the share: its order, for the session's agent.
   | { t: 'share'; sessionId: string; shareId: string; order: Sealed }
+  | { t: 'agent_logs'; machineId: string; requestId: string; request: Sealed }
+  | { t: 'diagnose'; machineId: string; requestId: string; request: Sealed }
 
 // relay -> viewer (/ws/share, with a share token): one session, read only.
 export type RelayToViewer =
@@ -326,3 +422,53 @@ export type RelayToViewer =
   | { t: 'shared_status'; status: SessionStatus }
   // Revoked or expired: the socket closes after it.
   | { t: 'share_ended' }
+
+// Push notifications to the iPhone app, from a relay that holds an APNs key (TONTON_APNS_*, off by default). Apple only
+// ever carries ids, states and blobs sealed by the agents: the phone opens them with the account key.
+
+/** POST /api/push/devices (app -> relay): what one install of the iPhone app wants pushed, sent again on each change. */
+export interface PushDevice {
+  /** Random, made by the app once per install. */
+  device: string
+  environment: 'sandbox' | 'production'
+  /** APNs device token, hex: permission requests are pushed to it. Null: no alerts. */
+  alert: string | null
+  /** Push token of the Live Activity running on the phone, hex. Null: none runs. */
+  activity: string | null
+  /** Token that lets the relay start a Live Activity (iOS 17.2 and later), hex. Null: none. */
+  activityStart: string | null
+}
+
+/** The answer to GET /api/push and POST /api/push/devices. Older relays answer 404. */
+export interface PushStatus {
+  /** False when the relay has no APNs key: the phone only sees the sessions while it is open. */
+  enabled: boolean
+}
+
+/** Sent next to the content-free text of a permission alert, under `tonton`. */
+export interface PermissionPush {
+  sessionId: string
+  requestId: string
+  /** The sealed `PermissionDetail`, left out when the alert would not fit. */
+  request?: Sealed
+  /** The session's sealed `SessionInfo`, likewise. */
+  info?: Sealed
+}
+
+/** The content state of the Live Activity: set by the phone while it runs, pushed by the relay otherwise. */
+export interface IslandState {
+  /** Those that need the user first, then the latest at work, then the latest done. At most 3. */
+  sessions: IslandSession[]
+  /** Sessions working or starting. */
+  working: number
+  /** Sessions asking for a permission, waiting for the user or stopped by an error. */
+  attention: number
+}
+export interface IslandSession {
+  id: string
+  status: SessionStatus
+  /** The sealed `SessionInfo`, null when unknown or too long to push. */
+  info: Sealed | null
+  /** The sealed `StatusDetail`, likewise. */
+  detail: Sealed | null
+}

@@ -3,6 +3,8 @@
 // agents can add some.
 
 import type {
+  AgentLog,
+  Diagnosis,
   Entry,
   FileEdit,
   ImageData,
@@ -10,6 +12,7 @@ import type {
   PermissionDetail,
   SessionInfo,
   SessionMeta,
+  SessionName,
   StartDetail,
   StatusDetail,
   TokenCounts,
@@ -94,6 +97,10 @@ const tokenCounts = (value: unknown): TokenCounts => {
   return { input: integer(f.input), output: integer(f.output), cacheRead: integer(f.cacheRead), cacheWrite: integer(f.cacheWrite) }
 }
 
+export const decodeSessionName = decoder(
+  (f): SessionName => ({ sessionId: text(f.sessionId), name: text(f.name), issuedAt: text(f.issuedAt) }),
+)
+
 export const decodeSessionInfo = decoder(
   (f): SessionInfo =>
     compact({
@@ -169,6 +176,45 @@ export const decodeStartDetail = decoder(
       text: optional(f.text, text),
       question: optional(f.question, text),
       sessionId: optional(f.sessionId, text),
+    }),
+)
+
+export const decodeAgentLog = decoder(
+  (f): AgentLog =>
+    compact({
+      requestId: text(f.requestId),
+      machineId: text(f.machineId),
+      lines: list(f.lines, text),
+      truncated: flag(f.truncated),
+      size: integer(f.size),
+      at: text(f.at),
+      error: optional(f.error, text),
+    }),
+)
+
+/** Checks and repairs are named by the agent: the ones this client does not know are kept as they are. */
+export const decodeDiagnosis = decoder(
+  (f): Diagnosis =>
+    compact({
+      requestId: text(f.requestId),
+      machineId: text(f.machineId),
+      at: text(f.at),
+      version: text(f.version),
+      checks: list(f.checks, value => {
+        const c = fields(value)
+        return compact({
+          id: text(c.id),
+          label: text(c.label),
+          ok: flag(c.ok),
+          detail: text(c.detail),
+          fix: optional(c.fix, text) as Diagnosis['checks'][number]['fix'],
+        })
+      }),
+      fixed: optional(f.fixed, value => {
+        const r = fields(value)
+        return { fix: text(r.fix) as NonNullable<Diagnosis['fixed']>['fix'], ok: flag(r.ok), text: text(r.text) }
+      }),
+      error: optional(f.error, text),
     }),
 )
 

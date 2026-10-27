@@ -1,4 +1,5 @@
 import Foundation
+import TontonCore
 
 /// The agent installed on this Mac, if any: its sessions are the ones whose files, terminal and folders are right here.
 public enum LocalAgent {

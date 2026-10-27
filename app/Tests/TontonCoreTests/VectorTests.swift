@@ -70,12 +70,15 @@ final class VectorTests: XCTestCase {
                     ["requestId": "fghij", "ts": "2026-10-25T10:05:01.000Z", "blob": try E2E.seal(permission, with: other)],
                 ],
                 "startedAt": "2026-10-25T10:00:00.123Z", "lastActivity": "2026-10-25T10:05:00Z",
+                "name": try vault.sealSessionName("Billing rewrite ✨", for: "s1"),
             ],
             [
                 "id": "s2", "machineId": "m1", "status": "idle", "agentOnline": false, "canChat": false,
                 "info": try E2E.seal(SessionInfo(machine: "PC-Studio", platform: nil, cwd: "/srv", project: "srv"), with: other),
                 "meta": try sealed(["title": "Wrong types", "costUSD": "a lot"]), "statusDetail": NSNull(), "pendingPermissions": [],
                 "startedAt": "2026-10-25T09:00:00.000Z", "lastActivity": "yesterday",
+                // A name the relay moved from another session: both sides ignore it.
+                "name": try vault.sealSessionName("Moved", for: "s1"),
             ],
         ]
         let entries = [
@@ -109,6 +112,9 @@ final class VectorTests: XCTestCase {
                 try vault.sealStartAnswer(launchId: "abcdefgh12", machineId: "m1", question: "q1", confirm: true, issuedAt: issuedAt)
             ),
             ("rules", try vault.sealRules([PermissionRule(tool: "Bash", pattern: "npm test")], issuedAt: issuedAt)),
+            ("log request", try vault.sealLogRequest(requestId: "abcdefgh12", machineId: "m1", issuedAt: issuedAt)),
+            ("session name", try vault.sealSessionName("Billing rewrite ✨", for: "s1", issuedAt: issuedAt)),
+            ("diagnose request", try vault.sealDiagnoseRequest(requestId: "abcdefgh12", machineId: "m1", fix: "hooks", issuedAt: issuedAt)),
             ("machine name", try vault.sealMachineName("Studio ✨")),
             (
                 "share order",
@@ -192,7 +198,7 @@ final class VectorTests: XCTestCase {
             startedAt: milliseconds(s.startedAt), lastActivity: milliseconds(s.lastActivity), lastMessage: s.lastMessage,
             fiveHourLimit: limit(s.fiveHourLimit), sevenDayLimit: limit(s.sevenDayLimit), terminal: s.terminal,
             commands: s.commands.map(\.rawValue).sorted(), model: s.model, modelName: s.modelName, modelFamily: s.modelFamily?.rawValue,
-            acceptsCommands: s.acceptsCommands, branch: s.branch)
+            acceptsCommands: s.acceptsCommands, branch: s.branch, name: s.name)
     }
 
     /// Dates the app could not read are `distantPast`; TypeScript has null for them.
@@ -259,6 +265,7 @@ private struct Vectors: Codable {
         let modelFamily: String?
         let acceptsCommands: Bool
         let branch: String?
+        let name: String?
     }
     struct ChatRow: Codable, Equatable { let kind: String; let id: String; let result: String? }
     struct Expected: Codable, Equatable {

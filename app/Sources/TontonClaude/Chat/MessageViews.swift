@@ -5,6 +5,8 @@ import TontonCore
 struct ChatItemView: View {
     let item: ChatItem
     let sessionWorking: Bool
+    /// The calls of the subagents, by the Task call that started them.
+    var steps: [String: [(call: Entry, result: Entry?)]] = [:]
 
     var body: some View {
         switch item {
@@ -13,11 +15,13 @@ struct ChatItemView: View {
         case .assistant(let e):
             MarkdownText(text: e.text ?? "").frame(maxWidth: .infinity, alignment: .leading)
         case .tool(let call, let result):
-            ToolRow(call: call, result: result, running: result == nil && sessionWorking)
+            ToolRow(
+                call: call, result: result, running: result == nil && sessionWorking,
+                steps: call.toolUseId.flatMap { steps[$0] } ?? [])
         case .system(let e):
             Text(e.text ?? "")
-                .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .font(.notch(10))
+                .foregroundStyle(Theme.tertiary)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -36,7 +40,7 @@ struct UserBubble: View {
                 if !images.isEmpty { ImageStrip(images: images) }
                 if !text.isEmpty {
                     Text(text)
-                        .font(.system(size: 12))
+                        .font(.notch(12))
                         .textSelection(.enabled)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
@@ -44,7 +48,7 @@ struct UserBubble: View {
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.accent.opacity(pending ? 0.35 : 0.8)))
                 }
                 if viaNotch || pending {
-                    Text(pending ? "sending…" : "from the notch").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    Text(pending ? "sending…" : "from the notch").font(.notch(9)).foregroundStyle(Theme.tertiary)
                 }
             }
         }
@@ -54,32 +58,31 @@ struct UserBubble: View {
 struct ImageStrip: View {
     let images: [ImageData]
     @EnvironmentObject var store: SessionStore
+    @EnvironmentObject var state: NotchState
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(Array(images.enumerated()), id: \.offset) { _, img in
+            ForEach(Array(images.enumerated()), id: \.offset) { index, img in
                 if let ns = ImageCache.shared.image(for: img) {
                     Image(nsImage: ns)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: 220, maxHeight: 150)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .onTapGesture { openInPreview(img) }
-                        .help("Open in Preview")
+                        .quickLook({ preview(at: index) }, state: state)
+                        .accessibilityLabel(images.count == 1 ? "Image" : "Image \(index + 1) of \(images.count)")
                 }
             }
         }
     }
 
-    private func openInPreview(_ img: ImageData) {
-        guard let data = Data(base64Encoded: img.data) else { return }
-        let ext = img.mediaType.split(separator: "/").last.map(String.init) ?? "png"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("tonton-\(UUID().uuidString).\(ext)")
-        if let failure = SaveFailure.write(data, to: url) {
-            store.lastError = failure
-            return
+    /// Every image of the message, so the arrows go from one to the next.
+    private func preview(at index: Int) {
+        let items = images.enumerated().map { offset, img in
+            let ext = img.mediaType.split(separator: "/").last.map(String.init) ?? "png"
+            return QuickLook.Item(name: "image-\(offset + 1).\(ext)", data: Data(base64Encoded: img.data) ?? Data())
         }
-        NSWorkspace.shared.open(url)
+        if let failure = QuickLook.shared.show(items, at: index) { store.lastError = failure }
     }
 }
 
@@ -87,8 +90,11 @@ struct ToolRow: View {
     let call: Entry
     let result: Entry?
     let running: Bool
+    /// What a Task call's subagent did, folded under it until opened.
+    var steps: [(call: Entry, result: Entry?)] = []
     @EnvironmentObject var settings: AppSettings
     @State private var open = false
+    @State private var showSteps = false
 
     private var icon: String {
         switch call.name ?? "" {
@@ -106,9 +112,9 @@ struct ToolRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 10)).frame(width: 14)
-                Text(call.name ?? "?").font(.system(size: 11, weight: .semibold))
-                Text(call.summary ?? "").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+                Image(systemName: icon).font(.notch(10)).frame(width: 14).accessibilityHidden(true)
+                Text(call.name ?? "?").font(.notch(11, weight: .semibold))
+                Text(call.summary ?? "").font(.notch(11, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
                 if let path = call.filePath, FileManager.default.fileExists(atPath: path) {
@@ -116,28 +122,32 @@ struct ToolRow: View {
                     Button {
                         editor.open(path)
                     } label: {
-                        Image(systemName: "arrow.up.forward.square").font(.system(size: 10))
+                        Image(systemName: "arrow.up.forward.square").font(.notch(10))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.secondary)
                     .help(editor == .defaultApp ? "Open" : "Open in \(editor.label)")
+                    .accessibilityLabel(editor == .defaultApp ? "Open the file" : "Open in \(editor.label)")
                 }
                 if running {
-                    ProgressView().controlSize(.mini)
+                    ProgressView().controlSize(.mini).accessibilityLabel("Running")
                 } else if result?.isError == true {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 10)).foregroundStyle(.red)
+                    Image(systemName: "xmark.circle.fill").font(.notch(10)).foregroundStyle(.red).accessibilityLabel("Failed")
                 } else if result != nil {
-                    Image(systemName: "checkmark").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    Image(systemName: "checkmark").font(.notch(9)).foregroundStyle(Theme.tertiary).accessibilityLabel("Done")
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture { if result != nil { open.toggle() } }
+            .accessibilityElement(children: .contain)
+            .accessibilityAction(named: open ? "Hide the result" : "Show the result") { if result != nil { open.toggle() } }
+            if !steps.isEmpty { subagentSteps }
             if let edits = call.edits, !edits.isEmpty { EditDiff(edits: edits, path: call.summary) }
             if open, let result {
                 if let imgs = result.images, !imgs.isEmpty { ImageStrip(images: imgs) }
                 ScrollView {
                     Text(result.text ?? "")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.notch(10, design: .monospaced))
                         .foregroundStyle(result.isError == true ? .red : .secondary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -150,5 +160,47 @@ struct ToolRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
+    }
+}
+
+extension ToolRow {
+    /// The subagent's calls: a count to open, then one line each, the last one still running while the task does.
+    var subagentSteps: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) { showSteps.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: showSteps ? "chevron.down" : "chevron.right").font(.notch(8, weight: .bold))
+                        .accessibilityHidden(true)
+                    Text("\(steps.count) call\(steps.count == 1 ? "" : "s") by the subagent").font(.notch(10))
+                }
+                .foregroundStyle(Theme.secondary)
+            }
+            .buttonStyle(.plain)
+            if showSteps {
+                ForEach(steps, id: \.call.id) { step in
+                    HStack(spacing: 6) {
+                        // The agent sends the first calls of a task, then a line without a tool saying there were more.
+                        if let name = step.call.name, !name.isEmpty {
+                            Text(name).font(.notch(10, weight: .semibold))
+                        }
+                        Text(step.call.summary ?? "")
+                            .font(.notch(10, design: step.call.name?.isEmpty == false ? .monospaced : .default))
+                            .foregroundStyle(Theme.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 4)
+                        // Only failures come with a result: the latest call is the one still running.
+                        if step.result?.isError == true {
+                            Image(systemName: "xmark.circle.fill").font(.notch(9)).foregroundStyle(.red).accessibilityLabel("Failed")
+                        } else if running && step.call.id == steps.last?.call.id {
+                            ProgressView().controlSize(.mini).accessibilityLabel("Running")
+                        }
+                    }
+                    .padding(.leading, 12)
+                }
+            }
+        }
     }
 }

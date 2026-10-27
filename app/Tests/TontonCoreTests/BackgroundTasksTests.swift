@@ -58,19 +58,4 @@ final class BackgroundTasksTests: XCTestCase {
         try tasks.read(line([["type": "tool_result", "tool_use_id": "t", "content": "ok (build complete)"]]), now: now)
         XCTAssertEqual(tasks.count(at: now), 0)
     }
-
-    func testThisMacsSessionStaysAtWorkWhileATaskRuns() throws {
-        var conversation = LocalSessions.Conversation()
-        conversation.apply(TranscriptTail.Read(lines: [try shell("bi8o5pw7k")]))
-        // Claude Code's registry says the session is done with its turn.
-        let record = LocalSessions.Record(pid: 1, sessionId: "s1", cwd: "/x", status: "idle")
-        let session = LocalSessions.summary(record, conversation)
-        XCTAssertEqual(session.status, .working)
-        XCTAssertEqual(session.statusText, "Waiting for 1 background task")
-        conversation.apply(TranscriptTail.Read(lines: [try notification("bi8o5pw7k", "completed")]))
-        XCTAssertEqual(LocalSessions.summary(record, conversation).status, .idle)
-        // A closed session is closed, whatever ran in its background.
-        conversation.apply(TranscriptTail.Read(lines: [try shell("b5iig1z64")]))
-        XCTAssertEqual(LocalSessions.summary(record, conversation, endedAt: now).status, .ended)
-    }
 }

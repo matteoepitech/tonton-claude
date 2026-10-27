@@ -4,14 +4,19 @@ import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
 import {
   HEALTH_MIN_INTERVAL_MS,
+  MAX_AGENT_LOG_BYTES,
+  MAX_DIAGNOSE_REQUEST_BYTES,
+  MAX_DIAGNOSIS_BYTES,
   MAX_HEALTH_BYTES,
+  MAX_LOG_REQUEST_BYTES,
   MAX_RULES_BYTES,
+  MAX_SESSION_NAME_BYTES,
   MAX_START_DETAIL_BYTES,
   MAX_START_ORDER_BYTES,
   MAX_VIEWERS_PER_SHARE,
   MAX_WS_MESSAGE_BYTES,
 } from './limits'
-import { isLaunchId, isRequestId, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
+import { isLaunchId, isRequestId, isRequestToken, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
 
 export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<SocketData> {
   return {
@@ -54,6 +59,8 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
       }
       if (socket.data.role === 'app') {
         ctx.hub.removeApp(socket)
+        // The phone went to the background: the relay takes over its Live Activity.
+        if (socket.data.device) ctx.push?.deviceWentAway(socket.data.accountId, socket.data.device)
         return
       }
       const { accountId, sessionId } = socket.data
@@ -82,6 +89,18 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
     const { launchId, state, detail } = message
     if (!isLaunchId(launchId) || !isStartState(state) || !isSealed(detail, MAX_START_DETAIL_BYTES)) return
     ctx.hub.sendToApps(accountId, { t: 'session_start', machineId, launchId, state, detail })
+    return
+  }
+  if (message?.t === 'agent_logs') {
+    const { requestId, logs } = message
+    if (!isRequestToken(requestId) || !isSealed(logs, MAX_AGENT_LOG_BYTES)) return
+    ctx.hub.sendToApps(accountId, { t: 'agent_logs', machineId, requestId, logs })
+    return
+  }
+  if (message?.t === 'diagnosis') {
+    const { requestId, diagnosis } = message
+    if (!isRequestToken(requestId) || !isSealed(diagnosis, MAX_DIAGNOSIS_BYTES)) return
+    ctx.hub.sendToApps(accountId, { t: 'diagnosis', machineId, requestId, diagnosis })
     return
   }
   if (!isSessionId(message?.sessionId)) return
@@ -169,6 +188,10 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
     case 'dismiss':
       if (isSessionId(message.sessionId)) ctx.sessions.remove(accountId, message.sessionId)
       break
+    case 'rename':
+      if (isSessionId(message.sessionId) && isSealed(message.name, MAX_SESSION_NAME_BYTES))
+        ctx.sessions.rename(accountId, message.sessionId, message.name)
+      break
     case 'start_session': {
       const { machineId, launchId, order } = message
       if (!isText(machineId, 32) || !isLaunchId(launchId) || !isSealed(order, MAX_START_ORDER_BYTES)) return
@@ -184,6 +207,26 @@ function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage
       if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
       // Only the connection that runs this start acts on it.
       ctx.hub.sendToMachine(machineId, { t: 'start_answer', launchId, answer })
+      break
+    }
+    case 'agent_logs': {
+      const { machineId, requestId, request } = message
+      if (!isText(machineId, 32) || !isRequestToken(requestId) || !isSealed(request, MAX_LOG_REQUEST_BYTES)) return
+      if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
+      // Every process of the machine reads the same log: one of them answers, the background service when it runs.
+      const agent = ctx.hub.machineSocket(machineId)
+      if (agent) ctx.hub.send(agent, { t: 'agent_logs', requestId, request })
+      else ctx.hub.send(socket, { t: 'agent_logs', machineId, requestId, reason: 'offline' })
+      break
+    }
+    case 'diagnose': {
+      const { machineId, requestId, request } = message
+      if (!isText(machineId, 32) || !isRequestToken(requestId) || !isSealed(request, MAX_DIAGNOSE_REQUEST_BYTES)) return
+      if (!ctx.registry.machines(accountId).some(machine => machine.id === machineId)) return
+      // The background service when it runs: it can tell whether it runs, and repair what a session's process can't.
+      const agent = ctx.hub.machineSocket(machineId)
+      if (agent) ctx.hub.send(agent, { t: 'diagnose', requestId, request })
+      else ctx.hub.send(socket, { t: 'diagnosis', machineId, requestId, reason: 'offline' })
       break
     }
     case 'update_agent':

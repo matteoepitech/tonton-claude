@@ -9,7 +9,7 @@ import { agentBinaryName, TRAY_HELPER_NAME } from '../agent/src/update'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { open, seal } from '../shared/crypto'
-import type { RelayToApp, SessionSummary } from '../shared/protocol'
+import type { AgentLog, Diagnosis, RelayToApp, SessionSummary } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-e2e-'))
@@ -27,6 +27,8 @@ const NEW_VERSION = '9.9.9'
 const base = `http://127.0.0.1:${relay.server.port}`
 const sessionId = `session-${Date.now()}`
 const transcript = join(dir, 'transcript.jsonl')
+/** The home folder the agent sees: its Claude Code and shell setup, never the developer's. */
+const userHome = join(dir, 'user')
 
 interface App {
   socket: WebSocket
@@ -102,8 +104,12 @@ beforeAll(async () => {
   writeFileSync(join(project, '.git', 'HEAD'), 'ref: refs/heads/SECRET-branch\n')
   writeFileSync(join(home, 'run', `${process.pid}.json`), JSON.stringify({ sessionId, transcriptPath: transcript, cwd: project }))
 
+  const { CLAUDE_CONFIG_DIR: _claude, ...developer } = process.env
   const env = {
-    ...process.env,
+    ...developer,
+    HOME: userHome,
+    USERPROFILE: userHome,
+    XDG_CONFIG_HOME: join(userHome, '.config'),
     TONTON_HOME: home,
     TONTON_CHANNEL: '1',
     TONTON_SERVICE: 'off',
@@ -302,6 +308,38 @@ describe('end to end', () => {
     expect(after?.model).toBe('claude-sonnet-5-5')
   })
 
+  test('the turns that ended reach the app in the meta, once each', async () => {
+    const turns = async () => {
+      const blob = latestSession(app)?.meta
+      return blob ? (await open<{ turns?: { end: string; seconds: number }[] }>(key, blob)).turns : undefined
+    }
+    const ended = (uuid: string, end: string, durationMs: number) =>
+      line({ type: 'system', subtype: 'turn_duration', uuid, durationMs, timestamp: end })
+    appendFileSync(transcript, ended('d1', '2026-10-26T21:00:00.000Z', 754_300) + ended('d1', '2026-10-26T21:00:00.000Z', 754_300))
+    for (let i = 0; i < 80 && !(await turns())?.length; i++) await Bun.sleep(50)
+    expect(await turns()).toEqual([{ end: '2026-10-26T21:00:00.000Z', seconds: 754.3 }])
+    // Sealed: the relay never sees the duration.
+    expect(app.raw.join('')).not.toContain('754.3')
+  })
+
+  test("a subagent's calls reach the app under its Task call, sealed", async () => {
+    const folder = join(transcript.replace(/\.jsonl$/, ''), 'subagents')
+    mkdirSync(folder, { recursive: true })
+    const before = app.messages.length
+    writeFileSync(join(folder, 'agent-e2e.meta.json'), JSON.stringify({ toolUseId: 'toolu_task_e2e' }))
+    const content = [{ type: 'tool_use', id: 'toolu_sub_e2e', name: 'Grep', input: { pattern: 'SECRET_PATTERN' } }]
+    writeFileSync(join(folder, 'agent-e2e.jsonl'), line({ type: 'assistant', uuid: 's1', isSidechain: true, message: { content } }))
+    const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'the subagent call')
+    if (live.t !== 'entries') throw new Error('unexpected message')
+    expect(await open(key, live.entries[0].blob)).toMatchObject({
+      kind: 'sub_tool',
+      parent: 'toolu_task_e2e',
+      name: 'Grep',
+      summary: 'SECRET_PATTERN',
+    })
+    expect(app.raw.join('')).not.toContain('SECRET_PATTERN')
+  })
+
   test('a message sent from the notch while Claude is working reaches the app from the queue', async () => {
     const before = app.messages.length
     const prompt = '<channel source="tonton" sender="notch">\nAlso run the linter\n</channel>'
@@ -473,6 +511,64 @@ esac
     })
     expect(stranger.messages.some(m => m.t === 'session_start')).toBe(false)
     expect(app.raw.filter(raw => raw.includes('session_start')).join()).not.toContain('missing')
+  })
+
+  test("the machine's agent log reaches the app sealed, and holds nothing of the conversation", async () => {
+    const requestId = 'e2elogs0001'
+    const request = await seal(key, { requestId, machineId: machine.machineId, issuedAt: new Date().toISOString() })
+    stranger.socket.send(JSON.stringify({ t: 'agent_logs', machineId: machine.machineId, requestId, request }))
+    app.socket.send(JSON.stringify({ t: 'agent_logs', machineId: machine.machineId, requestId, request }))
+    const answer = await eventually(() => app.messages.find(m => m.t === 'agent_logs' && m.requestId === requestId), 'the log')
+    if (answer.t !== 'agent_logs' || !answer.logs) throw new Error('unexpected message')
+    const logs = await open<AgentLog>(key, answer.logs)
+    expect(logs).toMatchObject({ requestId, machineId: machine.machineId })
+    const text = logs.lines.join('\n')
+    expect(text).toContain('channel started')
+    // Everything the session said, asked or was told so far.
+    for (const secret of ['SECRET', 'Ship it', 'forged', 'Deploy', 'deploy', 'needs your permission', 'npm test', 'away', 'Long answer'])
+      expect(text).not.toContain(secret)
+    for (const secret of [key, machine.token]) expect(text).not.toContain(secret)
+    expect(app.raw.filter(raw => raw.includes('agent_logs')).join()).not.toContain('channel started')
+    expect(stranger.messages.some(m => m.t === 'agent_logs')).toBe(false)
+  })
+
+  test('a diagnosis comes back sealed, and a repair from the app adds the hooks in the home the agent sees', async () => {
+    const diagnose = async (requestId: string, fix?: string) => {
+      const order = { requestId, machineId: machine.machineId, issuedAt: new Date().toISOString(), ...(fix ? { fix } : {}) }
+      const request = await seal(key, order)
+      app.socket.send(JSON.stringify({ t: 'diagnose', machineId: machine.machineId, requestId, request }))
+      const answer = await eventually(() => app.messages.find(m => m.t === 'diagnosis' && m.requestId === requestId), 'the diagnosis')
+      if (answer.t !== 'diagnosis' || !answer.diagnosis) throw new Error('unexpected message')
+      return open<Diagnosis>(key, answer.diagnosis)
+    }
+    const before = await diagnose('e2ediagnose01')
+    expect(before.checks.find(c => c.id === 'hooks')).toMatchObject({ ok: false, fix: 'hooks' })
+    expect(before.checks.find(c => c.id === 'relay')).toMatchObject({ ok: true })
+    const after = await diagnose('e2ediagnose02', 'hooks')
+    expect(after.fixed).toMatchObject({ fix: 'hooks', ok: true })
+    expect(after.checks.find(c => c.id === 'hooks')).toMatchObject({ ok: true })
+    expect(JSON.parse(readFileSync(join(userHome, '.claude', 'settings.json'), 'utf8')).hooks.Stop).toHaveLength(1)
+    expect(app.raw.filter(raw => raw.includes('"diagnosis"')).join()).not.toContain('.claude')
+  })
+
+  test('a name given on one Mac reaches the others sealed, and only for its session', async () => {
+    const name = (sessionId: string, text: string) => seal(key, { sessionId, name: text, issuedAt: new Date().toISOString() })
+    stranger.socket.send(JSON.stringify({ t: 'rename', sessionId, name: await name(sessionId, 'Hijacked') }))
+    app.socket.send(JSON.stringify({ t: 'rename', sessionId, name: await name(sessionId, 'Billing rewrite') }))
+    const renamed = await eventually(() => latestSession(app)?.name && latestSession(app), 'the name')
+    expect(await open(key, renamed.name as string)).toMatchObject({ sessionId, name: 'Billing rewrite' })
+
+    const other = await connectApp(accountToken)
+    try {
+      const snapshot = await eventually(() => other.messages.find(m => m.t === 'snapshot'), 'the snapshot')
+      if (snapshot.t !== 'snapshot') throw new Error('unexpected message')
+      const session = snapshot.sessions.find(s => s.id === sessionId)
+      expect(await open(key, session?.name as string)).toMatchObject({ name: 'Billing rewrite' })
+    } finally {
+      other.socket.close()
+    }
+    expect(app.raw.join('')).not.toContain('Billing rewrite')
+    expect(stranger.messages.some(m => m.t === 'session')).toBe(false)
   })
 
   test('revoking the machine signs it out and removes its sessions', async () => {

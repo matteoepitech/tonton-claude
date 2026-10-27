@@ -65,7 +65,9 @@ describe('sessions on disk', () => {
     store.setMeta(id, 's1', 'sealed-meta')
     store.addEntries(id, 's1', [entry('a'), entry('b')], false)
     store.addPermission(id, 's1', { requestId: 'abcde', ts: 'now', blob: 'sealed' })
+    store.rename(id, 's1', 'sealed-name')
     const before = store.list(id)[0]
+    expect(before.name).toBe('sealed-name')
 
     restart()
     expect(store.list(id)).toEqual([

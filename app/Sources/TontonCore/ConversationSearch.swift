@@ -27,7 +27,8 @@ public enum ConversationSearch {
                 first
             }
             var seen: Set<String> = []
-            for entry in list.reversed() {
+            // Subagent calls are folded under their task, with no item of their own to show.
+            for entry in list.reversed() where !entry.kind.isSubagent {
                 let haystack = entry.kind == .tool ? "\(entry.name ?? "") \(entry.summary ?? "")" : entry.text ?? ""
                 guard let range = haystack.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) else { continue }
                 let itemId = entry.kind == .toolResult ? entry.toolUseId.flatMap { callIds[$0] } ?? entry.id : entry.id
