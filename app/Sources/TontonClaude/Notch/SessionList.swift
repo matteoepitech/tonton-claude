@@ -47,6 +47,7 @@ struct SessionListView: View {
                             SessionRow(
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
                                 continues: store.autoContinue.contains(s.id),
+                                snoozed: store.isSnoozed(s.id),
                                 machine: section.mixesMachines ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
                                 machineStyle: settings.machineStyles[s.machineId],
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
@@ -68,6 +69,7 @@ struct SessionListView: View {
                                 if s.canChat {
                                     Toggle("Continue when the limit resets", isOn: autoContinue(s.id))
                                 }
+                                SnoozeMenu(sessionId: s.id)
                                 Menu("Sound when \(s.project) finishes") {
                                     Toggle("Event sound", isOn: projectSound(s.project, nil))
                                     Divider()
@@ -320,6 +322,8 @@ struct SessionRow: View {
     var showCost = false
     /// Gets `continue` when the limit that stopped it resets.
     var continues = false
+    /// Its alerts are muted for a while.
+    var snoozed = false
     /// Shown in the pinned section, where sessions from every machine sit together.
     var machine: String?
     var machineStyle: MachineStyle?
@@ -355,6 +359,11 @@ struct SessionRow: View {
                     Spacer(minLength: 4)
                     if let shortcut {
                         Text("⌘\(shortcut)").font(.notch(9, weight: .medium)).foregroundStyle(Theme.tertiary)
+                    }
+                    if snoozed {
+                        Image(systemName: "bell.slash").font(.notch(9)).foregroundStyle(Theme.tertiary)
+                            .help("Alerts snoozed: permission requests still come through")
+                            .accessibilityLabel("Alerts snoozed")
                     }
                     if !session.pendingPermissions.isEmpty {
                         Image(systemName: "lock.fill").font(.notch(9)).foregroundStyle(Theme.accent)
