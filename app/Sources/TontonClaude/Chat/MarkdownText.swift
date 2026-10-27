@@ -54,10 +54,13 @@ struct CodeBlock: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(copied ? Theme.success : Theme.textDim)
                 .help("Copy")
+                .accessibilityLabel(copied ? "Copied" : "Copy the code")
                 .padding(4)
             }
         }
         .onHover { hovering = $0 }
+        // The button only shows under the pointer.
+        .accessibilityAction(named: "Copy the code") { copy() }
     }
 
     private func copy() {

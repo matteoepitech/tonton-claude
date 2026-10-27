@@ -34,10 +34,12 @@ struct ActivityDots: View {
                             .foregroundStyle(level.color)
                             .lineLimit(1)
                             .help("A usage limit resets in \(countdown.timeLeft(at: context.date))")
+                            .accessibilityLabel("A usage limit resets in \(countdown.timeLeft(at: context.date))")
                     } else {
                         Text("\(live.count)")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundStyle(store.attentionCount > 0 ? Theme.warning : .white.opacity(0.6))
+                            .accessibilityLabel(Spoken.count(live.count, "live session"))
                     }
                 }
                 .frame(width: state.currentWingWidth)

@@ -50,6 +50,9 @@ struct EditDiff: View {
         .font(.notch(10, design: .monospaced))
         .padding(.horizontal, 6)
         .padding(.vertical, 0.5)
+        // Read as words rather than as a minus or a plus sign.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(line.kind == .removed ? "Removed: \(line.text)" : line.kind == .added ? "Added: \(line.text)" : line.text)
         .background(tint.map { $0.opacity(0.14) } ?? .clear)
     }
 

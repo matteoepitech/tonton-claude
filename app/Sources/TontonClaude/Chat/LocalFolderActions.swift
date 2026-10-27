@@ -39,6 +39,7 @@ struct LocalFolderActions: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.secondary)
                 .help(action.label)
+                .accessibilityLabel(action.label)
             case .menu:
                 Button(action.label, action: action.run)
             }

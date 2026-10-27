@@ -55,6 +55,8 @@ final class SessionStore: ObservableObject {
 
     /// A session started needing the user: permission, question or error.
     let attention = PassthroughSubject<SessionSummary, Never>()
+    /// Permission requests that just arrived, for VoiceOver to read out.
+    let permissionsAsked = PassthroughSubject<(session: SessionSummary, requests: [PermissionRequest]), Never>()
     /// A session went from working to done.
     let finished = PassthroughSubject<SessionSummary, Never>()
     /// A session finished a task, with how long it worked on it.
@@ -336,6 +338,8 @@ final class SessionStore: ObservableObject {
         guard !settings.hiddenMachines.contains(session.machine) else { return }
         let changed = previous?.status != session.status || previous?.pendingPermissions != session.pendingPermissions
         if session.status.needsAttention && changed { attention.send(session) }
+        let asked = PermissionRequest.added(session.pendingPermissions, since: previous?.pendingPermissions ?? [])
+        if !asked.isEmpty { permissionsAsked.send((session, asked)) }
         if previous?.status == .working && session.status == .idle { finished.send(session) }
         if let worked = workTimer.update(session, previous: previous?.status) { taskDone.send((session, worked)) }
     }

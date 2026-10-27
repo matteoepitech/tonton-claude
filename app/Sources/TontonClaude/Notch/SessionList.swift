@@ -23,10 +23,11 @@ struct SessionListView: View {
             if store.hasSessions {
                 HStack(spacing: 4) {
                     HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").font(.notch(10)).foregroundStyle(Theme.secondary)
+                        Image(systemName: "magnifyingglass").font(.notch(10)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
                         TextField("", text: $query, prompt: Text("Search sessions and messages").foregroundStyle(Theme.textFaint))
                             .textFieldStyle(.plain)
                             .font(.notch(11))
+                            .accessibilityLabel("Search sessions and messages")
                     }
                     .padding(.horizontal, 8)
                     .frame(height: 26)
@@ -56,6 +57,11 @@ struct SessionListView: View {
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { store.selectedId = s.id }
+                            // One element per session for VoiceOver, read in the order shown, that opens it like a click. While
+                            // renamed, its field stays reachable.
+                            .accessibilityElement(children: renaming == s.id ? .contain : .combine)
+                            .accessibilityAddTraits(s.id == store.selectedId ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityAction { store.selectedId = s.id }
                             .contextMenu {
                                 Button(pinned ? "Unpin" : "Pin to top") { store.togglePin(s.id) }
                                 tagMenu(s.project)
@@ -148,11 +154,17 @@ struct SessionListView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .contentShape(Rectangle())
-            .onTapGesture {
-                store.selectedId = match.sessionId
-                state.jumpTo = match.itemId
-            }
+            .onTapGesture { show(match) }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { show(match) }
         }
+    }
+
+    /// Opens the session of a message found by the search, on that message.
+    private func show(_ match: ConversationSearch.Match) {
+        store.selectedId = match.sessionId
+        state.jumpTo = match.itemId
     }
 
     /// Groups the project's sessions under a tag, a client or a topic, whatever machine they run on.
@@ -178,10 +190,11 @@ struct SessionListView: View {
 
     private func tagEditor(_ project: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "tag").font(.notch(10)).foregroundStyle(Theme.secondary)
+            Image(systemName: "tag").font(.notch(10)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
             TextField("", text: $newTag, prompt: Text("Tag for \(project)").foregroundStyle(Theme.textFaint))
                 .textFieldStyle(.plain)
                 .font(.notch(11))
+                .accessibilityLabel("Tag for \(project)")
                 .onSubmit { saveTag(project) }
             Button("Cancel") { tagging = nil }.buttonStyle(.plain).font(.notch(10)).foregroundStyle(Theme.secondary)
             Button("Save") { saveTag(project) }.buttonStyle(.plain).font(.notch(10, weight: .semibold))
@@ -219,27 +232,29 @@ struct SessionListView: View {
         HStack(spacing: 4) {
             switch section.kind {
             case .pinned:
-                Image(systemName: "pin.fill").font(.notch(8)).foregroundStyle(Theme.secondary)
-                Text("PINNED").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
+                Image(systemName: "pin.fill").font(.notch(8)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
+                Text("PINNED").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
             case .tag(let tag):
-                Image(systemName: "tag.fill").font(.notch(8)).foregroundStyle(Theme.secondary)
+                Image(systemName: "tag.fill").font(.notch(8)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
                 Text(tag.uppercased()).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
             case .thisMac:
                 if let style = store.thisMac.flatMap({ settings.machineStyles[$0] }), !style.isEmpty {
-                    MachineBadge(style: style, size: 9)
+                    MachineBadge(style: style, size: 9).accessibilityHidden(true)
                 } else {
-                    Image(systemName: "laptopcomputer").font(.notch(9)).foregroundStyle(Theme.secondary)
+                    Image(systemName: "laptopcomputer").font(.notch(9)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
                 }
-                Text("THIS MAC").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
+                Text("THIS MAC").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
                 if let info = store.machines.first(where: { $0.id == store.thisMac }) { NotchAgentUpdate(machine: info) }
             case .machine(let machine):
                 if let style = section.sessions.first.flatMap({ settings.machineStyles[$0.machineId] }) {
-                    MachineBadge(style: style, size: 9)
+                    MachineBadge(style: style, size: 9).accessibilityHidden(true)
                 }
                 Text(machine.uppercased()).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
                 if let info = store.machines.first(where: { $0.id == section.sessions.first?.machineId }) {
                     NotchAgentUpdate(machine: info)
@@ -326,7 +341,7 @@ struct SessionRow: View {
                             .help(session.name == nil ? "" : "Renamed. Its project is \(session.project).")
                     }
                     if let machine {
-                        if let machineStyle { MachineBadge(style: machineStyle, size: 9) }
+                        if let machineStyle { MachineBadge(style: machineStyle, size: 9).accessibilityHidden(true) }
                         Text(machine).font(.notch(10)).foregroundStyle(Theme.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 4)
@@ -335,6 +350,7 @@ struct SessionRow: View {
                     }
                     if !session.pendingPermissions.isEmpty {
                         Image(systemName: "lock.fill").font(.notch(9)).foregroundStyle(Theme.accent)
+                            .accessibilityLabel("Waiting for permission")
                     }
                     Text(session.lastActivity, style: .relative)
                         .font(.notch(9))
@@ -426,6 +442,7 @@ struct SessionNameField: View {
         TextField("", text: editing.text, prompt: Text(placeholder).foregroundStyle(Theme.textFaint))
             .textFieldStyle(.plain)
             .font(.notch(12, weight: .semibold))
+            .accessibilityLabel("Name of the session")
             .padding(.horizontal, 4)
             .background(RoundedRectangle(cornerRadius: 4).fill(Theme.ink.opacity(0.1)))
             .focused($focused)

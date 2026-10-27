@@ -20,7 +20,8 @@ struct PermissionCard: View {
 
     var body: some View {
         ZStack {
-            hint
+            // What letting go of a swipe does: VoiceOver has the buttons.
+            hint.accessibilityHidden(true)
             card.offset(x: flyOff ?? swipe.offset)
         }
         // The card slides within its own frame, never over the session list.
@@ -42,8 +43,8 @@ struct PermissionCard: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Image(systemName: "lock.shield").foregroundStyle(Theme.accent)
-                Text("Allow \(request.toolName)?").font(.notch(12, weight: .bold))
+                Image(systemName: "lock.shield").foregroundStyle(Theme.accent).accessibilityHidden(true)
+                Text("Allow \(request.toolName)?").font(.notch(12, weight: .bold)).accessibilityAddTraits(.isHeader)
                 Spacer()
             }
             Text(request.description).font(.notch(11)).foregroundStyle(Theme.secondary)

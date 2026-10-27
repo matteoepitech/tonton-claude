@@ -30,6 +30,7 @@ struct NewSessionPanel: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.secondary)
                 .help("Close (esc)")
+                .accessibilityLabel("Close")
             }
             .padding(.bottom, 10)
             if machines.isEmpty {
@@ -68,7 +69,9 @@ struct NewSessionPanel: View {
                         focused = true
                     } label: {
                         HStack(spacing: 5) {
-                            if let style = settings.machineStyles[machine.id] { MachineBadge(style: style, size: 10) }
+                            if let style = settings.machineStyles[machine.id] {
+                                MachineBadge(style: style, size: 10).accessibilityHidden(true)
+                            }
                             Text(store.thisMac == machine.id ? "This Mac" : machine.name).font(.notch(11, weight: .medium))
                         }
                         .padding(.horizontal, 10)
@@ -80,6 +83,7 @@ struct NewSessionPanel: View {
                     .disabled(!canStart(machine))
                     .opacity(canStart(machine) ? 1 : 0.4)
                     .help(why(machine) ?? "Start a session on \(machine.name)")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
         }
@@ -97,7 +101,7 @@ struct NewSessionPanel: View {
                     focused = true
                 } label: {
                     HStack(spacing: 5) {
-                        ToolMark(tool: choice, size: 10)
+                        ToolMark(tool: choice, size: 10).accessibilityHidden(true)
                         Text(choice.label).font(.notch(11, weight: .medium))
                     }
                     .padding(.horizontal, 10)
@@ -107,6 +111,7 @@ struct NewSessionPanel: View {
                 }
                 .buttonStyle(.plain)
                 .help("Start \(choice.command) on \(machine.name)")
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
         .padding(.bottom, 8)
@@ -121,8 +126,9 @@ struct NewSessionPanel: View {
     private func folderField(_ machine: MachineInfo?) -> some View {
         let startable = machine != nil && RecentFolders.isStartable(folder) && store.connection == .connected
         return HStack(spacing: 8) {
-            Image(systemName: "folder").font(.notch(11)).foregroundStyle(Theme.secondary)
+            Image(systemName: "folder").font(.notch(11)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
             TextField("", text: $folder, prompt: Text("~/code/project").foregroundStyle(Theme.textFaint))
+                .accessibilityLabel("Folder")
                 .textFieldStyle(.plain)
                 .font(.notch(12, design: .monospaced))
                 .focused($focused)
@@ -149,7 +155,7 @@ struct NewSessionPanel: View {
             Text("RECENT").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.secondary).padding(.top, 10).padding(.bottom, 2)
             ForEach(folders, id: \.self) { recent in
                 HStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath").font(.notch(10)).foregroundStyle(Theme.tertiary)
+                    Image(systemName: "clock.arrow.circlepath").font(.notch(10)).foregroundStyle(Theme.tertiary).accessibilityHidden(true)
                     Text(recent).font(.notch(11, design: .monospaced)).lineLimit(1).truncationMode(.head)
                     Spacer(minLength: 0)
                 }
@@ -163,6 +169,13 @@ struct NewSessionPanel: View {
                 }
                 .onTapGesture { folder = recent }
                 .help("Click to pick, double-click to start")
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { folder = recent }
+                .accessibilityAction(named: "Start here") {
+                    folder = recent
+                    start(machine)
+                }
             }
         }
     }
@@ -196,8 +209,8 @@ private struct LaunchCard: View {
             HStack(spacing: 8) {
                 switch launch.state {
                 case .sending, .starting, .started: ProgressView().controlSize(.mini)
-                case .asking: Image(systemName: "questionmark.circle.fill").foregroundStyle(Theme.accent)
-                case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.danger)
+                case .asking: Image(systemName: "questionmark.circle.fill").foregroundStyle(Theme.accent).accessibilityLabel("Question")
+                case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.danger).accessibilityLabel("Failed")
                 }
                 Text("\(launch.cwd) on \(machine)").font(.notch(11, weight: .medium)).lineLimit(1).truncationMode(.head)
                 Spacer(minLength: 0)
@@ -210,6 +223,7 @@ private struct LaunchCard: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.secondary)
                     .help("Dismiss")
+                    .accessibilityLabel("Dismiss")
                 }
             }
             switch launch.state {

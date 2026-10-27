@@ -71,5 +71,7 @@ extension View {
         onTapGesture(perform: open)
             .onHover { inside in state.quickLookUnderPointer = inside ? open : nil }
             .help("Quick Look (Space)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { open() }
     }
 }
