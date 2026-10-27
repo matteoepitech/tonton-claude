@@ -1,0 +1,19 @@
+{
+  "appId": "tech.d3l.tontonclaude.island",
+  "productName": "Tonton Claude",
+  "directories": {
+    "output": "out"
+  },
+  "files": ["dist/**", "package.json"],
+  "electronLanguages": ["en-US"],
+  "win": {
+    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "icon": "dist/icon.png"
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
+    "shortcutName": "Tonton Claude",
+    "artifactName": "TontonClaude-Setup-${version}.${ext}"
+  }
+}
