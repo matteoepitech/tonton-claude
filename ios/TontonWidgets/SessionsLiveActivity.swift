@@ -19,15 +19,11 @@ struct SessionsLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     PixelMascot(status: island.status).frame(width: 34, height: 34).padding(.leading, 4)
                 }
-                DynamicIslandExpandedRegion(.trailing) {
-                    Text(island.state.summary)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(island.status.tint)
-                        .lineLimit(1)
-                        .padding(.trailing, 4)
-                }
                 DynamicIslandExpandedRegion(.center) {
-                    Text(island.top?.project ?? "Tonton Claude").font(.headline).lineLimit(1)
+                    Text(island.state.summary)
+                        .font(.headline)
+                        .foregroundStyle(island.state.attention > 0 ? island.status.tint : .white)
+                        .lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 4) {

@@ -8,6 +8,7 @@ import {
   ISLAND_MIN_INTERVAL_MS,
   ISLAND_QUIET_MS,
   ISLAND_RESTART_MS,
+  ISLAND_START_GRACE_MS,
   MAX_PUSH_DEVICES_PER_ACCOUNT,
   MAX_PUSH_PAYLOAD_BYTES,
 } from '../src/limits'
@@ -217,6 +218,20 @@ describe('PushService', () => {
     service.updateIslands(accountId)
     expect(events()).toEqual(['update', 'end', 'start'])
     expect(sent[2]).toMatchObject({ token: hex(4), priority: 10 })
+  })
+
+  test('no Live Activity is started right after the app went away: its own may be on the way', () => {
+    register('phone-0001', { activityStart: hex(4) })
+    sessions = [session('s1', 'working')]
+    service.deviceWentAway(accountId, 'phone-0001')
+    service.updateIslands(accountId)
+    expect(sent).toHaveLength(0)
+    // The phone reports the one it started: the relay updates it and starts nothing.
+    register('phone-0001', { activityStart: hex(4), activity: hex(5) })
+    clock += ISLAND_START_GRACE_MS
+    service.updateIslands(accountId)
+    expect(sent.map(push => push.token)).toEqual([hex(5)])
+    expect(events()).toEqual(['update'])
   })
 
   test('a Live Activity the phone never reported is not started again for hours', () => {

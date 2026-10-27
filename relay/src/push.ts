@@ -17,6 +17,7 @@ import {
   ISLAND_QUIET_MS,
   ISLAND_RESTART_MS,
   ISLAND_SESSIONS,
+  ISLAND_START_GRACE_MS,
   MAX_ALERTED_REQUESTS,
   MAX_ISLAND_DETAIL_BYTES,
   MAX_ISLAND_INFO_BYTES,
@@ -130,6 +131,8 @@ export class PushService {
   private readonly quietSince = new Map<string, number>()
   /** When the relay last started a Live Activity on a device the phone has not reported since, per device. */
   private readonly started = new Map<string, number>()
+  /** When each phone's app last closed its socket. */
+  private readonly away = new Map<string, number>()
   private readonly alerted = new Map<string, number>()
   private readonly logged = new Map<string, number>()
 
@@ -149,11 +152,18 @@ export class PushService {
     if (device.activity) this.sessionsChanged(accountId)
   }
 
+  /** The phone's app closed its socket: the relay takes over its Live Activity. */
+  deviceWentAway(accountId: string, deviceId: string) {
+    this.away.set(deviceKey(accountId, deviceId), this.now())
+    this.sessionsChanged(accountId)
+  }
+
   unregister(accountId: string, deviceId: string) {
     const previous = this.deps.registry.pushDevices(accountId).find(stored => stored.device === deviceId)
     if (previous?.activity) this.islands.delete(previous.activity)
     this.deps.registry.removePushDevice(accountId, deviceId)
     this.started.delete(deviceKey(accountId, deviceId))
+    this.away.delete(deviceKey(accountId, deviceId))
   }
 
   /** A new request from an agent: one alert per device, once. */
@@ -223,6 +233,12 @@ export class PushService {
         const key = deviceKey(accountId, device.device)
         const startedAt = this.started.get(key)
         if (startedAt !== undefined && now - startedAt < ISLAND_RESTART_MS) continue
+        // An app that just went away may have started one whose token is still on its way.
+        const awayFor = now - (this.away.get(key) ?? Number.NEGATIVE_INFINITY)
+        if (awayFor < ISLAND_START_GRACE_MS) {
+          next = Math.min(next, ISLAND_START_GRACE_MS - awayFor)
+          continue
+        }
         this.started.set(key, now)
         void this.deliver(
           device,

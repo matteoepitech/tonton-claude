@@ -367,6 +367,7 @@
 				INFOPLIST_FILE = "Config/TontonClaude-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Tonton Claude";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan the QR code your Mac shows to sign in.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -392,6 +393,7 @@
 				INFOPLIST_FILE = "Config/TontonClaude-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Tonton Claude";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan the QR code your Mac shows to sign in.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -175,19 +175,20 @@ struct CodeBlockView: View {
     @State private var copied = false
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            Text(code).font(.caption.monospaced()).textSelection(.enabled).padding(10)
-        }
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.07)))
-        .overlay(alignment: .topTrailing) {
+        // The button sits beside the code, which scrolls sideways under nothing.
+        HStack(alignment: .top, spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code).font(.caption.monospaced()).textSelection(.enabled).padding(10)
+            }
             Button {
                 UIPasteboard.general.string = code
                 copied = true
             } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.caption2).padding(8)
+                Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.caption2).padding(10)
             }
             .accessibilityLabel("Copy")
         }
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.07)))
         .task(id: copied) {
             guard copied else { return }
             try? await Task.sleep(for: .seconds(1.5))

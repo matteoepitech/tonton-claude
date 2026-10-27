@@ -82,23 +82,15 @@ final class PhoneLinkTests: XCTestCase {
         XCTAssertNil(PhoneLink(url: try XCTUnwrap(URL(string: "tonton://session/a/b"))))
         XCTAssertNil(PhoneLink(url: try XCTUnwrap(URL(string: "https://session/a"))))
     }
-
-    func testSignInLinksCarryTheAccount() throws {
-        let account = Account(relay: "https://tonton.d3l.tech", accountId: "acc", token: "ta_x", key: E2E.newKey())
-        XCTAssertEqual(PhoneLink(url: try XCTUnwrap(URL(string: account.signInLink))), .signIn(account))
-        XCTAssertNil(PhoneLink(url: try XCTUnwrap(URL(string: "tonton://signin#nope"))))
-        XCTAssertNil(PhoneLink.signIn(account).url)
-    }
 }
 
-final class SignInLinkTests: XCTestCase {
-    func testTheLinkCarriesTheRecoveryKeyInItsFragment() throws {
-        let account = Account(relay: "https://tonton.d3l.tech", accountId: "acc", token: "ta_x", key: E2E.newKey())
-        XCTAssertTrue(account.signInLink.hasPrefix("tonton://signin#tonton1."))
-        XCTAssertEqual(Account(signInLink: account.signInLink), account)
-        XCTAssertEqual(Account(signInLink: "  \(account.recoveryKey)\n"), account, "a pasted recovery key works too")
-        XCTAssertNil(Account(signInLink: "tonton://open#\(account.recoveryKey)"))
-        XCTAssertNil(Account(signInLink: "tonton://signin"))
-        XCTAssertNil(Account(signInLink: "https://example.com/#\(account.recoveryKey)"))
+final class PhoneSignInTests: XCTestCase {
+    /// The QR code of Settings › Machines holds the recovery key without the join secret, which the phone does not need.
+    func testThePhoneSignsInWithTheRecoveryKeyWithOrWithoutTheJoinSecret() throws {
+        let account = Account(relay: "https://tonton.d3l.tech", accountId: "acc", token: "ta_x", key: E2E.newKey(), joinSecret: "s")
+        XCTAssertEqual(Account(recoveryKey: "  \(account.recoveryKey)\n"), account)
+        XCTAssertEqual(Account(recoveryKey: account.with(joinSecret: nil).recoveryKey)?.joinSecret, nil)
+        XCTAssertEqual(Account(recoveryKey: account.with(joinSecret: nil).recoveryKey)?.key, account.key)
+        XCTAssertNil(Account(recoveryKey: "tonton_" + account.recoveryKey.dropFirst(8)), "an account token is not a recovery key")
     }
 }

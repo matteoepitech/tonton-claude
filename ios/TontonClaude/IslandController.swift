@@ -29,7 +29,7 @@ final class IslandController {
     func observe() {
         for activity in Activity<SessionsActivityAttributes>.activities { watch(activity) }
         Task { [weak self] in
-            for await activity in Activity<SessionsActivityAttributes>.activityUpdates { self?.watch(activity) }
+            for await activity in Activity<SessionsActivityAttributes>.activityUpdates { await self?.adopt(activity) }
         }
         if #available(iOS 17.2, *) {
             Task { [weak self] in
@@ -73,6 +73,15 @@ final class IslandController {
 
     private var current: Activity<SessionsActivityAttributes>? {
         Activity<SessionsActivityAttributes>.activities.first { $0.activityState == .active || $0.activityState == .stale }
+    }
+
+    /// One Live Activity at a time: one the relay started by push, before the phone could tell it about the one it had,
+    /// replaces it.
+    private func adopt(_ activity: Activity<SessionsActivityAttributes>) async {
+        for other in Activity<SessionsActivityAttributes>.activities where other.id != activity.id {
+            await other.end(nil, dismissalPolicy: .immediate)
+        }
+        watch(activity)
     }
 
     private func watch(_ activity: Activity<SessionsActivityAttributes>) {

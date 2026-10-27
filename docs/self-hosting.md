@@ -172,9 +172,9 @@ A share lets a teammate follow one session from the web app, without the account
 `ios/` is a native iPhone app (iOS 17 or later) built on `TontonCore`, the Mac app's Swift package: the same models,
 crypto and relay client.
 
-- It signs in to the account of the Mac: **Settings › Relay › Show QR code** on the Mac shows the recovery key as a
-  `tonton://signin#…` link, which the iPhone's Camera opens in the app. The key is in the fragment, which no server
-  receives. Pasting the recovery key works too. The phone keeps the account in its Keychain, on this device only.
+- It signs in to the account of the Mac with its recovery key, scanned in the app from the QR code of **Settings ›
+  Machines › Phone or browser** (VisionKit reads it on the phone) or pasted. The phone keeps the account in its
+  Keychain, on this device only.
 - While it is open, it reads the relay's socket like the Mac app: the sessions, their conversation, messages, permission
   requests, `/compact` and `/clear`.
 - **Live Activity.** The sessions that need you, then those at work, on the Lock Screen and in the Dynamic Island. Its

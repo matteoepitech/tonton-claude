@@ -1,12 +1,13 @@
 import SwiftUI
 import TontonCore
 
-/// The phone joins the account of the Mac: scan the QR code in Settings › Relay with the Camera, or paste the recovery
-/// key. Nothing is created here, since the key that opens the sessions lives on the Mac.
+/// The phone joins the account of the Mac with its recovery key: scanned from the QR code the Mac shows, or pasted.
+/// Nothing is created here, since the key that opens the sessions lives on the Mac.
 struct SignInView: View {
     @Environment(PhoneStore.self) private var store
     @State private var key = ""
     @State private var busy = false
+    @State private var scanning = false
     @State private var problem: String?
 
     var body: some View {
@@ -20,12 +21,22 @@ struct SignInView: View {
                             .foregroundStyle(.secondary)
                     }
                     step(
-                        1, "On your Mac, open Tonton Claude › Settings › Relay.",
+                        1, "On your Mac, open Tonton Claude › Settings › Machines › Phone or browser.",
                         detail: "The phone signs in to the same account. Set one up on the Mac first if you have none.")
                     step(
-                        2, "Scan the QR code under Recovery key with the Camera.",
-                        detail: "It opens this app and signs in. Or copy the recovery key and paste it below.")
+                        2, "Show the QR code and scan it here.",
+                        detail: "Or copy the recovery key from Settings › Relay and paste it below.")
                     VStack(alignment: .leading, spacing: 10) {
+                        if QRScanner.isAvailable {
+                            Button {
+                                scanning = true
+                            } label: {
+                                Label("Scan the QR code", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .disabled(busy)
+                        }
                         SecureField("tonton1.…", text: $key)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -39,11 +50,11 @@ struct SignInView: View {
                             .labelStyle(.titleAndIcon)
                             Spacer()
                             Button {
-                                signIn()
+                                signIn(key)
                             } label: {
                                 if busy { ProgressView() } else { Text("Sign in").bold() }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.bordered)
                             .disabled(key.isEmpty || busy)
                         }
                         if let problem {
@@ -58,6 +69,24 @@ struct SignInView: View {
             }
             .navigationTitle("Tonton Claude")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $scanning) { scanner }
+        }
+    }
+
+    private var scanner: some View {
+        NavigationStack {
+            QRScanner { text in
+                guard Account(recoveryKey: text) != nil else { return false }
+                scanning = false
+                signIn(text)
+                return true
+            }
+            .ignoresSafeArea()
+            .navigationTitle("Scan the QR code")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { scanning = false } }
+            }
         }
     }
 
@@ -75,8 +104,8 @@ struct SignInView: View {
         }
     }
 
-    private func signIn() {
-        guard let account = Account(signInLink: key) else {
+    private func signIn(_ text: String) {
+        guard let account = Account(recoveryKey: text) else {
             problem = "This is not a recovery key. It starts with tonton1."
             return
         }

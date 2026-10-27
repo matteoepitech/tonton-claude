@@ -3,7 +3,7 @@
 <!-- Merged with the keys the build settings generate (INFOPLIST_KEY_*): only what they can't express is here. -->
 <plist version="1.0">
 <dict>
-	<!-- tonton://signin#<recovery key> from the QR code on the Mac, tonton://session/<id> from the Live Activity. -->
+	<!-- tonton://session/<id>, from the Live Activity. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -45,6 +45,8 @@ export const ISLAND_DEBOUNCE_MS = 1500
 export const ISLAND_MIN_INTERVAL_MS = 10_000
 /** A Live Activity is ended once nothing has run for this long. */
 export const ISLAND_QUIET_MS = 15 * 60_000
+/** No Live Activity is started by push this soon after the phone's app closed its socket: it may have one on the way. */
+export const ISLAND_START_GRACE_MS = 60_000
 /** A Live Activity the relay started but the phone never reported is not started again before this. */
 export const ISLAND_RESTART_MS = 8 * 60 * 60_000
 /** Permission alerts already sent, kept to not send one twice when an agent reconnects. */

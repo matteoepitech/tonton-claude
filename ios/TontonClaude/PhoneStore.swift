@@ -85,14 +85,7 @@ final class PhoneStore {
     // MARK: Links
 
     func open(_ url: URL) {
-        switch PhoneLink(url: url) {
-        case .signIn(let account):
-            Task {
-                do { try await signIn(account) } catch { lastError = error.localizedDescription }
-            }
-        case .session(let id): show(id)
-        case nil: break
-        }
+        if case .session(let id) = PhoneLink(url: url) { show(id) }
     }
 
     func show(_ sessionId: String) {

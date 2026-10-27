@@ -31,6 +31,8 @@ final class PushRegistrar {
     @ObservationIgnored let deviceId: String
     @ObservationIgnored private var deviceToken: String?
     @ObservationIgnored private let api = RelayAPI()
+    @ObservationIgnored private var syncing = false
+    @ObservationIgnored private var syncAgain = false
 
     private enum Keys {
         static let device = "pushDevice"
@@ -70,17 +72,27 @@ final class PushRegistrar {
         tokenProblem = error.localizedDescription
     }
 
-    /// Sends every token the relay should have now.
+    /// Sends every token the relay should have now. One request at a time, the latest state last: the relay replaces
+    /// what it had with each one, so an older request landing late would bring back a token that is gone.
     func sync() async {
-        guard let account else { return }
-        let device = PushDevice(
-            device: deviceId, environment: Self.environment, alert: alertsEnabled ? deviceToken : nil, activity: activityToken,
-            activityStart: activityStartToken)
-        do {
-            relayPushes = try await api.register(device, for: account) ?? false
-        } catch {
-            // Offline or refused: the next connection tries again.
+        guard !syncing else {
+            syncAgain = true
+            return
         }
+        syncing = true
+        defer { syncing = false }
+        repeat {
+            syncAgain = false
+            guard let account else { return }
+            let device = PushDevice(
+                device: deviceId, environment: Self.environment, alert: alertsEnabled ? deviceToken : nil, activity: activityToken,
+                activityStart: activityStartToken)
+            do {
+                relayPushes = try await api.register(device, for: account) ?? false
+            } catch {
+                // Offline or refused: the next connection tries again.
+            }
+        } while syncAgain
     }
 
     func signOut(_ account: Account) async {
