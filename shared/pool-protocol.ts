@@ -40,14 +40,17 @@ export interface PoolSessionProfile {
   project?: string
   machine?: string
   tool?: 'claude' | 'opencode'
-  /** The one session that plans and assigns. */
+  /** Older profiles only: the orchestrator is now the pool's `orchestrator` field, which only owners and admins set. */
   orchestrator?: boolean
   /**
    * The kind of task its owner gives it: `simple` (tests, docs, small fixes, boilerplate) or `large` (features that need
    * broad context). Missing: by its tool, simple for OpenCode and large for Claude Code (docs/pools.md, Sizes of work).
    */
-  takes?: 'simple' | 'large'
+  takes?: PoolTaskSize
 }
+
+/** `simple`: tests, docs, small fixes, boilerplate, a page that follows an existing pattern. `large`: a feature, an area. */
+export type PoolTaskSize = 'simple' | 'large'
 
 export type PoolTaskState = 'todo' | 'assigned' | 'in_progress' | 'review' | 'done' | 'blocked'
 
@@ -61,13 +64,30 @@ export interface PoolTask {
   assignee?: { account: string; session: string }
   /** Ids of the tasks it waits for. */
   dependsOn?: string[]
+  /** `pool/<id>-<slug>`: the branch the work goes on, one per task. */
   branch?: string
   /** What was done, when it is done or blocked. */
   summary?: string
+  /** Missing: `large`. Decides who the orchestrator hands it to. */
+  size?: PoolTaskSize
+  /** The files and folders the task works in, from its area. */
+  paths?: string[]
 }
 
+/** An area of the code and the paths it owns, so two sessions rarely edit the same files. */
+export interface PoolArea {
+  name: string
+  paths: string[]
+}
+
+/** The sections of the shared notes, each replaced on its own. */
+export type PoolNotesSection = 'goal' | 'stack' | 'contracts' | 'decisions'
+
 export interface PoolNotes {
+  /** Free text, for anything the sections do not hold. Older clients read and write only this. */
   text: string
+  sections?: Partial<Record<PoolNotesSection, string>>
+  areas?: PoolArea[]
 }
 
 export interface PoolMessageBody {
@@ -195,6 +215,16 @@ export interface PoolSnapshot {
   events: PoolPostWire[]
   /** For the account it is sent to: its private key for the pool and the later pool keys wrapped for it. */
   own?: { secret: Sealed | null; wraps: PoolKeyWrapWire[] }
+  /**
+   * The one pool session that plans and assigns, set by an owner or an admin. In clear, like every id: the relay
+   * attests it, so no member can make its own session the orchestrator. Missing from older relays.
+   */
+  orchestrator?: PoolSessionRef | null
+}
+
+export interface PoolSessionRef {
+  account: string
+  session: string
 }
 
 // app or agent -> relay. Agents add their `sessionId`; the relay attaches the sender to what it keeps.
@@ -222,6 +252,8 @@ export type PoolAppMessage =
   /** Puts one of the account's sessions in the pool: `order` is a `PoolSessionOrder` sealed with the account key. */
   | { t: 'pool_join_session'; poolId: string; sessionId: string; order: Sealed; profile: Sealed }
   | { t: 'pool_leave_session'; poolId: string; sessionId: string }
+  /** Owner and admins: make one of the pool's sessions the orchestrator, or none. */
+  | { t: 'pool_orchestrator'; poolId: string; orchestrator: PoolSessionRef | null }
 
 export type PoolAgentMessage =
   | (PoolPost & { sessionId: string })
@@ -239,6 +271,7 @@ export type PoolUpdate =
   | { t: 'pool_message'; poolId: string; message: PoolPostWire }
   | { t: 'pool_event'; poolId: string; event: PoolPostWire }
   | { t: 'pool_info'; poolId: string; info: Sealed; paused: boolean; keyVersion: number }
+  | { t: 'pool_orchestrator'; poolId: string; orchestrator: PoolSessionRef | null }
   | { t: 'pool_member'; poolId: string; member: PoolMemberWire }
   | { t: 'pool_member_left'; poolId: string; account: string }
   | { t: 'pool_session'; poolId: string; session: PoolSessionWire }

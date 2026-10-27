@@ -19,7 +19,9 @@ struct PoolButton: View {
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: membership == nil ? "person.3" : "person.3.fill").font(.notch(11))
-                if let membership { Text(PoolLabels.role(of: membership.session)).font(.notch(10, weight: .semibold)).lineLimit(1) }
+                if let membership {
+                    Text(PoolLabels.role(of: membership.session, in: membership.state)).font(.notch(10, weight: .semibold)).lineLimit(1)
+                }
             }
         }
         .buttonStyle(.plain)
@@ -58,7 +60,7 @@ struct PoolPanel: View {
             }
             if let goal = state.info?.goal { Text(goal).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(3) }
             VStack(alignment: .leading, spacing: 3) {
-                row("Role", PoolLabels.role(of: member))
+                row("Role", PoolLabels.role(of: member, in: state))
                 row("Takes", PoolTaskSize.of(member.profile, tool: session.codingTool).label)
                 row("Task", PoolLabels.task(of: session.id, in: state))
                 row(
@@ -195,7 +197,8 @@ struct PoolMark: View {
                 .help(
                     PoolLabels.hint(
                         membership.board.name,
-                        "\(PoolLabels.role(of: membership.session)) · \(PoolLabels.task(of: sessionId, in: membership.state))")
+                        "\(PoolLabels.role(of: membership.session, in: membership.state)) · \(PoolLabels.task(of: sessionId, in: membership.state))"
+                    )
                 )
                 .accessibilityLabel("In pool \(membership.board.name)")
         }
@@ -267,8 +270,9 @@ struct PoolTaskCard: View {
 
 /// The words the pool views share.
 enum PoolLabels {
-    static func role(of session: PoolState.Session) -> String {
-        session.profile?.orchestrator == true ? String(localized: "orchestrator") : session.profile?.area ?? String(localized: "pool")
+    static func role(of session: PoolState.Session, in pool: PoolState) -> String {
+        let leads = pool.orchestrator?.account == session.account && pool.orchestrator?.session == session.session
+        return leads ? String(localized: "orchestrator") : session.profile?.area ?? String(localized: "pool")
     }
 
     /// `Hackathon: Build the API`, never translated.

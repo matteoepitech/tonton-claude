@@ -33,20 +33,20 @@ A pool mixes Claude Code and OpenCode sessions, with nothing to change on either
 OpenCode sessions take the simpler, well-bounded tasks (tests, docs, small fixes, boilerplate, a page following an
 existing pattern), and Claude Code sessions take the features that need broad context. `pool_status` shows each
 session's coding tool and model for that, and the kind of task it takes (`takes`: `simple` or `large`). The machine owner
-picks it when the session joins; without a choice it follows the tool.
+picks it when the session joins; without a choice it follows the tool. The orchestrator's tools apply these rules: [pool-orchestrator.md](pool-orchestrator.md).
 
 ## What the relay keeps
 
 | Store | Clear to the relay | Sealed with the pool key |
 |---|---|---|
-| Pools | id, owner, created at, paused or not, key version | name, goal |
+| Pools | id, owner, created at, paused or not, key version, the orchestrator's account and session | name, goal |
 | Members | account id, role, joined at | display name |
 | Member keys | account id, key version | the pool key it joined with, and its P-256 private key, both sealed with that member's account key; its public key, sealed with each version of the pool key it saw |
 | Key wraps | account id, version, who made it | a later version of the pool key, wrapped for that member (see Keys) |
 | Invites | id, role, token hash, uses left, expiry | — |
-| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, tool, kind of task, orchestrator); the order, sealed with the account key |
-| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, state, assignee, dependencies, branch, summary |
-| Notes | revision, updated at, who changed them last | the notes |
+| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, tool, kind of task); the order, sealed with the account key |
+| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, size, paths, state, assignee, dependencies, branch, summary |
+| Notes | revision, updated at, who changed them last | free text, the sections (goal, stack, contracts, decisions), the areas and the paths each owns |
 | Messages | id, order, sender account and session, time | text, and who it is for (a session, an area or everyone) |
 | Events | id, order, sender account and session, time | what happened (task moved, merge, blocker…) |
 
@@ -76,6 +76,11 @@ The account's REST routes (`relay/src/pool-routes.ts`):
 | `POST /api/pools/<id>/owner` | owner | Hands the pool to another member; the previous owner stays as an admin |
 | `POST /api/pools/<id>/members/<account>/kick` | owner, admins | Kicks a member and rotates the key in one step. Only the owner kicks admins; nobody kicks the owner |
 | `POST /api/pools/<id>/rotate` | owner, admins | Rotates the key without kicking, after someone left for instance |
+
+Owners and admins choose the pool's orchestrator with `pool_orchestrator` (a pool session, or none); everyone gets
+`pool_orchestrator`, and the snapshot carries it. It is in clear, like every id, so that the relay attests it: no member
+can make its own session the orchestrator by writing it in a sealed profile. An orchestrator whose session leaves the
+pool is no orchestrator any more.
 
 On the app socket (`relay/src/pool-sockets.ts`, types in `shared/pool-protocol.ts`): `pool_subscribe` answers with a
 `pool_snapshot` (the latest 200 messages and 500 events), then every change. Members post `pool_task`, `pool_notes`,
@@ -131,8 +136,8 @@ The agent turns a pool session into tools, served by the MCP channel for Claude 
 | `pool_status` | all | The pool, its sessions, their areas, tasks and limits |
 | `pool_tasks`, `task_claim`, `task_update`, `task_done` | all | Read and move tasks; done means a summary, the branch, the tests run |
 | `pool_send`, `pool_inbox` | all | Messages to a session, a role or everyone |
-| `pool_notes_read`, `pool_notes_write` | all | The shared notes |
-| `plan_create`, `task_create`, `task_assign`, `task_reassign` | orchestrator | Plan and hand out work |
+| `pool_notes_read`, `pool_notes_write` | all | The shared notes, whole or one section at a time |
+| `pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign` | orchestrator | Plan and hand out work ([pool-orchestrator.md](pool-orchestrator.md)) |
 
 A task assigned to a session, or a message to it, arrives like a message from the notch, but marked as coming from the
 pool and from which member: `<pool kind="task" from="Ana · orchestrator" task="…">…</pool>`, or `kind="message"`. What
@@ -157,7 +162,22 @@ Details:
   says to read the task again. Claiming, blocking and finishing a task also post an event, for the timeline.
 - An agent sends 20 messages a minute at most, under the relay's own limit per member.
 - A paused pool still reads; nothing is posted to it and nothing is delivered from it.
-- Creating and assigning tasks is the orchestrator's (#221).
+- Creating and assigning tasks is the orchestrator's: Claude Code lists its tools to the orchestrator only, OpenCode's
+  plugin registers them for every session and they answer the others that only the orchestrator plans.
+- **Who hands out work.** A session takes a task assigned to it only from the orchestrator, from a person (a member's
+  app or the website), or from itself. The relay attests who wrote each task last, so another member's Claude cannot
+  hand work to the others' sessions.
+- **A branch per task.** The orchestrator's tasks get `pool/<id>-<slug>`. The task tells the session to pull main and
+  work there, never on main; the agent never runs git itself, Claude does through its permission prompts. `task_done`
+  needs the branch and the tests that pass (or "none" and why). A merge conflict is reported with `task_update`
+  (blocked), which tells the orchestrator.
+- **Shared notes.** Free text plus sections (goal, stack, contracts, decisions) and areas with the paths each owns.
+  `pool_notes_write` changes one part and keeps the others; each change posts a `notes_changed` event, so the timeline
+  says who changed what. A session is told, as a short `<pool kind="notes">` notice and never with the whole text, when
+  it joins a pool that has notes and whenever another session or a member changes them.
+- **The orchestrator's notices.** Its agent tells it, as `<pool kind="notice" from="Tonton">`, when to re-plan: a task
+  blocked, sent to review or done (with what that frees), its session gone or offline, a task in progress that has not
+  moved for 30 minutes. It also gets its guide once, as `<pool kind="role">`.
 
 ## Control
 

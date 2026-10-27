@@ -59,6 +59,8 @@ public struct PoolState: Equatable, Sendable {
     public var notes: String?
     public var messages: [Post<PoolMessageBody>]
     public var events: [Post<PoolEventBody>]
+    /// The session owners and admins chose to plan and hand out the work; nil: none yet.
+    public var orchestrator: PoolSessionRef?
     /// This member's private key for the pool and the pool keys wrapped for it.
     var own: PoolOwnKeys
 
@@ -74,6 +76,7 @@ public struct PoolState: Equatable, Sendable {
         messages = snapshot.messages.compactMap { Self.post($0, vault) }
         events = snapshot.events.compactMap { Self.post($0, vault) }
         own = snapshot.own ?? PoolOwnKeys(secret: nil, wraps: [])
+        orchestrator = snapshot.orchestrator
     }
 
     /// Folds a change in. False when the pool is gone for this member.
@@ -104,6 +107,8 @@ public struct PoolState: Equatable, Sendable {
         case .key(_, let wrap):
             own = PoolOwnKeys(
                 secret: own.secret, wraps: (own.wraps.filter { $0.version != wrap.version } + [wrap]).sorted { $0.version < $1.version })
+        case .orchestrator(_, let ref):
+            orchestrator = ref
         case .removed:
             return false
         case .conflict, .error:
@@ -118,7 +123,7 @@ public struct PoolState: Equatable, Sendable {
         case .snapshot(let snapshot): snapshot.id
         case .task(let id, _), .notes(let id, _), .message(let id, _), .event(let id, _), .info(let id, _, _, _), .member(let id, _),
             .memberLeft(let id, _), .session(let id, _), .sessionLeft(let id, _, _), .key(let id, _), .conflict(let id, _, _, _),
-            .removed(let id), .error(let id, _):
+            .removed(let id), .error(let id, _), .orchestrator(let id, _):
             id
         }
     }
@@ -134,7 +139,8 @@ public struct PoolState: Equatable, Sendable {
     /// `Ana · back`, `Ana · orchestrator`, or `Ana` for an app or the website, as the agent names them.
     public func who(account: String, session: String?) -> String {
         let profile = session.flatMap { id in sessions.first { $0.account == account && $0.session == id } }?.profile
-        let role = profile?.orchestrator == true ? String(core: "orchestrator") : profile?.area
+        let leads = session != nil && orchestrator?.account == account && orchestrator?.session == session
+        let role = leads ? String(core: "orchestrator") : profile?.area
         return role.map { "\(memberName(account)) · \($0)" } ?? memberName(account)
     }
 

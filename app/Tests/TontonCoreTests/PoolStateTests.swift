@@ -37,14 +37,15 @@ final class PoolStateTests: XCTestCase {
             members: members ?? everyone,
             sessions: [
                 PoolSessionWire(
-                    account: "ana", session: "ses_ana", joinedAt: "x", profile: try pool.seal(PoolSessionProfile(orchestrator: true)),
+                    account: "ana", session: "ses_ana", joinedAt: "x", profile: try pool.seal(PoolSessionProfile()),
                     online: true, ready: true),
                 PoolSessionWire(
                     account: "me", session: "ses_me", joinedAt: "x", profile: try pool.seal(PoolSessionProfile(area: "front")),
                     online: true,
                     ready: true),
             ],
-            tasks: tasks, notes: nil, messages: messages, events: [], own: own)
+            tasks: tasks, notes: nil, messages: messages, events: [], own: own,
+            orchestrator: PoolSessionRef(account: "ana", session: "ses_ana"))
     }
 
     func testWhatASessionWorksOnWaitsForAndHears() throws {

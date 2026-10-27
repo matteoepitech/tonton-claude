@@ -267,12 +267,15 @@ describe('pool tools end to end', () => {
     const delivered = await eventually(() => promptsToOpenCode().find(p => p.text.includes(`task="${id}"`)), 'the task in OpenCode')
     expect(delivered.text).toContain('Do not start it yet')
     expect(await openCodeTool('task_claim', { task: id })).toStartWith('Started.')
-    expect(await openCodeTool('task_done', { task: id, summary: 'Page done', branch: 'feat/login' })).toBe('Done: the pool sees it.')
+    expect(await openCodeTool('task_done', { task: id, summary: 'Page done', branch: 'feat/login' })).toContain('which tests')
+    expect(await openCodeTool('task_done', { task: id, summary: 'Page done', branch: 'feat/login', tests: 'bun test' })).toBe(
+      'Done: the pool sees it.',
+    )
     const done = await eventually(async () => {
       const item = (await stateOf(back))?.tasks.find(t => t.id === id)
       return item?.task?.state === 'done' && item.task
     }, 'the task done for the other account')
-    expect(done).toMatchObject({ summary: 'Page done', branch: 'feat/login', assignee: { session: OPENCODE } })
+    expect(done).toMatchObject({ summary: 'Page done\n\nTests: bun test', branch: 'feat/login', assignee: { session: OPENCODE } })
   })
 
   test('a task handed to the Claude Code session: it starts at once, as its owner chose', async () => {
@@ -290,7 +293,10 @@ describe('pool tools end to end', () => {
     )
     expect(delivered.params?.content).toContain('Start it: call task_claim')
     expect(await callClaude('task_claim', { task: id })).toStartWith('Started.')
-    expect(await callClaude('task_done', { task: id, summary: 'API done', tests: 'bun test' })).toBe('Done: the pool sees it.')
+    expect(await callClaude('task_done', { task: id, summary: 'API done', tests: 'bun test' })).toContain('which branch')
+    expect(await callClaude('task_done', { task: id, summary: 'API done', tests: 'bun test', branch: 'feat/sessions-api' })).toBe(
+      'Done: the pool sees it.',
+    )
     await eventually(async () => (await stateOf(front))?.tasks.find(t => t.id === id)?.task?.state === 'done', 'the task done')
   })
 

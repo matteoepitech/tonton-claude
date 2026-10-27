@@ -188,6 +188,9 @@ const MIGRATIONS = [
      PRIMARY KEY (pool_id, account_id, version),
      FOREIGN KEY (pool_id, account_id) REFERENCES pool_members(pool_id, account_id) ON DELETE CASCADE
    );`,
+  // The pool session that plans and assigns (docs/pools.md, The orchestrator): ids in clear, set by owners and admins.
+  `ALTER TABLE pools ADD COLUMN orchestrator_account TEXT;
+   ALTER TABLE pools ADD COLUMN orchestrator_session TEXT;`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */
