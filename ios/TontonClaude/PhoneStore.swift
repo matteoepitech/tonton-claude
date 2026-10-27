@@ -25,6 +25,8 @@ final class PhoneStore {
     @ObservationIgnored private var foreground = false
     /// The requests waiting when the relay last spoke: alerts of the others can go.
     @ObservationIgnored private var lastPending: Set<String> = []
+    /// Answers from alerts under way, which keep the socket open in the background.
+    @ObservationIgnored private var answering = 0
 
     init() {
         account = SharedAccount.load()
@@ -179,12 +181,17 @@ final class PhoneStore {
     /// cannot, a notification says so: nothing else would.
     func answer(_ alert: PermissionPush, with action: PermissionAction) async {
         guard let account else { return }
-        let borrowed = connection != .connected
+        let current = connection == .connected
         let seen = feed.snapshots
-        if borrowed { socket.connect(account, device: push.deviceId) }
-        // Back in the background, the relay takes the Live Activity over again.
-        defer { if borrowed && !foreground { socket.disconnect(to: .paused) } }
-        if borrowed, await !until({ self.feed.snapshots > seen }) { return await couldNotAnswer(alert) }
+        // Another answer may be connecting already.
+        if !current && connection != .connecting { socket.connect(account, device: push.deviceId) }
+        answering += 1
+        defer {
+            answering -= 1
+            // Back in the background, the relay takes the Live Activity over again.
+            if answering == 0 && !foreground { socket.disconnect(to: .paused) }
+        }
+        if !current, await !until({ self.feed.snapshots > seen }) { return await couldNotAnswer(alert) }
         switch feed.standing(of: alert) {
         case .gone: return
         case .unreachable: return await couldNotAnswer(alert)
