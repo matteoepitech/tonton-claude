@@ -130,7 +130,7 @@ struct ChatHeader: View {
                 let link = try await store.share(session, for: duration)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(link.string, forType: .string)
-                shareNote = "Share key copied, valid for \(duration.label)"
+                shareNote = String(localized: "Share key copied, valid for \(duration.label)")
                 try? await Task.sleep(for: .seconds(5))
                 shareNote = nil
             } catch {
@@ -226,11 +226,12 @@ struct ChatHeader: View {
                 Text("·").font(.notch(12)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
                 ToolMark(tool: session.codingTool, size: 10)
                 if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11).accessibilityHidden(true) }
-                Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.notch(12)).foregroundStyle(Theme.secondary)
+                Text(store.isOnThisMac(session) ? String(localized: "This Mac") : session.machine).font(.notch(12))
+                    .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
                 Spacer()
                 if settings.showCosts, let cost = session.costUSD {
-                    Text(String(format: "$%.2f", cost)).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary)
+                    Text(Money.dollars(cost)).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary)
                         .help("Estimated by \(session.codingTool.label) at list price")
                 }
                 Text(session.status.label).font(.notch(11)).foregroundStyle(Color(nsColor: session.status.color)).fixedSize()
@@ -277,8 +278,10 @@ struct ChatHeader: View {
                         .foregroundStyle(Theme.secondary)
                         .fixedSize()
                         .help(
-                            "\(tokens.input.formatted()) input, \(tokens.cacheRead.formatted()) read from the cache, "
-                                + "\(tokens.cacheWrite.formatted()) written to it, \(tokens.output.formatted()) output")
+                            """
+                            \(tokens.input.formatted()) input, \(tokens.cacheRead.formatted()) read from the cache, \
+                            \(tokens.cacheWrite.formatted()) written to it, \(tokens.output.formatted()) output
+                            """)
                 }
                 if session.canChat, let reset = session.stoppedUntil() { autoContinueToggle(until: reset) }
                 if let shareNote {
@@ -337,22 +340,24 @@ struct ContextGauge: View {
 
     var body: some View {
         let near = context.isNearCompaction
-        let percent = "\(Int((context.fraction * 100).rounded()))%"
+        let percent = Int((context.fraction * 100).rounded())
         HStack(spacing: 5) {
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.ink.opacity(0.12))
                 Capsule().fill(near ? Color(nsColor: .systemOrange) : Theme.ink.opacity(0.5)).frame(width: 32 * context.fraction)
             }
             .frame(width: 32, height: 4)
-            Text(near ? "\(percent) · compacts soon" : "\(percent) context")
+            Text(near ? "\(percent)% · compacts soon" : "\(percent)% context")
                 .font(.notch(10, design: .monospaced))
                 .foregroundStyle(near ? Color(nsColor: .systemOrange) : .secondary)
         }
         .fixedSize()
         .accessibilityElement(children: .combine)
         .help(
-            "Context: \(TokenCounts.short(context.usedTokens)) of \(TokenCounts.short(context.windowTokens)) tokens. "
-                + "Claude Code compacts it at about \(TokenCounts.short(context.autoCompactAt)).")
+            """
+            Context: \(TokenCounts.short(context.usedTokens)) of \(TokenCounts.short(context.windowTokens)) tokens. \
+            Claude Code compacts it at about \(TokenCounts.short(context.autoCompactAt)).
+            """)
     }
 }
 

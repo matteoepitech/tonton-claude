@@ -38,8 +38,10 @@ struct LimitRing: View {
                 }
                 .frame(width: diameter, height: diameter)
                 .help(
-                    "5-hour limit: \(Int(limit.usedPercent.rounded())) % used, resets at "
-                        + limit.resetsAt.formatted(date: .omitted, time: .shortened))
+                    """
+                    5-hour limit: \(Int(limit.usedPercent.rounded())) % used, resets at \
+                    \(limit.resetsAt.formatted(date: .omitted, time: .shortened))
+                    """)
             }
         }
     }

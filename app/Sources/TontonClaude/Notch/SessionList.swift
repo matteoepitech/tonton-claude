@@ -48,7 +48,7 @@ struct SessionListView: View {
                                 session: s, selected: s.id == store.selectedId, showCost: settings.showCosts,
                                 continues: store.autoContinue.contains(s.id),
                                 snoozed: store.isSnoozed(s.id),
-                                machine: section.mixesMachines ? (store.isOnThisMac(s) ? "This Mac" : s.machine) : nil,
+                                machine: section.mixesMachines ? (store.isOnThisMac(s) ? String(localized: "This Mac") : s.machine) : nil,
                                 machineStyle: settings.machineStyles[s.machineId],
                                 // Pinned sessions lead the list, so their place is their ⌘ shortcut unless a search hides some.
                                 shortcut: pinned && query.isEmpty && index < 9 ? index + 1 : nil,
@@ -301,7 +301,7 @@ struct NotchAgentUpdate: View {
         }
     }
 
-    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+    private func pill(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 3) {
                 Image(systemName: "arrow.up.circle.fill").font(.notch(9))
@@ -383,7 +383,7 @@ struct SessionRow: View {
                         .lineLimit(2)
                     Spacer(minLength: 0)
                     if showCost, let cost = session.costUSD, cost > 0 {
-                        Text(String(format: "$%.2f", cost)).font(.notch(9, design: .monospaced)).foregroundStyle(Theme.tertiary)
+                        Text(Money.dollars(cost)).font(.notch(9, design: .monospaced)).foregroundStyle(Theme.tertiary)
                     }
                 }
                 if session.status.needsAttention || session.status.isLive && (session.limitToWatch() != nil || runsOut(at: .now) != nil) {
@@ -408,8 +408,9 @@ struct SessionRow: View {
         if session.status.needsAttention || limit != nil || end != nil {
             let countdown = limit.flatMap { limit in
                 limit.level(at: now).map { level in
-                    let verb = continues && session.stoppedUntil(at: now) != nil ? "continues" : "resets"
-                    return Text("\(verb) in \(limit.timeLeft(at: now))").foregroundColor(level.color)
+                    let left = limit.timeLeft(at: now)
+                    let text = continues && session.stoppedUntil(at: now) != nil ? Text("continues in \(left)") : Text("resets in \(left)")
+                    return text.foregroundColor(level.color)
                 }
             }
             let pace = end.map { end in

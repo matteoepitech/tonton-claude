@@ -86,7 +86,7 @@ extension Attachment {
 
 /// What the "sending…" bubble says for a message: its text, or how many files it carries.
 func pendingLabel(_ text: String, images: Int) -> String {
-    text.isEmpty ? "(\(images) attachment\(images == 1 ? "" : "s"))" : text
+    text.isEmpty ? String(localized: "(\(images) attachments)") : text
 }
 
 /// A message held for Undo send: the "sending…" bubble, with the seconds left and the button that takes it back.
