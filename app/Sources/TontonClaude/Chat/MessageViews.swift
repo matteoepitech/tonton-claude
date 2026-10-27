@@ -70,6 +70,7 @@ struct ImageStrip: View {
                         .frame(maxWidth: 220, maxHeight: 150)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .quickLook({ preview(at: index) }, state: state)
+                        .accessibilityLabel(images.count == 1 ? "Image" : "Image \(index + 1) of \(images.count)")
                 }
             }
         }
@@ -111,7 +112,7 @@ struct ToolRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Image(systemName: icon).font(.notch(10)).frame(width: 14)
+                Image(systemName: icon).font(.notch(10)).frame(width: 14).accessibilityHidden(true)
                 Text(call.name ?? "?").font(.notch(11, weight: .semibold))
                 Text(call.summary ?? "").font(.notch(11, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1)
                     .truncationMode(.middle)
@@ -126,17 +127,20 @@ struct ToolRow: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.secondary)
                     .help(editor == .defaultApp ? "Open" : "Open in \(editor.label)")
+                    .accessibilityLabel(editor == .defaultApp ? "Open the file" : "Open in \(editor.label)")
                 }
                 if running {
-                    ProgressView().controlSize(.mini)
+                    ProgressView().controlSize(.mini).accessibilityLabel("Running")
                 } else if result?.isError == true {
-                    Image(systemName: "xmark.circle.fill").font(.notch(10)).foregroundStyle(.red)
+                    Image(systemName: "xmark.circle.fill").font(.notch(10)).foregroundStyle(.red).accessibilityLabel("Failed")
                 } else if result != nil {
-                    Image(systemName: "checkmark").font(.notch(9)).foregroundStyle(Theme.tertiary)
+                    Image(systemName: "checkmark").font(.notch(9)).foregroundStyle(Theme.tertiary).accessibilityLabel("Done")
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture { if result != nil { open.toggle() } }
+            .accessibilityElement(children: .contain)
+            .accessibilityAction(named: open ? "Hide the result" : "Show the result") { if result != nil { open.toggle() } }
             if !steps.isEmpty { subagentSteps }
             if let edits = call.edits, !edits.isEmpty { EditDiff(edits: edits, path: call.summary) }
             if open, let result {
@@ -167,8 +171,9 @@ extension ToolRow {
                 withAnimation(.easeOut(duration: 0.15)) { showSteps.toggle() }
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: showSteps ? "chevron.down" : "chevron.right").font(.system(size: 8, weight: .bold))
-                    Text("\(steps.count) call\(steps.count == 1 ? "" : "s") by the subagent").font(.system(size: 10))
+                    Image(systemName: showSteps ? "chevron.down" : "chevron.right").font(.notch(8, weight: .bold))
+                        .accessibilityHidden(true)
+                    Text("\(steps.count) call\(steps.count == 1 ? "" : "s") by the subagent").font(.notch(10))
                 }
                 .foregroundStyle(Theme.secondary)
             }
@@ -178,19 +183,19 @@ extension ToolRow {
                     HStack(spacing: 6) {
                         // The agent sends the first calls of a task, then a line without a tool saying there were more.
                         if let name = step.call.name, !name.isEmpty {
-                            Text(name).font(.system(size: 10, weight: .semibold))
+                            Text(name).font(.notch(10, weight: .semibold))
                         }
                         Text(step.call.summary ?? "")
-                            .font(.system(size: 10, design: step.call.name?.isEmpty == false ? .monospaced : .default))
+                            .font(.notch(10, design: step.call.name?.isEmpty == false ? .monospaced : .default))
                             .foregroundStyle(Theme.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer(minLength: 4)
                         // Only failures come with a result: the latest call is the one still running.
                         if step.result?.isError == true {
-                            Image(systemName: "xmark.circle.fill").font(.system(size: 9)).foregroundStyle(.red)
+                            Image(systemName: "xmark.circle.fill").font(.notch(9)).foregroundStyle(.red).accessibilityLabel("Failed")
                         } else if running && step.call.id == steps.last?.call.id {
-                            ProgressView().controlSize(.mini)
+                            ProgressView().controlSize(.mini).accessibilityLabel("Running")
                         }
                     }
                     .padding(.leading, 12)

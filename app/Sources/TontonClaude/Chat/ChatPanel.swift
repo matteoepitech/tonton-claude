@@ -140,7 +140,7 @@ struct ChatHeader: View {
             store.toggleAutoContinue(session.id)
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.notch(9))
+                Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.notch(9)).accessibilityHidden(true)
                 Text("Continue at \(reset.formatted(date: .omitted, time: .shortened))").font(.notch(9, weight: .semibold))
             }
             .foregroundStyle(on ? Theme.accent : .secondary)
@@ -150,6 +150,7 @@ struct ChatHeader: View {
         }
         .buttonStyle(.plain)
         .help(on ? "Claude gets “continue” when the limit resets. Click to cancel." : "Send “continue” when the limit resets")
+        .accessibilityValue(on ? "On" : "Off")
     }
 
     /// Slash commands its agent runs: Claude Code sessions in tmux and OpenCode sessions, while the session waits for you.
@@ -183,6 +184,7 @@ struct ChatHeader: View {
         .foregroundStyle(Theme.secondary)
         .disabled(!session.acceptsCommands)
         .help(session.acceptsCommands ? "Run a command in the session" : "Commands wait until the session is done")
+        .accessibilityLabel("Commands")
     }
 
     /// Stops the turn, like Escape in the terminal.
@@ -195,6 +197,7 @@ struct ChatHeader: View {
         .buttonStyle(.plain)
         .foregroundStyle(Theme.secondary)
         .help("Interrupt, like Escape in the terminal (⌘.)")
+        .accessibilityLabel("Interrupt")
     }
 
     var body: some View {
@@ -202,9 +205,9 @@ struct ChatHeader: View {
             HStack(spacing: 6) {
                 StatusDot(status: session.status, limit: session.fiveHourLimit)
                 Text(session.displayName).font(.notch(13, weight: .bold)).lineLimit(1)
-                Text("·").font(.notch(12)).foregroundStyle(Theme.secondary)
+                Text("·").font(.notch(12)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
                 ToolMark(tool: session.codingTool, size: 10)
-                if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11) }
+                if let style = settings.machineStyles[session.machineId] { MachineBadge(style: style, size: 11).accessibilityHidden(true) }
                 Text(store.isOnThisMac(session) ? "This Mac" : session.machine).font(.notch(12)).foregroundStyle(Theme.secondary)
                     .lineLimit(1)
                 Spacer()
@@ -237,6 +240,7 @@ struct ChatHeader: View {
                 .fixedSize()
                 .foregroundStyle(Theme.secondary)
                 .help("Export the conversation, images included, or share it read-only")
+                .accessibilityLabel("Export or share")
             }
             HStack {
                 Text(session.title ?? session.cwd).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(1)
@@ -324,6 +328,7 @@ struct ContextGauge: View {
                 .foregroundStyle(near ? Color(nsColor: .systemOrange) : .secondary)
         }
         .fixedSize()
+        .accessibilityElement(children: .combine)
         .help(
             "Context: \(TokenCounts.short(context.usedTokens)) of \(TokenCounts.short(context.windowTokens)) tokens. "
                 + "Claude Code compacts it at about \(TokenCounts.short(context.autoCompactAt)).")

@@ -90,6 +90,7 @@ struct Composer: View {
         }
         .buttonStyle(.plain)
         .help(dictation.listening ? "Stop dictating" : "Dictate a message (or hold ⌃)")
+        .accessibilityLabel(dictation.listening ? "Stop dictating" : "Dictate")
     }
 
     private var quickReplies: some View {
@@ -129,6 +130,8 @@ struct Composer: View {
                                 fileChip(attachment)
                             }
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(attachment.name)
                         .quickLook({ preview(attachment) }, state: state)
                         .overlay(alignment: .topTrailing) {
                             Button {
@@ -138,6 +141,7 @@ struct Composer: View {
                                 Image(systemName: "xmark.circle.fill").font(.notch(12))
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Remove \(attachment.name)")
                             .offset(x: 4, y: -4)
                         }
                     }
@@ -199,6 +203,7 @@ struct Composer: View {
             }
             .buttonStyle(.plain)
             .help("Attach files, up to \(AttachmentBudget.describe(AttachmentBudget.maxTotalBytes)) per message")
+            .accessibilityLabel("Attach files")
             Button {
                 AttachmentReader.fromClipboard().forEach(add)
             } label: {
@@ -207,6 +212,7 @@ struct Composer: View {
             .buttonStyle(.plain)
             .keyboardShortcut("v", modifiers: [.command, .shift])
             .help("Paste an image from the clipboard (⌘⇧V)")
+            .accessibilityLabel("Paste an image")
             templatesMenu
             micButton
             TextField(placeholder, text: $text, axis: .vertical)
@@ -221,10 +227,12 @@ struct Composer: View {
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
                 .help("Send after Claude's current turn (⌘⇧↩)")
+                .accessibilityLabel("Send after this turn")
             Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.notch(18)) }
                 .buttonStyle(.plain)
                 .foregroundStyle(canSend ? Theme.accent : .secondary)
                 .disabled(!canSend)
+                .accessibilityLabel("Send")
         }
         .disabled(!session.canChat)
         .opacity(session.canChat ? 1 : 0.5)
@@ -252,6 +260,7 @@ struct Composer: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Insert a prompt template")
+        .accessibilityLabel("Insert a template")
     }
 
     /// One field per placeholder, and a preview of what goes into the message.
@@ -268,11 +277,13 @@ struct Composer: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.secondary)
                 .help("Cancel")
+                .accessibilityLabel("Cancel the template")
             }
             ForEach(template.variables, id: \.self) { name in
                 HStack(spacing: 8) {
                     Text(name).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(1).frame(width: 90, alignment: .leading)
                     TextField("", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }))
+                        .accessibilityLabel(name)
                         .textFieldStyle(.plain)
                         .font(.notch(12))
                         .focused($focusedVariable, equals: name)
@@ -335,17 +346,17 @@ struct Composer: View {
             Text("QUEUED · sent one per turn").font(.notch(9, weight: .semibold)).foregroundStyle(Theme.tertiary)
             ForEach(Array(items.enumerated()), id: \.element.id) { index, message in
                 HStack(spacing: 6) {
-                    Text("\(index + 1)").font(.notch(10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.secondary)
-                        .frame(
-                            width: 12)
+                    Text("\(index + 1)").font(.notch(10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.secondary)
+                        .frame(width: 12)
                     Text(message.text.isEmpty ? "\(message.images.count) image(s)" : message.text)
                         .font(.notch(11)).lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: 4)
-                    queueButton("chevron.up", "Earlier", disabled: index == 0) { queues.move(message.id, by: -1, in: session.id) }
-                    queueButton("chevron.down", "Later", disabled: index == items.count - 1) {
+                    queueButton("chevron.up", "Move earlier", disabled: index == 0) { queues.move(message.id, by: -1, in: session.id) }
+                    queueButton("chevron.down", "Move later", disabled: index == items.count - 1) {
                         queues.move(message.id, by: 1, in: session.id)
                     }
-                    queueButton("xmark", "Cancel", disabled: false) { queues.remove(message.id, from: session.id) }
+                    queueButton("xmark", "Remove from the queue", disabled: false) { queues.remove(message.id, from: session.id) }
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 24)
@@ -360,6 +371,7 @@ struct Composer: View {
             .foregroundStyle(disabled ? Theme.tertiary : Theme.secondary)
             .disabled(disabled)
             .help(help)
+            .accessibilityLabel(help)
     }
 
     private func send() {

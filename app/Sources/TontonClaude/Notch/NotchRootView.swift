@@ -232,10 +232,12 @@ struct SessionPills: View {
                     Text(session.displayName).font(.system(size: 10, weight: .semibold)).lineLimit(1).truncationMode(.tail)
                 }
                 .overlay(Capsule().stroke(Color(nsColor: session.status.color).opacity(session.status.needsAttention ? 0.9 : 0.35)))
+                .accessibilityElement(children: .combine)
             }
             if row.more > 0 {
                 pill { Text("+\(row.more)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
                     .overlay(Capsule().stroke(.white.opacity(0.15)))
+                    .accessibilityLabel(Spoken.count(row.more, "more session"))
             }
         }
         .allowsHitTesting(false)

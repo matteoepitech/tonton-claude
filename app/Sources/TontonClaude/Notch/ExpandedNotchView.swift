@@ -53,7 +53,7 @@ struct ExpandedView: View {
 
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 8) {
-            TontonGlyph(size: 16)
+            TontonGlyph(size: 16).accessibilityHidden(true)
             Text("Tonton Claude").font(.notch(12, weight: .semibold))
             connectionBadge.padding(.leading, 4)
             Spacer(minLength: 12)
@@ -67,6 +67,7 @@ struct ExpandedView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(state.showNewSession ? Theme.accent : Theme.ink.opacity(0.7))
                 .help("Start a session on a machine (⌘N)")
+                .accessibilityLabel("New session")
             }
             Button {
                 state.pinned.toggle()
@@ -76,10 +77,12 @@ struct ExpandedView: View {
             .buttonStyle(.plain)
             .foregroundStyle(state.pinned ? Theme.accent : Theme.ink.opacity(0.7))
             .help(state.pinned ? "Unpin (closes when the pointer leaves)" : "Pin open")
+            .accessibilityLabel(state.pinned ? "Unpin" : "Pin open")
             Button(action: onSettings) { Image(systemName: "gearshape").font(.notch(12)) }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.ink.opacity(0.7))
                 .help("Settings")
+                .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 14)
         // One band from the divider to the bottom edge, content centered in it.
@@ -94,6 +97,7 @@ struct ExpandedView: View {
                 Circle().fill(Theme.success).frame(width: 6, height: 6)
                 Text("connected").font(.notch(10)).foregroundStyle(Theme.secondary)
             }
+            .accessibilityElement(children: .combine)
         case .connecting:
             Text("connecting…").font(.notch(10)).foregroundStyle(Theme.secondary)
         case .notConfigured:
@@ -125,6 +129,7 @@ struct CenteredMessage: View {
                 .frame(width: 58, height: 58)
                 .background(Circle().fill(Theme.ink.opacity(0.08)))
                 .overlay(Circle().stroke(Theme.line(0.12)))
+                .accessibilityHidden(true)
             Text(title).font(.notch(15, weight: .semibold))
             Text(detail)
                 .font(.notch(12))

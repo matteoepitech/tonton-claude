@@ -220,6 +220,13 @@ final class NotchWindowController {
         }
     }
 
+    /// VoiceOver reads it out at once, wherever its cursor is; without VoiceOver nothing happens.
+    private func announce(_ text: String) {
+        NSAccessibility.post(
+            element: panel, notification: .announcementRequested,
+            userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+    }
+
     /// Sessions a usage limit stopped can go again: the same sound and banner, once for all of them.
     private func limitLifted(_ sessions: [SessionSummary]) {
         guard let session = sessions.first, !settings.isQuietNow else { return }
@@ -306,6 +313,10 @@ final class NotchWindowController {
             .store(in: &subscriptions)
         store.attention
             .sink { [weak self] session in self?.alert(session, finished: false) }
+            .store(in: &subscriptions)
+        store.permissionsAsked
+            .filter { [settings] _ in !settings.isQuietNow }
+            .sink { [weak self] asked in self?.announce(Spoken.permissions(asked.requests, session: asked.session.project)) }
             .store(in: &subscriptions)
         // The user started the session: its questions open the notch whatever the settings say.
         store.launchAsks
