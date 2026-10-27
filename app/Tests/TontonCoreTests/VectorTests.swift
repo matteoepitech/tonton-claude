@@ -109,6 +109,7 @@ final class VectorTests: XCTestCase {
                 try vault.sealStartAnswer(launchId: "abcdefgh12", machineId: "m1", question: "q1", confirm: true, issuedAt: issuedAt)
             ),
             ("rules", try vault.sealRules([PermissionRule(tool: "Bash", pattern: "npm test")], issuedAt: issuedAt)),
+            ("log request", try vault.sealLogRequest(requestId: "abcdefgh12", machineId: "m1", issuedAt: issuedAt)),
             ("machine name", try vault.sealMachineName("Studio ✨")),
             (
                 "share order",

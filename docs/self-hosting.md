@@ -61,7 +61,9 @@ and timing.
 - When OpenCode is set up, adds `tonton-claude.js` to its plugins folder (`~/.config/opencode/plugins`). OpenCode loads it
   on its next start (`opencode service restart` with OpenCode 2), and its sessions show up next to Claude Code's.
 
-`tonton status` checks the connection, `tonton uninstall` removes everything.
+`tonton status` checks the connection, `tonton uninstall` removes everything. The agent logs what it does to
+`~/.tonton/tonton.log`, never what Claude writes: Settings › Machines › **Show agent log** reads its last 300 lines from the
+Mac, sealed on the way, with the account key, the machine's credential, tokens and proxy passwords taken out.
 
 **Changing relay or account.** Click the tray icon › **Set token…** and paste the token from the app, or run
 `tonton token <token>`.

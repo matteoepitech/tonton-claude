@@ -53,10 +53,14 @@ public enum RelayMessage: Decodable, Sendable {
     /// Where a start from the notch stands. `detail` is a sealed `StartDetail`, `reason` set when the relay could not
     /// reach the machine.
     case sessionStart(machineId: String, launchId: String, state: String, reason: String?, detail: String?)
+    /// A machine's answer to a request for its log: `logs` is a sealed `AgentLog`, `reason` set when the relay could not
+    /// reach the machine.
+    case agentLogs(machineId: String, requestId: String, reason: String?, logs: String?)
     case unknown
 
     private enum Keys: String, CodingKey {
         case t, sessions, machines, session, sessionId, entries, message, machineId, ok, reason, detail, launchId, state
+        case requestId, logs
     }
 
     public init(from decoder: Decoder) throws {
@@ -80,6 +84,9 @@ public enum RelayMessage: Decodable, Sendable {
             self = .sessionStart(
                 machineId: try value(.machineId), launchId: try value(.launchId), state: try value(.state), reason: reason,
                 detail: detail)
+        case "agent_logs":
+            let (reason, logs) = (try optional(.reason), try optional(.logs))
+            self = .agentLogs(machineId: try value(.machineId), requestId: try value(.requestId), reason: reason, logs: logs)
         default: self = .unknown
         }
     }
@@ -134,6 +141,7 @@ struct PromptPayload: Codable {
     var command: SessionCommand?
 }
 struct UpdateOrder: Codable { let version: String; let issuedAt: String }
+struct LogRequest: Codable { let requestId: String; let machineId: String; let issuedAt: String }
 struct StartOrder: Codable {
     let launchId: String
     let machineId: String

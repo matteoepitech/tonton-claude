@@ -35,6 +35,11 @@ struct MachinesPane: View {
                     ForEach(Array(store.machines.enumerated()), id: \.element.id) { index, m in
                         if index > 0 { Hairline() }
                         MachineRow(machine: m)
+                        if let request = store.agentLogs[m.id] {
+                            Hairline()
+                            AgentLogPanel(
+                                machine: m, request: request, refresh: { store.requestLog(of: m) }, close: { store.closeLog(of: m.id) })
+                        }
                     }
                 }
                 Text("Hidden machines keep running, they just stay out of the notch. Revoking a machine signs it out for good.")
@@ -183,6 +188,8 @@ struct MachineRow: View {
             Toggle("", isOn: visible).toggleStyle(AccentToggleStyle()).labelsHidden().fixedSize()
                 .help(visible.wrappedValue ? "Shown in the notch" : "Hidden from the notch")
             Menu {
+                Button("Show agent log") { store.requestLog(of: machine) }.disabled(!machine.online)
+                Divider()
                 Button("Revoke access…", role: .destructive) { confirmRevoke = true }
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 12)).foregroundStyle(Theme.textDim).frame(width: 22, height: 22)

@@ -9,7 +9,7 @@ import { agentBinaryName, TRAY_HELPER_NAME } from '../agent/src/update'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { open, seal } from '../shared/crypto'
-import type { RelayToApp, SessionSummary } from '../shared/protocol'
+import type { AgentLog, RelayToApp, SessionSummary } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-e2e-'))
@@ -472,6 +472,25 @@ esac
     })
     expect(stranger.messages.some(m => m.t === 'session_start')).toBe(false)
     expect(app.raw.filter(raw => raw.includes('session_start')).join()).not.toContain('missing')
+  })
+
+  test("the machine's agent log reaches the app sealed, and holds nothing of the conversation", async () => {
+    const requestId = 'e2elogs0001'
+    const request = await seal(key, { requestId, machineId: machine.machineId, issuedAt: new Date().toISOString() })
+    stranger.socket.send(JSON.stringify({ t: 'agent_logs', machineId: machine.machineId, requestId, request }))
+    app.socket.send(JSON.stringify({ t: 'agent_logs', machineId: machine.machineId, requestId, request }))
+    const answer = await eventually(() => app.messages.find(m => m.t === 'agent_logs' && m.requestId === requestId), 'the log')
+    if (answer.t !== 'agent_logs' || !answer.logs) throw new Error('unexpected message')
+    const logs = await open<AgentLog>(key, answer.logs)
+    expect(logs).toMatchObject({ requestId, machineId: machine.machineId })
+    const text = logs.lines.join('\n')
+    expect(text).toContain('channel started')
+    // Everything the session said, asked or was told so far.
+    for (const secret of ['SECRET', 'Ship it', 'forged', 'Deploy', 'deploy', 'needs your permission', 'npm test', 'away', 'Long answer'])
+      expect(text).not.toContain(secret)
+    for (const secret of [key, machine.token]) expect(text).not.toContain(secret)
+    expect(app.raw.filter(raw => raw.includes('agent_logs')).join()).not.toContain('channel started')
+    expect(stranger.messages.some(m => m.t === 'agent_logs')).toBe(false)
   })
 
   test('revoking the machine signs it out and removes its sessions', async () => {

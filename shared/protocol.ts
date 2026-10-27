@@ -206,6 +206,26 @@ export interface UpdateOrder {
   version: string
   issuedAt: string
 }
+/** Sealed by the app: send the end of your log. It names its machine and is recent, like start orders. */
+export interface LogRequest {
+  requestId: string
+  machineId: string
+  issuedAt: string
+}
+/** Sealed by the agent: the end of its log, for the request it names. Never what Claude wrote, and without secrets. */
+export interface AgentLog {
+  requestId: string
+  machineId: string
+  /** The last lines, oldest first. */
+  lines: string[]
+  /** Earlier lines were left out. */
+  truncated: boolean
+  /** Of the whole log file, in bytes. */
+  size: number
+  at: string
+  /** Why the agent sent no lines. */
+  error?: string
+}
 
 export interface SealedEntry {
   id: string
@@ -260,6 +280,8 @@ export type AgentMessage =
   // A read-only share of the session: `info` is a `SharedInfo`, it and the entries sealed with the share key.
   | { t: 'share_info'; sessionId: string; shareId: string; info: Sealed }
   | { t: 'share_entries'; sessionId: string; shareId: string; entries: SealedEntry[]; reset: boolean }
+  // The answer to a `LogRequest`: a sealed `AgentLog`.
+  | { t: 'agent_logs'; requestId: string; logs: Sealed }
 
 // relay -> agent
 export type RelayToAgent =
@@ -275,6 +297,8 @@ export type RelayToAgent =
   | { t: 'share'; sessionId: string; shareId: string; order: Sealed }
   // The share was revoked or expired: stop sealing for it.
   | { t: 'unshare'; sessionId: string; shareId: string }
+  // A sealed `LogRequest`.
+  | { t: 'agent_logs'; requestId: string; request: Sealed }
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {
@@ -302,6 +326,8 @@ export type RelayToApp =
       reason?: 'offline'
       detail?: Sealed | null
     }
+  // The sealed `AgentLog` of a machine, or `reason` when the relay could not reach it.
+  | { t: 'agent_logs'; machineId: string; requestId: string; reason?: 'offline'; logs?: Sealed | null }
 
 // app -> relay
 export type AppMessage =
@@ -315,6 +341,7 @@ export type AppMessage =
   | { t: 'start_answer'; machineId: string; launchId: string; answer: Sealed }
   // After `POST /api/shares` made the share: its order, for the session's agent.
   | { t: 'share'; sessionId: string; shareId: string; order: Sealed }
+  | { t: 'agent_logs'; machineId: string; requestId: string; request: Sealed }
 
 // relay -> viewer (/ws/share, with a share token): one session, read only.
 export type RelayToViewer =

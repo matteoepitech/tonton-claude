@@ -2,7 +2,7 @@
 // the account key and folded into an immutable state. UI-agnostic, so the web, Windows and Linux apps only render it.
 // Mirrors RelaySocket.swift and SessionStore.swift.
 
-import type { AppMessage, Entry, ModelAlias, PermissionRule, RelayToApp, SessionCommand, StartDetail } from './protocol'
+import type { AgentLog, AppMessage, Entry, ModelAlias, PermissionRule, RelayToApp, SessionCommand, StartDetail } from './protocol'
 import { type Machine, type Session, sortSessions } from './session'
 import type { OutgoingImage, Vault } from './vault'
 import { parseRelayMessage } from './wire'
@@ -33,6 +33,8 @@ export type ClientEvent =
   | { t: 'error'; message: string }
   | { t: 'agent_update'; machineId: string; ok: boolean; reason?: 'offline' | 'unsupported'; detail: string | null }
   | { t: 'session_start'; machineId: string; launchId: string; state: string; reason?: 'offline'; detail: StartDetail | null }
+  // `log` is null unless it was sealed for this request and this machine.
+  | { t: 'agent_logs'; machineId: string; requestId: string; reason?: 'offline'; log: AgentLog | null }
 
 export const initialState: ClientState = {
   connection: 'stopped',
@@ -62,6 +64,11 @@ export async function openMessage(vault: Vault, message: RelayToApp, machines: r
       return { ...message, detail: await vault.detailText(message.detail) }
     case 'session_start':
       return { ...message, detail: await vault.startDetail(message.detail) }
+    case 'agent_logs': {
+      const { logs, ...rest } = message
+      const log = await vault.agentLog(logs)
+      return { ...rest, log: log?.requestId === message.requestId && log.machineId === message.machineId ? log : null }
+    }
     case 'removed':
     case 'error':
       return message
@@ -97,6 +104,7 @@ export function reduce(state: ClientState, event: ClientEvent): ClientState {
       return { ...state, error: event.message }
     case 'agent_update':
     case 'session_start':
+    case 'agent_logs':
       return state
   }
 }
@@ -185,6 +193,16 @@ export class RelayClient {
   async allowForSession(sessionId: string, requestId: string, rules: PermissionRule[]): Promise<boolean> {
     const rule = await this.options.vault.sealSessionRules(sessionId, requestId, rules)
     return this.send({ t: 'verdict', sessionId, requestId, behavior: 'allow', rule })
+  }
+
+  /**
+   * Asks a machine for the end of its agent log. The answer comes as an `agent_logs` event with the id returned here;
+   * null when the client is not connected.
+   */
+  async requestLog(machineId: string): Promise<string | null> {
+    const requestId = crypto.randomUUID().replaceAll('-', '')
+    const request = await this.options.vault.sealLogRequest(requestId, machineId)
+    return this.send({ t: 'agent_logs', machineId, requestId, request }) ? requestId : null
   }
 
   /** Removes a finished session from the account's list. */

@@ -4,6 +4,7 @@
 
 import { type AccountKey, open, seal } from './crypto'
 import {
+  decodeAgentLog,
   decodeEntry,
   decodeMachineHealth,
   decodeMachineName,
@@ -14,7 +15,9 @@ import {
   decodeStatusDetail,
 } from './payloads'
 import type {
+  AgentLog,
   Entry,
+  LogRequest,
   MachineSummary,
   ModelAlias,
   PermissionRule,
@@ -141,6 +144,16 @@ export class Vault {
 
   startDetail(blob: Sealed | null | undefined): Promise<StartDetail | null> {
     return this.read(blob, decodeStartDetail)
+  }
+
+  /** Asks a machine for the end of its agent log. It names the machine, and agents refuse old ones. */
+  sealLogRequest(requestId: string, machineId: string, issuedAt = new Date()): Promise<Sealed> {
+    const request: LogRequest = { requestId, machineId, issuedAt: issuedAt.toISOString() }
+    return seal(this.key, request)
+  }
+
+  agentLog(blob: Sealed | null | undefined): Promise<AgentLog | null> {
+    return this.read(blob, decodeAgentLog)
   }
 
   /** The text of a sealed `{ text }` detail, such as the reason an agent update failed. */
