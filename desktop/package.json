@@ -1,0 +1,25 @@
+{
+  "name": "tonton-claude",
+  "productName": "Tonton Claude",
+  "description": "Your Claude Code sessions at the top of the screen, from all your machines.",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "author": "matteoepitech",
+  "homepage": "https://github.com/matteoepitech/tonton-claude",
+  "main": "dist/main.cjs",
+  "desktopName": "tonton-claude.desktop",
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "start": "bun scripts/build.ts && electron .",
+    "check": "tsc --noEmit -p . && tsc --noEmit -p src/renderer",
+    "package:windows": "bun scripts/build.ts && electron-builder --win --x64 --publish never",
+    "package:linux": "bun scripts/build.ts && electron-builder --linux --x64 --publish never"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "electron": "44.9.3",
+    "electron-builder": "26.17.0",
+    "typescript": "5.9.3"
+  }
+}

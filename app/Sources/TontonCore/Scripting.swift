@@ -24,12 +24,14 @@ public enum ScriptSessions {
 
     public typealias Lookup = Result<SessionSummary, Failure>
 
-    /// A session by its id, or by its project's name, ignoring case. Among sessions of the same project the live one
+    /// A session by its id, or by its project's name or the name given to it, ignoring case. Among sessions of the same project the live one
     /// wins; several live ones need the id. With none live, the latest one, so its status can still be read.
     public static func find(_ name: String, in sessions: [SessionSummary]) -> Lookup {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if let session = sessions.first(where: { $0.id == name }) { return .success(session) }
-        let matching = sessions.filter { $0.project.caseInsensitiveCompare(name) == .orderedSame }
+        let matching = sessions.filter {
+            $0.project.caseInsensitiveCompare(name) == .orderedSame || $0.name?.caseInsensitiveCompare(name) == .orderedSame
+        }
         let live = matching.filter(\.status.isLive)
         if live.count > 1 { return .failure(.ambiguous(name, live.map(\.id))) }
         if let session = live.first ?? matching.max(by: { $0.lastActivity < $1.lastActivity }) { return .success(session) }

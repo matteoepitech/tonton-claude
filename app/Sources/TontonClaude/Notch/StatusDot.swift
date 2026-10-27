@@ -16,6 +16,8 @@ struct StatusDot: View {
             .animation(status == .working ? .easeInOut(duration: 0.8).repeatForever() : .default, value: pulse)
             .onAppear { pulse = true }
             .overlay { if let limit { LimitRing(limit: limit, diameter: size + 6) } }
+            .accessibilityElement()
+            .accessibilityLabel(Spoken.status(status, limit: limit))
     }
 }
 

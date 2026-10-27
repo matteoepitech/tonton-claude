@@ -6,17 +6,19 @@ import TontonCore
 /// MarkdownBlock.
 struct MarkdownText: View {
     let text: String
+    /// The open notch's by default; What's new, outside the notch, keeps the Default size.
+    var textSize = Theme.textSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(MarkdownBlock.parse(text).enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .prose(let s):
-                    Text(Self.inline(s)).font(.system(size: 12)).textSelection(.enabled)
+                    Text(Self.inline(s)).font(.system(size: textSize.points(12))).textSelection(.enabled)
                 case .code(let s):
-                    CodeBlock(code: s)
+                    CodeBlock(code: s, textSize: textSize)
                 case .table(let table):
-                    MarkdownTableView(table: table)
+                    MarkdownTableView(table: table, textSize: textSize)
                 }
             }
         }
@@ -31,19 +33,20 @@ struct MarkdownText: View {
 /// A fenced code block that scrolls sideways, with a copy button on hover.
 struct CodeBlock: View {
     let code: String
+    let textSize: NotchTextSize
     @State private var hovering = false
     @State private var copied = false
 
     var body: some View {
         ScrollView(.horizontal) {
-            Text(code).font(.system(size: 11, design: .monospaced)).textSelection(.enabled).padding(8)
+            Text(code).font(.system(size: textSize.points(11), design: .monospaced)).textSelection(.enabled).padding(8)
         }
         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.07)))
         .overlay(alignment: .topTrailing) {
             if hovering || copied {
                 Button(action: copy) {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: textSize.points(10), weight: .medium))
                         .frame(width: 22, height: 22)
                         .background(RoundedRectangle(cornerRadius: 5).fill(Theme.surface))
                         .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderStrong))
@@ -51,10 +54,13 @@ struct CodeBlock: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(copied ? Theme.success : Theme.textDim)
                 .help("Copy")
+                .accessibilityLabel(copied ? "Copied" : "Copy the code")
                 .padding(4)
             }
         }
         .onHover { hovering = $0 }
+        // The button only shows under the pointer.
+        .accessibilityAction(named: "Copy the code") { copy() }
     }
 
     private func copy() {
@@ -69,6 +75,7 @@ struct CodeBlock: View {
 /// between rows, inside a rounded frame like the code blocks.
 struct MarkdownTableView: View {
     let table: MarkdownTable
+    let textSize: NotchTextSize
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
@@ -96,7 +103,7 @@ struct MarkdownTableView: View {
 
     private func cell(_ value: String, column: Int, header: Bool = false) -> some View {
         Text(MarkdownText.inline(value))
-            .font(.system(size: 11.5, weight: header ? .semibold : .regular))
+            .font(.system(size: textSize.points(11.5), weight: header ? .semibold : .regular))
             .multilineTextAlignment(alignment(column).text)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 8)

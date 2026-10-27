@@ -114,6 +114,14 @@ public enum DailyBudget {
     }
 }
 
+/// The monthly budget, next to the daily one: one alert, the first time a month's spending goes past it. Months are
+/// `2026-10`, like Wrapped's.
+public enum MonthlyBudget {
+    public static func shouldAlert(spent: Double, budget: Double, lastAlertMonth: String, month: String) -> Bool {
+        DailyBudget.shouldAlert(spent: spent, budget: budget, lastAlertDay: lastAlertMonth, today: month)
+    }
+}
+
 private struct UsageDelta {
     let costUSD: Double
     let tokens: TokenCounts

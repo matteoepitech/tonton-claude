@@ -156,6 +156,18 @@ describe('parseLine', () => {
     expect(parseLine(line({ type: 'user', message: { model: 'claude-opus-5-5', content: 'x' } })).model).toBeUndefined()
   })
 
+  test('the end of a turn, with how long it took', () => {
+    const ended = (fields: object) => parseLine(line({ type: 'system', subtype: 'turn_duration', ...fields })).turn
+    expect(ended({ durationMs: 1030715, timestamp: '2026-09-23T12:48:23.478Z' })).toEqual({
+      end: '2026-09-23T12:48:23.478Z',
+      seconds: 1030.7,
+    })
+    // Its end is what tells the turn apart: no time of its own, no turn.
+    expect(ended({ durationMs: 5000, timestamp: undefined })).toBeUndefined()
+    for (const durationMs of [0, -1, '5000', null]) expect(ended({ durationMs, timestamp: '2026-09-23T12:48:23.478Z' })).toBeUndefined()
+    expect(ended({ durationMs: 5000, timestamp: 'yesterday' })).toBeUndefined()
+  })
+
   test('garbage and subagent lines are ignored', () => {
     expect(parseLine('{not json').entries).toEqual([])
     expect(parseLine(line({ type: 'user', isSidechain: true, message: { content: 'x' } })).entries).toEqual([])

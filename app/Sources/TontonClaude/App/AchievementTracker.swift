@@ -16,6 +16,11 @@ final class AchievementTracker {
         store.sessionsPublisher.sink { [weak self] sessions in self?.update { $0.sessionsChanged(sessions) } }.store(in: &subscriptions)
         store.approved.sink { [weak self] in self?.update { $0.approved() } }.store(in: &subscriptions)
         store.sent.sink { [weak self] in self?.update { $0.sentFromNotch() } }.store(in: &subscriptions)
+        // Conversations grow with each entry: counting the calls once things settle is enough.
+        store.entriesPublisher
+            .debounce(for: .seconds(5), scheduler: RunLoop.main)
+            .sink { [weak self] entries in self?.update { $0.count(entries) } }
+            .store(in: &subscriptions)
     }
 
     private func update(_ change: (inout AchievementProgress) -> [Achievement]) {
@@ -44,8 +49,14 @@ final class AchievementStore: ObservableObject {
     static let shared = AchievementStore()
 
     @Published var progress: AchievementProgress {
-        didSet { if let data = try? JSONEncoder().encode(progress) { UserDefaults.standard.set(data, forKey: "achievements") } }
+        didSet {
+            // Every update goes through here, and most change nothing that is saved (a turn starting or ending).
+            guard let data = try? JSONEncoder().encode(progress), data != saved else { return }
+            saved = data
+            UserDefaults.standard.set(data, forKey: "achievements")
+        }
     }
+    private var saved: Data?
 
     init() {
         progress =

@@ -48,10 +48,10 @@ struct NoteButton: View {
         Button {
             editing.toggle()
         } label: {
-            Image(systemName: has ? "note.text" : "square.and.pencil").font(.system(size: 11))
+            Image(systemName: has ? "note.text" : "square.and.pencil").font(.notch(11))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(has ? Theme.accent : .secondary)
+        .foregroundStyle(has ? AnyShapeStyle(Theme.accent) : Theme.secondary)
         .help(has ? "Your note on this session" : "Add a note to this session, kept on this Mac")
         .accessibilityLabel(has ? "Edit note" : "Add note")
         .popover(isPresented: $editing, arrowEdge: .bottom) { NoteEditor(text: store.binding(for: session.id)) }
@@ -66,25 +66,25 @@ struct NoteEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Note").font(.system(size: 12, weight: .semibold))
+                Text("Note").font(.notch(12, weight: .semibold))
                 Spacer()
-                Text(verbatim: "\(text.count)/\(SessionNotes.maxLength)").font(.system(size: 10).monospacedDigit()).foregroundStyle(
-                    .tertiary)
+                Text(verbatim: "\(text.count)/\(SessionNotes.maxLength)").font(.notch(10).monospacedDigit()).foregroundStyle(
+                    Theme.tertiary)
             }
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
-                    Text("What to check when Claude is done…").font(.system(size: 12)).foregroundStyle(.tertiary)
+                    Text("What to check when Claude is done…").font(.notch(12)).foregroundStyle(Theme.tertiary)
                         .padding(.horizontal, 5).padding(.vertical, 8)
                 }
                 TextEditor(text: $text)
-                    .font(.system(size: 12))
+                    .font(.notch(12))
                     .scrollContentBackground(.hidden)
                     .focused($focused)
             }
             .frame(height: 120)
             .padding(4)
             .background(RoundedRectangle(cornerRadius: 7).fill(Theme.code))
-            Text("Kept on this Mac only.").font(.system(size: 10)).foregroundStyle(.tertiary)
+            Text("Kept on this Mac only.").font(.notch(10)).foregroundStyle(Theme.tertiary)
         }
         .padding(12)
         .frame(width: 280)
@@ -99,7 +99,7 @@ struct NoteMark: View {
 
     var body: some View {
         if store.notes.has(sessionId) {
-            Image(systemName: "note.text").font(.system(size: 9)).foregroundStyle(.tertiary)
+            Image(systemName: "note.text").font(.notch(9)).foregroundStyle(Theme.tertiary)
                 .help(store.notes.text(for: sessionId))
                 .accessibilityLabel("Has a note")
         }

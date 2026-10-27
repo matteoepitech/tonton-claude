@@ -11,6 +11,15 @@ final class SoundsTests: XCTestCase {
         XCTAssertEqual(SoundEvent.of(.error, finished: false), .error)
     }
 
+    func testAProjectFinishesWithItsOwnSound() {
+        let sounds = ["api": "Hero", "web": ""]
+        XCTAssertEqual(ProjectSound.pick(.finished, project: "api", projectSounds: sounds, eventSound: "Glass"), "Hero")
+        // Its other events, and projects without a sound, keep the event's.
+        XCTAssertEqual(ProjectSound.pick(.permission, project: "api", projectSounds: sounds, eventSound: "Ping"), "Ping")
+        XCTAssertEqual(ProjectSound.pick(.finished, project: "web", projectSounds: sounds, eventSound: "Glass"), "Glass")
+        XCTAssertEqual(ProjectSound.pick(.finished, project: "docs", projectSounds: sounds, eventSound: "Glass"), "Glass")
+    }
+
     func testEveryPackHasASoundForEveryEvent() {
         for event in SoundEvent.allCases {
             XCTAssertNotNil(ChipSound.named(SoundPack.eightBit.sound(for: event)))
