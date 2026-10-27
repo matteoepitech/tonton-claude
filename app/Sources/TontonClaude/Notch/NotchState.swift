@@ -34,6 +34,8 @@ final class NotchState: ObservableObject {
     @Published var achievement: Achievement?
     /// A chat item to scroll to and highlight, picked in the search results.
     @Published var jumpTo: String?
+    /// The session whose changed files cover its conversation, from the header's files button.
+    @Published var filesOf: String?
     /// Live sessions as pills under the collapsed notch (Settings › Notch › Session pills).
     @Published var pills = PillRow([])
     /// The pill whose session shows in a card under it, while the pointer rests on it.
