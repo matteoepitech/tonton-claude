@@ -81,7 +81,8 @@ public struct IslandLine: Equatable, Sendable {
     /// Without the key: the states alone.
     public static func placeholders(_ state: IslandState) -> [IslandLine] {
         state.sessions.map {
-            IslandLine(id: $0.id, status: $0.status, project: "Session", machine: nil, text: SessionSummary.statusText(nil, status: $0.status))
+            IslandLine(
+                id: $0.id, status: $0.status, project: "Session", machine: nil, text: SessionSummary.statusText(nil, status: $0.status))
         }
     }
 }

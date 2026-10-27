@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import TontonCore
+import TontonMac
 
 /// Watches the OpenCode 2 sessions of this Mac through OpenCode's own service (see `OpenCodeLocal`), off the main thread,
 /// and hands every change to `onChange`. It also sends what the notch asks them: messages, answers to permission requests,

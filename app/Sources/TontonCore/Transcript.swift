@@ -161,7 +161,7 @@ public enum Transcript {
     }
 
     /// The replacements of an Edit or MultiEdit call, for the diff.
-    static func fileEdits(_ name: String, _ input: Any?) -> [FileEdit] {
+    public static func fileEdits(_ name: String, _ input: Any?) -> [FileEdit] {
         let fields = input as? [String: Any] ?? [:]
         let raw = name == "Edit" ? [fields] : name == "MultiEdit" ? fields["edits"] as? [[String: Any]] ?? [] : []
         func cut(_ text: String) -> String { text.count > maxEditChars ? String(text.prefix(maxEditChars)) + "\n…" : text }

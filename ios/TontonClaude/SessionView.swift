@@ -79,10 +79,13 @@ struct SessionView: View {
                 if session.canChat {
                     composer
                 } else {
-                    Text(session.agentOnline ? "Read only: start claude with the launcher on its machine to message it." : "Session offline: history only.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(
+                        session.agentOnline
+                            ? "Read only: start claude with the launcher on its machine to message it." : "Session offline: history only."
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
