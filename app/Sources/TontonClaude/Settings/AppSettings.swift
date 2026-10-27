@@ -115,6 +115,12 @@ final class AppSettings: ObservableObject {
     /// Minutes after midnight.
     @Published var quietStart: Int
     @Published var quietEnd: Int
+    /// A notification in the evening with the day's work (Settings › Notch).
+    @Published var dailySummary: Bool
+    /// Minutes after midnight.
+    @Published var dailySummaryTime: Int
+    /// The last day it went out, `2026-10-27`.
+    @Published var dailySummaryDay: String
 
     /// Webhooks (https only, see Webhook); empty is off.
     @Published var webhookFinished: String
@@ -217,6 +223,9 @@ final class AppSettings: ObservableObject {
         quietHours = value("quietHours", false)
         quietStart = value("quietStart", 22 * 60)
         quietEnd = value("quietEnd", 8 * 60)
+        dailySummary = value("dailySummary", false)
+        dailySummaryTime = value("dailySummaryTime", 18 * 60)
+        dailySummaryDay = value("dailySummaryDay", "")
         webhookFinished = value("webhookFinished", "")
         webhookNeedsYou = value("webhookNeedsYou", "")
         webhookIncludeNames = value("webhookIncludeNames", false)
@@ -271,6 +280,9 @@ final class AppSettings: ObservableObject {
         persist($quietHours, "quietHours")
         persist($quietStart, "quietStart")
         persist($quietEnd, "quietEnd")
+        persist($dailySummary, "dailySummary")
+        persist($dailySummaryTime, "dailySummaryTime")
+        persist($dailySummaryDay, "dailySummaryDay")
         persist($webhookFinished, "webhookFinished")
         persist($webhookNeedsYou, "webhookNeedsYou")
         persist($webhookIncludeNames, "webhookIncludeNames")
