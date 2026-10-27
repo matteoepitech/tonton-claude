@@ -11,6 +11,7 @@
 #   SPARKLE_FEED_URL    defaults to the appcast published with the latest GitHub release
 #   APP_GROUP           app group the widget shares with the app; defaults to <TeamID>.tech.d3l.tontonclaude with a
 #                       Developer ID. Without one the widget is left out (see below)
+# Needs Xcode, not only the Command Line Tools: its xcstringstool compiles the strings.
 set -e
 cd "$(dirname "$0")/.."
 
@@ -65,6 +66,9 @@ if [ -n "$APP_GROUP" ]; then
   WIDGET_STATE=on
 fi
 
+xcrun --find xcstringstool >/dev/null 2>&1 ||
+  { echo "xcstringstool not found: install Xcode, or select it with xcode-select -s" >&2; exit 1; }
+
 # One build per architecture, merged with lipo: works with the Command Line Tools alone, unlike a multi-arch swift build.
 if [ $UNIVERSAL = 1 ]; then
   for arch in arm64 x86_64; do swift build -c release --arch $arch; done
@@ -94,6 +98,14 @@ cp "$BIN" "$APP/Contents/MacOS/TontonClaude"
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp Resources/TontonClaude.sdef "$APP/Contents/Resources/"
+# The text of the app and of the widget: one .lproj folder per language in their Resources, where Bundle.main and the
+# views look. Not SwiftPM's resources: its bundle would have to sit at the root of the .app, which the signature refuses.
+strings() {
+  xcrun xcstringstool compile Resources/Localizable.xcstrings --output-directory "$1"
+  xcrun xcstringstool compile Resources/InfoPlist.xcstrings --output-directory "$1"
+}
+strings "$APP/Contents/Resources"
+LANGUAGES=$(cd "$APP/Contents/Resources" && for folder in *.lproj; do printf '<string>%s</string>' "${folder%.lproj}"; done)
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -103,6 +115,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>Tonton Claude</string>
   <key>CFBundleDisplayName</key><string>Tonton Claude</string>
   <key>CFBundleExecutable</key><string>TontonClaude</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key><array>$LANGUAGES</array>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
@@ -137,8 +151,9 @@ if [ -n "$APP_GROUP" ]; then
       -c "Add :com.apple.security.application-groups:0 string $APP_GROUP" "$file"
   done
   WIDGET=$APP/Contents/PlugIns/TontonWidget.appex
-  mkdir -p "$WIDGET/Contents/MacOS"
+  mkdir -p "$WIDGET/Contents/MacOS" "$WIDGET/Contents/Resources"
   cp "$WIDGET_BIN" "$WIDGET/Contents/MacOS/TontonWidget"
+  strings "$WIDGET/Contents/Resources"
   cat > "$WIDGET/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -148,6 +163,8 @@ if [ -n "$APP_GROUP" ]; then
   <key>CFBundleName</key><string>Tonton Claude</string>
   <key>CFBundleDisplayName</key><string>Tonton Claude</string>
   <key>CFBundleExecutable</key><string>TontonWidget</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key><array>$LANGUAGES</array>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundlePackageType</key><string>XPC!</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>

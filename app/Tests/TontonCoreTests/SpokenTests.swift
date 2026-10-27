@@ -5,6 +5,9 @@ import XCTest
 final class SpokenTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_793_005_200)
 
+    override func setUpWithError() throws { try Catalog.use("en") }
+    override func tearDown() { Catalog.reset() }
+
     private func request(_ id: String, _ tool: String, _ description: String = "") -> PermissionRequest {
         PermissionRequest(requestId: id, toolName: tool, description: description, inputPreview: "", ts: "2026-10-27T09:00:00Z")
     }
@@ -41,8 +44,10 @@ final class SpokenTests: XCTestCase {
     }
 
     func testCountsReadNaturally() {
-        XCTAssertEqual(Spoken.count(1, "live session"), "1 live session")
-        XCTAssertEqual(Spoken.count(3, "live session"), "3 live sessions")
-        XCTAssertEqual(Spoken.count(0, "live session"), "No live session")
+        XCTAssertEqual(Spoken.liveSessions(1), "1 live session")
+        XCTAssertEqual(Spoken.liveSessions(3), "3 live sessions")
+        XCTAssertEqual(Spoken.liveSessions(0), "No live session")
+        XCTAssertEqual(Spoken.moreSessions(1), "1 more session")
+        XCTAssertEqual(Spoken.moreSessions(4), "4 more sessions")
     }
 }

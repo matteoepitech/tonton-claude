@@ -1,0 +1,1003 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {
+
+    },
+    " · " : {
+
+    },
+    "$" : {
+
+    },
+    "$%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ $"
+          }
+        }
+      }
+    },
+    "%@ asks for %lld permissions: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ asks for %2$lld permissions: %3$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ demande %2$lld autorisations : %3$@"
+          }
+        }
+      }
+    },
+    "%@ asks to use %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ asks to use %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ demande à utiliser %2$@"
+          }
+        }
+      }
+    },
+    "%@ asks to use %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ asks to use %2$@: %3$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ demande à utiliser %2$@ : %3$@"
+          }
+        }
+      }
+    },
+    "%@ context" : {
+
+    },
+    "%@ in %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ in %2$@"
+          }
+        }
+      }
+    },
+    "%@ in · %@ out" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ in · %2$@ out"
+          }
+        }
+      }
+    },
+    "%@ on %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ on %2$@"
+          }
+        }
+      }
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · compacts soon" : {
+
+    },
+    "%@, 5-hour limit %lld %% used" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, 5-hour limit %2$lld %% used"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, limite de 5 heures utilisée à %2$lld %%"
+          }
+        }
+      }
+    },
+    "%@/%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@/%2$@"
+          }
+        }
+      }
+    },
+    "%@: calls like this one are allowed without asking until the session ends." : {
+
+    },
+    "%lld" : {
+
+    },
+    "%lld %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld %2$@"
+          }
+        }
+      }
+    },
+    "%lld attachment%@ · %@ of %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld attachment%2$@ · %3$@ of %4$@"
+          }
+        }
+      }
+    },
+    "%lld call%@ by the subagent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld call%2$@ by the subagent"
+          }
+        }
+      }
+    },
+    "%lld live" : {
+
+    },
+    "%lld live sessions" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld live session"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld live sessions"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld session en cours"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sessions en cours"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld more in the notch" : {
+
+    },
+    "%lld more sessions" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more session"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more sessions"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld autre session"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld autres sessions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "+%lld" : {
+
+    },
+    "A full path, or one that starts with ~/" : {
+
+    },
+    "A teammate reads one session in the web app with the key you copied, and nothing else. Revoking closes their page at once." : {
+
+    },
+    "A usage limit resets in %@" : {
+
+    },
+    "Achievement unlocked" : {
+
+    },
+    "Add" : {
+
+    },
+    "Add an account…" : {
+
+    },
+    "Agent log" : {
+
+    },
+    "All machines are signed out and the relay forgets everything about this account. This cannot be undone." : {
+
+    },
+    "Allow" : {
+
+    },
+    "Allow %@?" : {
+
+    },
+    "Allow for this session: %@" : {
+
+    },
+    "Attach files" : {
+
+    },
+    "Attach files, up to %@ per message" : {
+
+    },
+    "Busiest: %@" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Cancel the template" : {
+
+    },
+    "Check for Updates…" : {
+
+    },
+    "Claude" : {
+
+    },
+    "Claude gets “continue” when the limit resets. Click to cancel." : {
+
+    },
+    "Claude is working" : {
+
+    },
+    "Claude sessions" : {
+
+    },
+    "Clear" : {
+
+    },
+    "Clear the conversation? Claude starts over without what was said so far." : {
+
+    },
+    "Click to pick, double-click to start" : {
+
+    },
+    "Close" : {
+
+    },
+    "Close (esc)" : {
+
+    },
+    "Color" : {
+
+    },
+    "Commands" : {
+
+    },
+    "Commands wait until the session is done" : {
+
+    },
+    "Confirm" : {
+
+    },
+    "Connected" : {
+
+    },
+    "Continue at %@" : {
+
+    },
+    "Continue when the limit resets" : {
+
+    },
+    "Copied" : {
+
+    },
+    "Copy" : {
+
+    },
+    "Copy image" : {
+
+    },
+    "Copy the code" : {
+
+    },
+    "Copy the full command" : {
+
+    },
+    "Cost" : {
+
+    },
+    "Cost and tokens add up here while sessions run and Tonton Claude is open." : {
+
+    },
+    "Create account" : {
+
+    },
+    "Day" : {
+
+    },
+    "Delete account" : {
+
+    },
+    "Delete account…" : {
+
+    },
+    "Delete this template" : {
+
+    },
+    "Delete your account?" : {
+
+    },
+    "Deny" : {
+
+    },
+    "Diagnose" : {
+
+    },
+    "Diagnosis" : {
+
+    },
+    "Dictate" : {
+
+    },
+    "Dictate a message (or hold ⌃)" : {
+
+    },
+    "Dismiss" : {
+
+    },
+    "Done" : {
+
+    },
+    "Download the web app" : {
+
+    },
+    "Drop to attach to this session" : {
+
+    },
+    "Earlier lines are left out." : {
+
+    },
+    "Edit templates…" : {
+
+    },
+    "Estimated by %@ at list price" : {
+
+    },
+    "Event sound" : {
+
+    },
+    "Export CSV…" : {
+
+    },
+    "Export or share" : {
+
+    },
+    "Export the conversation, images included, or share it read-only" : {
+
+    },
+    "Failed" : {
+
+    },
+    "Folder" : {
+
+    },
+    "For %@" : {
+
+    },
+    "Get a new token" : {
+
+    },
+    "HTML page…" : {
+
+    },
+    "Hidden from the notch" : {
+
+    },
+    "Hidden machines keep running, they just stay out of the notch. Revoking a machine signs it out for good." : {
+
+    },
+    "Hide" : {
+
+    },
+    "Hide finished sessions" : {
+
+    },
+    "Hide the closed and offline sessions" : {
+
+    },
+    "Hide the result" : {
+
+    },
+    "Hides in %lld s" : {
+
+    },
+    "Icon" : {
+
+    },
+    "Image" : {
+
+    },
+    "Image %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Image %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Insert" : {
+
+    },
+    "Insert a prompt template" : {
+
+    },
+    "Insert a template" : {
+
+    },
+    "Insert them from the message field. A {name} becomes a field to fill in, e.g. Review PR #{number}." : {
+
+    },
+    "Install agent %@ on %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Install agent %1$@ on %2$@"
+          }
+        }
+      }
+    },
+    "Install agent %@ on this machine. Running sessions switch to it when they restart." : {
+
+    },
+    "Interrupt" : {
+
+    },
+    "Interrupt, like Escape in the terminal (⌘.)" : {
+
+    },
+    "Its keys leave this Mac. The account stays on the relay: its recovery key adds it back." : {
+
+    },
+    "Keep a work and a personal account on this Mac and switch between them." : {
+
+    },
+    "Loading the release notes…" : {
+
+    },
+    "MESSAGES" : {
+
+    },
+    "Machine" : {
+
+    },
+    "Machines are tied to an account on a relay." : {
+
+    },
+    "Machines join your account with it: paste it in the install command, or in the agent's tray icon › Set token." : {
+
+    },
+    "Markdown…" : {
+
+    },
+    "Name" : {
+
+    },
+    "Name of the session" : {
+
+    },
+    "New session" : {
+
+    },
+    "New tag…" : {
+
+    },
+    "No live session" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune session en cours"
+          }
+        }
+      }
+    },
+    "No machine is linked to the account yet. Add one in Settings › Machines." : {
+
+    },
+    "No machines yet. Run the install command on a computer, then start claude there." : {
+
+    },
+    "No report for a few minutes" : {
+
+    },
+    "No sessions right now." : {
+
+    },
+    "No shares. Make one from the share menu of a conversation." : {
+
+    },
+    "Nothing found in the conversations opened since Tonton Claude started, or on this Mac." : {
+
+    },
+    "Nothing matches" : {
+
+    },
+    "Nothing recorded yet" : {
+
+    },
+    "OK" : {
+
+    },
+    "Off" : {
+
+    },
+    "Offline" : {
+
+    },
+    "On" : {
+
+    },
+    "One click sends them to the session, from the chips above the message field." : {
+
+    },
+    "Online" : {
+
+    },
+    "Opaque" : {
+
+    },
+    "Open" : {
+
+    },
+    "Open Relay settings" : {
+
+    },
+    "Open in %@" : {
+
+    },
+    "Open the file" : {
+
+    },
+    "PINNED" : {
+
+    },
+    "Paste an image" : {
+
+    },
+    "Paste an image from the clipboard (⌘⇧V)" : {
+
+    },
+    "Paste the recovery key from your other Mac (Settings › Relay)." : {
+
+    },
+    "Pause the connection" : {
+
+    },
+    "Pick an icon and a color for %@" : {
+
+    },
+    "Pin open" : {
+
+    },
+    "Pin to top" : {
+
+    },
+    "Post to Discord, Slack or any service that takes a JSON webhook, over https only." : {
+
+    },
+    "Project names show on the image: check it before you share it." : {
+
+    },
+    "QR code to sign in on another device" : {
+
+    },
+    "QUEUED · sent one per turn" : {
+
+    },
+    "Question" : {
+
+    },
+    "Quick Look (Space)" : {
+
+    },
+    "Quit Tonton Claude" : {
+
+    },
+    "RECENT" : {
+
+    },
+    "Regenerate" : {
+
+    },
+    "Regenerate the token?" : {
+
+    },
+    "Regenerate…" : {
+
+    },
+    "Remove" : {
+
+    },
+    "Remove %@" : {
+
+    },
+    "Remove %@ from this Mac?" : {
+
+    },
+    "Remove from list" : {
+
+    },
+    "Remove tag" : {
+
+    },
+    "Remove this rule" : {
+
+    },
+    "Remove…" : {
+
+    },
+    "Renamed. Its project is %@." : {
+
+    },
+    "Rename…" : {
+
+    },
+    "Repair" : {
+
+    },
+    "Repairs redo one step of the install on %@. Nothing else on the machine changes." : {
+
+    },
+    "Reported by the machine every minute" : {
+
+    },
+    "Reset" : {
+
+    },
+    "Restore" : {
+
+    },
+    "Resume the connection" : {
+
+    },
+    "Revoke" : {
+
+    },
+    "Revoke %@?" : {
+
+    },
+    "Revoke access…" : {
+
+    },
+    "Run a command in the session" : {
+
+    },
+    "Running" : {
+
+    },
+    "SETTINGS" : {
+
+    },
+    "Save" : {
+
+    },
+    "Save image…" : {
+
+    },
+    "Search sessions and messages" : {
+
+    },
+    "Search sessions, machines and settings" : {
+
+    },
+    "Send" : {
+
+    },
+    "Send after Claude's current turn (⌘⇧↩)" : {
+
+    },
+    "Send after this turn" : {
+
+    },
+    "Send “%@”" : {
+
+    },
+    "Send “continue” when the limit resets" : {
+
+    },
+    "Sending…" : {
+
+    },
+    "Sends a Wake-on-LAN packet on this Mac's network. %@ must be on the same network, with Wake-on-LAN on." : {
+
+    },
+    "Sent" : {
+
+    },
+    "Sent." : {
+
+    },
+    "Sessions, machines, settings…" : {
+
+    },
+    "Set up your account first" : {
+
+    },
+    "Settings" : {
+
+    },
+    "Share read-only" : {
+
+    },
+    "Show agent log" : {
+
+    },
+    "Show all %lld lines" : {
+
+    },
+    "Show finished sessions" : {
+
+    },
+    "Show less" : {
+
+    },
+    "Show the QR code" : {
+
+    },
+    "Show the finished sessions (%lld hidden)" : {
+
+    },
+    "Show the project name" : {
+
+    },
+    "Show the result" : {
+
+    },
+    "Shown in the notch" : {
+
+    },
+    "Sign out" : {
+
+    },
+    "Sound when %@ finishes" : {
+
+    },
+    "Start" : {
+
+    },
+    "Start %@ in this folder" : {
+
+    },
+    "Start %@ on %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start %1$@ on %2$@"
+          }
+        }
+      }
+    },
+    "Start a session on a machine (⌘N)" : {
+
+    },
+    "Start here" : {
+
+    },
+    "Stop dictating" : {
+
+    },
+    "Swipe right with two fingers to allow, left to deny" : {
+
+    },
+    "Switch" : {
+
+    },
+    "THIS MAC" : {
+
+    },
+    "TONTON CLAUDE WRAPPED" : {
+
+    },
+    "Tag" : {
+
+    },
+    "Tag for %@" : {
+
+    },
+    "Test" : {
+
+    },
+    "The QR code could not be made. Copy the recovery key from Settings › Relay instead." : {
+
+    },
+    "The log is empty." : {
+
+    },
+    "The machine is signed out immediately. You can add it again later with a new install command." : {
+
+    },
+    "The model Claude Code uses in this session" : {
+
+    },
+    "The release notes could not be loaded. They are on GitHub too." : {
+
+    },
+    "The service refused it. Check the address." : {
+
+    },
+    "This agent is too old to update from here. Copies the command to paste once in a terminal on the machine." : {
+
+    },
+    "This agent is too old to update from here: Settings › Machines gives the command to run once on %@" : {
+
+    },
+    "Tonton Claude" : {
+
+    },
+    "Tonton Claude %@" : {
+
+    },
+    "Unpin" : {
+
+    },
+    "Unpin (closes when the pointer leaves)" : {
+
+    },
+    "Update" : {
+
+    },
+    "Update…" : {
+
+    },
+    "Updating" : {
+
+    },
+    "Use an https address." : {
+
+    },
+    "Use it to sign in on another Mac. Anyone who has it can read and drive your sessions: keep it in your password manager." : {
+
+    },
+    "View on GitHub" : {
+
+    },
+    "Waiting for permission" : {
+
+    },
+    "Wake" : {
+
+    },
+    "What Claude is doing on each of your machines." : {
+
+    },
+    "What the agent did on %@, never what Claude wrote. Keys and tokens are taken out before it leaves." : {
+
+    },
+    "What's new" : {
+
+    },
+    "Your phone or another browser" : {
+
+    },
+    "Your token" : {
+
+    },
+    "connected" : {
+
+    },
+    "connecting…" : {
+
+    },
+    "disconnected" : {
+
+    },
+    "from the notch" : {
+
+    },
+    "of Claude at work" : {
+
+    },
+    "runs out in ~%@" : {
+
+    },
+    "sending…" : {
+
+    },
+    "this Mac only" : {
+
+    },
+    "~/code/project" : {
+
+    },
+    "·" : {
+
+    },
+    "↩" : {
+
+    },
+    "⌘%lld" : {
+
+    }
+  },
+  "version" : "1.0"
+}
