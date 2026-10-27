@@ -51,7 +51,7 @@ struct BusyHoursMap: View {
 
     private func detail(weekday: Int, hour: Int, seconds: TimeInterval) -> String {
         let when = span(weekday: weekday, hour: hour)
-        return seconds > 0 ? "\(when): \(WrappedLog.duration(seconds)) in 13 weeks" : when
+        return seconds > 0 ? String(localized: "\(when): \(WrappedLog.duration(seconds)) in 13 weeks") : when
     }
 
     private func span(weekday: Int, hour: Int) -> String {

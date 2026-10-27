@@ -47,7 +47,7 @@ struct SetupView: View {
                     selfHosted = true
                 }
                 if selfHosted {
-                    ThemeField(placeholder: "https://relay.example.com", text: $customURL).padding(.horizontal, 16).padding(.bottom, 14)
+                    ThemeField(verbatim: "https://relay.example.com", text: $customURL).padding(.horizontal, 16).padding(.bottom, 14)
                 }
             }
             GroupLabel(text: "New here")
@@ -64,10 +64,10 @@ struct SetupView: View {
                     Text("Paste the recovery key from your other Mac (Settings › Relay).").font(.system(size: 12)).foregroundStyle(
                         Theme.textDim)
                     HStack(spacing: 6) {
-                        ThemeField(placeholder: "tonton1.…", text: $recovery, secure: true)
+                        ThemeField(verbatim: "tonton1.…", text: $recovery, secure: true)
                         Button("Restore") {
                             guard let account = Account(recoveryKey: recovery) else {
-                                error = "This is not a valid recovery key."
+                                error = String(localized: "This is not a valid recovery key.")
                                 return
                             }
                             run { try await store.restore(account) }
@@ -114,8 +114,8 @@ struct SetupView: View {
 }
 
 struct RelayChoice: View {
-    let title: String
-    let detail: String
+    let title: LocalizedStringKey
+    let detail: LocalizedStringKey
     let selected: Bool
     let action: () -> Void
 
@@ -242,10 +242,10 @@ struct AccountView: View {
 
     private var statusText: String {
         switch store.connection {
-        case .connected: "Connected"
-        case .connecting: "Connecting…"
-        case .paused: "Paused"
-        case .notConfigured: "Not set up"
+        case .connected: String(localized: "Connected")
+        case .connecting: String(localized: "Connecting…")
+        case .paused: String(localized: "Paused")
+        case .notConfigured: String(localized: "Not set up")
         case .failed(let why): why
         }
     }
@@ -304,12 +304,14 @@ private struct SharesSection: View {
     }
 
     private func project(of share: ShareSummary) -> String {
-        store.sessions.first { $0.id == share.sessionId }.map { $0.name ?? $0.title ?? $0.project } ?? "A session no longer listed"
+        store.sessions.first { $0.id == share.sessionId }.map { $0.name ?? $0.title ?? $0.project }
+            ?? String(localized: "A session no longer listed")
     }
 
     private func details(of share: ShareSummary) -> String {
-        let ends = share.expires.map { "ends \($0.formatted(.relative(presentation: .named)))" } ?? "running"
-        let viewers = share.viewers == 0 ? "nobody watching" : share.viewers == 1 ? "1 viewer" : "\(share.viewers) viewers"
-        return "\(viewers) · \(ends)"
+        let ends =
+            share.expires.map { String(localized: "ends \($0.formatted(.relative(presentation: .named)))") } ?? String(localized: "running")
+        let viewers = share.viewers == 0 ? String(localized: "nobody watching") : String(localized: "\(share.viewers) viewers")
+        return String(localized: "\(viewers) · \(ends)")
     }
 }

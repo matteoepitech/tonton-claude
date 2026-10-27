@@ -47,7 +47,7 @@ final class WhatsNewWindowController {
         let host = NSHostingController(rootView: view)
         host.sizingOptions = []
         let window = NSWindow(contentViewController: host)
-        window.title = "What's New"
+        window.title = String(localized: "What's New")
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden

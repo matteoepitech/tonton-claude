@@ -22,16 +22,21 @@ struct WrappedCard: View {
             Spacer(minLength: 18)
             Grid(alignment: .topLeading, horizontalSpacing: 18, verticalSpacing: 14) {
                 GridRow {
-                    figure("Top project", recap.topProject?.name, recap.topProject.map { WrappedLog.duration($0.value) })
                     figure(
-                        "Most used tool", recap.topTool?.name,
-                        recap.topTool.map { recap.toolCalls == 1 ? "1 call" : "\(Int($0.value)) of \(recap.toolCalls) calls" })
+                        String(localized: "Top project"), recap.topProject?.name, recap.topProject.map { WrappedLog.duration($0.value) })
+                    figure(
+                        String(localized: "Most used tool"), recap.topTool?.name,
+                        recap.topTool.map {
+                            recap.toolCalls == 1
+                                ? String(localized: "1 call") : String(localized: "\(Int($0.value)) of \(recap.toolCalls) calls")
+                        })
                 }
                 GridRow {
                     figure(
-                        "Longest session", recap.longestSession.map { WrappedLog.duration($0.value) }, recap.longestSession?.name)
+                        String(localized: "Longest session"), recap.longestSession.map { WrappedLog.duration($0.value) },
+                        recap.longestSession?.name)
                     if let spent, spent > 0 {
-                        figure("Spent", String(format: "$%.2f", spent), "at list price")
+                        figure(String(localized: "Spent"), Money.dollars(spent), String(localized: "at list price"))
                     }
                 }
             }
@@ -52,7 +57,7 @@ struct WrappedCard: View {
 
     private func figure(_ label: String, _ value: String?, _ detail: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label.uppercased()).font(.system(size: 9, weight: .bold)).tracking(0.8).opacity(0.7)
+            Text(label.localizedUppercase).font(.system(size: 9, weight: .bold)).tracking(0.8).opacity(0.7)
             Text(value ?? "—").font(.system(size: 16, weight: .bold)).lineLimit(1).truncationMode(.middle)
             if let detail { Text(detail).font(.system(size: 11)).opacity(0.75).lineLimit(1).truncationMode(.middle) }
         }
@@ -113,7 +118,7 @@ struct WrappedSection: View {
 
     private func copy(_ card: WrappedCard) {
         guard let png = card.png() else {
-            failure = "Could not make the image."
+            failure = String(localized: "Could not make the image.")
             return
         }
         failure = nil
@@ -125,7 +130,7 @@ struct WrappedSection: View {
 
     private func save(_ card: WrappedCard, month: String) {
         guard let png = card.png() else {
-            failure = "Could not make the image."
+            failure = String(localized: "Could not make the image.")
             return
         }
         let panel = NSSavePanel()

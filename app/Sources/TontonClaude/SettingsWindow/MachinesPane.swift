@@ -132,8 +132,10 @@ struct TokenCard: View {
             Button("Regenerate", role: .destructive) { Task { await run { try await store.regenerateMachineToken() } } }
         } message: {
             Text(
-                "The current token stops working right away: every machine is signed out until you give it the new one. "
-                    + "Other Macs signed in to this account need the new recovery key.")
+                """
+                The current token stops working right away: every machine is signed out until you give it the new one. \
+                Other Macs signed in to this account need the new recovery key.
+                """)
         }
     }
 
@@ -242,9 +244,10 @@ struct MachineRow: View {
     }
 
     private func subtitle(sessions: Int) -> String {
+        let count = String(localized: "\(sessions) sessions")
         let when = (machine.lastSeen ?? machine.createdAt).formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
-        let version = machine.agentVersion.map { " · agent \($0)" } ?? ""
-        return "\(sessions) session\(sessions == 1 ? "" : "s") · seen \(when)\(version)"
+        let seen = String(localized: "\(count) · seen \(when)", comment: "3 sessions · seen 2 hr. ago")
+        return machine.agentVersion.map { String(localized: "\(seen) · agent \($0)", comment: "The agent's version") } ?? seen
     }
 
     /// The reported platform, or for older agents the one of their sessions, or a guess from the name.

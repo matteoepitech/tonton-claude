@@ -24,10 +24,10 @@ enum ThemeChoice: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .midnight: "Midnight"
-        case .paper: "Paper"
-        case .terminal: "Terminal"
-        case .synthwave: "Synthwave"
+        case .midnight: String(localized: "Midnight", comment: "A theme")
+        case .paper: String(localized: "Paper", comment: "A theme")
+        case .terminal: String(localized: "Terminal", comment: "A theme")
+        case .synthwave: String(localized: "Synthwave", comment: "A theme")
         }
     }
 

@@ -77,23 +77,24 @@ struct DiagnosisPanel<Update: View>: View {
     }
 
     private var caption: String {
-        guard let diagnosis = request.answer else { return request.isLoading ? "Asking \(machine.name)…" : "" }
+        guard let diagnosis = request.answer else { return request.isLoading ? String(localized: "Asking \(machine.name)…") : "" }
         let issues = diagnosis.failing.count
-        let summary = issues == 0 ? "All good" : "\(issues) to look at"
-        let when = diagnosis.checkedAt.map { " · checked at \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
-        return "\(summary) · agent \(diagnosis.version)\(when)"
+        let summary = issues == 0 ? String(localized: "All good") : String(localized: "\(issues) to look at")
+        let caption = String(localized: "\(summary) · agent \(diagnosis.version)", comment: "The agent's version")
+        guard let checked = diagnosis.checkedAt else { return caption }
+        return String(localized: "\(caption) · checked at \(checked.formatted(date: .omitted, time: .shortened))")
     }
 
     /// What each repair does on the machine, before the user asks for it.
     static func help(_ fix: String) -> String {
         switch fix {
-        case "service": "Registers the background service at login and starts it on the installed agent."
-        case "hooks": "Adds the Tonton Claude hooks to ~/.claude/settings.json, keeping everything else."
-        case "mcp": "Registers the tonton MCP server with claude mcp add."
-        case "launcher": "Writes the claude launcher into the shell profiles again."
-        case "statusline": "Writes the status line settings the launcher passes to claude."
-        case "opencode": "Writes the Tonton plugin into OpenCode's plugins folder."
-        default: "Runs this repair on the machine."
+        case "service": String(localized: "Registers the background service at login and starts it on the installed agent.")
+        case "hooks": String(localized: "Adds the Tonton Claude hooks to ~/.claude/settings.json, keeping everything else.")
+        case "mcp": String(localized: "Registers the tonton MCP server with claude mcp add.")
+        case "launcher": String(localized: "Writes the claude launcher into the shell profiles again.")
+        case "statusline": String(localized: "Writes the status line settings the launcher passes to claude.")
+        case "opencode": String(localized: "Writes the Tonton plugin into OpenCode's plugins folder.")
+        default: String(localized: "Runs this repair on the machine.")
         }
     }
 }

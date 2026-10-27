@@ -1,16 +1,30 @@
 import SwiftUI
 
+/// A titled row of a settings card. Literal titles and details are looked up in the string catalog; `verbatim` shows a
+/// name as it is (a project, a sound).
 struct Row<Trailing: View>: View {
-    let title: String
-    var detail: String?
+    let title: Text
+    var detail: Text?
     @ViewBuilder let trailing: Trailing
+
+    init(title: LocalizedStringKey, detail: LocalizedStringKey? = nil, @ViewBuilder trailing: () -> Trailing) {
+        self.title = Text(title)
+        self.detail = detail.map { Text($0) }
+        self.trailing = trailing()
+    }
+
+    init(verbatim title: String, detail: LocalizedStringKey? = nil, @ViewBuilder trailing: () -> Trailing) {
+        self.title = Text(title)
+        self.detail = detail.map { Text($0) }
+        self.trailing = trailing()
+    }
 
     var body: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 13, weight: .medium))
+                title.font(.system(size: 13, weight: .medium))
                 if let detail {
-                    Text(detail).font(.system(size: 12)).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+                    detail.font(.system(size: 12)).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 16)
@@ -22,8 +36,8 @@ struct Row<Trailing: View>: View {
 }
 
 struct ToggleRow: View {
-    let title: String
-    let detail: String
+    let title: LocalizedStringKey
+    let detail: LocalizedStringKey
     @Binding var isOn: Bool
 
     var body: some View {
@@ -38,7 +52,7 @@ struct Hairline: View {
 }
 
 struct GroupLabel: View {
-    let text: String
+    let text: LocalizedStringKey
     var body: some View {
         Text(text)
             .font(.system(size: 12, weight: .medium))
