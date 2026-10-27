@@ -31,7 +31,9 @@ public struct MachineRequest<Answer: MachineAnswer>: Equatable, Sendable {
     /// could hand back an older one, or another machine's.
     public func received(reason: String?, answer: Answer?, machine: String) -> MachineRequest {
         guard state == .loading else { return self }
-        if reason == "offline" { return failed("\(machine) is offline. Check that it is on and that the Tonton Claude agent runs there.") }
+        if reason == "offline" {
+            return failed(String(core: "\(machine) is offline. Check that it is on and that the Tonton Claude agent runs there."))
+        }
         guard let answer, answer.requestId == id, answer.machineId == machineId else { return self }
         if let error = answer.error { return failed(error) }
         return MachineRequest(id: id, machineId: machineId, state: .loaded(answer), previous: previous)

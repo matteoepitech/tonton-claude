@@ -19,7 +19,7 @@ struct ChatItemView: View {
                 call: call, result: result, running: result == nil && sessionWorking,
                 steps: call.toolUseId.flatMap { steps[$0] } ?? [])
         case .system(let e):
-            Text(e.text ?? "")
+            Text(AgentText.localized(e.text ?? ""))
                 .font(.notch(10))
                 .foregroundStyle(Theme.tertiary)
                 .frame(maxWidth: .infinity)
@@ -114,7 +114,8 @@ struct ToolRow: View {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.notch(10)).frame(width: 14).accessibilityHidden(true)
                 Text(call.name ?? "?").font(.notch(11, weight: .semibold))
-                Text(call.summary ?? "").font(.notch(11, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1)
+                Text(AgentText.localized(call.summary ?? "")).font(.notch(11, design: .monospaced)).foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
                 if let path = call.filePath, FileManager.default.fileExists(atPath: path) {
@@ -173,7 +174,7 @@ extension ToolRow {
                 HStack(spacing: 4) {
                     Image(systemName: showSteps ? "chevron.down" : "chevron.right").font(.notch(8, weight: .bold))
                         .accessibilityHidden(true)
-                    Text("\(steps.count) call\(steps.count == 1 ? "" : "s") by the subagent").font(.notch(10))
+                    Text("\(steps.count) calls by the subagent").font(.notch(10))
                 }
                 .foregroundStyle(Theme.secondary)
             }
@@ -185,7 +186,7 @@ extension ToolRow {
                         if let name = step.call.name, !name.isEmpty {
                             Text(name).font(.notch(10, weight: .semibold))
                         }
-                        Text(step.call.summary ?? "")
+                        Text(AgentText.localized(step.call.summary ?? ""))
                             .font(.notch(10, design: step.call.name?.isEmpty == false ? .monospaced : .default))
                             .foregroundStyle(Theme.secondary)
                             .lineLimit(1)

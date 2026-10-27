@@ -551,7 +551,7 @@ final class SessionStore: ObservableObject {
             try? await Task.sleep(for: .seconds(5))
             guard let self, let pending = self.pendingNames[session.id], pending == wanted else { return }
             self.pendingNames[session.id] = nil
-            self.lastError = "The relay did not keep the name. It may be too old to rename sessions."
+            self.lastError = String(localized: "The relay did not keep the name. It may be too old to rename sessions.")
         }
     }
 
@@ -590,7 +590,8 @@ final class SessionStore: ObservableObject {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(20))
             guard let self, let current = self.launches.first(where: { $0.id == launch.id }), current.state == .sending else { return }
-            self.replace(current.failed("No answer from \(machine.name). Its agent may be too old to start sessions: update it."))
+            self.replace(
+                current.failed(String(localized: "No answer from \(machine.name). Its agent may be too old to start sessions: update it.")))
         }
     }
 
@@ -609,7 +610,7 @@ final class SessionStore: ObservableObject {
 
     private func launchReported(_ id: String, machineId: String, state: String, reason: String?, detail: StartDetail?) {
         guard let launch = launches.first(where: { $0.id == id && $0.machineId == machineId }) else { return }
-        let name = machines.first { $0.id == machineId }?.name ?? "The machine"
+        let name = machines.first { $0.id == machineId }?.name ?? String(localized: "The machine")
         let next = launch.reported(state, reason: reason, detail: detail, machine: name)
         guard next != launch else { return }
         if next.state == .started {
@@ -647,12 +648,13 @@ final class SessionStore: ObservableObject {
     private func updateFinished(_ machineId: String, ok: Bool, reason: String?, detail: String?) {
         updatingMachines.remove(machineId)
         guard !ok else { return }
-        let name = machines.first { $0.id == machineId }?.name ?? "the machine"
+        let name = machines.first { $0.id == machineId }?.name ?? String(localized: "the machine")
         let message =
             switch reason {
-            case "offline": "\(name) is offline. Check that it is on and that the Tonton Claude agent runs there."
-            case "unsupported": "The agent on \(name) is too old to update itself. Run the install command there once more."
-            default: "Could not update \(name): \(detail ?? "unknown error")."
+            case "offline": String(localized: "\(name) is offline. Check that it is on and that the Tonton Claude agent runs there.")
+            case "unsupported":
+                String(localized: "The agent on \(name) is too old to update itself. Run the install command there once more.")
+            default: String(localized: "Could not update \(name): \(detail ?? String(localized: "unknown error")).")
             }
         updateErrors[machineId] = message
         lastError = message
@@ -677,16 +679,16 @@ final class SessionStore: ObservableObject {
     /// Makes a share of the session and asks its agent to seal a copy for it. Returns what the teammate pastes.
     func share(_ session: SessionSummary, for duration: ShareDuration) async throws -> ShareLink {
         guard let account = settings.account, let vault, connection == .connected else {
-            throw RelayError(message: "Connect to the relay to share a session.")
+            throw RelayError(message: String(localized: "Connect to the relay to share a session."))
         }
         if let machine = machines.first(where: { $0.id == session.machineId }), !machine.sealsShares {
-            throw RelayError(message: "The agent on \(machine.name) is too old to share a session. Update agent first.")
+            throw RelayError(message: String(localized: "The agent on \(machine.name) is too old to share a session. Update agent first."))
         }
         let created: (id: String, token: String, expiresAt: String)
         do {
             created = try await api.createShare(of: session.id, hours: duration.hours, for: account)
         } catch let error as RelayError where error.message == "not found" {
-            throw RelayError(message: "This relay is too old to share sessions: it needs 0.8.0 or later.")
+            throw RelayError(message: String(localized: "This relay is too old to share sessions: it needs 0.8.0 or later."))
         }
         let key = E2E.newKey()
         let order = try vault.sealShareOrder(shareId: created.id, sessionId: session.id, shareKey: key, expiresAt: created.expiresAt)
@@ -714,7 +716,7 @@ final class SessionStore: ObservableObject {
     func requestLog(of machine: MachineInfo) {
         let request = AgentLogRequest(machineId: machine.id, previous: agentLogs[machine.id]?.answer)
         guard connection == .connected, let sealed = try? vault?.sealLogRequest(requestId: request.id, machineId: machine.id) else {
-            agentLogs[machine.id] = request.failed("Not connected to the relay.")
+            agentLogs[machine.id] = request.failed(String(localized: "Not connected to the relay."))
             return
         }
         agentLogs[machine.id] = request
@@ -724,7 +726,7 @@ final class SessionStore: ObservableObject {
             try? await Task.sleep(for: .seconds(15))
             guard let self, let current = self.agentLogs[machine.id], current.id == request.id, current.isLoading else { return }
             self.agentLogs[machine.id] = current.failed(
-                "No answer from \(machine.name). Its agent may be too old to send its log: update it.")
+                String(localized: "No answer from \(machine.name). Its agent may be too old to send its log: update it."))
         }
     }
 
@@ -734,7 +736,7 @@ final class SessionStore: ObservableObject {
 
     private func logReceived(machineId: String, requestId: String, reason: String?, log: AgentLog?) {
         guard let request = agentLogs[machineId], request.id == requestId else { return }
-        let name = machines.first { $0.id == machineId }?.name ?? "The machine"
+        let name = machines.first { $0.id == machineId }?.name ?? String(localized: "The machine")
         agentLogs[machineId] = request.received(reason: reason, answer: log, machine: name)
     }
 
@@ -746,7 +748,7 @@ final class SessionStore: ObservableObject {
         guard connection == .connected,
             let sealed = try? vault?.sealDiagnoseRequest(requestId: request.id, machineId: machine.id, fix: fix)
         else {
-            diagnoses[machine.id] = request.failed("Not connected to the relay.")
+            diagnoses[machine.id] = request.failed(String(localized: "Not connected to the relay."))
             return
         }
         diagnoses[machine.id] = request
@@ -757,7 +759,7 @@ final class SessionStore: ObservableObject {
             try? await Task.sleep(for: .seconds(25))
             guard let self, let current = self.diagnoses[machine.id], current.id == request.id, current.isLoading else { return }
             self.diagnoses[machine.id] = current.failed(
-                "No answer from \(machine.name). Its agent may be too old to check itself: update it.")
+                String(localized: "No answer from \(machine.name). Its agent may be too old to check itself: update it."))
             self.repairing[machine.id] = nil
         }
     }
@@ -768,7 +770,7 @@ final class SessionStore: ObservableObject {
 
     private func diagnosisReceived(machineId: String, requestId: String, reason: String?, diagnosis: Diagnosis?) {
         guard let request = diagnoses[machineId], request.id == requestId else { return }
-        let name = machines.first { $0.id == machineId }?.name ?? "The machine"
+        let name = machines.first { $0.id == machineId }?.name ?? String(localized: "The machine")
         let next = request.received(reason: reason, answer: diagnosis, machine: name)
         diagnoses[machineId] = next
         if !next.isLoading { repairing[machineId] = nil }

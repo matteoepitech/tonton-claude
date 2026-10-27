@@ -48,7 +48,8 @@ final class ArchiveStore: ObservableObject {
         } catch {
             Logger.app.error("archive: the key can't be read")
             key = nil
-            failure = "The archive's key can't be read, so nothing can be archived or opened. Delete all starts a new archive."
+            failure = String(
+                localized: "The archive's key can't be read, so nothing can be archived or opened. Delete all starts a new archive.")
         }
     }
 
@@ -83,7 +84,7 @@ final class ArchiveStore: ObservableObject {
             try archive.save(ConversationArchive.Conversation(summary: summary, entries: entries))
             reload()
         } catch {
-            failure = "Could not archive \(session.project): \(Self.describe(error))"
+            failure = String(localized: "Could not archive \(session.project): \(Self.describe(error))")
         }
     }
 
@@ -93,7 +94,7 @@ final class ArchiveStore: ObservableObject {
             removePage(of: id)
             reload()
         } catch {
-            failure = "Could not delete it: \(Self.describe(error))"
+            failure = String(localized: "Could not delete it: \(Self.describe(error))")
         }
     }
 
@@ -159,16 +160,16 @@ final class ArchiveStore: ObservableObject {
     /// Returns why it couldn't, if it couldn't.
     @discardableResult
     func open(_ id: String) -> String? {
-        guard let conversation = archive?.load(id) else { return "This conversation can't be read any more." }
+        guard let conversation = archive?.load(id) else { return String(localized: "This conversation can't be read any more.") }
         let summary = conversation.summary
+        let archived = summary.archivedAt.formatted(date: .abbreviated, time: .shortened)
         let page = ConversationExport.render(
-            .html, title: summary.title ?? summary.project,
-            subtitle: "\(summary.machine) · archived \(summary.archivedAt.formatted(date: .abbreviated, time: .shortened))",
+            .html, title: summary.title ?? summary.project, subtitle: String(localized: "\(summary.machine) · archived \(archived)"),
             entries: conversation.entries)
         try? FileManager.default.createDirectory(at: Self.pages, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let url = Self.page(of: id)
         guard FileManager.default.createFile(atPath: url.path, contents: Data(page.utf8), attributes: [.posixPermissions: 0o600]) else {
-            return "Could not open \(summary.project)."
+            return String(localized: "Could not open \(summary.project).")
         }
         NSWorkspace.shared.open(url)
         // Opened again: the minute starts over.
@@ -207,14 +208,14 @@ final class ArchiveStore: ObservableObject {
             if key != nil { failure = nil }
         } catch {
             summaries = []
-            failure = "The archive's list can't be read. Nothing is written over it; Delete all starts over."
+            failure = String(localized: "The archive's list can't be read. Nothing is written over it; Delete all starts over.")
         }
     }
 
     private static func describe(_ error: Error) -> String {
         switch error as? ConversationArchive.Failure {
-        case .unreadableIndex: "the archive's list can't be read."
-        case .unreadableKey: "the archive's key can't be read."
+        case .unreadableIndex: String(localized: "the archive's list can't be read.")
+        case .unreadableKey: String(localized: "the archive's key can't be read.")
         case nil: error.localizedDescription
         }
     }

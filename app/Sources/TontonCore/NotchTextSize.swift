@@ -7,9 +7,9 @@ public enum NotchTextSize: String, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .small: "Small"
-        case .standard: "Default"
-        case .large: "Large"
+        case .small: String(core: "Small")
+        case .standard: String(core: "Default")
+        case .large: String(core: "Large")
         }
     }
 

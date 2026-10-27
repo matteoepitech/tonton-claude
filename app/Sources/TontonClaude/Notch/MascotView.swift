@@ -34,9 +34,9 @@ struct MascotView: View {
 
     private static func label(_ pose: Mascot.Pose) -> String {
         switch pose {
-        case .typing: "Claude is working"
-        case .sleeping: "Nothing running"
-        case .raisingHand: "A session needs you"
+        case .typing: String(localized: "Claude is working")
+        case .sleeping: String(localized: "Nothing running")
+        case .raisingHand: String(localized: "A session needs you")
         }
     }
 

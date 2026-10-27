@@ -39,8 +39,8 @@ enum Notifier {
     @MainActor
     static func postUpdate(version: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Tonton Claude \(version) is available"
-        content.body = "Click to see the update."
+        content.title = String(localized: "Tonton Claude \(version) is available")
+        content.body = String(localized: "Click to see the update.")
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: AppUpdater.notificationId, content: content, trigger: nil))
     }
 }

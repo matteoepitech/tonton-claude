@@ -40,12 +40,12 @@ final class QuickLook: NSObject, QLPreviewPanelDataSource {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: attributes)
             let url = directory.appendingPathComponent(PreviewFile.name(item.name))
             guard FileManager.default.createFile(atPath: url.path, contents: item.data, attributes: [.posixPermissions: 0o600]) else {
-                return "Could not prepare \(item.name) for Quick Look."
+                return String(localized: "Could not prepare \(item.name) for Quick Look.")
             }
             urls.append(url)
         }
         self.urls = urls
-        guard let panel = QLPreviewPanel.shared() else { return "Quick Look is not available." }
+        guard let panel = QLPreviewPanel.shared() else { return String(localized: "Quick Look is not available.") }
         panel.dataSource = self
         // The notch floats above regular windows: the panel has to float above the notch.
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 2)

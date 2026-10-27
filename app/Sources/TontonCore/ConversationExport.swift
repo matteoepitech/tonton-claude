@@ -21,12 +21,13 @@ public enum ConversationExport {
         for item in ChatItem.build(from: entries) {
             switch item {
             case .user(let entry):
-                md += "**You:** \(entry.text ?? "")\n\n"
+                md += String(core: "**You:** \(entry.text ?? "")") + "\n\n"
                 md += images(entry.images) { "![image](\($0))\n\n" }
             case .assistant(let entry):
                 md += "\(entry.text ?? "")\n\n"
             case .tool(let call, let result):
-                md += "- `\(call.name ?? "tool")` \(call.summary ?? "")\(result?.isError == true ? " (failed)" : "")\n\n"
+                let failed = result?.isError == true ? " " + String(core: "(failed)") : ""
+                md += "- `\(call.name ?? "tool")` \(call.summary ?? "")\(failed)\n\n"
                 md += images(result?.images) { "  ![tool result](\($0))\n\n" }
             case .system(let entry):
                 md += "> \(entry.text ?? "")\n\n"

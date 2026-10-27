@@ -6,21 +6,28 @@ public enum Spoken {
     /// A status dot: the state, then the 5-hour limit while its ring shows.
     public static func status(_ status: SessionStatus, limit: UsageLimit?, at now: Date = Date()) -> String {
         guard let limit, limit.level(at: now) != nil else { return status.label }
-        return "\(status.label), 5-hour limit \(Int(limit.usedPercent.rounded())) % used"
+        return String(core: "\(status.label), 5-hour limit \(Int(limit.usedPercent.rounded())) % used")
     }
 
     /// Read out when a session asks for permissions, without moving the VoiceOver cursor.
     public static func permissions(_ requests: [PermissionRequest], session: String) -> String {
         guard requests.count == 1, let request = requests.first else {
-            return "\(session) asks for \(requests.count) permissions: \(requests.map(\.toolName).joined(separator: ", "))"
+            let tools = requests.map(\.toolName).joined(separator: ", ")
+            return String(core: "\(session) asks for \(requests.count) permissions: \(tools)")
         }
         let description = request.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        return "\(session) asks to use \(request.toolName)" + (description.isEmpty ? "" : ": \(description)")
+        if description.isEmpty { return String(core: "\(session) asks to use \(request.toolName)") }
+        return String(core: "\(session) asks to use \(request.toolName): \(description)")
     }
 
-    /// "No live session", "1 live session", "3 live sessions".
-    public static func count(_ count: Int, _ noun: String) -> String {
-        count == 0 ? "No \(noun)" : "\(count) \(noun)\(count == 1 ? "" : "s")"
+    /// The live sessions behind the closed notch's dots: "No live session", "1 live session", "3 live sessions".
+    public static func liveSessions(_ count: Int) -> String {
+        count == 0 ? String(core: "No live session") : String(core: "\(count) live sessions")
+    }
+
+    /// The sessions a pill row has no room for.
+    public static func moreSessions(_ count: Int) -> String {
+        String(core: "\(count) more sessions")
     }
 }
 

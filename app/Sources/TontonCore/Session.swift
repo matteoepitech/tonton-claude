@@ -5,14 +5,14 @@ public enum SessionStatus: String, Codable, Sendable {
 
     public var label: String {
         switch self {
-        case .starting: "Starting"
-        case .working: "Working"
-        case .waiting: "Waiting for you"
-        case .permission: "Needs approval"
-        case .idle: "Done"
-        case .error: "Error"
-        case .ended: "Closed"
-        case .offline: "Offline"
+        case .starting: String(core: "Starting")
+        case .working: String(core: "Working")
+        case .waiting: String(core: "Waiting for you")
+        case .permission: String(core: "Needs approval")
+        case .idle: String(core: "Done")
+        case .error: String(core: "Error")
+        case .ended: String(core: "Closed")
+        case .offline: String(core: "Offline")
         }
     }
 
@@ -152,10 +152,12 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     /// A status text from Claude Code shortened, or the status when there is none.
     public static func statusText(_ statusText: String?, status: SessionStatus) -> String {
         guard let text = statusText, !text.isEmpty else { return status.label }
-        if let range = text.range(of: "needs your permission to use ") { return "Wants to use \(text[range.upperBound...])" }
-        if text.contains("waiting for your input") { return "Waiting for you" }
+        if let range = text.range(of: "needs your permission to use ") {
+            return String(core: "Wants to use \(String(text[range.upperBound...]))")
+        }
+        if text.contains("waiting for your input") { return String(core: "Waiting for you") }
         // StopFailure's error type when the plan's limit refuses a request.
-        if text == "rate_limit" { return "Usage limit reached" }
+        if text == "rate_limit" { return String(core: "Usage limit reached") }
         return text
     }
 }
@@ -184,9 +186,12 @@ public struct TokenCounts: Codable, Equatable, Sendable {
             cacheWrite: a.cacheWrite + b.cacheWrite)
     }
 
-    /// `950`, `4.2k`, `48k`, `1.2M`.
+    /// `950`, `4.2k`, `48k`, `1.2M`, with the language's decimal mark.
     public static func short(_ count: Int) -> String {
-        func trimmed(_ value: Double) -> String { String(format: "%.1f", value).replacingOccurrences(of: ".0", with: "") }
+        func trimmed(_ value: Double) -> String {
+            let mark = Strings.numbers.decimalSeparator ?? "."
+            return String(format: "%.1f", locale: Strings.numbers, value).replacingOccurrences(of: "\(mark)0", with: "")
+        }
         if count < 1000 { return "\(count)" }
         if count < 10_000 { return "\(trimmed(Double(count) / 1000))k" }
         if count < 1_000_000 { return "\(count / 1000)k" }
@@ -261,10 +266,10 @@ public struct UsageLimit: Equatable, Sendable {
     /// `1 h 42`, `42 min` or `2 d 5 h` from one time to another, at least a minute.
     public static func duration(from now: Date, to end: Date) -> String {
         let minutes = max(1, Int((end.timeIntervalSince(now) / 60).rounded(.up)))
-        if minutes < 60 { return "\(minutes) min" }
-        if minutes < 24 * 60 { return "\(minutes / 60) h \(String(format: "%02d", minutes % 60))" }
+        if minutes < 60 { return String(core: "\(minutes) min") }
+        if minutes < 24 * 60 { return String(core: "\(minutes / 60) h \(String(format: "%02d", minutes % 60))") }
         let hours = minutes / 60
-        return hours % 24 == 0 ? "\(hours / 24) d" : "\(hours / 24) d \(hours % 24) h"
+        return hours % 24 == 0 ? String(core: "\(hours / 24) d") : String(core: "\(hours / 24) d \(hours % 24) h")
     }
 }
 

@@ -9,11 +9,12 @@ struct GeneralPane: View {
 
     private var shortcuts: [(String, [String])] {
         [
-            ("Toggle the notch", settings.hotkey.keys), ("Command palette", ["⌘", "K"]), ("Close the notch", ["esc"]),
-            ("Jump to session 1…9, pinned first", ["⌘", "1…9"]),
-            ("Previous / next session", ["⌘", "↑↓"]), ("Send a message", ["↩"]), ("New line", ["⌥", "↩"]),
-            ("Allow the pending request", ["⌘", "↩"]), ("Interrupt the session", ["⌘", "."]), ("Dictate a message (hold)", ["⌃"]),
-            ("Paste an image", ["⌘", "⇧", "V"]),
+            (String(localized: "Toggle the notch"), settings.hotkey.keys), (String(localized: "Command palette"), ["⌘", "K"]),
+            (String(localized: "Close the notch"), ["esc"]), (String(localized: "Jump to session 1…9, pinned first"), ["⌘", "1…9"]),
+            (String(localized: "Previous / next session"), ["⌘", "↑↓"]), (String(localized: "Send a message"), ["↩"]),
+            (String(localized: "New line"), ["⌥", "↩"]), (String(localized: "Allow the pending request"), ["⌘", "↩"]),
+            (String(localized: "Interrupt the session"), ["⌘", "."]), (String(localized: "Dictate a message (hold)"), ["⌃"]),
+            (String(localized: "Paste an image"), ["⌘", "⇧", "V"]),
         ].filter { !$0.1.isEmpty }
     }
 
@@ -61,7 +62,8 @@ struct GeneralPane: View {
                 Row(title: "Daily budget", detail: "An alert the first time a day's cost goes past it.") {
                     ChoiceMenu(
                         selection: String(settings.dailyBudget),
-                        options: [("0", "None")] + [5, 10, 20, 50, 100, 200].map { (String($0), "$\($0)") }
+                        options: [("0", String(localized: "None"))]
+                            + [5, 10, 20, 50, 100, 200].map { (String($0), Money.dollars(Double($0), digits: 0)) }
                     ) {
                         settings.dailyBudget = Int($0) ?? 0
                     }
@@ -70,7 +72,8 @@ struct GeneralPane: View {
                 Row(title: "Monthly budget", detail: "An alert the first time a month's cost goes past it.") {
                     ChoiceMenu(
                         selection: String(settings.monthlyBudget),
-                        options: [("0", "None")] + [50, 100, 200, 500, 1000, 2000].map { (String($0), "$\($0)") }
+                        options: [("0", String(localized: "None"))]
+                            + [50, 100, 200, 500, 1000, 2000].map { (String($0), Money.dollars(Double($0), digits: 0)) }
                     ) {
                         settings.monthlyBudget = Int($0) ?? 0
                     }
@@ -83,9 +86,9 @@ struct GeneralPane: View {
                     ChoiceMenu(
                         selection: String(settings.hideFinishedAfterHours),
                         options: [
-                            ("0", "Never"), (String(FinishedSessions.rightAway), "Right away"), ("1", "After 1 hour"),
-                            ("6", "After 6 hours"),
-                            ("24", "After 1 day"),
+                            ("0", String(localized: "Never")), (String(FinishedSessions.rightAway), String(localized: "Right away")),
+                            ("1", String(localized: "After 1 hour")), ("6", String(localized: "After 6 hours")),
+                            ("24", String(localized: "After 1 day")),
                         ]
                     ) {
                         settings.hideFinishedAfterHours = Int($0) ?? 0
@@ -122,8 +125,10 @@ struct GeneralPane: View {
             Card {
                 ToggleRow(
                     title: "Scripts can send messages",
-                    detail: "AppleScript and Shortcuts (Run AppleScript) can always read the sessions. With this on, they can also "
-                        + "message Claude, e.g. send message \"run the tests\" to \"api\".",
+                    detail: """
+                        AppleScript and Shortcuts (Run AppleScript) can always read the sessions. With this on, they can also \
+                        message Claude, e.g. send message "run the tests" to "api".
+                        """,
                     isOn: $settings.scriptsCanSend)
             }
             GroupLabel(text: "Updates")

@@ -39,7 +39,7 @@ struct ActivityDots: View {
                         Text("\(live.count)")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundStyle(store.attentionCount > 0 ? Theme.warning : .white.opacity(0.6))
-                            .accessibilityLabel(Spoken.count(live.count, "live session"))
+                            .accessibilityLabel(Spoken.liveSessions(live.count))
                     }
                 }
                 .frame(width: state.currentWingWidth)

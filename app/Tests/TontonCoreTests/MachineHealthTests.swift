@@ -3,6 +3,9 @@ import XCTest
 @testable import TontonCore
 
 final class MachineHealthTests: XCTestCase {
+    override func setUpWithError() throws { try Catalog.use("en") }
+    override func tearDown() { Catalog.reset() }
+
     /// Sealed by agent/src/crypto.ts with the key of E2ETests (32 bytes set to 42), as the service sends it.
     private let agentKey = "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio"
     private let agentBlob =

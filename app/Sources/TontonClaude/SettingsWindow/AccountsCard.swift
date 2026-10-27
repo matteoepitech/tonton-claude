@@ -20,6 +20,7 @@ struct AccountsCard: View {
                     Text("Keep a work and a personal account on this Mac and switch between them.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Button("Add an account…", action: add).buttonStyle(ThemeButtonStyle())
                 }

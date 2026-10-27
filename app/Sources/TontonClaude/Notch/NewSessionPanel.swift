@@ -44,8 +44,10 @@ struct NewSessionPanel: View {
                 if let machine { recentFolders(machine) }
             }
             ForEach(store.launches) { launch in
-                LaunchCard(launch: launch, machine: store.machines.first { $0.id == launch.machineId }?.name ?? "the machine")
-                    .padding(.top, 10)
+                LaunchCard(
+                    launch: launch, machine: store.machines.first { $0.id == launch.machineId }?.name ?? String(localized: "the machine")
+                )
+                .padding(.top, 10)
             }
         }
         .padding(14)
@@ -72,7 +74,8 @@ struct NewSessionPanel: View {
                             if let style = settings.machineStyles[machine.id] {
                                 MachineBadge(style: style, size: 10).accessibilityHidden(true)
                             }
-                            Text(store.thisMac == machine.id ? "This Mac" : machine.name).font(.notch(11, weight: .medium))
+                            Text(store.thisMac == machine.id ? String(localized: "This Mac") : machine.name)
+                                .font(.notch(11, weight: .medium))
                         }
                         .padding(.horizontal, 10)
                         .frame(height: 24)
@@ -82,7 +85,7 @@ struct NewSessionPanel: View {
                     .buttonStyle(.plain)
                     .disabled(!canStart(machine))
                     .opacity(canStart(machine) ? 1 : 0.4)
-                    .help(why(machine) ?? "Start a session on \(machine.name)")
+                    .help(why(machine) ?? String(localized: "Start a session on \(machine.name)"))
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
@@ -190,8 +193,8 @@ struct NewSessionPanel: View {
     /// Why no session can start on the machine from here, if it cannot.
     private func why(_ machine: MachineInfo) -> String? {
         let platform = machine.platform ?? store.sessions.first { $0.machineId == machine.id }?.platform
-        if platform == "win32" { return "Starting sessions needs tmux, which Windows does not have" }
-        if !machine.online { return "\(machine.name) is offline" }
+        if platform == "win32" { return String(localized: "Starting sessions needs tmux, which Windows does not have") }
+        if !machine.online { return String(localized: "\(machine.name) is offline") }
         return nil
     }
 }
@@ -284,7 +287,7 @@ private struct LaunchCard: View {
             .textSelection(.enabled)
     }
 
-    private func caption(_ text: String) -> some View {
+    private func caption(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.notch(11)).foregroundStyle(Theme.secondary)
     }
 }

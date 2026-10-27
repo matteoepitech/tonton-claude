@@ -10,10 +10,10 @@ public enum SessionCommandName: String, Codable, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .compact: "Compact the conversation"
-        case .clear: "Clear the conversation…"
-        case .model: "Model"
-        case .interrupt: "Interrupt"
+        case .compact: String(core: "Compact the conversation")
+        case .clear: String(core: "Clear the conversation…")
+        case .model: String(core: "Model")
+        case .interrupt: String(core: "Interrupt")
         }
     }
 

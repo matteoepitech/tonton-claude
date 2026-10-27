@@ -18,11 +18,14 @@ public enum Webhook {
     }
 
     public static func message(_ event: Event, _ session: SessionSummary, privacy: Privacy) -> String {
-        let who = privacy.includeNames ? "Claude (\(session.displayName) on \(session.machine))" : "A Claude session"
+        let (name, machine) = (session.displayName, session.machine)
+        let status = session.status.label.lowercased(with: Strings.locale)
         var text =
-            switch event {
-            case .finished: "\(who) finished."
-            case .needsYou: "\(who) needs you: \(session.status.label.lowercased())."
+            switch (event, privacy.includeNames) {
+            case (.finished, true): String(core: "Claude (\(name) on \(machine)) finished.")
+            case (.finished, false): String(core: "A Claude session finished.")
+            case (.needsYou, true): String(core: "Claude (\(name) on \(machine)) needs you: \(status).")
+            case (.needsYou, false): String(core: "A Claude session needs you: \(status).")
             }
         if privacy.includeLastMessage, let last = session.lastMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !last.isEmpty {
             text += "\n> \(last.prefix(300))"

@@ -8,7 +8,7 @@ public enum UndoSendDelay: Int, CaseIterable, Sendable {
     case ten = 10
 
     public var seconds: TimeInterval { TimeInterval(rawValue) }
-    public var label: String { self == .off ? "Off" : "\(rawValue) seconds" }
+    public var label: String { self == .off ? String(core: "Off") : String(core: "\(rawValue) seconds") }
 }
 
 /// A message held in the app before it is sent, with everything needed to put it back in the composer.

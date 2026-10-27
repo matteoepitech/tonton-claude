@@ -112,12 +112,15 @@ struct ExpandedView: View {
 
 struct CenteredMessage: View {
     let icon: String
-    let title: String
-    let detail: String
-    var action: String?
+    let title: LocalizedStringKey
+    let detail: LocalizedStringKey
+    var action: LocalizedStringKey?
     var perform: (() -> Void)?
 
-    init(icon: String, title: String, detail: String, action: String? = nil, perform: (() -> Void)? = nil) {
+    init(
+        icon: String, title: LocalizedStringKey, detail: LocalizedStringKey, action: LocalizedStringKey? = nil,
+        perform: (() -> Void)? = nil
+    ) {
         (self.icon, self.title, self.detail, self.action, self.perform) = (icon, title, detail, action, perform)
     }
 
@@ -157,21 +160,26 @@ struct TodayCost: View {
 
     /// The month too, against its budget when there is one.
     private var help: String {
-        let month = usage.history.spent(inMonth: WrappedLog.month(Date()))
+        let month = Money.dollars(usage.history.spent(inMonth: WrappedLog.month(Date())))
         let budget = settings.monthlyBudget
-        let spent = budget > 0 ? String(format: "$%.2f of $%d", month, budget) : String(format: "$%.2f", month)
-        return "Spent today, as recorded on this Mac. This month: \(spent)."
+        guard budget > 0 else { return String(localized: "Spent today, as recorded on this Mac. This month: \(month).") }
+        return String(
+            localized: "Spent today, as recorded on this Mac. This month: \(month) of \(Money.dollars(Double(budget), digits: 0)).")
     }
 
     var body: some View {
         let spent = usage.history.spent()
         if spent > 0 {
             let budget = settings.dailyBudget
-            Text(budget > 0 ? String(format: "Today $%.2f of $%d", spent, budget) : String(format: "Today $%.2f", spent))
-                .font(.notch(11, design: .monospaced))
-                .foregroundStyle(budget > 0 && spent >= Double(budget) ? Theme.warning : Theme.ink.opacity(0.5))
-                .padding(.trailing, 6)
-                .help(help)
+            Text(
+                budget > 0
+                    ? String(localized: "Today \(Money.dollars(spent)) of \(Money.dollars(Double(budget), digits: 0))")
+                    : String(localized: "Today \(Money.dollars(spent))")
+            )
+            .font(.notch(11, design: .monospaced))
+            .foregroundStyle(budget > 0 && spent >= Double(budget) ? Theme.warning : Theme.ink.opacity(0.5))
+            .padding(.trailing, 6)
+            .help(help)
         }
     }
 }

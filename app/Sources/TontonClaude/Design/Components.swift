@@ -115,17 +115,33 @@ struct Card<Content: View>: View {
 }
 
 struct ThemeField: View {
-    let placeholder: String
+    private let placeholder: Text
     @Binding var text: String
     var secure = false
     @FocusState private var focused: Bool
 
+    init(placeholder: LocalizedStringKey, text: Binding<String>, secure: Bool = false) {
+        self.init(prompt: Text(placeholder), text: text, secure: secure)
+    }
+
+    /// A placeholder that reads the same in every language, an address or a key's start, shown as it is: no Markdown
+    /// turning it into a link.
+    init(verbatim placeholder: String, text: Binding<String>, secure: Bool = false) {
+        self.init(prompt: Text(verbatim: placeholder), text: text, secure: secure)
+    }
+
+    private init(prompt: Text, text: Binding<String>, secure: Bool) {
+        placeholder = prompt
+        _text = text
+        self.secure = secure
+    }
+
     var body: some View {
         Group {
             if secure {
-                SecureField("", text: $text, prompt: Text(placeholder).foregroundStyle(Theme.textFaint))
+                SecureField("", text: $text, prompt: placeholder.foregroundStyle(Theme.textFaint))
             } else {
-                TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Theme.textFaint))
+                TextField("", text: $text, prompt: placeholder.foregroundStyle(Theme.textFaint))
             }
         }
         .textFieldStyle(.plain)
