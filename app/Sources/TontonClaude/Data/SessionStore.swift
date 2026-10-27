@@ -345,7 +345,8 @@ final class SessionStore: ObservableObject {
             logReceived(machineId: machineId, requestId: requestId, reason: reason, log: vault.agentLog(logs))
         case .diagnosis(let machineId, let requestId, let reason, let diagnosis):
             diagnosisReceived(machineId: machineId, requestId: requestId, reason: reason, diagnosis: vault.diagnosis(diagnosis))
-        case .unknown:
+        // Pools come with #234; until then the notch shows none.
+        case .pool, .unknown:
             break
         }
     }

@@ -47,9 +47,12 @@ export async function runChannel() {
       else if (conversation && message.sessionId === conversation.link.sessionId) {
         if (message.t === 'share') conversation.shares.receive(message.shareId, message.order)
         else if (message.t === 'unshare') conversation.shares.remove(message.shareId)
+        else if (message.t === 'pool_join') conversation.pools.receive(message.poolId, message.order)
+        else if (message.t === 'pool_left') conversation.pools.remove(message.poolId)
         else void onRelayMessage(message)
       }
     },
+    pool: update => conversation?.pools.apply(update),
   })
 
   const onRelayMessage = async (message: Extract<RelayToAgent, { t: 'prompt' | 'verdict' }>) => {

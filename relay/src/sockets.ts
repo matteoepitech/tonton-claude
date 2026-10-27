@@ -1,4 +1,5 @@
 import type { WebSocketHandler } from 'bun'
+import type { PoolAgentMessage, PoolAppMessage } from '../../shared/pool-protocol'
 import type { AgentMessage, AppMessage, SealedEntry } from '../../shared/protocol'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
@@ -18,6 +19,7 @@ import {
   RECENT_HISTORY_BYTES,
   RECENT_HISTORY_ENTRIES,
 } from './limits'
+import { handleAgentPoolMessage, handleAppPoolMessage, poolSessionConnected, poolSessionDisconnected } from './pool-sockets'
 import { isLaunchId, isRequestId, isRequestToken, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
 
 export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<SocketData> {
@@ -66,7 +68,10 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
         return
       }
       const { accountId, sessionId } = socket.data
-      if (sessionId && ctx.hub.unbindAgent(socket, sessionId)) ctx.sessions.agentDisconnected(accountId, sessionId)
+      if (sessionId && ctx.hub.unbindAgent(socket, sessionId)) {
+        ctx.sessions.agentDisconnected(accountId, sessionId)
+        poolSessionDisconnected(ctx, accountId, sessionId)
+      }
       ctx.hub.removeMachineSocket(socket)
       onMachinePresence(ctx, socket)
     },
@@ -109,6 +114,7 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
   const sessionId = message.sessionId
   // Once announced, a socket only speaks for its own session.
   if (message.t !== 'hello' && socket.data.sessionId !== sessionId) return
+  if (handleAgentPoolMessage(ctx, socket, message as PoolAgentMessage, sessionId)) return
 
   switch (message.t) {
     case 'hello': {
@@ -122,6 +128,8 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
       for (const share of ctx.registry.shares(accountId, sessionId)) {
         if (share.order) ctx.hub.send(socket, { t: 'share', sessionId, shareId: share.id, order: share.order })
       }
+      // And its pools, with the orders that put it there.
+      poolSessionConnected(ctx, socket, sessionId)
       break
     }
     case 'share_info': {
@@ -165,6 +173,7 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
 
 function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage) {
   const { accountId } = socket.data
+  if (handleAppPoolMessage(ctx, socket, message as PoolAppMessage)) return
   switch (message?.t) {
     case 'subscribe': {
       socket.data.sessionId = isSessionId(message.sessionId) ? message.sessionId : null

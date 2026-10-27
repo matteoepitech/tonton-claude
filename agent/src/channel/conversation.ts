@@ -7,6 +7,7 @@ import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
+import { SessionPools } from './pools'
 import type { SessionLink } from './session-link'
 import { SessionShares } from './shares'
 import { COMMANDS } from './terminal'
@@ -53,6 +54,8 @@ export class Conversation {
   private readonly sentSubIds = new Set<string>()
   /** Read-only shares of this session: each gets its own sealed copy. */
   readonly shares: SessionShares
+  /** The pools this session works for, with their keys. */
+  readonly pools: SessionPools
 
   constructor(
     readonly link: SessionLink,
@@ -67,6 +70,7 @@ export class Conversation {
       post,
       () => withoutOldImages(this.entries),
     )
+    this.pools = new SessionPools(() => link.sessionId, key, post)
     this.tailer = link.transcriptPath
       ? new Tailer(link.transcriptPath, {
           lines: (lines, initial) => this.onLines(lines, initial),

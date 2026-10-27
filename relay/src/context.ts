@@ -1,3 +1,4 @@
+import type { PoolUpdate } from '../../shared/pool-protocol'
 import type { MachineSummary, SessionSummary, ShareSummary } from '../../shared/protocol'
 import { ApnsClient, type Pusher } from './apns'
 import { SessionArchive } from './archive'
@@ -5,6 +6,7 @@ import type { RelayConfig } from './config'
 import { Hub } from './hub'
 import { RATE_LIMITS } from './limits'
 import type { RelayCounts } from './metrics'
+import { type PoolSessionOrderRow, PoolStore } from './pools'
 import { PushService } from './push'
 import { RateLimiter } from './rate-limit'
 import { Registry, type Share } from './registry'
@@ -30,6 +32,10 @@ export class RelayContext {
    */
   readonly rules = new Map<string, string>()
   readonly sessions: SessionStore
+  /** Pools, their members, sessions and sealed work (docs/pools.md). */
+  readonly pools: PoolStore
+  /** Posts per pool member in the current minute, to cap how fast one member can write to a pool. */
+  readonly poolPosts = new Map<string, { minute: number; count: number }>()
   /** The sealed copies of shared sessions. */
   readonly shares = new ShareStreams()
   private readonly archive: SessionArchive
@@ -47,6 +53,7 @@ export class RelayContext {
   ) {
     this.registry = new Registry(config.dataDir)
     this.archive = new SessionArchive(this.registry.db)
+    this.pools = new PoolStore(this.registry.db)
     this.sessions = new SessionStore(
       {
         updated: (accountId, session) => {
@@ -74,7 +81,74 @@ export class RelayContext {
     this.pruneTimer = setInterval(() => {
       for (const limiter of [this.signups, this.claims, this.failedAuth]) limiter.prune()
       for (const share of this.registry.expireShares()) this.endShare(share, 'expired')
+      this.poolPosts.clear()
     }, 60_000)
+  }
+
+  // MARK: Pools
+
+  /** The pool's sessions, as `Hub.sendToPool` reaches their agents. */
+  poolSessions(poolId: string): { accountId: string; sessionId: string }[] {
+    return this.pools.sessionOrders(poolId).map(({ accountId, sessionId }) => ({ accountId, sessionId }))
+  }
+
+  /** To every app that follows the pool and to the agents of its sessions. */
+  broadcastPool(poolId: string, message: PoolUpdate) {
+    this.hub.sendToPool(poolId, message, this.poolSessions(poolId))
+  }
+
+  /** The owner deleted the pool: its members and its sessions' agents are told, then forget it. */
+  removePool(poolId: string) {
+    const members = this.pools.memberAccounts(poolId)
+    const sessions = this.pools.remove(poolId)
+    this.hub.sendToPool(poolId, { t: 'pool_removed', poolId }, [])
+    for (const accountId of members) this.hub.dropPoolAccount(poolId, accountId)
+    for (const session of sessions) this.sessionLeftPool(session, false)
+  }
+
+  /** A member left: the others see it go with its sessions, its own apps and agents drop the pool. */
+  leavePool(poolId: string, accountId: string) {
+    const sessions = this.pools.leave(poolId, accountId)
+    if (!sessions) return
+    this.hub.sendToApps(accountId, { t: 'pool_removed', poolId }, socket => socket.data.pools?.has(poolId) === true)
+    this.hub.dropPoolAccount(poolId, accountId)
+    for (const session of sessions) this.sessionLeftPool(session, true)
+    this.broadcastPool(poolId, { t: 'pool_member_left', poolId, account: accountId })
+  }
+
+  /** Tells the session's agent it is out of the pool, and the members when `announce`. */
+  sessionLeftPool(session: Pick<PoolSessionOrderRow, 'poolId' | 'accountId' | 'sessionId'>, announce: boolean) {
+    const { poolId, accountId, sessionId } = session
+    this.hub.setPoolSessionReady(poolId, accountId, sessionId, false)
+    const agent = this.hub.agentOf(accountId, sessionId)
+    if (agent) this.hub.send(agent, { t: 'pool_left', sessionId, poolId })
+    if (announce) this.broadcastPool(poolId, { t: 'pool_session_left', poolId, account: accountId, session: sessionId })
+  }
+
+  /** A pool session's agent connected, left or took its order: the members see it. */
+  poolSessionChanged(poolId: string, accountId: string, sessionId: string) {
+    const session = this.pools.sessions(poolId).find(s => s.account === accountId && s.session === sessionId)
+    if (session) {
+      const live = this.hub.poolSessionState(poolId, accountId, sessionId)
+      this.broadcastPool(poolId, { t: 'pool_session', poolId, session: { ...session, ...live } })
+    }
+  }
+
+  /** False once the member wrote to the pool as often as it may this minute. */
+  allowPoolPost(poolId: string, accountId: string, limit: number): boolean {
+    const minute = Math.floor(Date.now() / 60_000)
+    const key = `${poolId}/${accountId}`
+    const current = this.poolPosts.get(key)
+    const count = current?.minute === minute ? current.count + 1 : 1
+    this.poolPosts.set(key, { minute, count })
+    return count <= limit
+  }
+
+  /** Before an account is deleted: the pools it owns go, it leaves the others. */
+  removeAccountPools(accountId: string) {
+    const { owned, joined } = this.pools.poolsOf(accountId)
+    for (const poolId of owned) this.removePool(poolId)
+    for (const poolId of joined) this.leavePool(poolId, accountId)
   }
 
   machineList(accountId: string): MachineSummary[] {

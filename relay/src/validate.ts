@@ -27,3 +27,14 @@ export const isDeviceId = (value: unknown): value is string => typeof value === 
 
 /** An APNs device or Live Activity token, hex. */
 export const isPushToken = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-fA-F]{64,512}$/.test(value)
+
+/** A pool's id, chosen by the client that creates it: 12 base64url characters, like the relay's own ids. */
+export const isPoolId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{12}$/.test(value)
+
+/** The id a client gives a pool task, message or event. */
+export const isPoolItemId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(value)
+
+export const isPoolRole = (value: unknown): value is 'owner' | 'admin' | 'member' | 'viewer' =>
+  value === 'owner' || value === 'admin' || value === 'member' || value === 'viewer'
+
+export const isRevision = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0

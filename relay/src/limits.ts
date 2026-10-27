@@ -31,6 +31,27 @@ export const MAX_AGENT_LOG_BYTES = 256 * 1024
 export const MAX_DIAGNOSE_REQUEST_BYTES = 4096
 /** A sealed diagnosis: a few lines of checks. */
 export const MAX_DIAGNOSIS_BYTES = 64 * 1024
+/** Pools (docs/pools.md): what one account and one pool may hold. Messages and events go oldest first. */
+export const MAX_POOLS_PER_ACCOUNT = 10
+export const MAX_POOL_MEMBERS = 50
+export const MAX_POOL_SESSIONS = 100
+export const MAX_POOL_TASKS = 500
+export const MAX_POOL_MESSAGES = 2000
+export const MAX_POOL_EVENTS = 5000
+export const MAX_POOL_INVITES = 20
+export const MAX_POOL_INVITE_USES = 100
+export const MAX_POOL_INVITE_HOURS = 30 * 24
+/** Sealed pool name and goal, a member's or a session's profile, a key grant, a session order. */
+export const MAX_POOL_INFO_BYTES = 8192
+export const MAX_POOL_NOTES_BYTES = 256 * 1024
+/** One sealed task, message or event. */
+export const MAX_POOL_TASK_BYTES = 64 * 1024
+export const MAX_POOL_POST_BYTES = 16 * 1024
+/** What a snapshot carries of the messages and events, the latest ones. */
+export const POOL_SNAPSHOT_MESSAGES = 200
+export const POOL_SNAPSHOT_EVENTS = 500
+/** Posts (tasks, notes, messages, events) one member may send to one pool per minute. */
+export const MAX_POOL_POSTS_PER_MINUTE = 240
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
 /** iPhones and iPads that get pushes, per account. The least recently registered goes first. */

@@ -5,6 +5,8 @@ import { parseAccountToken } from '../account-token'
 import { chatItems } from '../chat'
 import { open } from '../crypto'
 import { modelFamily, modelName } from '../model'
+import { openPoolGrant, openPoolSessionOrder } from '../pool'
+import { parsePoolInvite } from '../pool-link'
 import { acceptsCommands, displayStatusText, type Session } from '../session'
 import { parseShareLink } from '../share-link'
 import { Vault } from '../vault'
@@ -50,6 +52,20 @@ describe('vectors from the Swift implementation', () => {
     expect(parseShareLink(text)).toEqual(fields)
     // From the address bar too: the web app takes it after the #.
     expect(parseShareLink(`#${text}`)).toEqual(fields)
+  })
+
+  test("the pool invite the app makes, its key grant and a session's order, are read as the app wrote them", async () => {
+    const { text, ...fields } = vectors.poolInvite
+    expect(parsePoolInvite(text)).toEqual(fields)
+    const blob = (name: string) => vectors.blobs.find(b => b.name === name)?.blob ?? ''
+    expect(await openPoolGrant(vectors.key, blob('pool key grant'), 'pool00000001')).toEqual({
+      poolId: 'pool00000001',
+      key: 'k'.repeat(43),
+      version: 1,
+    })
+    // As the agent checks it: for this session and this pool only.
+    expect(await openPoolSessionOrder(vectors.key, blob('pool session order'), 's1', 'pool00000001')).toMatchObject({ version: 1 })
+    expect(await openPoolSessionOrder(vectors.key, blob('pool session order'), 's2', 'pool00000001')).toBeNull()
   })
 
   test('machines and sessions read the same as in the app', async () => {

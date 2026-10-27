@@ -63,6 +63,8 @@ public enum RelayMessage: Decodable, Sendable {
     /// A machine's answer to a request for a diagnosis: `diagnosis` is a sealed `Diagnosis`, `reason` set when the relay
     /// could not reach the machine.
     case diagnosis(machineId: String, requestId: String, reason: String?, diagnosis: String?)
+    /// A pool's message (docs/pools.md), unopened: each pool has its own key. One the app cannot read is `unknown`.
+    case pool(PoolUpdate)
     case unknown
 
     private enum Keys: String, CodingKey {
@@ -74,7 +76,12 @@ public enum RelayMessage: Decodable, Sendable {
         let container = try decoder.container(keyedBy: Keys.self)
         func value<T: Decodable>(_ key: Keys) throws -> T { try container.decode(T.self, forKey: key) }
         func optional(_ key: Keys) throws -> String? { try container.decodeIfPresent(String.self, forKey: key) }
-        switch try container.decode(String.self, forKey: .t) {
+        let t = try container.decode(String.self, forKey: .t)
+        if t.hasPrefix("pool_") {
+            self = (try? PoolUpdate(from: decoder)).map(RelayMessage.pool) ?? .unknown
+            return
+        }
+        switch t {
         case "snapshot":
             self = .snapshot(sessions: try value(.sessions), machines: try value(.machines))
         case "session": self = .session(try value(.session))

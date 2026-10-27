@@ -2,6 +2,8 @@
 // the account key and folded into an immutable state. UI-agnostic, so the web, Windows and Linux apps only render it.
 // Mirrors RelaySocket.swift and SessionStore.swift.
 
+import type { PoolAppMessage, PoolUpdate } from './pool-protocol'
+import { parsePoolUpdate } from './pool-wire'
 import type {
   AgentLog,
   AppMessage,
@@ -159,6 +161,8 @@ export interface RelayClientOptions {
   onEvent?: (event: ClientEvent) => void
   /** Called when the relay closes the socket for good (code 4001: signed out, revoked or deleted). */
   onSignedOut?: () => void
+  /** The messages of the pools this client subscribed to, unopened: each pool has its own key (shared/pool.ts). */
+  onPoolUpdate?: (update: PoolUpdate) => void
   /** The first delay before reconnecting, doubled after each failure up to 30 seconds. */
   retryMs?: number
 }
@@ -173,6 +177,8 @@ export class RelayClient {
   private generation = 0
   private backoff: number
   private retry: ReturnType<typeof setTimeout> | null = null
+  /** The pools subscribed to, again on every connection. */
+  private readonly pools = new Set<string>()
   /** Opening is asynchronous: messages go through this chain to be applied in the order they came. */
   private queue: Promise<void> = Promise.resolve()
 
@@ -260,6 +266,22 @@ export class RelayClient {
     if (this.current.error) this.set({ ...this.current, error: null })
   }
 
+  /** Asks for a pool's snapshot, then its changes; again after every reconnection. */
+  subscribePool(poolId: string) {
+    this.pools.add(poolId)
+    this.send({ t: 'pool_subscribe', poolId })
+  }
+
+  unsubscribePool(poolId: string) {
+    this.pools.delete(poolId)
+    this.send({ t: 'pool_unsubscribe', poolId })
+  }
+
+  /** A task, notes, a message, an event or a session joining. False when not connected: nothing was sent. */
+  sendPool(message: PoolAppMessage): boolean {
+    return this.send(message)
+  }
+
   private open() {
     const generation = this.generation
     let socket: SocketLike
@@ -299,6 +321,7 @@ export class RelayClient {
   }
 
   private async receive(raw: string, generation: number) {
+    if (this.receivePool(raw)) return
     const message = parseRelayMessage(raw)
     if (!message) return
     const event = await openMessage(this.options.vault, message, this.current.machines)
@@ -308,9 +331,25 @@ export class RelayClient {
       this.backoff = this.firstDelay
       this.set({ ...this.current, connection: 'connected' })
       if (this.current.selectedId) this.send({ t: 'subscribe', sessionId: this.current.selectedId, latestFirst: true })
+      for (const poolId of this.pools) this.send({ t: 'pool_subscribe', poolId })
     }
     this.set(reduce(this.current, event))
     this.options.onEvent?.(event)
+  }
+
+  /** True when the message was a pool's, handed to `onPoolUpdate`. */
+  private receivePool(raw: string): boolean {
+    // Only the start is looked at: a history can be megabytes, and is parsed once, by parseRelayMessage.
+    if (!raw.slice(0, 24).includes('"t":"pool_')) return false
+    let value: unknown
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      return true
+    }
+    const update = parsePoolUpdate(value)
+    if (update && this.current.connection === 'connected') this.options.onPoolUpdate?.(update)
+    return true
   }
 
   private scheduleReconnect(generation: number) {

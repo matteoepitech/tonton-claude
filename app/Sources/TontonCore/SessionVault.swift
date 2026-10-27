@@ -4,7 +4,8 @@ import Foundation
 /// Turns the relay's sealed messages into readable models, and seals what the app sends back.
 /// Fields that do not decrypt (another key, corrupted data) degrade to placeholders instead of failing.
 public struct SessionVault: Sendable {
-    private let key: SymmetricKey
+    /// Internal so that extensions in TontonCore (Pool.swift) seal with it too; never public.
+    let key: SymmetricKey
 
     public init(key: SymmetricKey) {
         self.key = key

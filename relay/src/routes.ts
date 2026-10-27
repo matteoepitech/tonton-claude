@@ -6,6 +6,7 @@ import { BROWSER_PROTOCOL, bearerToken, browserToken, clientIp, fail, json, read
 import type { SocketData } from './hub'
 import { MAX_SHARE_HOURS } from './limits'
 import { renderMetrics } from './metrics'
+import { poolRoute } from './pool-routes'
 import { safeEqual, sha256 } from './tokens'
 import { isDeviceId, isPushToken, isSealed, isSessionId, isText, isVersion } from './validate'
 
@@ -188,6 +189,10 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
   if (path === '/api/shares' && req.method === 'GET') return json(ctx.shareList(accountId))
   if (path === '/api/push' && req.method === 'GET') return json({ enabled: ctx.push !== null } satisfies PushStatus)
   if (path === '/api/push/devices' && req.method === 'POST') return registerDevice(ctx, req, accountId)
+  if (path.startsWith('/api/pools')) {
+    const response = await poolRoute(ctx, req, path, accountId, ip)
+    if (response) return response
+  }
 
   const devicePath = DEVICE_PATH.exec(path)
   if (devicePath && req.method === 'DELETE') {
@@ -220,6 +225,7 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
       ctx.forgetMachine(machine.id)
     }
     for (const share of ctx.registry.shares(accountId)) ctx.endShare(share, 'account deleted')
+    ctx.removeAccountPools(accountId)
     ctx.hub.disconnectApps(accountId, 'account deleted')
     ctx.registry.deleteAccount(accountId)
     ctx.sessions.removeAccount(accountId)
