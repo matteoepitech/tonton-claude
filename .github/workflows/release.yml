@@ -37,7 +37,8 @@ jobs:
   mac:
     runs-on: macos-15
     env:
-      # Optional: with these secrets the app is signed with a Developer ID and notarized; without them it is ad-hoc signed.
+      # Optional: with these secrets the app is signed with a Developer ID and notarized, and embeds its widget, whose app
+      # group starts with the Team ID (see build-app.sh). Without them it is ad-hoc signed, without the widget.
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
       CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}

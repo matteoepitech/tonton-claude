@@ -41,4 +41,6 @@ scripts and `SHA256SUMS`.
 - On a Mac running the previous version (one built with the update keys), Settings › General › **Check for Updates…**
   offers the new one and installs it.
 - Install the DMG on a Mac and check that **Update agent** appears for a machine on the previous version.
+- With a Developer ID, the widget is in the gallery (right-click the desktop › **Edit Widgets…**, search Tonton) once
+  the new app has started, and it lists the sessions of the notch. Ad-hoc releases have no widget.
 - If the relay changed, update the hosted relay with `install-relay.sh` (see `docs/self-hosting.md`).
