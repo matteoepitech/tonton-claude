@@ -351,6 +351,46 @@
         }
       }
     },
+    "%@ · %@ · %@ · %lld messages" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ · %@ · %@ · %lld message"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ · %@ · %@ · %lld messages"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$@ · %3$@ · %4$lld message"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$@ · %3$@ · %4$lld messages"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%@ · agent %@" : {
       "comment" : "The agent's version",
       "localizations" : {
@@ -364,6 +404,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ · agent %2$@"
+          }
+        }
+      }
+    },
+    "%@ · archived %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · archived %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · archivée le %2$@"
           }
         }
       }
@@ -1365,6 +1421,16 @@
         }
       }
     },
+    "ARCHIVE" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ARCHIVES"
+          }
+        }
+      }
+    },
     "Account" : {
       "localizations" : {
         "fr" : {
@@ -1701,6 +1767,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Demandes d’autorisation"
+          }
+        }
+      }
+    },
+    "Archive" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archives"
+          }
+        }
+      }
+    },
+    "Archive conversation" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archiver la conversation"
+          }
+        }
+      }
+    },
+    "Archive finished conversations" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archiver les conversations terminées"
           }
         }
       }
@@ -2393,6 +2489,16 @@
         }
       }
     },
+    "Conversations" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversations"
+          }
+        }
+      }
+    },
     "Copied" : {
       "localizations" : {
         "fr" : {
@@ -2493,12 +2599,48 @@
         }
       }
     },
+    "Could not archive %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not archive %1$@: %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’archiver %1$@ : %2$@"
+          }
+        }
+      }
+    },
+    "Could not delete it: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de la supprimer : %@"
+          }
+        }
+      }
+    },
     "Could not make the image." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Impossible de créer l’image."
+          }
+        }
+      }
+    },
+    "Could not open %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’ouvrir %@."
           }
         }
       }
@@ -2665,6 +2807,16 @@
         }
       }
     },
+    "Delete" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer"
+          }
+        }
+      }
+    },
     "Delete account" : {
       "localizations" : {
         "fr" : {
@@ -2681,6 +2833,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Supprimer le compte…"
+          }
+        }
+      }
+    },
+    "Delete all" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout supprimer"
+          }
+        }
+      }
+    },
+    "Delete all…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout supprimer…"
+          }
+        }
+      }
+    },
+    "Delete every archived conversation?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer toutes les conversations archivées ?"
           }
         }
       }
@@ -3001,6 +3183,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les fichiers que Claude lit ou modifie sur ce Mac s’ouvrent depuis la conversation."
+          }
+        }
+      }
+    },
+    "Finished conversations kept on this Mac, encrypted, to read later." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les conversations terminées gardées sur ce Mac, chiffrées, à relire plus tard."
           }
         }
       }
@@ -4219,6 +4411,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Taille de l’encoche"
+          }
+        }
+      }
+    },
+    "Nothing archived yet." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien d’archivé pour l’instant."
           }
         }
       }
@@ -6303,6 +6505,26 @@
         }
       }
     },
+    "The archive's key can't be read, so nothing can be archived or opened. Delete all starts a new archive." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire la clé des archives : rien ne peut être archivé ni ouvert. Tout supprimer repart sur de nouvelles archives."
+          }
+        }
+      }
+    },
+    "The archive's list can't be read. Nothing is written over it; Delete all starts over." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire la liste des archives. Rien n’est écrit par-dessus ; Tout supprimer repart de zéro."
+          }
+        }
+      }
+    },
     "The current token stops working right away: every machine is signed out until you give it the new one. Other Macs signed in to this account need the new recovery key." : {
       "localizations" : {
         "fr" : {
@@ -6463,6 +6685,16 @@
         }
       }
     },
+    "They can't be brought back." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elles ne pourront pas être récupérées."
+          }
+        }
+      }
+    },
     "This Mac" : {
       "localizations" : {
         "fr" : {
@@ -6489,6 +6721,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cet agent est trop ancien pour être mis à jour d’ici : Réglages › Machines donne la commande à lancer une fois sur %@"
+          }
+        }
+      }
+    },
+    "This conversation can't be read any more." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette conversation ne peut plus être lue."
           }
         }
       }
@@ -6782,6 +7024,16 @@
         }
       }
     },
+    "Up to %lld conversations, the most recent ones, on this Mac only. The key sits next to them: a copy of the archive folder alone can't be read, but anyone who can read your files can." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jusqu’à %lld conversations, les plus récentes, sur ce Mac uniquement. La clé est à côté : une copie du seul dossier des archives est illisible, mais quiconque peut lire vos fichiers peut les lire."
+          }
+        }
+      }
+    },
     "Update" : {
       "localizations" : {
         "fr" : {
@@ -7058,6 +7310,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quand Claude travaille"
+          }
+        }
+      }
+    },
+    "When a session ends, its whole conversation is kept here, sealed with a key of this Mac's. Any session can also be archived from its menu in the notch, and the notch's search looks here too. Each account has its own." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quand une session se termine, toute sa conversation est gardée ici, scellée avec une clé propre à ce Mac. Toute session peut aussi être archivée depuis son menu dans l’encoche, et la recherche de l’encoche regarde aussi ici. Chaque compte a les siennes."
           }
         }
       }
@@ -7434,6 +7696,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "envoi…"
+          }
+        }
+      }
+    },
+    "the archive's key can't be read." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la clé des archives est illisible."
+          }
+        }
+      }
+    },
+    "the archive's list can't be read." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la liste des archives est illisible."
           }
         }
       }

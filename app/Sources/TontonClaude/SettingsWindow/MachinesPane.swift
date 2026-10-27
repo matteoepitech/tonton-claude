@@ -193,9 +193,8 @@ struct MachineRow: View {
             AgentUpdateButton(machine: machine)
             HStack(spacing: 5) {
                 Circle().fill(machine.online ? Theme.success : Theme.textFaint).frame(width: 6, height: 6)
-                Text(live > 0 ? "\(live) live" : (machine.online ? "Online" : "Offline")).font(.system(size: 12)).foregroundStyle(
-                    Theme.textDim)
-                    .fixedSize()
+                Text(live > 0 ? "\(live) live" : (machine.online ? "Online" : "Offline"))
+                    .font(.system(size: 12)).foregroundStyle(Theme.textDim).fixedSize()
             }
             // Wider when a language needs it, rather than cut.
             .frame(minWidth: 70, alignment: .leading)
