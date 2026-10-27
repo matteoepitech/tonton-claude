@@ -11,7 +11,8 @@ struct RelayPane: View {
     var body: some View {
         Group {
             if let account = settings.account, !adding {
-                AccountView(account: account) { adding = true }
+                // A new view per account: a revealed recovery key, an error or the shares must not carry over to the next.
+                AccountView(account: account) { adding = true }.id(AccountList.id(of: account))
             } else {
                 SetupView(cancel: settings.account == nil ? nil : { adding = false })
             }
@@ -88,7 +89,8 @@ struct SetupView: View {
             if let cancel {
                 HStack {
                     Spacer()
-                    Button("Cancel", action: cancel).buttonStyle(ThemeButtonStyle())
+                    // Once a request is out, its account is coming: cancelling then would only hide it.
+                    Button("Cancel", action: cancel).buttonStyle(ThemeButtonStyle()).disabled(busy)
                 }
                 .padding(.top, 20)
             }
@@ -99,7 +101,13 @@ struct SetupView: View {
         busy = true
         error = nil
         Task {
-            do { try await work() } catch { self.error = error.localizedDescription }
+            do {
+                try await work()
+                // Back to the account, also when it was the one already connected (restored again).
+                cancel?()
+            } catch {
+                self.error = error.localizedDescription
+            }
             busy = false
         }
     }

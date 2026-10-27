@@ -1,6 +1,5 @@
 import AppKit
 import Combine
-import CryptoKit
 import Foundation
 import OSLog
 import ServiceManagement
@@ -64,6 +63,8 @@ final class AppSettings: ObservableObject {
     @Published var terminal: TerminalChoice
     /// Session ids, in the order they were pinned.
     @Published var pinnedSessions: [String]
+    /// The pins of the accounts not connected, by `AccountList.id`, until the user switches back.
+    @Published var parkedPins: [String: [String]]
     /// Folders sessions were started in from the notch, most recent first, per machine id.
     @Published var startFolders: [String: [String]]
 
@@ -166,6 +167,7 @@ final class AppSettings: ObservableObject {
         editor = choice("editor", EditorChoice.installed.first ?? .defaultApp)
         terminal = choice("terminal", .terminal)
         pinnedSessions = value("pinnedSessions", [String]())
+        parkedPins = value("parkedPins", [String: [String]]())
         startFolders = value("startFolders", [String: [String]]())
         openOnHover = value("openOnHover", true)
         showActivityDots = value("showActivityDots", false)
@@ -220,6 +222,7 @@ final class AppSettings: ObservableObject {
         persist($editor.map(\.rawValue), "editor")
         persist($terminal.map(\.rawValue), "terminal")
         persist($pinnedSessions, "pinnedSessions")
+        persist($parkedPins, "parkedPins")
         persist($startFolders, "startFolders")
         persist($openOnHover, "openOnHover")
         persist($showActivityDots, "showActivityDots")
@@ -291,41 +294,11 @@ enum AccountStore {
 
     private static var url: URL { directory.appendingPathComponent("account.json") }
 
-    private static var listDirectory: URL {
-        let url = directory.appendingPathComponent("Accounts")
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        return url
-    }
+    private static var files: AccountFiles { AccountFiles(directory: directory.appendingPathComponent("Accounts")) }
 
-    /// A file name that says nothing about the account.
-    private static func file(for entry: AccountList.Entry) -> URL {
-        let digest = SHA256.hash(data: Data(entry.id.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
-        return listDirectory.appendingPathComponent("\(digest).json")
-    }
+    static func loadAll() -> AccountList { files.load() }
 
-    static func loadAll() -> AccountList {
-        let files = (try? FileManager.default.contentsOfDirectory(at: listDirectory, includingPropertiesForKeys: [.creationDateKey])) ?? []
-        let created = { (url: URL) in (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast }
-        let entries = files.filter { $0.pathExtension == "json" }.sorted { created($0) < created($1) }.compactMap { url in
-            try? JSONDecoder().decode(AccountList.Entry.self, from: Data(contentsOf: url))
-        }
-        return AccountList(entries)
-    }
-
-    /// Writes each account to its file and removes the files of the ones signed out.
-    static func saveAll(_ list: AccountList) {
-        var kept = Set<URL>()
-        for entry in list.entries {
-            let url = file(for: entry)
-            kept.insert(url.standardizedFileURL)
-            guard let data = try? JSONEncoder().encode(entry), (try? Data(contentsOf: url)) != data else { continue }
-            FileManager.default.createFile(atPath: url.path, contents: data, attributes: [.posixPermissions: 0o600])
-        }
-        let files = (try? FileManager.default.contentsOfDirectory(at: listDirectory, includingPropertiesForKeys: nil)) ?? []
-        for url in files where url.pathExtension == "json" && !kept.contains(url.standardizedFileURL) {
-            try? FileManager.default.removeItem(at: url)
-        }
-    }
+    static func saveAll(_ list: AccountList) { files.save(list) }
 
     static func load() -> Account? {
         try? JSONDecoder().decode(Account.self, from: Data(contentsOf: url))

@@ -17,6 +17,9 @@ public struct AccountList: Equatable, Sendable {
 
     public private(set) var entries: [Entry]
 
+    /// By name, as Settings lists them.
+    public var sorted: [Entry] { entries.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending } }
+
     public init(_ entries: [Entry] = []) {
         // One entry per account, whatever the files on disk say.
         var seen = Set<String>()
@@ -54,10 +57,5 @@ public struct AccountList: Equatable, Sendable {
         guard let index = entries.firstIndex(where: { $0.id == Self.id(of: account) }) else { return }
         let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
         entries[index].name = trimmed.isEmpty ? Self.defaultName(for: account) : trimmed
-    }
-
-    /// The name of an account, for the status of the connection and the menus.
-    public func name(of account: Account) -> String {
-        entry(for: account)?.name ?? Self.defaultName(for: account)
     }
 }

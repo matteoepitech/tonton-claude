@@ -217,6 +217,7 @@ final class SessionStore: ObservableObject {
 
     func connect() {
         relaySessions = []
+        shares = []
         machines = []
         thisMac = nil
         relayEntries = [:]
@@ -555,7 +556,8 @@ final class SessionStore: ObservableObject {
 
     func refreshShares() async {
         guard let account = settings.account else { return }
-        if let listed = try? await api.shares(of: account) { shares = listed }
+        // Another account may be connected by the time the relay answers.
+        if let listed = try? await api.shares(of: account), isConnected(account) { shares = listed }
     }
 
     /// Closes the teammates' pages at once, and the agent stops sealing for it.
@@ -613,7 +615,7 @@ final class SessionStore: ObservableObject {
     /// regenerate it here.
     func createMachineToken() async throws {
         guard let account = settings.account, account.joinSecret == nil else { return }
-        settings.account = account.with(joinSecret: try await api.joinSecret(for: account, regenerate: false))
+        updated(account.with(joinSecret: try await api.joinSecret(for: account, regenerate: false)))
     }
 
     /// A new token and a new encryption key: every machine is signed out until it gets the new token, and other Macs
@@ -621,7 +623,17 @@ final class SessionStore: ObservableObject {
     func regenerateMachineToken() async throws {
         guard let account = settings.account else { return }
         let secret = try await api.joinSecret(for: account, regenerate: true)
-        settings.account = account.with(key: E2E.newKey(), joinSecret: secret)
+        updated(account.with(key: E2E.newKey(), joinSecret: secret))
+    }
+
+    /// New keys for an account after a request to the relay: it may not be the connected one any more, but its saved copy
+    /// must get them.
+    private func updated(_ account: Account) {
+        if isConnected(account) { settings.account = account } else { settings.accounts.save(account) }
+    }
+
+    private func isConnected(_ account: Account) -> Bool {
+        settings.account.map(AccountList.id(of:)) == AccountList.id(of: account)
     }
 
     func revoke(_ machine: MachineInfo) async throws {
@@ -632,19 +644,29 @@ final class SessionStore: ObservableObject {
     func deleteAccount() async throws {
         guard let account = settings.account else { return }
         try await api.deleteAccount(account)
-        signOut()
+        // The one deleted, even if the user switched to another meanwhile.
+        signOut(of: account)
     }
 
-    /// Signs this Mac out of the connected account: it leaves the list too. The others stay, to switch to.
-    func signOut() {
-        if let account = settings.account { settings.accounts.remove(account) }
-        settings.account = nil
+    /// Signs this Mac out of an account, the connected one by default: it leaves the list, with its keys. The others stay,
+    /// to switch to.
+    func signOut(of account: Account? = nil) {
+        guard let account = account ?? settings.account else { return }
+        settings.accounts.remove(account)
+        settings.parkedPins[AccountList.id(of: account)] = nil
+        if isConnected(account) { settings.account = nil }
     }
 
-    /// Connects to another account signed in on this Mac. The one connected now stays in the list.
+    /// Connects to another account signed in on this Mac. The one connected now stays in the list, and its pins wait for
+    /// it: the sessions of the next account would not include them, and they would be dropped.
     func switchAccount(to account: Account) {
-        guard settings.accounts.entry(for: account) != nil, settings.account.map(AccountList.id(of:)) != AccountList.id(of: account)
-        else { return }
+        guard settings.accounts.entry(for: account) != nil, !isConnected(account) else { return }
+        let here = Set(localSessions.map(\.id))
+        if let current = settings.account {
+            settings.parkedPins[AccountList.id(of: current)] = settings.pinnedSessions.filter { !here.contains($0) }
+        }
+        let parked = settings.parkedPins.removeValue(forKey: AccountList.id(of: account)) ?? []
+        settings.pinnedSessions = settings.pinnedSessions.filter { here.contains($0) } + parked
         selectedId = nil
         settings.account = account
     }
