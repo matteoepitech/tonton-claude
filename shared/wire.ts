@@ -115,6 +115,15 @@ export function parseRelayMessage(raw: string): RelayToApp | null {
         ...(m.reason === 'offline' ? { reason: m.reason } : {}),
         logs: m.logs ?? null,
       }
+    case 'diagnosis':
+      if (!isText(m.machineId) || !isText(m.requestId) || !isOptionalText(m.diagnosis)) return null
+      return {
+        t: 'diagnosis',
+        machineId: m.machineId,
+        requestId: m.requestId,
+        ...(m.reason === 'offline' ? { reason: m.reason } : {}),
+        diagnosis: m.diagnosis ?? null,
+      }
     default:
       return null
   }

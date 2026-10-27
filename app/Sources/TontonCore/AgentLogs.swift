@@ -2,7 +2,7 @@ import Foundation
 
 /// The end of a machine's agent log (shared/protocol.ts `AgentLog`), once decrypted. It says what the agent did, never
 /// what Claude wrote, and the agent takes keys and tokens out before it leaves the machine.
-public struct AgentLog: Codable, Equatable, Sendable {
+public struct AgentLog: MachineAnswer {
     public let requestId: String
     public let machineId: String
     /// Oldest first.
@@ -45,42 +45,4 @@ public struct AgentLogLine: Equatable, Sendable {
 }
 
 /// A request for a machine's agent log, from the click in Settings › Machines to the answer.
-public struct AgentLogRequest: Equatable, Sendable {
-    public enum State: Equatable, Sendable {
-        case loading
-        case loaded(AgentLog)
-        case failed(String)
-    }
-
-    public let id: String
-    public let machineId: String
-    public let state: State
-    /// The log shown before this request, kept on screen while it loads.
-    public let previous: AgentLog?
-
-    public init(id: String = SessionLaunch.newId(), machineId: String, state: State = .loading, previous: AgentLog? = nil) {
-        (self.id, self.machineId, self.state, self.previous) = (id, machineId, state, previous)
-    }
-
-    /// The request once the relay answered. Only a log sealed for this request and this machine counts: the relay could
-    /// hand back an older one, or another machine's.
-    public func received(reason: String?, log: AgentLog?, machine: String) -> AgentLogRequest {
-        guard state == .loading else { return self }
-        if reason == "offline" { return failed("\(machine) is offline. Check that it is on and that the Tonton Claude agent runs there.") }
-        guard let log, log.requestId == id, log.machineId == machineId else { return self }
-        if let error = log.error { return failed(error) }
-        return AgentLogRequest(id: id, machineId: machineId, state: .loaded(log), previous: previous)
-    }
-
-    public func failed(_ text: String) -> AgentLogRequest {
-        AgentLogRequest(id: id, machineId: machineId, state: .failed(text), previous: previous)
-    }
-
-    /// What to show: this request's log, or the previous one until it comes.
-    public var log: AgentLog? {
-        if case .loaded(let log) = state { return log }
-        return previous
-    }
-
-    public var isLoading: Bool { state == .loading }
-}
+public typealias AgentLogRequest = MachineRequest<AgentLog>

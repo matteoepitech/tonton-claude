@@ -2,7 +2,18 @@
 // the account key and folded into an immutable state. UI-agnostic, so the web, Windows and Linux apps only render it.
 // Mirrors RelaySocket.swift and SessionStore.swift.
 
-import type { AgentLog, AppMessage, Entry, ModelAlias, PermissionRule, RelayToApp, SessionCommand, StartDetail } from './protocol'
+import type {
+  AgentLog,
+  AppMessage,
+  Diagnosis,
+  Entry,
+  ModelAlias,
+  PermissionRule,
+  RelayToApp,
+  SessionCommand,
+  SetupFix,
+  StartDetail,
+} from './protocol'
 import { type Machine, type Session, sortSessions } from './session'
 import type { OutgoingImage, Vault } from './vault'
 import { parseRelayMessage } from './wire'
@@ -35,6 +46,8 @@ export type ClientEvent =
   | { t: 'session_start'; machineId: string; launchId: string; state: string; reason?: 'offline'; detail: StartDetail | null }
   // `log` is null unless it was sealed for this request and this machine.
   | { t: 'agent_logs'; machineId: string; requestId: string; reason?: 'offline'; log: AgentLog | null }
+  // `diagnosis` is null unless it was sealed for this request and this machine.
+  | { t: 'diagnosis'; machineId: string; requestId: string; reason?: 'offline'; diagnosis: Diagnosis | null }
 
 export const initialState: ClientState = {
   connection: 'stopped',
@@ -68,6 +81,12 @@ export async function openMessage(vault: Vault, message: RelayToApp, machines: r
       const { logs, ...rest } = message
       const log = await vault.agentLog(logs)
       return { ...rest, log: log?.requestId === message.requestId && log.machineId === message.machineId ? log : null }
+    }
+    case 'diagnosis': {
+      const { diagnosis, ...rest } = message
+      const opened = await vault.diagnosis(diagnosis)
+      const forThis = opened?.requestId === message.requestId && opened.machineId === message.machineId
+      return { ...rest, diagnosis: forThis ? opened : null }
     }
     case 'removed':
     case 'error':
@@ -105,6 +124,7 @@ export function reduce(state: ClientState, event: ClientEvent): ClientState {
     case 'agent_update':
     case 'session_start':
     case 'agent_logs':
+    case 'diagnosis':
       return state
   }
 }
@@ -203,6 +223,16 @@ export class RelayClient {
     const requestId = crypto.randomUUID().replaceAll('-', '')
     const request = await this.options.vault.sealLogRequest(requestId, machineId)
     return this.send({ t: 'agent_logs', machineId, requestId, request }) ? requestId : null
+  }
+
+  /**
+   * Asks a machine to check how it is set up, after one repair if `fix` names it. The answer comes as a `diagnosis`
+   * event with the id returned here; null when the client is not connected.
+   */
+  async requestDiagnosis(machineId: string, fix?: SetupFix): Promise<string | null> {
+    const requestId = crypto.randomUUID().replaceAll('-', '')
+    const request = await this.options.vault.sealDiagnoseRequest(requestId, machineId, fix)
+    return this.send({ t: 'diagnose', machineId, requestId, request }) ? requestId : null
   }
 
   /** Removes a finished session from the account's list. */

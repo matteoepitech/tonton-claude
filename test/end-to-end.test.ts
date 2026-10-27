@@ -9,7 +9,7 @@ import { agentBinaryName, TRAY_HELPER_NAME } from '../agent/src/update'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { open, seal } from '../shared/crypto'
-import type { AgentLog, RelayToApp, SessionSummary } from '../shared/protocol'
+import type { AgentLog, Diagnosis, RelayToApp, SessionSummary } from '../shared/protocol'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-e2e-'))
@@ -27,6 +27,8 @@ const NEW_VERSION = '9.9.9'
 const base = `http://127.0.0.1:${relay.server.port}`
 const sessionId = `session-${Date.now()}`
 const transcript = join(dir, 'transcript.jsonl')
+/** The home folder the agent sees: its Claude Code and shell setup, never the developer's. */
+const userHome = join(dir, 'user')
 
 interface App {
   socket: WebSocket
@@ -101,8 +103,12 @@ beforeAll(async () => {
     JSON.stringify({ sessionId, transcriptPath: transcript, cwd: '/home/x/SecretProject' }),
   )
 
+  const { CLAUDE_CONFIG_DIR: _claude, ...developer } = process.env
   const env = {
-    ...process.env,
+    ...developer,
+    HOME: userHome,
+    USERPROFILE: userHome,
+    XDG_CONFIG_HOME: join(userHome, '.config'),
     TONTON_HOME: home,
     TONTON_CHANNEL: '1',
     TONTON_SERVICE: 'off',
@@ -505,6 +511,25 @@ esac
     for (const secret of [key, machine.token]) expect(text).not.toContain(secret)
     expect(app.raw.filter(raw => raw.includes('agent_logs')).join()).not.toContain('channel started')
     expect(stranger.messages.some(m => m.t === 'agent_logs')).toBe(false)
+  })
+
+  test('a diagnosis comes back sealed, and a repair from the app adds the hooks in the home the agent sees', async () => {
+    const diagnose = async (requestId: string, fix?: string) => {
+      const order = { requestId, machineId: machine.machineId, issuedAt: new Date().toISOString(), ...(fix ? { fix } : {}) }
+      const request = await seal(key, order)
+      app.socket.send(JSON.stringify({ t: 'diagnose', machineId: machine.machineId, requestId, request }))
+      const answer = await eventually(() => app.messages.find(m => m.t === 'diagnosis' && m.requestId === requestId), 'the diagnosis')
+      if (answer.t !== 'diagnosis' || !answer.diagnosis) throw new Error('unexpected message')
+      return open<Diagnosis>(key, answer.diagnosis)
+    }
+    const before = await diagnose('e2ediagnose01')
+    expect(before.checks.find(c => c.id === 'hooks')).toMatchObject({ ok: false, fix: 'hooks' })
+    expect(before.checks.find(c => c.id === 'relay')).toMatchObject({ ok: true })
+    const after = await diagnose('e2ediagnose02', 'hooks')
+    expect(after.fixed).toMatchObject({ fix: 'hooks', ok: true })
+    expect(after.checks.find(c => c.id === 'hooks')).toMatchObject({ ok: true })
+    expect(JSON.parse(readFileSync(join(userHome, '.claude', 'settings.json'), 'utf8')).hooks.Stop).toHaveLength(1)
+    expect(app.raw.filter(raw => raw.includes('"diagnosis"')).join()).not.toContain('.claude')
   })
 
   test('revoking the machine signs it out and removes its sessions', async () => {

@@ -37,6 +37,10 @@ final class SessionStore: ObservableObject {
     @Published private(set) var updateErrors: [String: String] = [:]
     /// Requests for agent logs, by machine, while their panel is open in Settings › Machines.
     @Published private(set) var agentLogs: [String: AgentLogRequest] = [:]
+    /// Requests for diagnoses, by machine, while their panel is open in Settings › Machines.
+    @Published private(set) var diagnoses: [String: DiagnosisRequest] = [:]
+    /// The repair each machine is running, until its diagnosis comes back.
+    @Published private(set) var repairing: [String: String] = [:]
     @Published private var relayEntries: [String: [Entry]] = [:]
     @Published private var localEntries: [String: [Entry]] = [:]
     /// The relay's history once it arrived, this Mac's transcript until then.
@@ -231,6 +235,8 @@ final class SessionStore: ObservableObject {
         launches = []
         launchSelection = nil
         agentLogs = [:]
+        diagnoses = [:]
+        repairing = [:]
         guard settings.connectionEnabled else {
             socket.disconnect(to: .paused)
             return
@@ -287,6 +293,8 @@ final class SessionStore: ObservableObject {
             launchReported(launchId, machineId: machineId, state: state, reason: reason, detail: vault.startDetail(detail))
         case .agentLogs(let machineId, let requestId, let reason, let logs):
             logReceived(machineId: machineId, requestId: requestId, reason: reason, log: vault.agentLog(logs))
+        case .diagnosis(let machineId, let requestId, let reason, let diagnosis):
+            diagnosisReceived(machineId: machineId, requestId: requestId, reason: reason, diagnosis: vault.diagnosis(diagnosis))
         case .unknown:
             break
         }
@@ -576,7 +584,7 @@ final class SessionStore: ObservableObject {
 
     /// Asks the machine for the end of its agent log, sealed on the way back. A new request replaces the previous one.
     func requestLog(of machine: MachineInfo) {
-        let request = AgentLogRequest(machineId: machine.id, previous: agentLogs[machine.id]?.log)
+        let request = AgentLogRequest(machineId: machine.id, previous: agentLogs[machine.id]?.answer)
         guard connection == .connected, let sealed = try? vault?.sealLogRequest(requestId: request.id, machineId: machine.id) else {
             agentLogs[machine.id] = request.failed("Not connected to the relay.")
             return
@@ -599,7 +607,43 @@ final class SessionStore: ObservableObject {
     private func logReceived(machineId: String, requestId: String, reason: String?, log: AgentLog?) {
         guard let request = agentLogs[machineId], request.id == requestId else { return }
         let name = machines.first { $0.id == machineId }?.name ?? "The machine"
-        agentLogs[machineId] = request.received(reason: reason, log: log, machine: name)
+        agentLogs[machineId] = request.received(reason: reason, answer: log, machine: name)
+    }
+
+    // MARK: Diagnosis
+
+    /// Asks the machine's agent to check how the machine is set up, after the repair `fix` names if any.
+    func diagnose(_ machine: MachineInfo, fix: String? = nil) {
+        let request = DiagnosisRequest(machineId: machine.id, previous: diagnoses[machine.id]?.answer)
+        guard connection == .connected,
+            let sealed = try? vault?.sealDiagnoseRequest(requestId: request.id, machineId: machine.id, fix: fix)
+        else {
+            diagnoses[machine.id] = request.failed("Not connected to the relay.")
+            return
+        }
+        diagnoses[machine.id] = request
+        repairing[machine.id] = fix
+        socket.send(["t": "diagnose", "machineId": machine.id, "requestId": request.id, "request": sealed])
+        // An agent or a relay too old to diagnose never answers. Starting the service can take a few seconds.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(25))
+            guard let self, let current = self.diagnoses[machine.id], current.id == request.id, current.isLoading else { return }
+            self.diagnoses[machine.id] = current.failed(
+                "No answer from \(machine.name). Its agent may be too old to check itself: update it.")
+            self.repairing[machine.id] = nil
+        }
+    }
+
+    func closeDiagnosis(of machineId: String) {
+        diagnoses[machineId] = nil
+    }
+
+    private func diagnosisReceived(machineId: String, requestId: String, reason: String?, diagnosis: Diagnosis?) {
+        guard let request = diagnoses[machineId], request.id == requestId else { return }
+        let name = machines.first { $0.id == machineId }?.name ?? "The machine"
+        let next = request.received(reason: reason, answer: diagnosis, machine: name)
+        diagnoses[machineId] = next
+        if !next.isLoading { repairing[machineId] = nil }
     }
 
     // MARK: Account

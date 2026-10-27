@@ -5,6 +5,7 @@
 import { type AccountKey, open, seal } from './crypto'
 import {
   decodeAgentLog,
+  decodeDiagnosis,
   decodeEntry,
   decodeMachineHealth,
   decodeMachineName,
@@ -16,6 +17,8 @@ import {
 } from './payloads'
 import type {
   AgentLog,
+  DiagnoseRequest,
+  Diagnosis,
   Entry,
   LogRequest,
   MachineSummary,
@@ -27,6 +30,7 @@ import type {
   SessionCommand,
   SessionRules,
   SessionSummary,
+  SetupFix,
   StartDetail,
   UsageLimit,
 } from './protocol'
@@ -154,6 +158,16 @@ export class Vault {
 
   agentLog(blob: Sealed | null | undefined): Promise<AgentLog | null> {
     return this.read(blob, decodeAgentLog)
+  }
+
+  /** Asks a machine to check how it is set up, after the repair `fix` names. Like log requests, it names the machine. */
+  sealDiagnoseRequest(requestId: string, machineId: string, fix?: SetupFix, issuedAt = new Date()): Promise<Sealed> {
+    const request: DiagnoseRequest = { requestId, machineId, issuedAt: issuedAt.toISOString(), ...(fix ? { fix } : {}) }
+    return seal(this.key, request)
+  }
+
+  diagnosis(blob: Sealed | null | undefined): Promise<Diagnosis | null> {
+    return this.read(blob, decodeDiagnosis)
   }
 
   /** The text of a sealed `{ text }` detail, such as the reason an agent update failed. */
