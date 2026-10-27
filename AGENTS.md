@@ -17,7 +17,7 @@ opencode ─ Tonton plugin ──────▶ agent
 | Path | What | Language |
 |---|---|---|
 | `agent/` | One binary per machine: a background service, Claude Code hooks, an MCP channel that streams the transcript and relays prompts and permissions. Tray icons in `agent/tray/` (Swift on macOS, PowerShell on Windows). | TypeScript (Bun) |
-| `relay/` | Accounts, machines and sealed session history in SQLite, live sessions in memory, WebSocket routing. Never sees plaintext. | TypeScript (Bun) |
+| `relay/` | Accounts, machines and sealed session history in SQLite, live sessions in memory, WebSocket routing, the web app at its address. Never sees plaintext. | TypeScript (Bun) |
 | `shared/` | The client core: wire protocol, end-to-end crypto, account token, session models and a relay client. Used by the agent, the relay and the client apps, and runs in browsers. Versions, for the agent and the relay. | TypeScript |
 | `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown) and also builds for iOS, `TontonMac` what reads this Mac's own files (local Claude Code and OpenCode sessions, the local agent), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
 | `ios/` | The iPhone app (`TontonClaude.xcodeproj`, Xcode 16 or later), its Live Activity (`TontonWidgets`) and the extension that opens permission alerts (`TontonNotifications`), on `TontonCore`. | Swift 5, iOS 17+ |

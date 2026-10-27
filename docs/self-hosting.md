@@ -19,7 +19,7 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 | `relay/` | The relay. Accounts, machines and the sealed history of sessions in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
 | `app/` | The macOS app living in the notch (SwiftUI), plus its settings window. |
 | `shared/` | The client core shared by the agent, the relay and the clients: wire protocol, AES-256-GCM sealing with WebCrypto, account token, session models. It runs in browsers. |
-| `web/` | The web app, one HTML file. Its views (`web/views.ts`) also make up the island. |
+| `web/` | The web app, one HTML file, also served by the relay at its address. Its views (`web/views.ts`) also make up the island. |
 | `desktop/` | The island for Windows and Linux: an Electron window at the top of the screen, a tray icon, the account in the system's keyring. |
 | `scripts/` | Builds, and the install scripts published with each release. |
 
@@ -147,6 +147,20 @@ Open it from disk, or put it on any static host: it has no server side.
   `tonton` and `bearer.<token>`, and the relay answers with `tonton` only. Relays before 0.8.0 refuse it.
 - Its Content-Security-Policy allows its own inline script and style, and WebSocket connections, nothing else. It never
   puts what a session says into the page as HTML.
+
+### At the relay's address
+
+From 0.8.0 the relay also serves the web app at its own address, `https://<relay>/`: a browser needs nothing else.
+`bun build --compile` bundles `web/site.html`, with its script and style, into the relay's executable; `bun run relay`
+builds them at the first visit.
+
+- Every file goes out with a Content-Security-Policy that runs the page's own script and style only, from the relay,
+  with nothing inline. The page opens sockets to that relay only, and no other site can show it in a frame.
+- The script and style have a hash in their names and are cached for good; the page itself is asked for again at each
+  visit, so an updated relay serves its new version.
+- The key stays in the browser, as with `tonton-web.html`. But here the page's code comes from the relay: whoever runs
+  the relay could serve a page that reads the key when you paste it. On your own relay that is you. On a relay you don't
+  run, `tonton-web.html` from the release keeps its code away from the relay.
 
 ### Read-only shares
 
