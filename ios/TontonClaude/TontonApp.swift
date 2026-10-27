@@ -14,7 +14,7 @@ struct TontonApp: App {
                 .environment(delegate.store)
                 .onOpenURL { url in delegate.store.open(url) }
         }
-        .onChange(of: scenePhase) { _, phase in
+        .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
             case .active: delegate.store.activate()
             case .background: delegate.store.deactivate()
