@@ -30,7 +30,7 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
-      - run: swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos
+      - run: swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos ../ios
       - run: swift build
       - run: swift test
       # The bundle as releases build it, with Sparkle and the widget embedded and signed. Any key and group will do:
@@ -39,6 +39,22 @@ jobs:
         run: SPARKLE_PUBLIC_KEY=$(head -c 32 /dev/urandom | base64) APP_GROUP=ABCDE12345.tech.d3l.tontonclaude ./scripts/build-app.sh
       - run: xmllint --noout Resources/TontonClaude.sdef
       - run: swiftc -O ../agent/tray/macos/main.swift -o "$RUNNER_TEMP/tonton-tray"
+
+  # The iPhone app, its Live Activity and its notification extension, for the Simulator and without signing: the team
+  # that publishes it signs its own builds.
+  ios-app:
+    runs-on: macos-15
+    env:
+      # The runner's default Xcode is 16; the project is built with the iOS 26 SDK, like the maintainer's.
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - run: >-
+          xcodebuild -project TontonClaude.xcodeproj -scheme TontonClaude -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/ios" CODE_SIGNING_ALLOWED=NO build
 
   raycast:
     runs-on: ubuntu-latest

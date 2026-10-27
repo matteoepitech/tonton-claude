@@ -73,6 +73,10 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
   open it, paste the recovery key from **Settings › Relay** or scan the QR code of **Settings › Machines** with the
   phone's camera, and chat, answer requests and stop sessions from there.
   It decrypts in the page, so the key never reaches the relay. It needs a relay from 0.8.0 or later.
+- **On your iPhone.** The iPhone app in `ios/` shows the sessions, the conversations and the permission cards, with the
+  sessions at work on the Lock Screen and in the Dynamic Island. It signs in with the recovery key: scan the QR code of
+  **Settings › Machines › Phone or browser**, or paste the key. On a relay with an APNs key, permission requests come
+  as notifications that only the phone can read, and the Live Activity keeps up while the app is closed. See [the details](docs/self-hosting.md#the-iphone-app).
 - **Allow for this session.** A permission card also offers to allow calls like the one it asks for until the session
   ends: a command's first words (`npm test`, never what is chained after it), a site for web pages, any call of the other
   tools. The agent keeps the rule and drops it when the session ends.

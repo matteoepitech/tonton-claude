@@ -1,7 +1,8 @@
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { MAX_MACHINES_PER_ACCOUNT, MAX_SHARES_PER_ACCOUNT } from './limits'
+import type { PushDevice } from '../../shared/protocol'
+import { MAX_MACHINES_PER_ACCOUNT, MAX_PUSH_DEVICES_PER_ACCOUNT, MAX_SHARES_PER_ACCOUNT } from './limits'
 import { issueToken, newJoinSecret, parseToken, safeEqual, sha256 } from './tokens'
 
 export interface Machine {
@@ -84,7 +85,45 @@ const MIGRATIONS = [
      expires_at INTEGER NOT NULL
    );
    CREATE INDEX shares_session ON shares(account_id, session_id);`,
+  // iPhones that get pushes: kept across restarts, since a phone only registers again when its app opens.
+  `CREATE TABLE push_devices (
+     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+     id TEXT NOT NULL,
+     environment TEXT NOT NULL,
+     alert_token TEXT,
+     activity_token TEXT,
+     start_token TEXT,
+     updated_at TEXT NOT NULL,
+     PRIMARY KEY (account_id, id)
+   );`,
 ]
+
+/** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */
+export interface StoredPushDevice extends PushDevice {
+  accountId: string
+}
+
+export type PushTokenKind = 'alert' | 'activity' | 'activityStart'
+
+interface PushDeviceRow {
+  account_id: string
+  id: string
+  environment: string
+  alert_token: string | null
+  activity_token: string | null
+  start_token: string | null
+}
+
+const PUSH_COLUMNS: Record<PushTokenKind, string> = { alert: 'alert_token', activity: 'activity_token', activityStart: 'start_token' }
+
+const toPushDevice = (row: PushDeviceRow): StoredPushDevice => ({
+  accountId: row.account_id,
+  device: row.id,
+  environment: row.environment === 'production' ? 'production' : 'sandbox',
+  alert: row.alert_token,
+  activity: row.activity_token,
+  activityStart: row.start_token,
+})
 
 interface MachineRow {
   id: string
@@ -290,6 +329,52 @@ export class Registry {
   expireShares(): Share[] {
     const rows = this.db.query(`DELETE FROM shares WHERE expires_at <= ? RETURNING ${SHARE_COLUMNS}`).all(Date.now()) as ShareRow[]
     return rows.map(toShare)
+  }
+
+  /**
+   * Replaces what a phone registered. A token belongs to one account: a phone signed in to another one since gets
+   * nothing more from the first. Past the cap, the device registered the longest ago goes.
+   */
+  savePushDevice(accountId: string, device: PushDevice) {
+    this.db.transaction(() => {
+      for (const kind of ['alert', 'activity', 'activityStart'] as const) {
+        const token = device[kind]
+        if (!token) continue
+        this.db
+          .query(`UPDATE push_devices SET ${PUSH_COLUMNS[kind]} = NULL WHERE ${PUSH_COLUMNS[kind]} = ? AND NOT (account_id = ? AND id = ?)`)
+          .run(token, accountId, device.device)
+      }
+      this.db
+        .query(
+          `INSERT INTO push_devices (account_id, id, environment, alert_token, activity_token, start_token, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (account_id, id) DO UPDATE SET environment = excluded.environment, alert_token = excluded.alert_token,
+             activity_token = excluded.activity_token, start_token = excluded.start_token, updated_at = excluded.updated_at`,
+        )
+        .run(accountId, device.device, device.environment, device.alert, device.activity, device.activityStart, now())
+      this.db
+        .query(
+          `DELETE FROM push_devices WHERE account_id = ? AND id NOT IN
+             (SELECT id FROM push_devices WHERE account_id = ? ORDER BY updated_at DESC, rowid DESC LIMIT ?)`,
+        )
+        .run(accountId, accountId, MAX_PUSH_DEVICES_PER_ACCOUNT)
+    })()
+  }
+
+  pushDevices(accountId: string): StoredPushDevice[] {
+    const rows = this.db.query('SELECT * FROM push_devices WHERE account_id = ? ORDER BY id').all(accountId) as PushDeviceRow[]
+    return rows.map(toPushDevice)
+  }
+
+  removePushDevice(accountId: string, deviceId: string) {
+    this.db.query('DELETE FROM push_devices WHERE account_id = ? AND id = ?').run(accountId, deviceId)
+  }
+
+  /** Forgets a token Apple refused, or a Live Activity the relay ended. */
+  clearPushToken(accountId: string, deviceId: string, kind: PushTokenKind, token: string) {
+    this.db
+      .query(`UPDATE push_devices SET ${PUSH_COLUMNS[kind]} = NULL WHERE account_id = ? AND id = ? AND ${PUSH_COLUMNS[kind]} = ?`)
+      .run(accountId, deviceId, token)
   }
 
   close() {

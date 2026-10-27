@@ -1,6 +1,7 @@
 import XCTest
 
 @testable import TontonCore
+@testable import TontonMac
 
 final class OpenCodeLocalTests: XCTestCase {
     /// A real `session.context` of OpenCode 2.0.32, the agent's fixture (agent/test/fixtures).

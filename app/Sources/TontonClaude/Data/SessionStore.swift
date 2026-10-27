@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import TontonCore
+import TontonMac
 
 /// Live state of the account's sessions and machines, fed by the relay socket and decrypted with the account key, plus
 /// the sessions of this Mac read from Claude Code's files, which need neither an account nor an agent.

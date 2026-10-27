@@ -13,6 +13,8 @@ import { SESSION_STATUSES } from './metrics'
 export interface SessionListener {
   updated(accountId: string, session: SessionSummary): void
   removed(accountId: string, sessionId: string): void
+  /** A request that was not pending yet, after `updated`. */
+  permissionRequested?(accountId: string, session: SessionSummary, request: SealedPermission): void
 }
 
 interface Session extends SessionSummary {
@@ -149,9 +151,11 @@ export class SessionStore {
     const session = this.get(accountId, sessionId)
     if (!session) return
     const others = session.pendingPermissions.filter(p => p.requestId !== request.requestId)
+    const isNew = others.length === session.pendingPermissions.length
     session.pendingPermissions = [...others, request].slice(-MAX_PENDING_PERMISSIONS)
     session.status = 'permission'
     this.changed(accountId, session)
+    if (isNew) this.listener.permissionRequested?.(accountId, toSummary(session), request)
   }
 
   closePermission(accountId: string, sessionId: string, requestId: string) {

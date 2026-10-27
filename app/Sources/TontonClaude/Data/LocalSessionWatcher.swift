@@ -1,5 +1,6 @@
 import Foundation
 import TontonCore
+import TontonMac
 
 /// Watches the `claude` sessions of this Mac in Claude Code's own files (see `LocalSessions`), off the main thread, and
 /// hands every change to `onChange`. Sessions whose process is gone stay as ended until the app quits.

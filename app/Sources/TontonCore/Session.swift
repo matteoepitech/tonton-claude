@@ -137,7 +137,10 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     }
 
     /// Claude Code's notification texts, shortened for the notch.
-    public var displayStatusText: String {
+    public var displayStatusText: String { Self.statusText(statusText, status: status) }
+
+    /// A status text from Claude Code shortened, or the status when there is none.
+    public static func statusText(_ statusText: String?, status: SessionStatus) -> String {
         guard let text = statusText, !text.isEmpty else { return status.label }
         if let range = text.range(of: "needs your permission to use ") { return "Wants to use \(text[range.upperBound...])" }
         if text.contains("waiting for your input") { return "Waiting for you" }
