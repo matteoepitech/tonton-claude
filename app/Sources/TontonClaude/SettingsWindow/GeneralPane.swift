@@ -4,6 +4,7 @@ import TontonCore
 
 struct GeneralPane: View {
     @EnvironmentObject var settings: AppSettings
+    @ObservedObject private var updates = AppUpdater.shared
     @State private var newReply = ""
 
     private var shortcuts: [(String, [String])] {
@@ -103,6 +104,12 @@ struct GeneralPane: View {
             }
             GroupLabel(text: "Updates")
             Card {
+                if updates.isOn {
+                    ToggleRow(
+                        title: "Check for updates", detail: "Looks for a new version of Tonton Claude once a day.",
+                        isOn: $updates.checksAutomatically)
+                    Hairline()
+                }
                 ToggleRow(
                     title: "Show what's new after an update",
                     detail: "The release notes open once when a new version starts. They come from the release on GitHub.",
@@ -175,6 +182,9 @@ struct GeneralPane: View {
                     Button("What's new") { AppDelegate.shared?.showWhatsNew() }.buttonStyle(.link).font(.system(size: 12))
                 }
                 Spacer()
+                if updates.isOn {
+                    Button("Check for Updates…") { updates.checkForUpdates() }.buttonStyle(ThemeButtonStyle()).disabled(!updates.canCheck)
+                }
                 Button("Quit Tonton Claude") { NSApp.terminate(nil) }.buttonStyle(ThemeButtonStyle())
             }
             .padding(.top, 28)

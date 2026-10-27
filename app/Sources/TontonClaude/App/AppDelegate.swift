@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var settingsWindow = SettingsWindowController(store: store, settings: settings)
     private let whatsNew = WhatsNewWindowController()
     private lazy var statusItem = StatusItemController(
+        updater: .shared,
         onToggleNotch: { [weak self] in self?.notch?.toggle() },
         onReconnect: { [weak self] in self?.store.connect() },
         onSettings: { [weak self] in self?.showSettings() }
@@ -29,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
         MainMenu.install()
+        // First: the menu bar icon's menu is built once, with or without its update item.
+        AppUpdater.shared.start()
         notch = NotchWindowController(store: store, settings: settings)
         MessageQueues.shared.attach(store)
         webhooks = WebhookNotifier(store: store, settings: settings)
@@ -112,13 +115,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
-    /// Clicking a notification opens the notch on its session.
+    /// Clicking a notification opens the notch on its session, or shows the update it announces.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        let isUpdate = response.notification.request.identifier == AppUpdater.notificationId
         let sessionId = response.notification.request.content.userInfo["sessionId"] as? String
         Task { @MainActor in
+            guard !isUpdate else { return AppUpdater.shared.checkForUpdates() }
             if let sessionId { self.store.selectedId = sessionId }
             self.notch?.expand()
         }

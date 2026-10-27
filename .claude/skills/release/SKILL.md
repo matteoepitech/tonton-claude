@@ -19,6 +19,10 @@ is signed with their key.
    - `shared/protocol.ts` changed: see the version table in the `protocol-change` skill.
    - The agent changed: users get **Update agent** in the app; agents older than 0.4.0 need the install command again.
 4. Draft the release notes: what users see, then what self-hosters must do.
+5. App updates: `gh variable list` shows `SPARKLE_PUBLIC_KEY` and `gh secret list` shows `SPARKLE_PRIVATE_KEY`. Without
+   both, the release ships without an `appcast.xml` and that version of the app never updates itself; with only one, the
+   workflow stops. Setting them up once is in `docs/self-hosting.md` (Releasing). Never replace the key pair: installed
+   apps only accept updates signed with the key they were built with.
 
 ## Tag
 
@@ -33,6 +37,8 @@ scripts and `SHA256SUMS`.
 
 ## After
 
-- The workflow is green and the release has every asset listed in the workflow.
+- The workflow is green and the release has every asset listed in the workflow, `appcast.xml` included.
+- On a Mac running the previous version (one built with the update keys), Settings › General › **Check for Updates…**
+  offers the new one and installs it.
 - Install the DMG on a Mac and check that **Update agent** appears for a machine on the previous version.
 - If the relay changed, update the hosted relay with `install-relay.sh` (see `docs/self-hosting.md`).

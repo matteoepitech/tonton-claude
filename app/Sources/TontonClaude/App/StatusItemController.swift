@@ -4,11 +4,13 @@ import AppKit
 @MainActor
 final class StatusItemController: NSObject {
     private var item: NSStatusItem?
+    private let updater: AppUpdater
     private let onToggleNotch: () -> Void
     private let onReconnect: () -> Void
     private let onSettings: () -> Void
 
-    init(onToggleNotch: @escaping () -> Void, onReconnect: @escaping () -> Void, onSettings: @escaping () -> Void) {
+    init(updater: AppUpdater, onToggleNotch: @escaping () -> Void, onReconnect: @escaping () -> Void, onSettings: @escaping () -> Void) {
+        self.updater = updater
         self.onToggleNotch = onToggleNotch
         self.onReconnect = onReconnect
         self.onSettings = onSettings
@@ -33,6 +35,7 @@ final class StatusItemController: NSObject {
         menu.addItem(entry("Reconnect", #selector(reconnect)))
         menu.addItem(.separator())
         menu.addItem(entry("Settings…", #selector(settings), key: ","))
+        if updater.isOn { menu.addItem(entry("Check for Updates…", #selector(checkForUpdates))) }
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Tonton Claude", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
@@ -47,4 +50,12 @@ final class StatusItemController: NSObject {
     @objc private func toggleNotch() { onToggleNotch() }
     @objc private func reconnect() { onReconnect() }
     @objc private func settings() { onSettings() }
+    @objc private func checkForUpdates() { updater.checkForUpdates() }
+}
+
+extension StatusItemController: NSMenuItemValidation {
+    /// Greyed out while a check or an update runs.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem.action != #selector(checkForUpdates) || updater.canCheck
+    }
 }

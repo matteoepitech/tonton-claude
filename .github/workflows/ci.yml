@@ -33,6 +33,9 @@ jobs:
       - run: swift format lint --strict --configuration .swift-format --recursive Sources Tests ../agent/tray/macos
       - run: swift build
       - run: swift test
+      # The bundle as releases build it, with Sparkle embedded and signed. Any key will do: nothing is published.
+      - name: Build the app bundle
+        run: SPARKLE_PUBLIC_KEY=$(head -c 32 /dev/urandom | base64) ./scripts/build-app.sh
       - run: xmllint --noout Resources/TontonClaude.sdef
       - run: swiftc -O ../agent/tray/macos/main.swift -o "$RUNNER_TEMP/tonton-tray"
 
