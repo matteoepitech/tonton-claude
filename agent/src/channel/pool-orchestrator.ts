@@ -45,7 +45,7 @@ export const ORCHESTRATOR_TOOLS: PoolToolSpec[] = [
       area: { type: 'string', description: 'The area it belongs to, as the plan names them.' },
       size: {
         type: 'string',
-        description: 'small: tests, docs, small fixes, boilerplate, a page following a pattern. large (default): a feature.',
+        description: 'simple: tests, docs, small fixes, boilerplate, a page following a pattern. large (default): a feature.',
       },
       depends_on: { type: 'array', description: 'Ids of the tasks it waits for.' },
       paths: { type: 'array', description: "The files and folders it works in. Default: its area's paths." },
@@ -90,7 +90,7 @@ export interface PoolOps {
 type Args = Record<string, unknown>
 
 /** The kind of task a session takes: its owner's choice, else by its coding tool. */
-export type SessionKind = PoolTaskSize | 'any'
+export type SessionKind = PoolTaskSize
 
 /** A task is active while a session holds it. */
 const ACTIVE = new Set(['assigned', 'in_progress', 'blocked'])
@@ -109,7 +109,7 @@ export function isOrchestrator(state: PoolState, me: Pick<PoolSession, 'account'
 export function sessionKind(session: PoolSession, description: SessionDescription | undefined): SessionKind {
   const takes = session.profile?.takes
   if (takes) return takes
-  return (description?.tool ?? session.profile?.tool ?? 'claude') === 'opencode' ? 'small' : 'large'
+  return (description?.tool ?? session.profile?.tool ?? 'claude') === 'opencode' ? 'simple' : 'large'
 }
 
 /** Why a task is too small to hand a full session, or null. */
@@ -163,8 +163,8 @@ export interface Candidate {
 
 /**
  * The sessions that may take a task, best first: free (no task they hold), online and ready, never the orchestrator
- * itself. A small task goes to the sessions that take small tasks first, then to the others; a large one never goes to
- * a session that only takes small tasks. Within that, a session of the task's area comes first.
+ * itself. A simple task goes to the sessions that take simple tasks first, then to the others; a large one never goes to
+ * a session that only takes simple tasks. Within that, a session of the task's area comes first.
  */
 export function candidates(
   state: PoolState,
@@ -174,12 +174,12 @@ export function candidates(
 ): Candidate[] {
   const size = task.size ?? 'large'
   const busy = new Set(state.tasks.filter(t => t.task && ACTIVE.has(t.task.state)).map(t => t.task?.assignee?.session))
-  const rank = (kind: SessionKind) => (size === 'small' ? { small: 0, any: 1, large: 2 }[kind] : { large: 0, any: 1, small: 9 }[kind])
+  const rank = (kind: SessionKind) => (size === 'simple' ? { simple: 0, large: 2 }[kind] : { large: 0, simple: 9 }[kind])
   return state.sessions
     .filter(s => s.online && s.ready && !busy.has(s.session) && !isOrchestrator(state, s) && !except.includes(s.session))
     .map(session => {
       const kind = sessionKind(session, descriptions.get(`${session.account}/${session.session}`))
-      return { session, kind, reason: `${kind === 'any' ? 'takes any task' : `takes ${kind} tasks`}` }
+      return { session, kind, reason: `takes ${kind} tasks` }
     })
     .filter(c => rank(c.kind) < 9)
     .sort((a, b) => {
@@ -202,8 +202,8 @@ export function refusal(
   const holding = state.tasks.find(t => t.task?.assignee?.session === session.session && ACTIVE.has(t.task.state))
   if (holding) return `That session already works on ${holding.id} (${holding.task?.title}): one task at a time.`
   const kind = sessionKind(session, descriptions.get(`${session.account}/${session.session}`))
-  if ((task.size ?? 'large') === 'large' && kind === 'small') {
-    return 'That session takes small tasks only (its tool or its owner says so): give it a small task, or this one to a Claude Code session.'
+  if ((task.size ?? 'large') === 'large' && kind === 'simple') {
+    return 'That session takes simple tasks only (its tool or its owner says so): give it a simple task, or this one to a Claude Code session.'
   }
   return null
 }
@@ -318,8 +318,10 @@ export class PoolOrchestrator {
   private async create(poolId: string, state: PoolState, args: Args): Promise<string> {
     const title = str(args.title)
     if (!title) return 'Give the task a title.'
-    const size: PoolTaskSize = args.size === 'small' ? 'small' : 'large'
-    if (args.size !== undefined && args.size !== 'small' && args.size !== 'large') return 'size is small or large.'
+    // `small` is what a model may well write for `simple`.
+    const size: PoolTaskSize = args.size === 'simple' || args.size === 'small' ? 'simple' : 'large'
+    if (args.size !== undefined && args.size !== 'simple' && args.size !== 'small' && args.size !== 'large')
+      return 'size is simple or large.'
     const area = str(args.area)
     const paths = strings(args.paths) ?? state.notes?.areas?.find(a => a.name === area)?.paths ?? []
     const id = newPoolItemId()
@@ -425,7 +427,7 @@ export class PoolOrchestrator {
       target = candidates(state, task, descriptions, except)[0]?.session
       if (!target) {
         return (task.size ?? 'large') === 'large'
-          ? 'No free session takes a large task now (OpenCode sessions take the small ones). Keep it to do, or split off the small parts.'
+          ? 'No free session takes a large task now (OpenCode sessions take the simple ones). Keep it to do, or split off the simple parts.'
           : 'No free session now: keep it to do.'
       }
     }
@@ -530,7 +532,7 @@ export const ORCHESTRATOR_GUIDE = [
   '1. Read pool_overview and pool_notes_read first.',
   '2. Plan with plan_create before any task: the goal, then the contracts (API routes, data shapes, folder layout), the stack, the decisions, and the areas with the paths each one owns.',
   '3. Split the work into tasks one session owns from start to end: a feature, an area, hours of work, with criteria. Never single steps: a session that waits for orders every few minutes costs more than one session doing it all.',
-  '4. Size each task. small: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it.',
+  '4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it.',
   '5. Write the contracts first and mark depends_on, so the front and the back work at the same time against the contracts.',
   '6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.',
   '7. Follow the pool: notices tell you when a task is blocked, done, stalled or its session left. Answer blockers, reassign, split, or re-plan.',

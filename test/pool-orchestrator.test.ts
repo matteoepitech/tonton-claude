@@ -240,7 +240,7 @@ describe('the orchestrator end to end', () => {
       goal: 'The page that lists the items from GET /v1/items, following the existing page pattern',
       criteria: ['shows every item', 'its tests pass'],
       area: 'front',
-      size: 'small',
+      size: 'simple',
       assign: 'auto',
     })
     expect(small).toContain('Assigned to Bob · front')
@@ -276,7 +276,7 @@ describe('the orchestrator end to end', () => {
     expect(done.branch).toMatch(/^pool\/[a-z0-9]+-items-api$/)
     expect(JSON.parse(await call(lead, 'pool_overview')).sessions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ session: OPENCODE, tool: 'opencode', takes: 'small', free: false }),
+        expect.objectContaining({ session: OPENCODE, tool: 'opencode', takes: 'simple', free: false }),
         expect.objectContaining({ session: WORKER, tool: 'claude', takes: 'large', free: true }),
       ]),
     )

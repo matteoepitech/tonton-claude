@@ -2,12 +2,15 @@
 // computer or phone. Built on the client core (shared/), which decrypts in the page: the account key never reaches the
 // relay. Signing in takes the recovery key of the Mac app (Settings › Relay), pasted or scanned from the QR code of
 // Settings › Machines; remembering it keeps the key as a CryptoKey that no script can read back. A read-only share key,
-// pasted or after the # of the address, shows one session instead.
+// pasted or after the # of the address, shows one session instead. On the relay's own website, the Pools tab shows the
+// account's pools (web/pools.ts).
 
 import {
   browserSocket,
   type ClientState,
   importAccountKey,
+  PoolApi,
+  PoolWatch,
   parseAccountToken,
   parseRecoveryKey,
   parseShareLink,
@@ -20,6 +23,7 @@ import {
   Vault,
 } from '../shared'
 import { element } from './markdown'
+import { type PoolsContext, poolSelected, renderPoolList, renderPoolMain } from './pools'
 import { cameraProblem, canScan, type Scan, startScan } from './scanner'
 import { renderChat, renderList, renderShared } from './views'
 
@@ -29,12 +33,19 @@ interface Saved {
   relay: string
   token: string
   key: CryptoKey
+  /** Missing for a browser that signed in before pools: asked of the relay then. */
+  accountId?: string
 }
 
 const app = document.getElementById('app') as HTMLElement
 let client: RelayClient | null = null
 let state: ClientState | null = null
 let viewer: ShareViewer | null = null
+let saved: Saved | null = null
+/** The sessions, or the pools of the account. */
+let mode: 'sessions' | 'pools' = 'sessions'
+let pools: PoolsContext | null = null
+let poolsProblem: string | null = null
 /** On phones, the list or one conversation. */
 let showingChat = false
 /** Machines folded in the list, kept in this browser only: a convenience, lost with the site's data. */
@@ -99,9 +110,9 @@ function signInScreen(problem?: string) {
       return
     }
     const key = await importAccountKey(account.key)
-    const saved = { relay: account.relay, token: account.token, key }
-    if (remember.checked) await save(saved).catch(() => {})
-    connect(saved)
+    const signedIn = { relay: account.relay, token: account.token, key, accountId: account.accountId }
+    if (remember.checked) await save(signedIn).catch(() => {})
+    connect(signedIn)
   }
   app.replaceChildren(form)
   field.focus()
@@ -166,26 +177,68 @@ function qrScanner(camera: HTMLElement, field: HTMLTextAreaElement, error: HTMLE
   return { button, stop }
 }
 
-function connect(saved: Saved) {
+function connect(account: Saved) {
   client?.stop()
+  saved = account
+  pools = null
+  poolsProblem = null
   client = new RelayClient({
-    vault: new Vault(saved.key),
+    vault: new Vault(account.key),
     // The DOM's handlers take events this client does not read: the socket fits SocketLike.
-    connect: () => browserSocket(saved.relay, saved.token, (url, protocols) => new WebSocket(url, protocols) as unknown as SocketLike),
+    connect: () => browserSocket(account.relay, account.token, (url, protocols) => new WebSocket(url, protocols) as unknown as SocketLike),
     onChange: next => {
       state = next
       render()
     },
     onSignedOut: () => signOut('The relay signed this device out.'),
+    onPoolUpdate: update => void pools?.watch.handle(update),
   })
-  layout(new URL(saved.relay).host)
+  layout(new URL(account.relay).host)
   client.start()
+}
+
+/**
+ * Pools take the relay's routes as well as its socket: the page's policy allows them on the relay's own website only.
+ * Opened the first time the Pools tab is.
+ */
+async function openPools() {
+  if (pools || !saved || !client) return
+  if (!location.protocol.startsWith('http') || new URL(saved.relay).origin !== location.origin) {
+    poolsProblem = `Pools are on your relay's website: open ${saved.relay} and sign in there.`
+    return render()
+  }
+  const account = saved
+  const api = new PoolApi({ relay: account.relay, token: account.token })
+  let accountId = account.accountId
+  if (!accountId) {
+    try {
+      const ping = await (await fetch(`${account.relay}/api/ping`, { headers: { authorization: `Bearer ${account.token}` } })).json()
+      accountId = typeof ping?.accountId === 'string' ? ping.accountId : undefined
+    } catch {}
+  }
+  if (!accountId) {
+    poolsProblem = 'The relay did not say which account this is: sign in again with the recovery key.'
+    return render()
+  }
+  const watch = new PoolWatch({
+    api,
+    accountKey: account.key,
+    account: accountId,
+    relay: account.relay,
+    link: client,
+    onChange: () => render(),
+  })
+  pools = { watch, account: accountId, rerender: () => render() }
+  await watch.refresh()
 }
 
 async function signOut(problem?: string) {
   client?.stop()
   client = null
   state = null
+  saved = null
+  pools = null
+  mode = 'sessions'
   await forget().catch(() => {})
   signInScreen(problem)
 }
@@ -199,7 +252,23 @@ function layout(host: string) {
   status.className = 'connection'
   const out = element('button', 'Sign out')
   out.onclick = () => void signOut()
-  const header = element('header', element('strong', 'Tonton Claude'), status, element('span', host), out)
+  const sessions = element('button', 'Sessions')
+  const poolsTab = element('button', 'Pools')
+  for (const [button, target] of [
+    [sessions, 'sessions'],
+    [poolsTab, 'pools'],
+  ] as const) {
+    button.className = 'mode'
+    button.onclick = () => {
+      mode = target
+      if (target === 'pools') void openPools()
+      render()
+    }
+  }
+  const modes = element('div', sessions, poolsTab)
+  modes.className = 'modes'
+  modes.setAttribute('role', 'tablist')
+  const header = element('header', element('strong', 'Tonton Claude'), modes, status, element('span', host), out)
   const list = element('nav')
   const chat = element('main')
   const shell = element('div', list, chat)
@@ -213,6 +282,10 @@ function render() {
   parts.status.textContent =
     state.connection === 'connected' ? '● connected' : state.connection === 'connecting' ? '○ connecting' : '○ offline'
   parts.status.dataset.state = state.connection
+  for (const button of document.querySelectorAll<HTMLButtonElement>('.modes button')) {
+    button.setAttribute('aria-selected', String(button.textContent?.toLowerCase() === mode))
+  }
+  if (mode === 'pools') return renderPools(parts.list, parts.chat, parts.shell)
   parts.shell.dataset.view = showingChat && state.selectedId ? 'chat' : 'list'
   renderList(
     parts.list,
@@ -235,6 +308,18 @@ function render() {
     showingChat = false
     render()
   })
+}
+
+function renderPools(list: HTMLElement, main: HTMLElement, shell: HTMLElement) {
+  if (!pools) {
+    shell.dataset.view = 'list'
+    list.replaceChildren(element('p', poolsProblem ?? 'Opening the pools…'))
+    main.replaceChildren(element('p', poolsProblem ?? ''))
+    return
+  }
+  shell.dataset.view = poolSelected() ? 'chat' : 'list'
+  renderPoolList(list, pools)
+  renderPoolMain(main, pools, () => render())
 }
 
 function loadFolded(): Set<string> {

@@ -13,6 +13,7 @@ import {
   openPoolGrant,
   openPoolSessionOrder,
   PoolVault,
+  poolTaskSize,
   sealPoolSessionOrder,
 } from '../pool'
 import { formatPoolInvite, parsePoolInvite } from '../pool-link'
@@ -81,9 +82,18 @@ describe('what other members sealed', () => {
       criteria: ['tests pass'],
     })
     expect(decodePoolSessionProfile({ area: 'front', tool: 'vim', orchestrator: 'yes' })).toEqual({ area: 'front' })
+    expect(decodePoolSessionProfile({ takes: 'simple' })).toEqual({ takes: 'simple' })
+    expect(decodePoolSessionProfile({ takes: 'huge' })).toEqual({})
     expect(decodePoolMessageBody({ text: 'hi', to: { area: 'back' } })).toEqual({ text: 'hi', to: { area: 'back' } })
     expect(decodePoolMessageBody({ text: 'hi', to: { nobody: true } })).toEqual({ text: 'hi' })
   })
+})
+
+test('a session takes the kind of task its owner chose, or by its tool: simple for OpenCode, large for Claude Code', () => {
+  expect(poolTaskSize(null, 'opencode')).toBe('simple')
+  expect(poolTaskSize(null, 'claude')).toBe('large')
+  expect(poolTaskSize({ takes: 'large' }, 'opencode')).toBe('large')
+  expect(poolTaskSize({ takes: 'simple' }, 'claude')).toBe('simple')
 })
 
 describe('the pool state', () => {
@@ -277,8 +287,9 @@ describe('the orchestrator and the structured notes', () => {
       state: 'todo',
       paths: ['web/'],
     })
-    expect(decodePoolTask({ title: 'Page', state: 'todo', size: 'small' })?.size).toBe('small')
-    expect(decodePoolSessionProfile({ takes: 'any' })).toEqual({ takes: 'any' })
+    expect(decodePoolTask({ title: 'Page', state: 'todo', size: 'simple' })?.size).toBe('simple')
+    expect(decodePoolSessionProfile({ takes: 'large' })).toEqual({ takes: 'large' })
+    expect(decodePoolSessionProfile({ takes: 'any' })).toEqual({})
     expect(decodePoolSessionProfile({ takes: 'all' })).toEqual({})
   })
 })

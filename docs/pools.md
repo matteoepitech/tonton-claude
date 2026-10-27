@@ -32,8 +32,8 @@ minutes costs more than one session doing everything. The orchestrator:
 A pool mixes Claude Code and OpenCode sessions, with nothing to change on either side. They are not equally capable:
 OpenCode sessions take the simpler, well-bounded tasks (tests, docs, small fixes, boilerplate, a page following an
 existing pattern), and Claude Code sessions take the features that need broad context. `pool_status` shows each
-session's coding tool and model for that. The machine owner can override it per session in its profile (`takes`:
-`small`, `large` or `any`). The orchestrator's tools apply these rules: [pool-orchestrator.md](pool-orchestrator.md).
+session's coding tool and model for that, and the kind of task it takes (`takes`: `simple` or `large`). The machine owner
+picks it when the session joins; without a choice it follows the tool. The orchestrator's tools apply these rules: [pool-orchestrator.md](pool-orchestrator.md).
 
 ## What the relay keeps
 
@@ -44,7 +44,7 @@ session's coding tool and model for that. The machine owner can override it per 
 | Member keys | account id, key version | the pool key it joined with, and its P-256 private key, both sealed with that member's account key; its public key, sealed with each version of the pool key it saw |
 | Key wraps | account id, version, who made it | a later version of the pool key, wrapped for that member (see Keys) |
 | Invites | id, role, token hash, uses left, expiry | — |
-| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, tool, what it takes); the order, sealed with the account key |
+| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, tool, kind of task); the order, sealed with the account key |
 | Tasks | id, revision, updated at, who changed it last | goal, criteria, area, size, paths, state, assignee, dependencies, branch, summary |
 | Notes | revision, updated at, who changed them last | free text, the sections (goal, stack, contracts, decisions), the areas and the paths each owns |
 | Messages | id, order, sender account and session, time | text, and who it is for (a session, an area or everyone) |
@@ -146,8 +146,10 @@ other members wrote cannot close that envelope or forge its attributes. The chan
 secrets outside the project, or acting on another repository.
 
 The machine owner chooses per session, in the join order sealed with the account key (`autoStart`): start pool tasks
-right away, or (the default) tell the user and wait until they agree. Until the notch has a button for it (#234), the
-user answers in the terminal or with a message from the notch.
+right away, or (the default) tell the user and wait until they agree. The notch shows such a task as a card in the
+session's conversation: **Accept** sends the session a message from its owner to claim it; **Refuse** puts the task back
+on the board (state `todo`, no assignee, a `refused` event) and tells the session to leave it. The user can also answer
+in the terminal.
 
 Details:
 
@@ -186,13 +188,40 @@ Details:
 - A budget per member and per pool (cost, time), counted by each agent from its own usage.
 - Every start, stop, join, kick, rotation and rule change goes to the events, for the audit log.
 
+## The notch
+
+The Mac app lists the account's pools when it connects and follows each one on its socket (`app/Sources/TontonClaude/Data/PoolStore.swift`,
+the logic in `TontonCore/PoolState.swift` and `PoolJoin.swift`). A session joins from its context menu or the pool
+button of its chat header: the pool, its area, what it knows, its repository folder, the kind of task it takes, and
+whether it starts pool tasks right away. Only sessions an agent serves join, from an agent of 0.8.0 or later. The row and
+the header show its role, and the pool button its task, its agent's state and the pool's latest messages for it, with a
+link to the pool on the website (`<relay>/#pool=<id>`) and a way to leave. Pools are made and joined on the website.
+
 ## The website
 
-The relay serves a website at `/`, built on the client core like the web app: sign in with the recovery key, create a
-pool, invite with a link or a QR code, and watch it. Pages: pools, control center (members, machines, sessions, status,
-current task, limits, a graph of who talks to whom), task board, activity, leaderboard (tasks done, time, lines changed,
-tokens and cost), notes, settings. It decrypts in the browser and keeps the same Content-Security-Policy as
-`tonton-web.html`.
+The relay serves a website at `/`, built on the client core like the web app: sign in with the recovery key, then the
+**Pools** tab next to the sessions. It decrypts in the browser and keeps the relay's Content-Security-Policy.
+
+- Pools are on the relay's own website only: they take the relay's routes (`/api/pools…`) as well as its socket, and the
+  policy of `tonton-web.html` allows sockets only. Opened from disk, the page says where to go.
+- The list shows each pool's name, opened with the member's keys. **New pool** makes the pool and its key in the
+  browser; **Join** takes an invite pasted from a teammate (`tontonpool1.…`, for this relay only).
+- A pool's page has tabs, each a name and a function in `POOL_TABS` (`web/pools.ts`): **Tasks**, **Members**,
+  **Invites** (owner and admins) and **Settings**. The control center, the activity, the leaderboard and the notes come as
+  more tabs.
+- **Tasks** is the board: one column per state (to do, assigned, in progress, in review, done, blocked), live. A task
+  opens with its goal, criteria, area, assignee, dependencies, branch, summary and history (the `task_*` events each
+  change leaves). Members create, edit and move tasks; viewers read. A change over a revision someone else changed
+  meanwhile is refused by the relay: the board shows their version, marked "changed meanwhile".
+- **Members** lists the members and the pool's sessions (tool, machine, online or not). Roles change from a menu, by the
+  rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and says who could
+  not get the new one.
+- **Invites** makes an invite (uses, how long, which role) and shows its link and a QR code, drawn in the page
+  (`shared/qr.ts`, no dependency). Open invites are listed with **Revoke**.
+- Forms sit in a panel above the tab: live changes redraw the tab, never what is being typed.
+- What each role is offered comes from `shared/pool-board.ts`, and the page follows the pool through
+  `shared/pool-watch.ts`: the member's copy of the key, the wraps of later versions, a new snapshot after a rotation,
+  and its public key published again under the new version.
 
 ## Threats
 

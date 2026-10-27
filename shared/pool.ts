@@ -31,7 +31,7 @@ const KEY = /^[A-Za-z0-9_-]{43}$/
 const TASK_STATES: readonly PoolTaskState[] = ['todo', 'assigned', 'in_progress', 'review', 'done', 'blocked']
 const ROLES: readonly PoolRole[] = ['owner', 'admin', 'member', 'viewer']
 export const POOL_NOTES_SECTIONS: readonly PoolNotesSection[] = ['goal', 'stack', 'contracts', 'decisions']
-const isSize = (value: unknown): value is PoolTaskSize => value === 'small' || value === 'large'
+const isSize = (value: unknown): value is PoolTaskSize => value === 'simple' || value === 'large'
 /** The longest text kept from a field another member wrote. */
 const MAX_TEXT = 64 * 1024
 
@@ -115,6 +115,7 @@ export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | n
   const f = fields(value)
   if (!f) return null
   const tool: PoolSessionProfile['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
+  const takes: PoolSessionProfile['takes'] = f.takes === 'simple' || f.takes === 'large' ? f.takes : undefined
   return defined({
     area: text(f.area),
     skills: text(f.skills),
@@ -123,8 +124,13 @@ export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | n
     machine: text(f.machine),
     tool,
     orchestrator: f.orchestrator === true ? true : undefined,
-    takes: isSize(f.takes) || f.takes === 'any' ? (f.takes as PoolTaskSize | 'any') : undefined,
+    takes,
   })
+}
+
+/** What kind of task a session takes: its owner's choice, or by its tool when it made none. */
+export function poolTaskSize(profile: PoolSessionProfile | null, tool: 'claude' | 'opencode'): PoolTaskSize {
+  return profile?.takes ?? (tool === 'opencode' ? 'simple' : 'large')
 }
 
 export function decodePoolTask(value: unknown): PoolTask | null {

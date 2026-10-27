@@ -68,6 +68,9 @@ struct ChatPanel: View {
                 }
             }
             .overlay { ChangedFilesPanel(session: session) }
+            PoolTaskCards(session: session)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
             ForEach(session.pendingPermissions) { req in
                 PermissionCard(
                     request: req, sessionRule: store.sessionRule(for: req, in: session),
@@ -262,6 +265,7 @@ struct ChatHeader: View {
                 }
                 Text(session.status.label).font(.notch(11)).foregroundStyle(Color(nsColor: session.status.color)).fixedSize()
                 NoteButton(session: session)
+                PoolButton(session: session)
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
                 if session.accepts(.interrupt) { interrupt }
                 if session.canChat && !session.menuCommands.isEmpty { commands }

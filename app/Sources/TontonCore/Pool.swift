@@ -135,7 +135,7 @@ public struct PoolSessionProfile: Codable, Equatable, Sendable {
     public var tool: String?
     /// Older profiles only: the orchestrator is the pool's `orchestrator`, which only owners and admins set.
     public var orchestrator: Bool?
-    /// The owner's override of what the session takes: `small`, `large` or `any`. Nil: by its tool.
+    /// `simple` or `large`: the kind of task its owner gives it. Nil: by its tool (`PoolTaskSize.default(for:)`).
     public var takes: String?
 
     public init(
@@ -169,16 +169,25 @@ public struct PoolTask: Codable, Equatable, Sendable {
     /// `pool/<id>-<slug>`: one branch per task.
     public var branch: String?
     public var summary: String?
-    /// `small` or `large`; nil: large.
+    /// `simple` or `large`; nil: large.
     public var size: String?
     /// The files and folders it works in.
     public var paths: [String]?
+
+    public init(
+        title: String, goal: String? = nil, criteria: [String]? = nil, area: String? = nil, state: PoolTaskState,
+        assignee: PoolSessionRef? = nil, dependsOn: [String]? = nil, branch: String? = nil, summary: String? = nil
+    ) {
+        (self.title, self.goal, self.criteria, self.area, self.state) = (title, goal, criteria, area, state)
+        (self.assignee, self.dependsOn, self.branch, self.summary) = (assignee, dependsOn, branch, summary)
+    }
 }
 
 /// An area of the code and the paths it owns.
 public struct PoolArea: Codable, Equatable, Sendable {
     public var name: String
     public var paths: [String]
+
 }
 
 public struct PoolNotes: Codable, Equatable, Sendable {
@@ -205,6 +214,10 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
     /// `session` events: `claude` or `opencode`, and the model, as the session's agent last posted them.
     public var tool: String?
     public var model: String?
+
+    public init(kind: String, text: String? = nil, taskId: String? = nil, tool: String? = nil, model: String? = nil) {
+        (self.kind, self.text, self.taskId, self.tool, self.model) = (kind, text, taskId, tool, model)
+    }
 }
 
 /// Seals with the latest pool key it holds and opens with whichever version sealed a blob. What another member sealed

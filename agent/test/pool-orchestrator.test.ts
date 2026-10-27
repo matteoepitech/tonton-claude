@@ -28,7 +28,7 @@ const SESSIONS = [
   { account: 'acc_me', session: ME, area: undefined, tool: 'claude' },
   { account: 'acc_bob', session: 'ses_oc', area: 'front', tool: 'opencode' },
   { account: 'acc_ana', session: 'ses_cc', area: 'back', tool: 'claude' },
-  { account: 'acc_eve', session: 'ses_eve', area: 'back', tool: 'claude', takes: 'small' as const },
+  { account: 'acc_eve', session: 'ses_eve', area: 'back', tool: 'claude', takes: 'simple' as const },
 ]
 
 /** A relay that answers like the real one: revisions, conflicts, and every post sent back to the members. */
@@ -237,12 +237,12 @@ describe('the rules', () => {
   })
   const none = new Map()
 
-  test('a small task goes to OpenCode first, a large one to Claude Code, never to the orchestrator', () => {
-    expect(candidates(state(), { size: 'small' }, none).map(c => c.session.session)).toEqual(['ses_oc', 'ses_eve', 'ses_cc'])
-    // Eve's owner made it take small tasks only: it gets no large one.
+  test('a simple task goes to OpenCode first, a large one to Claude Code, never to the orchestrator', () => {
+    expect(candidates(state(), { size: 'simple' }, none).map(c => c.session.session)).toEqual(['ses_oc', 'ses_eve', 'ses_cc'])
+    // Eve's owner made it take simple tasks only: it gets no large one.
     expect(candidates(state(), { size: 'large' }, none).map(c => c.session.session)).toEqual(['ses_cc'])
     // In its area first, among those that fit.
-    expect(candidates(state(), { size: 'small', area: 'back' }, none)[0].session.session).toBe('ses_eve')
+    expect(candidates(state(), { size: 'simple', area: 'back' }, none)[0].session.session).toBe('ses_eve')
   })
 
   test('one task per session: a busy session is not a candidate, and is refused by name', () => {
@@ -322,18 +322,18 @@ describe('the orchestrator', () => {
     expect(delivered.filter(d => d.includes('kind="notes"'))).toEqual([])
   })
 
-  test('tasks: OpenCode gets the small one, Claude Code the large one, each on its own branch, with its area paths', async () => {
+  test('tasks: OpenCode gets the simple one, Claude Code the large one, each on its own branch, with its area paths', async () => {
     await join()
     await call('plan_create', { goal: 'A shop', contracts: 'GET /v1/items', areas: ['front: web/', 'back: api/'] })
     expect(await call('task_create', { title: 'Fix', goal: 'fix', criteria: ['ok'] })).toContain('Too small')
 
     const small = await call(
       'task_create',
-      big('Item list page', { area: 'front', size: 'small' }) as Record<string, unknown> & { assign?: string },
+      big('Item list page', { area: 'front', size: 'simple' }) as Record<string, unknown> & { assign?: string },
     )
     expect(small).toContain('Assign it')
     const smallId = [...relay.tasks.keys()][0]
-    expect(await relay.read(smallId)).toMatchObject({ state: 'todo', size: 'small', paths: ['web/'] })
+    expect(await relay.read(smallId)).toMatchObject({ state: 'todo', size: 'simple', paths: ['web/'] })
     expect((await relay.read(smallId))?.branch).toStartWith(
       `pool/${smallId
         .replace(/[^A-Za-z0-9]/g, '')
@@ -348,10 +348,10 @@ describe('the orchestrator', () => {
     const largeId = [...relay.tasks.keys()][1]
     expect(await relay.read(largeId)).toMatchObject({ state: 'assigned', assignee: { session: 'ses_cc' }, size: 'large' })
 
-    // Eve takes small tasks only, Ana is busy: nobody free takes a large task.
+    // Eve takes simple tasks only, Ana is busy: nobody free takes a large task.
     expect(await call('task_create', { ...big('Checkout'), assign: 'auto' })).toContain('No free session takes a large task')
     const checkout = [...relay.tasks.keys()][2]
-    expect(await call('task_assign', { task: checkout, session: 'ses_eve' })).toContain('takes small tasks only')
+    expect(await call('task_assign', { task: checkout, session: 'ses_eve' })).toContain('takes simple tasks only')
     expect(await call('task_assign', { task: checkout, session: 'ses_eve', force: true })).toBe('Assigned to Eve · back (ses_eve).')
     expect(relay.posts.filter(p => p.t === 'pool_event').length).toBeGreaterThanOrEqual(6)
   })
@@ -378,16 +378,16 @@ describe('the orchestrator', () => {
     await join()
     await call('task_create', { ...big('Items API'), assign: 'ses_cc' })
     const id = [...relay.tasks.keys()][0]
-    expect(await call('task_reassign', { task: id, session: 'ses_oc', reason: 'Ana is out of time' })).toContain('takes small tasks only')
+    expect(await call('task_reassign', { task: id, session: 'ses_oc', reason: 'Ana is out of time' })).toContain('takes simple tasks only')
     await call('task_create', big('Other'))
     expect(await call('task_reassign', { task: id, reason: 'Ana is out of time' })).toContain('No free session takes a large task')
-    // Bob's owner lets it take any task.
+    // Bob's owner lets it take large tasks.
     const sessions = pools.state(POOL)?.sessions ?? []
     const bob = sessions.find(s => s.session === 'ses_oc') as PoolSession
     pools.apply({
       t: 'pool_session',
       poolId: POOL,
-      session: { ...bob, profile: await vault.seal({ area: 'front', tool: 'opencode', takes: 'any' }) },
+      session: { ...bob, profile: await vault.seal({ area: 'front', tool: 'opencode', takes: 'large' }) },
     })
     await settle()
     expect(await call('task_reassign', { task: id, reason: 'Ana is out of time' })).toBe('Assigned to Bob · front (ses_oc).')

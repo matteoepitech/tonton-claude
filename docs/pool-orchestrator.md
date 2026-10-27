@@ -15,7 +15,7 @@ This session is now the orchestrator of this pool: it plans the project and hand
 1. Read pool_overview and pool_notes_read first.
 2. Plan with plan_create before any task: the goal, then the contracts (API routes, data shapes, folder layout), the stack, the decisions, and the areas with the paths each one owns.
 3. Split the work into tasks one session owns from start to end: a feature, an area, hours of work, with criteria. Never single steps: a session that waits for orders every few minutes costs more than one session doing it all.
-4. Size each task. small: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it.
+4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it.
 5. Write the contracts first and mark depends_on, so the front and the back work at the same time against the contracts.
 6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.
 7. Follow the pool: notices tell you when a task is blocked, done, stalled or its session left. Answer blockers, reassign, split, or re-plan.
@@ -27,9 +27,10 @@ This session is now the orchestrator of this pool: it plans the project and hand
 ## The rules the tools apply
 
 - **One task per session.** A session that holds a task (assigned, in progress or blocked) gets no other.
-- **What a session takes.** By its tool: OpenCode sessions take small tasks, Claude Code sessions large ones and, when
-  no small-task session is free, small ones too. A session's owner can set it in its profile (`takes`: `small`,
-  `large` or `any`). A large task never goes to a session that takes small tasks only, unless the orchestrator forces it.
+- **What a session takes.** By its tool: OpenCode sessions take simple tasks, Claude Code sessions large ones and, when
+  no simple-task session is free, simple ones too. A session's owner can set it when the session joins (`takes`:
+  `simple` or `large`). A large task never goes to a session that takes simple tasks only, unless the orchestrator
+  forces it.
 - **Area first.** Among the sessions that fit, one of the task's area comes first.
 - **Waits.** A task whose `depends_on` are not done is not handed out, unless forced.
 - **Too small.** A task needs criteria; a short goal with a single criterion is refused: fold it into a bigger task.

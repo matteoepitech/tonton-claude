@@ -43,14 +43,14 @@ export interface PoolSessionProfile {
   /** Older profiles only: the orchestrator is now the pool's `orchestrator` field, which only owners and admins set. */
   orchestrator?: boolean
   /**
-   * The machine owner's override of what the session takes: `small` (simple, well-bounded tasks), `large` (features
-   * that need broad context) or `any`. Missing: by its tool, OpenCode small and Claude Code large (docs/pools.md).
+   * The kind of task its owner gives it: `simple` (tests, docs, small fixes, boilerplate) or `large` (features that need
+   * broad context). Missing: by its tool, simple for OpenCode and large for Claude Code (docs/pools.md, Sizes of work).
    */
-  takes?: PoolTaskSize | 'any'
+  takes?: PoolTaskSize
 }
 
-/** `small`: tests, docs, small fixes, boilerplate, a page that follows an existing pattern. `large`: a feature, an area. */
-export type PoolTaskSize = 'small' | 'large'
+/** `simple`: tests, docs, small fixes, boilerplate, a page that follows an existing pattern. `large`: a feature, an area. */
+export type PoolTaskSize = 'simple' | 'large'
 
 export type PoolTaskState = 'todo' | 'assigned' | 'in_progress' | 'review' | 'done' | 'blocked'
 
