@@ -220,6 +220,17 @@ extension PoolState {
             return task.state == .assigned || task.state == .inProgress || task.state == .blocked
         }
     }
+
+    /// The pool machine whose agent started this session; nil for a session put in by hand.
+    public func machine(of session: Session) -> Machine? {
+        guard let id = session.machine else { return nil }
+        return machines?.first { $0.account == session.account && $0.machine == id }
+    }
+
+    /// Who stops a machine or starts it again, as the relay checks it: its owner, or the pool's owner and admins.
+    public static func mayStop(_ machine: Machine, account: String, role: PoolRole) -> Bool {
+        machine.account == account || role == .owner || role == .admin
+    }
 }
 
 extension PoolTaskState {

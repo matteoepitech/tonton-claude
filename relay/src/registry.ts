@@ -248,6 +248,12 @@ const MIGRATIONS = [
    ALTER TABLE pool_audit ADD COLUMN target_machine TEXT;`,
   // A pool machine its owner or an admin stopped (relay/src/pool-machines.ts): it takes no work until started again.
   `ALTER TABLE pool_machines ADD COLUMN stopped INTEGER NOT NULL DEFAULT 0;`,
+  // RPG: one account-private, sealed hero. Revisions serialize writes without inspecting the economy.
+  `CREATE TABLE rpg_profiles (
+     account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+     rev INTEGER NOT NULL,
+     blob TEXT NOT NULL
+   );`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */
@@ -372,6 +378,7 @@ export class Registry {
         ? (this.db.query('DELETE FROM machines WHERE account_id = ? RETURNING id').all(accountId) as { id: string }[]).map(m => m.id)
         : []
       const secret = newJoinSecret()
+      if (regenerate) this.db.query('DELETE FROM rpg_profiles WHERE account_id = ?').run(accountId)
       this.db.query('UPDATE accounts SET join_hash = ? WHERE id = ?').run(sha256(secret), accountId)
       return { secret, revoked }
     })()

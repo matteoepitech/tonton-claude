@@ -1,4 +1,6 @@
 export const MAX_MACHINES_PER_ACCOUNT = 100
+/** One encrypted hero document per account, including durable reward receipts. */
+export const MAX_RPG_BYTES = 4 * 1024 * 1024
 export const MAX_SESSIONS_PER_ACCOUNT = 100
 export const MAX_ENTRIES_PER_SESSION = 800
 export const MAX_SESSION_BYTES = 16 * 1024 * 1024

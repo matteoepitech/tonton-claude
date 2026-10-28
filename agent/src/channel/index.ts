@@ -7,6 +7,7 @@ import { receiveDiagnoseRequest } from '../diagnose'
 import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
 import { handleLogRequest } from '../logs'
+import { AgentRPG } from '../rpg'
 import { addSessionRules, openSessionRules, receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { Conversation } from './conversation'
@@ -36,6 +37,7 @@ export async function runChannel() {
     return
   }
   const canChat = process.env.TONTON_CHANNEL === '1'
+  const rpg = new AgentRPG(config)
   log('channel started', { parent: process.ppid, canChat, cwd: process.cwd() })
 
   const relay: RelayConnection = new RelayConnection(config, 'channel', {
@@ -100,6 +102,7 @@ export async function runChannel() {
       build => relay.post(build),
       { deliver: text => void mcp.inject(text, 'pool'), toolsChanged: () => void mcp.toolsChanged() },
       config.machineId,
+      rpg,
     )
     conversation.start()
   }

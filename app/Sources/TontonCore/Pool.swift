@@ -192,7 +192,15 @@ public struct PoolSessionRef: Codable, Equatable, Sendable {
     }
 }
 
+/// The first successful completion fixes reward attribution even if the task is later reassigned.
+public struct PoolCompletion: Codable, Equatable, Sendable {
+    public var at: String
+    public var assignee: PoolSessionRef
+    public var reviewer: PoolSessionRef?
+}
+
 public struct PoolTask: Codable, Equatable, Sendable {
+    public var completion: PoolCompletion?
     public var title: String
     public var goal: String?
     public var criteria: [String]?

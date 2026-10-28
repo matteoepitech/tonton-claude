@@ -12,6 +12,7 @@ import { PoolVault, sealPoolSessionOrder } from '../shared/pool'
 import { PoolApi } from '../shared/pool-api'
 import type { PoolUpdate } from '../shared/pool-protocol'
 import type { Entry, RelayToApp, RelayToViewer, SessionInfo, SessionMeta, SessionSummary, SharedInfo } from '../shared/protocol'
+import { RPGClient } from '../shared/rpg-client'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const FIXTURE = join(import.meta.dir, '../agent/test/fixtures/opencode-2.0.32.jsonl')
@@ -222,6 +223,11 @@ describe('OpenCode through the relay', () => {
       return tasks !== undefined
     }, 'the progress')
     expect(tasks).toEqual({ done: 1, total: 2 })
+    emit('session.tool.success', { callID: 'call_todo', tool: 'todowrite', output: 'ok', timestamp: Date.now() })
+    await eventually(
+      async () => (await new RPGClient(`${base}/api/rpg`, accountToken, key).read()).state.xp === 10,
+      'OpenCode checklist XP',
+    )
   })
 
   test('compact and interrupt run through OpenCode, clear says why it cannot', async () => {

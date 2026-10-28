@@ -195,6 +195,10 @@ export class PoolWork {
   private readonly ops: PoolOps
   private readonly orchestrator: PoolOrchestrator
   private merger: PoolMerger | null = null
+  private rewards: ((poolId: string, state: PoolState) => void) | null = null
+  useRewards(receive: (poolId: string, state: PoolState) => void) {
+    this.rewards = receive
+  }
   private readonly stallTimer: ReturnType<typeof setInterval>
 
   constructor(
@@ -464,7 +468,13 @@ export class PoolWork {
     const reviewer = reviewers(state, task)[0]
     const next: PoolTask = reviewer
       ? { ...task, state: 'review', summary, branch, reviewer: { account: reviewer.account, session: reviewer.session } }
-      : { ...task, state: 'done', summary, branch }
+      : {
+          ...task,
+          state: 'done',
+          summary,
+          branch,
+          completion: task.completion ?? { at: new Date().toISOString(), assignee: { account: me.account, session: me.session } },
+        }
     const result = await this.putTask(poolId, item, next)
     if (result) return result
     const who = reviewer ? this.who(state, reviewer.account, reviewer.session) : ''
@@ -484,7 +494,20 @@ export class PoolWork {
     const notes = typeof args.notes === 'string' ? args.notes.trim() : ''
     if (!accept && !notes) return 'Say what to fix in notes: its author only gets what you write.'
     const next: PoolTask = accept
-      ? { ...task, state: 'done', ...(notes ? { review: notes } : {}) }
+      ? {
+          ...task,
+          state: 'done',
+          ...(notes ? { review: notes } : {}),
+          ...(task.assignee
+            ? {
+                completion: task.completion ?? {
+                  at: new Date().toISOString(),
+                  assignee: task.assignee,
+                  reviewer: { account: me.account, session: me.session },
+                },
+              }
+            : {}),
+        }
       : { ...task, state: 'assigned', review: notes }
     const result = await this.putTask(poolId, item, next)
     if (result) return result
@@ -656,6 +679,7 @@ export class PoolWork {
     }
     const me = state.sessions.find(session => session.session === this.sessionId())
     if (!me) return
+    this.rewards?.(poolId, state)
     this.announce(poolId)
     // A pool it just joined gets its plan's figures at once; the others only when they move.
     if (!this.limitsPosted.has(poolId)) this.reportLimits()

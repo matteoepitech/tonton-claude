@@ -4,6 +4,7 @@ import TontonCore
 /// Optional dots beside the camera: the most urgent status on the left, the live session count on the right, or the time
 /// left before a usage limit resets when a session is close to it or stopped by it.
 struct ActivityDots: View {
+    @ObservedObject private var rpg = RPGStore.shared
     @EnvironmentObject var state: NotchState
     @EnvironmentObject var store: SessionStore
     @EnvironmentObject var settings: AppSettings
@@ -19,7 +20,7 @@ struct ActivityDots: View {
             } else if state.showWings {
                 Group {
                     if settings.showMascot {
-                        MascotView(status: urgent ?? .idle)
+                        MascotView(status: urgent ?? .idle, hero: rpg.hero)
                     } else if let urgent {
                         StatusDot(status: urgent, size: 7, limit: limit)
                     }
@@ -52,13 +53,14 @@ struct ActivityDots: View {
 /// The wings widened around the camera, like the Dynamic Island: the session's status and project on the left, what it
 /// needs or works on to the right.
 struct LiveActivityWings: View {
+    @ObservedObject private var rpg = RPGStore.shared
     let session: SessionSummary
     let mascot: Bool
     let width: CGFloat
 
     var body: some View {
         HStack(spacing: 6) {
-            if mascot { MascotView(status: session.status, size: 16) } else { StatusDot(status: session.status, size: 7) }
+            if mascot { MascotView(status: session.status, size: 16, hero: rpg.hero) } else { StatusDot(status: session.status, size: 7) }
             Text(session.displayName).font(.system(size: 11, weight: .semibold)).lineLimit(1).truncationMode(.tail)
         }
         .padding(.horizontal, 10)

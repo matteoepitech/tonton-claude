@@ -131,7 +131,10 @@ final class VectorTests: XCTestCase {
         history.append(["id": "o1", "ts": "2026-10-25T10:00:07.000Z", "blob": try E2E.seal(entries[1], with: other)])
 
         let issuedAt = Date(timeIntervalSince1970: 1_792_497_600)
+        var hero = RPG.State()
+        try hero.award(RPG.Reward(kind: .poolTask, source: "pool/task", at: "2026-10-28"))
         let blobs = [
+            ("rpg", try sealed(hero)),
             (
                 "prompt",
                 try vault.sealPrompt(

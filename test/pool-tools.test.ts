@@ -19,6 +19,7 @@ import { PoolKeyring } from '../shared/pool-keys'
 import { formatPoolInvite, parsePoolInvite } from '../shared/pool-link'
 import type { PoolTask, PoolUpdate } from '../shared/pool-protocol'
 import { controlCenter, leaderboard, talkGraph, timeline } from '../shared/pool-stats'
+import { RPGClient } from '../shared/rpg-client'
 import { Vault } from '../shared/vault'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
@@ -278,6 +279,11 @@ describe('pool tools end to end', () => {
       return item?.task?.state === 'done' && item.task
     }, 'the task done for the other account')
     expect(done).toMatchObject({ summary: 'Page done\n\nTests: bun test', branch: 'feat/login', assignee: { session: OPENCODE } })
+    expect(done.completion?.assignee).toEqual({ account: front.accountId, session: OPENCODE })
+    await eventually(
+      async () => (await new RPGClient(`${base}/api/rpg`, front.token, front.key).read()).state.xp === 50,
+      'OpenCode task XP',
+    )
   })
 
   test('a task handed to the Claude Code session: it starts at once, as its owner chose', async () => {
@@ -300,6 +306,7 @@ describe('pool tools end to end', () => {
       'Done: the pool sees it.',
     )
     await eventually(async () => (await stateOf(front))?.tasks.find(t => t.id === id)?.task?.state === 'done', 'the task done')
+    await eventually(async () => (await new RPGClient(`${base}/api/rpg`, back.token, back.key).read()).state.xp === 50, 'Claude task XP')
   })
 
   test("the website's control center, activity and leaderboard read the same pool from its events", async () => {

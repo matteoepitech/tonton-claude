@@ -196,6 +196,16 @@
         }
       }
     },
+    "%@ is stopped" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ est arrêtée"
+          }
+        }
+      }
+    },
     "%@ of %@" : {
       "comment" : "Last 40 lines of 12 KB",
       "localizations" : {
@@ -1107,6 +1117,22 @@
         }
       }
     },
+    "%lld sparks · %lld boosters" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld sparks · %2$lld boosters"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld étincelles · %lld boosters"
+          }
+        }
+      }
+    },
     "%lld to look at" : {
       "localizations" : {
         "fr" : {
@@ -1269,6 +1295,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "+%lld"
+          }
+        }
+      }
+    },
+    "+%lld XP" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld XP"
           }
         }
       }
@@ -1669,6 +1705,16 @@
         }
       }
     },
+    "Accessory" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessoire"
+          }
+        }
+      }
+    },
     "Account" : {
       "localizations" : {
         "fr" : {
@@ -1989,6 +2035,16 @@
         }
       }
     },
+    "All rarities" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les raretés"
+          }
+        }
+      }
+    },
     "Allow" : {
       "localizations" : {
         "fr" : {
@@ -2225,6 +2281,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Joindre des fichiers, jusqu’à %@ par message"
+          }
+        }
+      }
+    },
+    "Aura" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aura"
           }
         }
       }
@@ -2780,6 +2846,16 @@
         }
       }
     },
+    "Common" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commun"
+          }
+        }
+      }
+    },
     "Compact" : {
       "comment" : "A size of the open notch",
       "localizations" : {
@@ -2827,6 +2903,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirmer"
+          }
+        }
+      }
+    },
+    "Connect an account to grow Tonton." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez un compte pour faire progresser Tonton."
           }
         }
       }
@@ -3017,6 +3103,16 @@
         }
       }
     },
+    "Cosmetic slot" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Emplacement cosmétique"
+          }
+        }
+      }
+    },
     "Cost" : {
       "localizations" : {
         "fr" : {
@@ -3083,6 +3179,16 @@
         }
       }
     },
+    "Could not equip this item. Try again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’équiper cet objet. Réessayez."
+          }
+        }
+      }
+    },
     "Could not make the image." : {
       "localizations" : {
         "fr" : {
@@ -3125,6 +3231,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Impossible d’enregistrer %1$@ : %2$@"
+          }
+        }
+      }
+    },
+    "Could not sync Tonton." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de synchroniser Tonton."
+          }
+        }
+      }
+    },
+    "Could not sync Tonton. Retrying…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de synchroniser Tonton. Nouvelle tentative…"
           }
         }
       }
@@ -3531,6 +3657,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chiffrement"
+          }
+        }
+      }
+    },
+    "Epic" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Épique"
+          }
+        }
+      }
+    },
+    "Equip" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Équiper"
+          }
+        }
+      }
+    },
+    "Equipped" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Équipé"
           }
         }
       }
@@ -3948,6 +4104,16 @@
         }
       }
     },
+    "Hat" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chapeau"
+          }
+        }
+      }
+    },
     "Heads-up banner" : {
       "localizations" : {
         "fr" : {
@@ -4323,6 +4489,16 @@
         }
       }
     },
+    "It takes the pool's tasks again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elle reprend les tâches du pool."
+          }
+        }
+      }
+    },
     "Its agent has not taken the order: update the agent to %@ or later." : {
       "localizations" : {
         "fr" : {
@@ -4363,6 +4539,16 @@
         }
       }
     },
+    "Its other pool sessions end, and their tasks go back to the board. This orchestrator session goes on." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses autres sessions du pool s’arrêtent, et leurs tâches retournent au tableau. Cette session orchestrateur continue."
+          }
+        }
+      }
+    },
     "Its pool sessions do anything without asking, commands included: only for a machine or a virtual machine you give to the work, never one with your own files on it." : {
       "localizations" : {
         "fr" : {
@@ -4383,12 +4569,32 @@
         }
       }
     },
-    "Its pool sessions end, and their tasks go back to the board." : {
+    "Its pool sessions end, and it leaves the pool." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ses sessions du pool s’arrêtent, et leurs tâches retournent au tableau."
+            "value" : "Ses sessions du pool s’arrêtent, et elle quitte le pool."
+          }
+        }
+      }
+    },
+    "Its pool sessions end, and their tasks go back to the board. It takes no tasks until you start it again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses sessions du pool s’arrêtent, et leurs tâches retournent au tableau. Elle ne prend plus de tâche jusqu’à ce que vous la relanciez."
+          }
+        }
+      }
+    },
+    "Its pool sessions end, this one too, and their tasks go back to the board." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses sessions du pool s’arrêtent, celle-ci aussi, et leurs tâches retournent au tableau."
           }
         }
       }
@@ -4614,6 +4820,62 @@
         }
       }
     },
+    "Legendary" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Légendaire"
+          }
+        }
+      }
+    },
+    "Level %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau %lld"
+          }
+        }
+      }
+    },
+    "Level %lld · %lld XP" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Level %1$lld · %2$lld XP"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau %lld · %lld XP"
+          }
+        }
+      }
+    },
+    "Level up!" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau supérieur !"
+          }
+        }
+      }
+    },
+    "Levels 2–6 unlock starter cosmetics. Boosters are saved; opening and combat are coming later." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les niveaux 2 à 6 débloquent les premiers cosmétiques. Les boosters sont conservés ; leur ouverture et les combats arriveront plus tard."
+          }
+        }
+      }
+    },
     "Listening…" : {
       "localizations" : {
         "fr" : {
@@ -4640,6 +4902,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chargement des notes de version…"
+          }
+        }
+      }
+    },
+    "Locked" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verrouillé"
           }
         }
       }
@@ -4911,6 +5183,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Autorisation requise"
+          }
+        }
+      }
+    },
+    "Needs attention" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre attention est requise"
           }
         }
       }
@@ -5606,6 +5888,16 @@
         }
       }
     },
+    "Owned only" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objets possédés"
+          }
+        }
+      }
+    },
     "PINNED" : {
       "localizations" : {
         "fr" : {
@@ -5849,6 +6141,26 @@
         }
       }
     },
+    "Preview" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aperçu"
+          }
+        }
+      }
+    },
+    "Preview pose" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pose de l’aperçu"
+          }
+        }
+      }
+    },
     "Previous / next session" : {
       "localizations" : {
         "fr" : {
@@ -6016,6 +6328,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RÉCENTS"
+          }
+        }
+      }
+    },
+    "Rare" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rare"
+          }
+        }
+      }
+    },
+    "Rarity" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rareté"
           }
         }
       }
@@ -6346,6 +6678,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réinitialiser"
+          }
+        }
+      }
+    },
+    "Resting" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Au repos"
           }
         }
       }
@@ -7138,6 +7480,16 @@
         }
       }
     },
+    "Skin" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apparence"
+          }
+        }
+      }
+    },
     "Slides out under the camera when a session needs you." : {
       "localizations" : {
         "fr" : {
@@ -7362,6 +7714,16 @@
         }
       }
     },
+    "Start every machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relancer toutes les machines"
+          }
+        }
+      }
+    },
     "Start here" : {
       "localizations" : {
         "fr" : {
@@ -7372,12 +7734,32 @@
         }
       }
     },
+    "Start machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relancer la machine"
+          }
+        }
+      }
+    },
     "Start pool tasks right away" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Commencer tout de suite les tâches du pool"
+          }
+        }
+      }
+    },
+    "Started by %@ for the pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lancée par %@ pour le pool"
           }
         }
       }
@@ -7432,12 +7814,72 @@
         }
       }
     },
+    "Stop" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter"
+          }
+        }
+      }
+    },
+    "Stop %@? It takes no tasks until it is started again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter %@ ? Elle ne prend plus de tâche jusqu’à ce qu’on la relance."
+          }
+        }
+      }
+    },
     "Stop dictating" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêter la dictée"
+          }
+        }
+      }
+    },
+    "Stop every machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter toutes les machines"
+          }
+        }
+      }
+    },
+    "Stop every machine? The dispatch stops, and their pool sessions end. Nothing starts again until you start the machines and the dispatch." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter toutes les machines ? La distribution des tâches s’arrête, et leurs sessions du pool aussi. Rien ne repart avant que vous relanciez les machines et la distribution."
+          }
+        }
+      }
+    },
+    "Stop machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter la machine"
+          }
+        }
+      }
+    },
+    "Stopped: it takes no tasks until you start it again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêtée : elle ne prend plus de tâche jusqu’à ce que vous la relanciez."
           }
         }
       }
@@ -7479,6 +7921,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Utiliser"
+          }
+        }
+      }
+    },
+    "Syncing Tonton…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation de Tonton…"
           }
         }
       }
@@ -7727,6 +8179,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le jeton actuel cesse de fonctionner immédiatement : chaque machine est déconnectée jusqu’à ce que vous lui donniez le nouveau. Les autres Mac connectés à ce compte ont besoin de la nouvelle clé de récupération."
+          }
+        }
+      }
+    },
+    "The dispatch stays as it is: turn it on from the website, or ask the orchestrator." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La distribution des tâches reste telle quelle : activez-la depuis le site web, ou demandez-le à l’orchestrateur."
+          }
+        }
+      }
+    },
+    "The dispatch stops, and every machine ends its pool sessions." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La distribution des tâches s’arrête, et chaque machine arrête ses sessions du pool."
           }
         }
       }
@@ -7991,6 +8463,16 @@
         }
       }
     },
+    "This machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette machine"
+          }
+        }
+      }
+    },
     "This month" : {
       "localizations" : {
         "fr" : {
@@ -8210,6 +8692,16 @@
         }
       }
     },
+    "Tonton's progression and wardrobe" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progression et garde-robe de Tonton"
+          }
+        }
+      }
+    },
     "Toolsmith" : {
       "localizations" : {
         "fr" : {
@@ -8226,6 +8718,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Projet principal"
+          }
+        }
+      }
+    },
+    "Trail" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traînée"
           }
         }
       }
@@ -8250,6 +8752,16 @@
         }
       }
     },
+    "Uncommon" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peu commun"
+          }
+        }
+      }
+    },
     "Undo" : {
       "localizations" : {
         "fr" : {
@@ -8266,6 +8778,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annuler l’envoi"
+          }
+        }
+      }
+    },
+    "Unequip" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer"
           }
         }
       }
@@ -8356,6 +8878,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mettre à jour l’agent"
+          }
+        }
+      }
+    },
+    "Update the relay to enable Tonton's progression." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettez le relais à jour pour activer la progression de Tonton."
           }
         }
       }
@@ -8556,6 +9088,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Veut utiliser %@"
+          }
+        }
+      }
+    },
+    "Wardrobe" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garde-robe"
           }
         }
       }

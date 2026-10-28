@@ -26,7 +26,7 @@ export interface MachineCard {
   mine: boolean
   orchestrator: boolean
   slots: MachineSlot[]
-  /** Slots its capacity leaves free; none while it takes no tasks (offline, its agent too old, or its profile unread). */
+  /** Slots its capacity leaves free; none while it takes no tasks (offline, stopped, its agent too old, or its profile unread). */
   free: number
 }
 
@@ -35,7 +35,7 @@ export function machineCards(state: PoolState, account: string | null, names: Re
   const lead = state.orchestratorMachine
   return (state.machines ?? [])
     .map(machine => {
-      const takesTasks = machine.online && machine.ready && machine.profile !== null
+      const takesTasks = machine.online && machine.ready && machine.profile !== null && !machine.stopped
       const slots = state.tasks
         .filter(item => {
           const task = item.task
@@ -61,7 +61,7 @@ export function machineCards(state: PoolState, account: string | null, names: Re
     .sort((a, b) => Number(b.mine) - Number(a.mine) || a.name.localeCompare(b.name))
 }
 
-/** `starts`: the machine starts sessions now (online, its agent recent enough, the pool not paused). */
+/** `starts`: the machine starts sessions now (online, not stopped, its agent recent enough, the pool not paused). */
 function slotPhase(item: PoolTaskItem, session: PoolSession | null, starts: boolean): SlotPhase {
   if (session) return 'working'
   if (item.task?.assignee) return 'left'

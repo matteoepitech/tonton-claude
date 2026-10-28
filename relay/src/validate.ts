@@ -1,5 +1,12 @@
 import { VERSION_PATTERN } from '../../shared/version'
-import { MAX_BLOB_BYTES } from './limits'
+import { MAX_BLOB_BYTES, MAX_RPG_BYTES } from './limits'
+
+/** The relay validates only the opaque document and its compare-and-swap revision. */
+export function isRPGWrite(value: unknown): value is { rev: number; blob: string } {
+  if (!value || typeof value !== 'object') return false
+  const { rev, blob } = value as Record<string, unknown>
+  return typeof rev === 'number' && Number.isSafeInteger(rev) && rev >= 0 && rev < Number.MAX_SAFE_INTEGER && isSealed(blob, MAX_RPG_BYTES)
+}
 
 export const isText = (value: unknown, maxLength: number): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= maxLength

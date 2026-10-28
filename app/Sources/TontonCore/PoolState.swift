@@ -92,6 +92,8 @@ public struct PoolState: Equatable, Sendable {
     public var orchestratorMachine: PoolMachineRef?
     /// Whether the control loop hands out tasks. Nil: never set, or an older relay.
     public var dispatch: PoolDispatch?
+    /// The revision of `dispatch` this member saw: a change is sent over it, 0 at first.
+    public var dispatchRev = 0
     /// This member's private key for the pool and the pool keys wrapped for it.
     var own: PoolOwnKeys
 
@@ -116,6 +118,7 @@ public struct PoolState: Equatable, Sendable {
         machines = snapshot.machines.map { $0.map { Self.machine($0, vault) } }
         orchestratorMachine = snapshot.orchestratorMachine
         dispatch = snapshot.dispatch.flatMap { vault.open($0.blob, as: PoolDispatch.self) }
+        dispatchRev = snapshot.dispatch?.rev ?? 0
     }
 
     /// Folds a change in. False when the pool is gone for this member.
@@ -154,6 +157,7 @@ public struct PoolState: Equatable, Sendable {
             if orchestratorMachine?.machine == machine { orchestratorMachine = nil }
         case .dispatch(_, let wire):
             dispatch = vault.open(wire.blob, as: PoolDispatch.self)
+            dispatchRev = wire.rev ?? dispatchRev
         case .key(_, let wrap):
             own = PoolOwnKeys(
                 secret: own.secret, wraps: (own.wraps.filter { $0.version != wrap.version } + [wrap]).sorted { $0.version < $1.version })

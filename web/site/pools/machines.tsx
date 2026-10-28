@@ -1,8 +1,9 @@
 // The pool's machines, live (docs/pool-autopilot.md): one card per machine, with what it runs, how many sessions at once
 // and what they may do without asking, and its slots: the task dispatched to each and the session working on it. A
 // member opens its own sessions from here; the owner and admins, or the session's owner, stop one, and its machine puts
-// the task back on the board.
-import { BotIcon, CpuIcon, MessageSquareIcon, SquareIcon } from 'lucide-react'
+// the task back on the board. A machine's owner, the owner and admins stop a whole machine; the owner and admins every
+// machine at once, with the dispatch.
+import { BotIcon, CpuIcon, MessageSquareIcon, PowerIcon, PowerOffIcon, SquareIcon } from 'lucide-react'
 import {
   type OpenPool,
   type PoolMachineMode,
@@ -47,9 +48,41 @@ export function Machines({ pool, state }: TabProps) {
   // Older relays have no pool machines.
   if (!state.machines) return <Empty>This relay is older than pool machines: update it to use the autopilot.</Empty>
   const online = cards.filter(card => card.machine.online).length
+  const stopped = cards.filter(card => card.machine.stopped).length
+  // Every machine at once: the relay takes it from the owner and admins only.
+  const manages = poolAbilities(pool.role).kick
   return (
     <div className="flex flex-col gap-4">
-      <Toolbar title="Machines" detail={cards.length ? `${online} of ${cards.length} online` : undefined} />
+      <Toolbar
+        title="Machines"
+        detail={cards.length ? `${online} of ${cards.length} online${stopped ? `, ${stopped} stopped` : ''}` : undefined}
+      >
+        {manages && stopped > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            title="The dispatch stays as it is: turn it on in the Orchestrator tab."
+            onClick={() => store.client?.sendPool({ t: 'pool_stop_machine', poolId: pool.id, machine: null, stopped: false })}
+          >
+            <PowerIcon />
+            Start every machine
+          </Button>
+        )}
+        {manages && stopped < cards.length && (
+          <Confirm
+            trigger={
+              <Button variant="outline" size="sm" className="text-destructive">
+                <PowerOffIcon />
+                Stop every machine
+              </Button>
+            }
+            title="Stop every machine?"
+            description="The dispatch stops, and every machine ends its pool sessions and puts their tasks back on the board. Nothing starts again until you start the machines and the dispatch."
+            action="Stop every machine"
+            onConfirm={() => void store.pools?.stopAllMachines(pool.id)}
+          />
+        )}
+      </Toolbar>
       {cards.length ? (
         <div className="grid gap-3 xl:grid-cols-2">
           {cards.map(card => (
@@ -66,11 +99,12 @@ export function Machines({ pool, state }: TabProps) {
 function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenPool; state: PoolState }) {
   const store = useStore()
   const can = poolAbilities(pool.role)
-  // The relay lets its owner, and the pool's owner and admins, take a machine out.
-  const removes = card.mine || can.kick
+  // The relay lets its owner, and the pool's owner and admins, stop a machine or take it out.
+  const manages = card.mine || can.kick
   const { machine } = card
   const profile = machine.profile
-  const status = !machine.online ? 'offline' : machine.ready ? 'ready' : 'update the agent'
+  const status = machine.stopped ? 'stopped' : !machine.online ? 'offline' : machine.ready ? 'ready' : 'update the agent'
+  const variant = machine.stopped ? 'destructive' : !machine.online ? 'secondary' : machine.ready ? 'success' : 'warning'
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -86,7 +120,7 @@ function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenP
             orchestrator
           </Badge>
         )}
-        <Badge className="ms-auto" variant={!machine.online ? 'secondary' : machine.ready ? 'success' : 'warning'}>
+        <Badge className="ms-auto" variant={variant}>
           {status}
         </Badge>
       </div>
@@ -101,7 +135,8 @@ function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenP
       ) : (
         <p className="text-xs text-muted-foreground">Its settings could not be read.</p>
       )}
-      {machine.online && !machine.ready && (
+      {machine.stopped && <p className="text-xs text-muted-foreground">Stopped: it takes no tasks until it is started again.</p>}
+      {machine.online && !machine.ready && !machine.stopped && (
         <p className="text-xs text-warning">Its agent is too old to take tasks: its owner clicks Update agent in Settings › Machines.</p>
       )}
       <div className="flex flex-col gap-2">
@@ -116,8 +151,27 @@ function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenP
           </div>
         ))}
       </div>
-      {removes && (
+      {manages && (
         <div className="flex flex-wrap gap-2">
+          {machine.stopped ? (
+            <Button variant="outline" size="sm" onClick={() => store.pools?.stopMachine(pool.id, machine.machine, false)}>
+              <PowerIcon />
+              Start machine
+            </Button>
+          ) : (
+            <Confirm
+              trigger={
+                <Button variant="outline" size="sm" className="text-destructive">
+                  <PowerOffIcon />
+                  Stop machine
+                </Button>
+              }
+              title={`Stop ${card.name}?`}
+              description="Its pool sessions end, and it puts their tasks back on the board. It takes no tasks until it is started again."
+              action="Stop machine"
+              onConfirm={() => store.pools?.stopMachine(pool.id, machine.machine, true)}
+            />
+          )}
           {card.mine && can.chooseOrchestrator && (
             <Button
               variant="outline"
@@ -139,7 +193,7 @@ function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenP
               </Button>
             }
             title={`Take ${card.name} out of the pool?`}
-            description={`Its pool sessions end and it takes no more tasks. The tasks it holds stay on the board as they are.${card.orchestrator ? ' It stops being the orchestrator machine.' : ''}`}
+            description={`Its pool sessions end and it takes no more tasks. The control loop puts the tasks it held back on the board while the dispatch is on.${card.orchestrator ? ' It stops being the orchestrator machine.' : ''}`}
             action="Remove"
             onConfirm={() => store.pools?.removeMachine(pool.id, machine.machine)}
           />

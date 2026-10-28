@@ -108,6 +108,7 @@ struct PoolPanel: View {
                 }
                 .font(.notch(11))
             }
+            PoolMachineButtons(poolId: board.id, role: board.summary.role, state: state, member: member)
             HStack {
                 if let url = pools.websiteURL(of: board.id) {
                     Button("Open on the website") { NSWorkspace.shared.open(url) }
@@ -130,6 +131,93 @@ struct PoolPanel: View {
             Text(title).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 44, alignment: .leading)
             Text(value).font(.notch(11)).lineLimit(2)
         }
+    }
+}
+
+/// In the pool panel (#260): the machine that started this session, and for the owner and admins every machine of the
+/// pool. Stopped, a machine ends its pool sessions and takes no work until started again. The stops ask first, in the
+/// panel itself: a popover is no place for a dialog.
+struct PoolMachineButtons: View {
+    let poolId: String
+    let role: PoolRole
+    let state: PoolState
+    let member: PoolState.Session
+    @ObservedObject private var pools = PoolStore.shared
+    @State private var asking: Stop?
+
+    private enum Stop { case machine, every }
+
+    var body: some View {
+        let all = state.machines ?? []
+        let manages = role == .owner || role == .admin
+        if let machine = state.machine(of: member), PoolState.mayStop(machine, account: member.account, role: role) {
+            let name = machine.profile?.name ?? String(localized: "This machine")
+            // The orchestrator session goes on when its machine stops: the admin still talks to it.
+            let leads = state.orchestrator?.account == member.account && state.orchestrator?.session == member.session
+            HStack {
+                Text(machine.stopped ? "\(name) is stopped" : "Started by \(name) for the pool")
+                    .font(.notch(10)).foregroundStyle(Theme.tertiary).lineLimit(1)
+                Spacer()
+                if machine.stopped {
+                    Button("Start machine") { pools.stopMachine(machine.machine, stopped: false, pool: poolId) }
+                        .help("It takes the pool's tasks again.")
+                } else if asking != .machine {
+                    Button("Stop machine", role: .destructive) { asking = .machine }
+                        .help(
+                            leads
+                                ? "Its other pool sessions end, and their tasks go back to the board. This orchestrator session goes on."
+                                : "Its pool sessions end, this one too, and their tasks go back to the board.")
+                }
+            }
+            .font(.notch(11))
+            if asking == .machine && !machine.stopped {
+                ask("Stop \(name)? It takes no tasks until it is started again.", action: "Stop machine") {
+                    pools.stopMachine(machine.machine, stopped: true, pool: poolId)
+                }
+            }
+        }
+        if manages && !all.isEmpty {
+            let stops = all.contains { !$0.stopped } && asking != .every
+            let starts = all.contains(where: \.stopped)
+            if stops || starts {
+                HStack {
+                    if stops {
+                        Button("Stop every machine", role: .destructive) { asking = .every }
+                            .help("The dispatch stops, and every machine ends its pool sessions.")
+                    }
+                    if starts {
+                        Button("Start every machine") { pools.stopEveryMachine(false, pool: poolId) }
+                            .help("The dispatch stays as it is: turn it on from the website, or ask the orchestrator.")
+                    }
+                    Spacer()
+                }
+                .font(.notch(11))
+            }
+            if asking == .every {
+                ask(
+                    "Stop every machine? The dispatch stops, and their pool sessions end. Nothing starts again until you start the machines and the dispatch.",
+                    action: "Stop every machine"
+                ) { pools.stopEveryMachine(true, pool: poolId) }
+            }
+        }
+    }
+
+    private func ask(_ question: LocalizedStringKey, action: LocalizedStringKey, _ confirm: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(question).font(.notch(11)).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Spacer()
+                Button("Cancel") { asking = nil }
+                Button(action, role: .destructive) {
+                    confirm()
+                    asking = nil
+                }
+                .foregroundStyle(Theme.danger)
+            }
+            .font(.notch(11, weight: .medium))
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.danger.opacity(0.1)))
     }
 }
 
