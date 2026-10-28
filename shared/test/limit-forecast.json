@@ -1,0 +1,73 @@
+{
+  "about": "When the 5-hour window runs out at the current pace. Checked by shared/test/limit-forecast.test.ts and app/Tests/TontonCoreTests/LimitForecastTableTests.swift.",
+  "cases": [
+    {
+      "name": "a steady pace",
+      "readings": [
+        { "at": "2026-10-27T10:00:00Z", "usedPercent": 40, "resetsAt": "2026-10-27T14:00:00Z" },
+        { "at": "2026-10-27T10:10:00Z", "usedPercent": 45, "resetsAt": "2026-10-27T14:00:00Z" },
+        { "at": "2026-10-27T10:20:00Z", "usedPercent": 50, "resetsAt": "2026-10-27T14:00:00Z" }
+      ],
+      "ask": { "at": "2026-10-27T10:20:00Z", "usedPercent": 50, "resetsAt": "2026-10-27T14:00:00Z" },
+      "runsOut": "2026-10-27T12:00:00Z"
+    },
+    {
+      "name": "the window resets first",
+      "readings": [
+        { "at": "2026-10-27T10:00:00Z", "usedPercent": 40, "resetsAt": "2026-10-27T11:00:00Z" },
+        { "at": "2026-10-27T10:20:00Z", "usedPercent": 50, "resetsAt": "2026-10-27T11:00:00Z" }
+      ],
+      "ask": { "at": "2026-10-27T10:20:00Z", "usedPercent": 50, "resetsAt": "2026-10-27T11:00:00Z" },
+      "runsOut": null
+    },
+    {
+      "name": "flat usage",
+      "readings": [
+        { "at": "2026-10-27T10:00:00Z", "usedPercent": 40, "resetsAt": "2026-10-27T14:00:00Z" },
+        { "at": "2026-10-27T10:10:00Z", "usedPercent": 40, "resetsAt": "2026-10-27T14:00:00Z" },
+        { "at": "2026-10-27T10:20:00Z", "usedPercent": 40, "resetsAt": "2026-10-27T14:00:00Z" }
+      ],
+      "ask": { "at": "2026-10-27T10:20:00Z", "usedPercent": 40, "resetsAt": "2026-10-27T14:00:00Z" },
+      "runsOut": null
+    },
+    {
+      "name": "too short a span to say",
+      "readings": [
+        { "at": "2026-10-27T10:00:00Z", "usedPercent": 40, "resetsAt": "2026-10-27T14:00:00Z" },
+        { "at": "2026-10-27T10:03:00Z", "usedPercent": 42, "resetsAt": "2026-10-27T14:00:00Z" }
+      ],
+      "ask": { "at": "2026-10-27T10:03:00Z", "usedPercent": 42, "resetsAt": "2026-10-27T14:00:00Z" },
+      "runsOut": null
+    },
+    {
+      "name": "already full",
+      "readings": [
+        { "at": "2026-10-27T10:00:00Z", "usedPercent": 90, "resetsAt": "2026-10-27T14:00:00Z" },
+        { "at": "2026-10-27T10:20:00Z", "usedPercent": 100, "resetsAt": "2026-10-27T14:00:00Z" }
+      ],
+      "ask": { "at": "2026-10-27T10:20:00Z", "usedPercent": 100, "resetsAt": "2026-10-27T14:00:00Z" },
+      "runsOut": null
+    },
+    {
+      "name": "a new window starts over",
+      "readings": [
+        { "at": "2026-10-27T10:00:00Z", "usedPercent": 90, "resetsAt": "2026-10-27T10:30:00Z" },
+        { "at": "2026-10-27T10:10:00Z", "usedPercent": 95, "resetsAt": "2026-10-27T10:30:00Z" },
+        { "at": "2026-10-27T10:31:00Z", "usedPercent": 2, "resetsAt": "2026-10-27T15:30:00Z" },
+        { "at": "2026-10-27T10:40:00Z", "usedPercent": 5, "resetsAt": "2026-10-27T15:30:00Z" }
+      ],
+      "ask": { "at": "2026-10-27T10:40:00Z", "usedPercent": 5, "resetsAt": "2026-10-27T15:30:00Z" },
+      "runsOut": "2026-10-27T15:25:00Z"
+    },
+    {
+      "name": "readings older than half an hour do not count",
+      "readings": [
+        { "at": "2026-10-27T09:40:00Z", "usedPercent": 20, "resetsAt": "2026-10-27T14:00:00Z" },
+        { "at": "2026-10-27T10:00:00Z", "usedPercent": 40, "resetsAt": "2026-10-27T14:00:00Z" },
+        { "at": "2026-10-27T10:20:00Z", "usedPercent": 50, "resetsAt": "2026-10-27T14:00:00Z" }
+      ],
+      "ask": { "at": "2026-10-27T10:20:00Z", "usedPercent": 50, "resetsAt": "2026-10-27T14:00:00Z" },
+      "runsOut": "2026-10-27T12:00:00Z"
+    }
+  ]
+}

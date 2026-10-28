@@ -45,7 +45,7 @@ final class PoolHackathonTests: XCTestCase {
             info: try pool.seal(PoolInfo(name: "Hack")), members: [], sessions: [], tasks: [],
             notes: PoolItemWire(
                 id: nil, rev: 1, seq: nil, updatedAt: "x", ts: nil, account: "ana", session: nil, blob: try pool.seal(notes)),
-            messages: [], events: [], own: nil, orchestrator: nil)
+            messages: [], events: [], own: nil, rules: nil, budgets: nil, audit: nil, orchestrator: nil)
         let state = PoolState(snapshot: snapshot, vault: pool)
         XCTAssertEqual(PoolHackathon.joinRoles(of: state), ["front", "api"])
         var bare = state

@@ -63,6 +63,11 @@ public struct PoolState: Equatable, Sendable {
     public var events: [Post<PoolEventBody>]
     /// The session owners and admins chose to plan and hand out the work; nil: none yet.
     public var orchestrator: PoolSessionRef?
+    /// The auto-approve rules proposed to the sessions, and the budgets, as last set. Nil: none, or an older relay.
+    public var rules: PoolRules?
+    public var budgets: PoolBudgets?
+    /// The latest lines of what the relay enforced, oldest first.
+    public var audit: [PoolAuditWire]
     /// This member's private key for the pool and the pool keys wrapped for it.
     var own: PoolOwnKeys
 
@@ -81,6 +86,9 @@ public struct PoolState: Equatable, Sendable {
         events = snapshot.events.compactMap { Self.post($0, vault) }
         own = snapshot.own ?? PoolOwnKeys(secret: nil, wraps: [])
         orchestrator = snapshot.orchestrator
+        rules = snapshot.rules.flatMap { vault.open($0.blob, as: PoolRules.self) }
+        budgets = snapshot.budgets.flatMap { vault.open($0.blob, as: PoolBudgets.self) }
+        audit = Array((snapshot.audit ?? []).suffix(keptPoolPosts))
     }
 
     /// Folds a change in. False when the pool is gone for this member.
@@ -115,6 +123,12 @@ public struct PoolState: Equatable, Sendable {
                 secret: own.secret, wraps: (own.wraps.filter { $0.version != wrap.version } + [wrap]).sorted { $0.version < $1.version })
         case .orchestrator(_, let ref):
             orchestrator = ref
+        case .rules(_, let wire):
+            rules = vault.open(wire.blob, as: PoolRules.self)
+        case .budgets(_, let wire):
+            budgets = vault.open(wire.blob, as: PoolBudgets.self)
+        case .audit(_, let entry):
+            audit = Array((audit + [entry]).suffix(keptPoolPosts))
         case .removed:
             return false
         case .conflict, .error:
@@ -129,7 +143,7 @@ public struct PoolState: Equatable, Sendable {
         case .snapshot(let snapshot): snapshot.id
         case .task(let id, _), .notes(let id, _), .message(let id, _), .event(let id, _), .info(let id, _, _, _), .member(let id, _),
             .memberLeft(let id, _), .session(let id, _), .sessionLeft(let id, _, _), .key(let id, _), .conflict(let id, _, _, _),
-            .removed(let id), .error(let id, _), .orchestrator(let id, _):
+            .removed(let id), .error(let id, _), .orchestrator(let id, _), .rules(let id, _), .budgets(let id, _), .audit(let id, _):
             id
         }
     }

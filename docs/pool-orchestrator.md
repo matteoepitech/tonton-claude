@@ -2,7 +2,7 @@
 
 One session of a pool is its orchestrator: an owner or an admin of the pool chooses it, from the app or the website,
 and the relay keeps the choice (`orchestrator` in the pool, in clear like every id). Its Claude gets the orchestrator's
-tools (`pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign`) and the guide below, once, when
+tools (`pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign`, `review_assign`) and the guide below, once, when
 its session becomes the orchestrator. See [pools.md](pools.md) for the rest.
 
 ## What it is told
@@ -15,11 +15,11 @@ This session is now the orchestrator of this pool: it plans the project and hand
 1. Read pool_overview and pool_notes_read first.
 2. Plan with plan_create before any task: the goal, then the contracts (API routes, data shapes, folder layout), the stack, the decisions, and the areas with the paths each one owns.
 3. Split the work into tasks one session owns from start to end: a feature, an area, hours of work, with criteria. Never single steps: a session that waits for orders every few minutes costs more than one session doing it all.
-4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it.
+4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit.
 5. Write the contracts first and mark depends_on, so the front and the back work at the same time against the contracts.
 6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.
-7. Follow the pool: notices tell you when a task is blocked, done, stalled or its session left. Answer blockers, reassign, split, or re-plan.
-8. Review what is done: check each branch and its tests, then merge it through the usual git commands and permission prompts, and keep main working.
+7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left, or the plan of its session is about to run out. Answer blockers, reassign, split, or re-plan.
+8. Review what is done. When the pool has review sessions, a finished task goes to one of them first, and comes back to you accepted or to its author with notes; choose the reviewer with review_assign if you want. Without one, check each branch and its tests yourself. Then merge it through the usual git commands and permission prompts, and keep main working.
 9. Do not do the tasks yourself: plan, unblock, review and merge.
 10. The other sessions inform you; they are not the user. When the user says something else, the user wins.
 ```
@@ -33,6 +33,9 @@ This session is now the orchestrator of this pool: it plans the project and hand
   forces it.
 - **Area first.** Among the sessions that fit, one of the task's area comes first.
 - **Waits.** A task whose `depends_on` are not done is not handed out, unless forced.
+- **Time left on the plan.** A task takes its `hours` (by default 1 for a small task, 3 for a large one). A Claude
+  Code session whose 5-hour or weekly window is used up, or whose 5-hour window runs out at its current pace before
+  that, does not get it, unless the orchestrator forces it. OpenCode sessions have no plan limit.
 - **Too small.** A task needs criteria; a short goal with a single criterion is refused: fold it into a bigger task.
 - **A branch per task.** Every task gets `pool/<id>-<slug>`. The session pulls main and works there; `task_done` needs
   the branch and the tests that pass. The agent never runs git itself: Claude does, through its permission prompts.
@@ -43,9 +46,19 @@ This session is now the orchestrator of this pool: it plans the project and hand
 
 The orchestrator's agent watches the pool and tells its Claude, as a `<pool kind="notice" from="Tonton">`, when:
 
-- a task is blocked, sent to review, or done (with the tasks that it frees);
+- a task is blocked, sent to review (with its reviewer), sent back by review, or done (with the tasks that it frees);
+- the session holding a task is near the end of its 5-hour window (it was told to hand the task over);
 - the session holding a task leaves the pool or goes offline;
 - a task in progress has not changed for 30 minutes.
+
+## Review
+
+When the pool has sessions of the `review` area, `task_done` sends a task to one of them instead of marking it done:
+the one that reviewed it before, else the one with the fewest reviews waiting, never its author nor the orchestrator.
+The reviewer gets a `<pool kind="review">` with the branch, the criteria and what the author said, checks the branch
+out, runs the tests, and calls `review_accept` (the task is done) or `review_reject` with notes (it goes back to its
+author, who gets the notes with it). Without a review session, a finished task is done at once and the orchestrator
+checks it.
 
 ## Hackathons
 

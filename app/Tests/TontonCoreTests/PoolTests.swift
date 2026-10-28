@@ -83,6 +83,21 @@ final class PoolTests: XCTestCase {
         XCTAssertEqual([event.kind, event.tool, event.model], ["session", "opencode", "gpt-5"])
     }
 
+    func testUsageEventsAndSessionStatusReadAsTheAgentAndTheRelaySendThem() throws {
+        let json =
+            #"{"kind":"usage","usage":{"tokens":{"input":120000,"output":4000},"fiveHour":{"usedPercent":42,"resetsAt":"2026-10-27T18:00:00.000Z"}}}"#
+        let event = try JSONDecoder().decode(PoolEventBody.self, from: Data(json.utf8))
+        XCTAssertEqual(event.usage?.tokens, PoolUsage.Tokens(input: 120_000, output: 4000))
+        XCTAssertEqual(event.usage?.fiveHour?.usedPercent, 42)
+        XCTAssertNil(event.usage?.sevenDay)
+        let session =
+            #"{"account":"acc","session":"ses_1","joinedAt":"2026-10-27T10:00:00Z","profile":null,"online":true,"ready":true,"status":"working"}"#
+        XCTAssertEqual(try JSONDecoder().decode(PoolSessionWire.self, from: Data(session.utf8)).status, "working")
+        // Older relays send no status.
+        let older = #"{"account":"acc","session":"ses_1","joinedAt":"2026-10-27T10:00:00Z","profile":null,"online":false,"ready":false}"#
+        XCTAssertNil(try JSONDecoder().decode(PoolSessionWire.self, from: Data(older.utf8)).status)
+    }
+
     func testTheOrchestratorAndTheStructuredNotesDecodeAsTheClientCoreWritesThem() throws {
         let decode = { (json: String) in try JSONDecoder().decode(RelayMessage.self, from: Data(json.utf8)) }
         let set = #"{"t":"pool_orchestrator","poolId":"pool00000001","orchestrator":{"account":"acct","session":"ses_1"}}"#
@@ -112,5 +127,21 @@ final class PoolTests: XCTestCase {
         XCTAssertEqual([task.size, task.branch], ["small", "pool/abc-page"])
         let profile = try JSONDecoder().decode(PoolSessionProfile.self, from: Data(#"{"tool":"opencode","takes":"any"}"#.utf8))
         XCTAssertEqual(profile.takes, "any")
+    }
+
+    func testLimitsAndReviewReadAsTheAgentSealsThem() throws {
+        let event =
+            #"{"kind":"limits","limits":{"fiveHour":{"usedPercent":42.5,"resetsAt":"2026-10-27T14:00:00Z"},"runsOutAt":"2026-10-27T12:00:00Z"}}"#
+        let body = try JSONDecoder().decode(PoolEventBody.self, from: Data(event.utf8))
+        XCTAssertEqual(body.limits?.fiveHour, PoolLimitWindow(usedPercent: 42.5, resetsAt: "2026-10-27T14:00:00Z"))
+        XCTAssertEqual(body.limits?.runsOutAt, "2026-10-27T12:00:00Z")
+        XCTAssertNil(body.limits?.sevenDay)
+        let task =
+            #"{"title":"Checkout","state":"review","hours":2,"reviewer":{"account":"acc_rev","session":"rev"},"review":"Fix the total"}"#
+        let decoded = try JSONDecoder().decode(PoolTask.self, from: Data(task.utf8))
+        XCTAssertEqual(decoded.state, .review)
+        XCTAssertEqual(decoded.hours, 2)
+        XCTAssertEqual(decoded.reviewer?.session, "rev")
+        XCTAssertEqual(decoded.review, "Fix the total")
     }
 }

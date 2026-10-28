@@ -2,16 +2,20 @@ import { basename } from 'node:path'
 import { seal } from '../../../shared/crypto'
 import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
 import { latestTodos, taskProgress } from '../../../shared/todos'
+import { paths } from '../config'
 import { gitBranch } from '../git'
+import { setPoolRules } from '../rules'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
+import { PoolSafety } from './pool-safety'
+import { poolUsage } from './pool-usage'
 import { PoolWork } from './pool-work'
 import { SessionPools } from './pools'
 import type { SessionLink } from './session-link'
 import { SessionShares } from './shares'
-import { COMMANDS } from './terminal'
+import { COMMANDS, runCommand } from './terminal'
 
 const BACKLOG_SIZE = 400
 /** Subagents' calls are kept apart, so a busy one can't push the conversation itself out of the backlog. */
@@ -59,6 +63,8 @@ export class Conversation {
   readonly pools: SessionPools
   /** Claude's pool tools, and the tasks and messages the pool sends it. */
   readonly work: PoolWork
+  /** Budgets, stops and the pool rules its owner accepted. */
+  readonly safety: PoolSafety
 
   constructor(
     readonly link: SessionLink,
@@ -81,9 +87,37 @@ export class Conversation {
       () => link.sessionId,
       post,
       text => pool.deliver(text),
-      () => ({ tool: 'claude', model: this.model }),
+      () => ({
+        tool: 'claude',
+        model: this.model,
+        usage: poolUsage({ tokens: this.tokens, ...this.usage }),
+        // The plan's windows from the status line: the pool plans around them (agent/src/channel/pool-limits.ts).
+        plan: { fiveHour: this.usage.fiveHourLimit, sevenDay: this.usage.sevenDayLimit },
+      }),
       () => pool.toolsChanged(),
     )
+    this.safety = new PoolSafety(
+      this.pools,
+      () => link.sessionId,
+      post,
+      () => ({ costUSD: this.costUSD, turns: this.turns }),
+      {
+        interrupt: () => {
+          const command = {
+            name: 'interrupt' as const,
+            sessionId: link.sessionId,
+            id: crypto.randomUUID(),
+            issuedAt: new Date().toISOString(),
+          }
+          const result = runCommand(command, link.sessionId, link.tmux ?? null, { run: paths.run })
+          return result.typed ? null : (result.why ?? 'it could not be typed in the terminal.')
+        },
+        notice: text => this.notice(text),
+        // The PermissionRequest hook runs in its own process: it reads them from the session's file.
+        rulesChanged: rules => setPoolRules(link.sessionId, rules),
+      },
+    )
+    this.work.useSafety(this.safety)
     this.tailer = link.transcriptPath
       ? new Tailer(link.transcriptPath, {
           lines: (lines, initial) => this.onLines(lines, initial),
@@ -277,6 +311,7 @@ export class Conversation {
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd()), title: this.title })
     this.work.descriptionChanged()
+    this.safety.usageChanged()
   }
 
   private cwd(): string {

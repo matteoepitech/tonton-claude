@@ -498,7 +498,7 @@ export class PoolStore {
     sessionId: string,
     order: string,
     profile: string,
-  ): Omit<PoolSessionWire, 'online' | 'ready'> | null {
+  ): Omit<PoolSessionWire, 'online' | 'ready' | 'status'> | null {
     return this.db.transaction(() => {
       const known = this.db
         .query('SELECT joined_at FROM pool_sessions WHERE pool_id = ? AND account_id = ? AND session_id = ?')
@@ -551,11 +551,22 @@ export class PoolStore {
     return rows.map(row => ({ poolId, accountId: row.account_id, sessionId: row.session_id, order: row.order_blob }))
   }
 
-  sessions(poolId: string): Omit<PoolSessionWire, 'online' | 'ready'>[] {
+  sessions(poolId: string): Omit<PoolSessionWire, 'online' | 'ready' | 'status'>[] {
+    // With the revision of the rules its owner accepted for it (relay/src/pool-safety.ts).
     const rows = this.db
-      .query('SELECT account_id, session_id, joined_at, profile_blob FROM pool_sessions WHERE pool_id = ? ORDER BY joined_at')
-      .all(poolId) as { account_id: string; session_id: string; joined_at: string; profile_blob: string | null }[]
-    return rows.map(row => ({ account: row.account_id, session: row.session_id, joinedAt: row.joined_at, profile: row.profile_blob }))
+      .query(
+        `SELECT s.account_id, s.session_id, s.joined_at, s.profile_blob, a.rev AS accepted FROM pool_sessions s
+         LEFT JOIN pool_acceptances a ON a.pool_id = s.pool_id AND a.account_id = s.account_id AND a.session_id = s.session_id
+         WHERE s.pool_id = ? ORDER BY s.joined_at`,
+      )
+      .all(poolId) as { account_id: string; session_id: string; joined_at: string; profile_blob: string | null; accepted: number | null }[]
+    return rows.map(row => ({
+      account: row.account_id,
+      session: row.session_id,
+      joinedAt: row.joined_at,
+      profile: row.profile_blob,
+      accepted: row.accepted ?? 0,
+    }))
   }
 
   // MARK: Tasks and notes
@@ -649,10 +660,10 @@ export class PoolStore {
 
   // MARK: Snapshot
 
-  /** Everything a member sees on subscribing. `live` tells whether a session's agent is connected and ready. */
+  /** Everything a member sees on subscribing. `live` tells whether a session's agent is connected and ready, and its status. */
   snapshot(
     poolId: string,
-    live: (accountId: string, sessionId: string) => { online: boolean; ready: boolean },
+    live: (accountId: string, sessionId: string) => Pick<PoolSessionWire, 'online' | 'ready' | 'status'>,
     forAccount: string | null = null,
   ): PoolSnapshot | null {
     const pool = this.db.query('SELECT * FROM pools WHERE id = ?').get(poolId) as PoolRow | null

@@ -1,5 +1,5 @@
 import type { PoolUpdate } from '../../../shared/pool-protocol'
-import { parsePoolUpdate } from '../../../shared/pool-wire'
+import { isPoolOrderType, parsePoolUpdate } from '../../../shared/pool-wire'
 import type { AgentMessage, RelayToAgent } from '../../../shared/protocol'
 import { type AgentConfig, installedVersion } from '../config'
 import { log } from '../log'
@@ -60,7 +60,7 @@ export class RelayConnection {
     socket.onmessage = event => {
       try {
         const message = JSON.parse(String(event.data)) as RelayToAgent | PoolUpdate
-        const order = message.t === 'pool_join' || message.t === 'pool_left'
+        const order = isPoolOrderType(message.t)
         if (order || !message.t.startsWith('pool_')) this.events.message(message as RelayToAgent)
         else {
           // A pool's change, checked like anything else from the relay: a wrong shape is dropped.

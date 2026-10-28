@@ -722,6 +722,202 @@ canvas.qr {
   border-radius: 8px;
 }
 
+/* Control center, activity and leaderboard */
+.pool-panel .filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.pool-panel .filters input[type="search"] {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.pool-body .tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+.pool-body .tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+}
+.pool-body .tiles .tile > strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.pool-body .tile small {
+  color: var(--dim);
+}
+.pool-body .tiles .tile.working > strong {
+  color: var(--accent);
+}
+.pool-body .tiles .tile.needs-you > strong {
+  color: var(--warning);
+}
+.pool-body .tiles .tile.idle > strong {
+  color: var(--success);
+}
+.pool-body .people {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+.pool-body .person {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.pool-body .person-head {
+  display: flex;
+  flex-direction: column;
+}
+.pool-body .person-head small,
+.pool-body .pool-session small {
+  color: var(--dim);
+}
+.pool-body .pool-session {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.pool-body .pool-session > span {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pool-body .pool-session .dot {
+  grid-row: 1 / span 3;
+}
+.pool-body .pool-session em {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: normal;
+}
+.pool-body .pool-session.offline {
+  opacity: 0.6;
+}
+.pool-body .talk-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 520px;
+}
+.pool-body .talk-wrap small {
+  color: var(--dim);
+}
+.pool-body svg.talk {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.pool-body .talk-edge {
+  stroke: var(--accent);
+  stroke-opacity: 0.55;
+}
+.pool-body .talk-arrow {
+  fill: var(--accent);
+}
+.pool-body .talk-node {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.pool-body .talk-node.member {
+  stroke: var(--success);
+}
+.pool-body .talk-node.area,
+.pool-body .talk-node.everyone {
+  stroke: var(--warning);
+}
+.pool-body .talk-label {
+  fill: var(--text);
+  font-size: 11px;
+}
+.pool-body .timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pool-body .timeline li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.pool-body .timeline li > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.pool-body .timeline li span {
+  color: var(--dim);
+}
+.pool-body .timeline time {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 12px;
+}
+.pool-body .timeline small {
+  color: var(--dim);
+  display: block;
+}
+.pool-body .timeline p {
+  margin: 4px 0 0;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+.pool-body .timeline li[data-kind="blocked"] span {
+  color: var(--warning);
+}
+.pool-body .periods {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.pool-body .periods button[aria-pressed="true"] {
+  background: var(--raised);
+  border-color: var(--accent);
+}
+.pool-body .table-wrap {
+  overflow-x: auto;
+}
+.pool-body table.leaderboard {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.pool-body table.leaderboard th,
+.pool-body table.leaderboard td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.pool-body table.leaderboard th {
+  color: var(--dim);
+  font-weight: normal;
+  font-size: 12px;
+}
+.pool-body table.leaderboard tr.first td {
+  color: var(--accent);
+}
+
 @media (max-width: 720px) {
   .shell {
     grid-template-columns: 1fr;
@@ -747,6 +943,15 @@ canvas.qr {
   }
   .member {
     flex-wrap: wrap;
+  }
+  .pool-body .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pool-body .people {
+    grid-template-columns: 1fr;
+  }
+  .pool-body .periods {
+    margin-left: 0;
   }
 }
 .pool-check {
