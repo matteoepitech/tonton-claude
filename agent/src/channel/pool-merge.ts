@@ -64,19 +64,26 @@ export interface MergeRequest {
 /** Held by a session: it gets no other task, nor one sent back. */
 const ACTIVE = new Set(['assigned', 'in_progress', 'blocked'])
 
-/** Its branch is in main, or in a pull request that the repository's rules merge. */
+/** Off the list: its branch is in main, or in a pull request that the repository's rules merge. */
 export const landed = (task: Pick<PoolTask, 'merge'> | null | undefined): boolean =>
   task?.merge?.state === 'merged' || task?.merge?.state === 'pr'
 
-/** The tasks it depends on whose work is not in main yet: not done, or done on a branch not merged. */
+/**
+ * The tasks it depends on whose work is not in main yet: not done, or done on a branch not merged. A pull request still
+ * open counts as not merged: what depends on it would be checked against a main without it.
+ */
 export function unmerged(state: PoolState, task: Pick<PoolTask, 'dependsOn'>): string[] {
   return (task.dependsOn ?? []).filter(id => {
     const dependency = state.tasks.find(item => item.id === id)?.task
     if (!dependency) return false
     if (dependency.state !== 'done') return true
-    return Boolean(dependency.branch) && !landed(dependency)
+    return Boolean(dependency.branch) && dependency.merge?.state !== 'merged'
   })
 }
+
+/** The task that fixes its merge, when there is one on the board: one that is gone fixes nothing. */
+const fixOf = (state: PoolState, task: Pick<PoolTask, 'merge'>): string | undefined =>
+  task.merge?.fix && state.tasks.some(item => item.id === task.merge?.fix) ? task.merge.fix : undefined
 
 /**
  * Finished tasks whose branch is not in main yet, in the order to merge them: each one after the tasks it depends on,
@@ -84,7 +91,7 @@ export function unmerged(state: PoolState, task: Pick<PoolTask, 'dependsOn'>): s
  */
 export function mergeQueue(state: PoolState): MergeLine[] {
   const pending = state.tasks
-    .filter(item => item.task?.state === 'done' && item.task.branch && !landed(item.task) && !item.task.merge?.fix)
+    .filter(item => item.task?.state === 'done' && item.task.branch && !landed(item.task) && !fixOf(state, item.task))
     .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
     .map(item => ({
       id: item.id,
@@ -153,7 +160,10 @@ export class PoolMerger {
     })
     const now = this.current(poolId) ?? state
     const fresh = now.tasks.find(item => item.id === picked.id && item.task) ?? picked
-    return { text: await this.record(poolId, now, fresh, outcome, request), taskId: picked.id, outcome }
+    const said = await this.record(poolId, now, fresh, outcome, request)
+    // What went wrong around the merge itself: the folder left on it, or main here not moved.
+    const text = outcome.note && outcome.kind !== 'merged' ? `${said}\n${outcome.note}` : said
+    return { text, taskId: picked.id, outcome }
   }
 
   /** The task named, or the next one in line: or why there is none to merge. */
@@ -171,8 +181,11 @@ export class PoolMerger {
     if (task.state !== 'done') return `This task is ${task.state}: only finished tasks are merged.`
     if (!task.branch) return 'This task has no branch to merge.'
     if (task.merge?.state === 'merged') return `It is merged already, as ${short(task.merge.commit)}.`
-    if (task.merge?.state === 'pr') return `Its pull request is open: ${task.merge.url ?? 'see the task'}.`
-    if (task.merge?.fix) return `Its fix is task ${task.merge.fix}: merge that one once it is done.`
+    if (task.merge?.state === 'pr' && !request.skip) {
+      return `Its pull request is open: ${task.merge.url ?? 'see the task'}. Once it is merged, pass skip to mark the task merged: what depends on it waits until then.`
+    }
+    const fix = fixOf(state, task)
+    if (fix) return `Its fix is task ${fix}: merge that one once it is done.`
     const waits = unmerged(state, task)
     if (waits.length && !request.force) return `It waits for ${waits.join(', ')} to be merged first: merge them, or pass force.`
     return item
@@ -227,10 +240,8 @@ export class PoolMerger {
     const merge: PoolTaskMerge = { state: 'merged', at, commit: outcome.commit }
     const refused = await this.ops.putTask(poolId, item.id, item.rev, { ...task, merge })
     await this.ops.event(poolId, 'merged', item.id, `${task.branch} → ${outcome.base} ${short(outcome.commit)}`)
-    // A fix task carries the branch of the task it fixes: that one is in main now too.
-    for (const fixed of state.tasks.filter(t => t.task?.merge?.fix === item.id && t.task.state === 'done')) {
-      await this.ops.putTask(poolId, fixed.id, fixed.rev, { ...(fixed.task as PoolTask), merge })
-    }
+    // A fix task carries the branch of the task it fixes, maybe through other fixes: those are in main now too.
+    for (const fixed of fixedBy(state, item.id)) await this.ops.putTask(poolId, fixed.id, fixed.rev, { ...(fixed.task as PoolTask), merge })
     const after = { ...state, tasks: state.tasks.map(t => (t.id === item.id ? { ...t, task: { ...task, merge } } : t)) }
     const freed = after.tasks.filter(
       t => t.task?.state === 'todo' && t.task.dependsOn?.includes(item.id) && !unmerged(after, t.task).length,
@@ -259,6 +270,11 @@ export class PoolMerger {
     at: string,
   ): Promise<string> {
     const task = item.task as PoolTask & { branch: string }
+    const problemText = outcome.kind === 'conflict' ? 'conflicts with main' : `fails \`${outcome.command}\``
+    if (task.state !== 'done') {
+      // It moved during the merge: whoever moved it decides now.
+      return `${task.branch} ${problemText}: nothing was merged. The task is ${task.state} now, so it stays as it is.\n${outcome.output}`
+    }
     const problem: PoolTaskMerge =
       outcome.kind === 'conflict'
         ? { state: 'conflict', at, files: outcome.files, output: outcome.output }
@@ -291,6 +307,12 @@ export class PoolMerger {
       const refused = await this.ops.putTask(poolId, item.id, item.rev, { ...back, state: 'assigned', merge: problem })
       if (refused) return `${what} It could not go back to its author: ${refused}${output}`
       await this.ops.event(poolId, kind, item.id, said)
+      // Its agent hands it the details with the task; an older agent only shows this.
+      await this.ops.message(
+        poolId,
+        { account: author.account, session: author.session },
+        `Task ${item.id} (${task.title}) came back from the merge: ${what} Merge the latest main into ${task.branch}, fix it, push it, then call task_done again.`,
+      )
       return `${what} Sent back to ${this.ops.who(state, author.account, author.session)} with it: they merge main into the branch, fix it and finish it again.${output}`
     }
     const fixId = newPoolItemId()
@@ -310,6 +332,24 @@ export class PoolMerger {
     await this.ops.event(poolId, kind, item.id, said)
     return `${what} Its author cannot take it back (${why}), so it is a new task, ${fixId} (${fix.title}), on the same branch: assign it with task_assign.${output}`
   }
+}
+
+/** The tasks a fix stands for: those that name it in `fix`, and those that name them, and so on. */
+function fixedBy(state: PoolState, id: string): PoolTaskItem[] {
+  const ids = new Set([id])
+  const found: PoolTaskItem[] = []
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const item of state.tasks) {
+      const fix = item.task?.merge?.fix
+      if (item.task?.state === 'done' && fix && ids.has(fix) && !ids.has(item.id)) {
+        ids.add(item.id)
+        found.push(item)
+        grew = true
+      }
+    }
+  }
+  return found
 }
 
 /** The task that fixes a merge its author could not take back. */

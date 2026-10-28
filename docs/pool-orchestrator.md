@@ -76,14 +76,17 @@ Tasks end as pushed branches. The orchestrator brings them into main with `task_
   main that has it.
 - **Where.** On the orchestrator's machine, in its session's own folder, which must be the top of the pool's repository
   and have no uncommitted changes. Its agent runs git there and nowhere else. The call goes through the session's
-  permission prompt like any tool: the admin sees the branch and the checks before anything runs. The checks run the
+  permission prompt like any tool: the admin sees the task and the checks before anything runs. The checks run the
   members' code, like `bun test` on a teammate's branch, so `task_merge` is not a tool to approve for good.
-- **How.** It fetches origin, merges the branch on top of the latest main on a detached HEAD (`--no-ff`, the commit
-  names the task), and runs the checks it was given, in order, on the result: the commands that build and test the
-  project, from its README or the notes' stack. Only when they all pass does main move: a plain push to origin, refused
-  and never forced when main moved meanwhile (nothing changed: call it again), then main in the folder follows. A
-  branch already in main is marked merged. With `pr`, it opens a pull request with GitHub's `gh` instead, after the
-  same checks, and leaves main to the repository's rules.
+- **How.** It fetches origin and takes the branch as its author pushed it there (a branch only in the folder may be an
+  old one). It merges the branch on top of the latest main on a detached HEAD (`--no-ff`, the commit names the task),
+  and runs the checks it was given, in order, on the result: the commands that build and test the project, from its
+  README or the notes' stack. Whatever a check leaves running in the background stops with it. Only when they all pass
+  does main move: a plain push to origin, refused and never forced when main moved meanwhile (nothing changed: call it
+  again), then main in the folder follows. A branch already in main is marked merged.
+- **Pull requests.** With `pr`, it opens a pull request with GitHub's `gh` instead, after the same checks, and leaves
+  main to the repository's rules. What depends on that task waits until it is in main: once the pull request is
+  merged, `task_merge` with `skip` marks it merged.
 - **Main stays green.** A merge that conflicts or fails a check is dropped before main moves: nothing is reverted,
   force-pushed or rewritten. A revert would not do here anyway: git counts the reverted commits as merged, so the fixed
   branch would not bring them back. When a check fails, the same checks run on main without the branch, unless main
@@ -92,8 +95,10 @@ Tasks end as pushed branches. The orchestrator brings them into main with `task_
 - **Sent back.** A conflict (the files and the conflicting hunks) or a failing check (the command and the end of what it
   printed) goes on the task, sealed. The task goes back to its author, assigned, when its session is online and free;
   its agent hands it the details and the steps: merge the latest main into the branch, fix, push, `task_done` again.
-  Otherwise the agent makes a new task on the same branch (`Merge conflict: …` or `Fix the checks: …`) for the
-  orchestrator to assign, and the first task names it in `fix`. Once the fix is merged, both are.
+  The author also gets a short pool message saying so, which an older agent shows too. Otherwise the agent makes a new
+  task on the same branch (`Merge conflict: …` or `Fix the checks: …`) for the orchestrator to assign, and the first
+  task names it in `fix`. Once the fix is merged, both are, through a fix of a fix as well. A task that someone moved
+  while it merged stays as they left it.
 - **What shows.** The tool's answer, in the orchestrator's conversation, says what happened, what it frees and what is
   next. Each attempt posts an event for the activity and the task's history: `merged`, `pr_opened`, `merge_conflict`,
   `merge_failed` or `main_broken`.

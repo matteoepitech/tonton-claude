@@ -25,16 +25,21 @@ export interface LandRequest {
 }
 
 export type LandOutcome =
-  /** `already`: the branch was in main before. `note`: what did not go as planned once main moved. */
-  | { kind: 'merged'; commit: string; base: string; already: boolean; pushed: boolean; note?: string }
-  | { kind: 'pr'; url: string; base: string }
-  | { kind: 'conflict'; files: string[]; output: string }
-  /** A check fails with the branch merged, and passes without it. */
-  | { kind: 'failed'; command: string; output: string }
-  /** A check fails on main as it is: the branch is not to blame. */
-  | { kind: 'main_red'; command: string; output: string }
-  /** Nothing was tried, or nothing changed: why. */
-  | { kind: 'refused'; why: string }
+  /** `already`: the branch was in main before. */
+  (
+    | { kind: 'merged'; commit: string; base: string; already: boolean; pushed: boolean }
+    | { kind: 'pr'; url: string; base: string }
+    | { kind: 'conflict'; files: string[]; output: string }
+    /** A check fails with the branch merged, and passes without it. */
+    | { kind: 'failed'; command: string; output: string }
+    /** A check fails on main as it is: the branch is not to blame. */
+    | { kind: 'main_red'; command: string; output: string }
+    /** Nothing was tried, or nothing changed: why. */
+    | { kind: 'refused'; why: string }
+  ) & {
+    /** What did not go as planned around it: the folder or the local main left where they were. */
+    note?: string
+  }
 
 export interface PoolGitOptions {
   /** How long one check may run. */
@@ -53,6 +58,8 @@ const OUTPUT_KEPT = 4000
 /** What is kept in memory while a command runs. */
 const BUFFER_KEPT = 64 * 1024
 const MAX_FILES = 50
+/** Green commits remembered: the latest main is what matters. */
+const GREEN_KEPT = 50
 
 /** Where git looks for a repository: the agent's own environment must not send it to another one. */
 const GIT_LOCATION = /^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|PREFIX)$/i
@@ -127,6 +134,8 @@ export class PoolGit {
     const has = async (ref: string) => (await git(['rev-parse', '-q', '--verify', `${ref}^{commit}`])).code === 0
     const base = request.base ?? (await defaultBase(git, has, remote))
     if (!base) return refused('There is no main branch here nor on origin: name the branch to merge into in base.')
+    if (request.branch === base || request.branch === 'HEAD')
+      return refused(`${request.branch} is what it merges into, not a task's branch.`)
     const remoteBase = `refs/remotes/origin/${base}`
     const localBase = `refs/heads/${base}`
     const onOrigin = remote && (await has(remoteBase))
@@ -136,23 +145,21 @@ export class PoolGit {
     if (onOrigin && local && !(await isAncestor(git, localBase, remoteBase))) {
       return refused(`The ${base} branch here has commits that are not on origin: push them, or take them off, before merging.`)
     }
-    const pushedBranch = remote && (await has(`refs/remotes/origin/${request.branch}`))
-    const branchRef = pushedBranch
-      ? `refs/remotes/origin/${request.branch}`
-      : (await has(`refs/heads/${request.branch}`))
-        ? `refs/heads/${request.branch}`
-        : null
-    if (!branchRef) {
-      return refused(`${request.branch} is not on origin, nor here: its author has to push it. If its work is in main already, pass skip.`)
+    // With an origin, only what the author pushed: a branch left in this folder may be an old one.
+    const branchRef = remote ? `refs/remotes/origin/${request.branch}` : `refs/heads/${request.branch}`
+    if (!(await has(branchRef))) {
+      return refused(
+        `${request.branch} is not ${remote ? 'on origin' : 'here'}: its author has to push it. If its work is in main already, pass skip.`,
+      )
     }
-    if (request.how === 'pr' && !pushedBranch) return refused(`${request.branch} is not on origin: a pull request needs it pushed.`)
     const baseSha = (await git(['rev-parse', '--verify', `${baseRef}^{commit}`])).output.trim()
     const branchSha = (await git(['rev-parse', '--verify', `${branchRef}^{commit}`])).output.trim()
     if (await isAncestor(git, branchSha, baseSha)) return { kind: 'merged', commit: baseSha, base, already: true, pushed: false }
 
     const detached = await git(['checkout', '--quiet', '--detach', baseSha])
     if (detached.code !== 0) return refused(`git checkout failed:\n${tail(detached.output)}`)
-    let outcome: LandOutcome
+    let outcome: LandOutcome = refused('The merge stopped half-way.')
+    let back: Ran
     try {
       outcome = await this.mergeAndCheck(folder, git, request, baseSha, branchSha)
       if (outcome.kind === 'merged' && request.how === 'merge' && remote) {
@@ -166,7 +173,13 @@ export class PoolGit {
       }
     } finally {
       // Back where the folder was. The checks may have changed tracked files: the folder was clean when it started.
-      await git(['checkout', '--quiet', '--force', start, '--'])
+      back = await git(['checkout', '--quiet', '--force', start, '--'])
+    }
+    if (back.code !== 0) {
+      const note = `This folder stayed on the merge, not on ${start}: run git checkout ${start} there (${tail(back.output, 300)}).`
+      // Main moved only if it was pushed: otherwise nothing was merged, whatever the checks said.
+      if (outcome.kind === 'merged' && !outcome.pushed) return refused(`Nothing was merged. ${note}`)
+      return { ...outcome, note }
     }
     if (outcome.kind !== 'merged') return outcome
     // Checked: a pull request leaves main to the repository's own rules.
@@ -206,7 +219,10 @@ export class PoolGit {
       }
       return { kind: 'failed', command, output: described(ran, this.checkTimeout()) }
     }
-    if (request.checks.length) this.green.add(key(commit))
+    if (request.checks.length) {
+      this.green.add(key(commit))
+      for (const old of [...this.green].slice(0, -GREEN_KEPT)) this.green.delete(old)
+    }
     return { kind: 'merged', commit, base: '', already: false, pushed: false }
   }
 
@@ -326,14 +342,28 @@ function run(argv: string[], options: { cwd: string; env: Record<string, string>
       timedOut = true
       stop(child, Boolean(options.group))
     }, options.timeoutMs)
+    let drain: ReturnType<typeof setTimeout> | undefined
+    const finish = (code: number | null) => {
+      clearTimeout(timer)
+      clearTimeout(drain)
+      resolve({ code: code ?? -1, output, timedOut })
+    }
     child.on('error', error => {
       clearTimeout(timer)
       resolve({ code: -1, output: String(error), missing: (error as NodeJS.ErrnoException).code === 'ENOENT' })
     })
-    child.on('close', code => {
-      clearTimeout(timer)
-      resolve({ code: code ?? -1, output, timedOut })
+    child.on('exit', code => {
+      // What a check left running in the background (a server, a watcher) stops with it, and keeps no pipe open.
+      if (options.group && process.platform !== 'win32' && child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGKILL')
+        } catch {
+          // Nothing was left.
+        }
+      }
+      drain = setTimeout(() => finish(code), 2000)
     })
+    child.on('close', finish)
   })
 }
 

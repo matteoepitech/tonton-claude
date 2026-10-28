@@ -181,6 +181,26 @@ describe('landing a branch', () => {
   }, 15_000)
 })
 
+test('a check that leaves something running in the background does not hold the merge, nor outlive it', async () => {
+  const repos = fresh()
+  pushBranch(repos.ana, 'pool/t14-server', { 'feature.txt': 'new\n' })
+  const pidFile = join(root, `server-${count}`)
+  const started = Date.now()
+  const outcome = await new PoolGit().land(repos.lead, request('pool/t14-server', { checks: [`sleep 30 & echo $! > ${pidFile}`] }))
+  expect(outcome.kind).toBe('merged')
+  expect(Date.now() - started).toBeLessThan(10_000)
+  const pid = Number(readFileSync(pidFile, 'utf8'))
+  const alive = (() => {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  })()
+  expect(alive).toBe(false)
+}, 20_000)
+
 describe('pull requests', () => {
   test('with pr, the checked branch gets a pull request and main does not move', async () => {
     const repos = fresh()
@@ -226,6 +246,13 @@ describe('what it refuses', () => {
 
     const missing = await gitter.land(repos.lead, request('pool/t13-nobody'))
     expect(missing.kind === 'refused' && missing.why).toContain('has to push it')
+    // With an origin, a branch left in this folder is not what its author pushed.
+    git(repos.lead, 'branch', 'pool/t13-stale')
+    const stale = await gitter.land(repos.lead, request('pool/t13-stale'))
+    expect(stale.kind === 'refused' && stale.why).toContain('is not on origin')
+    // A task naming main itself would be marked merged with nothing merged.
+    const itself = await gitter.land(repos.lead, request('main'))
+    expect(itself.kind === 'refused' && itself.why).toContain('what it merges into')
     expect(originMain(repos)).toBe(git(repos.lead, 'rev-parse', 'main'))
   })
 

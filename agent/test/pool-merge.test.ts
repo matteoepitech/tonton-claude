@@ -76,20 +76,24 @@ const poolWith = (tasks: PoolTaskItem[], sessions = [session('acc_lea', 'ses_lea
 function recorder() {
   const writes: { id: string; rev: number; task: PoolTask }[] = []
   const events: { kind: string; taskId?: string; text?: string }[] = []
+  const messages: { to: string; text: string }[] = []
   const ops: PoolOps = {
     putTask: async (_pool, id, rev, task) => {
       writes.push({ id, rev, task })
       return null
     },
     putNotes: async () => null,
-    message: async () => null,
+    message: async (_pool, to, text) => {
+      messages.push({ to: to.session, text })
+      return null
+    },
     event: async (_pool, kind, taskId, text) => {
       events.push({ kind, taskId, text })
     },
     descriptions: () => new Map(),
     who: (_state, _account, id) => (id ? (NAMES[id] ?? id) : 'a member'),
   }
-  return { ops, writes, events }
+  return { ops, writes, events, messages }
 }
 
 function merger(state: PoolState, folder: string | undefined) {
@@ -113,15 +117,22 @@ describe('the merge queue', () => {
       item('c', finished('C', { merge: { state: 'merged', at: 'then', commit: 'abc' } })),
       item('d', finished('D', { branch: undefined })),
       item('e', finished('E', { merge: { state: 'conflict', at: 'then', fix: 'e2' } })),
+      item('e2', { title: 'Merge conflict: E', state: 'in_progress', branch: 'pool/e' }),
       item('f', finished('F', { dependsOn: ['g', 'c', 'd'] }), '2026-10-28T09:00:00Z'),
       item('g', { title: 'G', state: 'in_progress', branch: 'pool/g' }),
       item('h', finished('H', { merge: { state: 'pr', at: 'then', url: 'https://example.com/pr/1' } })),
       item('i', finished('I'), '2026-10-28T10:20:00Z'),
+      // A pull request still open: what depends on it waits.
+      item('j', finished('J', { dependsOn: ['h'] }), '2026-10-28T08:00:00Z'),
+      // A fix task that is not on the board fixes nothing.
+      item('k', finished('K', { merge: { state: 'conflict', at: 'then', fix: 'gone' } }), '2026-10-28T10:40:00Z'),
     ])
     expect(mergeQueue(state)).toEqual([
       { id: 'i', title: 'I', branch: 'pool/i', waitsFor: [] },
       { id: 'a', title: 'A', branch: 'pool/a', waitsFor: [] },
       { id: 'b', title: 'B', branch: 'pool/b', waitsFor: ['a'] },
+      { id: 'k', title: 'K', branch: 'pool/k', waitsFor: [] },
+      { id: 'j', title: 'J', branch: 'pool/j', waitsFor: ['h'] },
       { id: 'f', title: 'F', branch: 'pool/f', waitsFor: ['g'] },
     ])
   })
@@ -155,9 +166,13 @@ describe('task_merge', () => {
     pushMain(repos.ana, { 'app.txt': 'theirs\n' })
     const before = originMain(repos)
     const state = poolWith([item('a', finished('A', { review: 'Checked it' }))])
-    const { merger: m, writes, events } = merger(state, repos.lead)
+    const { merger: m, writes, events, messages } = merger(state, repos.lead)
     const said = await m.call('pool1', state, { task: 'a', checks: CHECKS })
     expect(said).toContain('pool/a conflicts with main in app.txt: nothing was merged.')
+    // An older agent drops the record: the message tells it anyway.
+    expect(messages).toEqual([
+      { to: 'ses_ana', text: expect.stringContaining('came back from the merge: pool/a conflicts with main in app.txt') },
+    ])
     expect(said).toContain('Sent back to Ana · back')
     expect(originMain(repos)).toBe(before)
     expect(writes).toHaveLength(1)
@@ -204,19 +219,51 @@ describe('task_merge', () => {
     expect(mergeQueue(after)).toEqual([])
   })
 
-  test('once its fix is merged, the task it fixes is merged too', async () => {
+  test('once its fix is merged, the task it fixes is merged too, through a fix of the fix', async () => {
     const repos = fresh()
     pushBranch(repos.ana, 'pool/a', { 'a.txt': 'fixed\n' })
     const state = poolWith([
       item('a', finished('A', { merge: { state: 'failed', at: 'then', command: 'bun test', fix: 'fix1' } })),
-      item('fix1', finished('Fix the checks: A', { branch: 'pool/a' })),
+      item('fix1', finished('Fix the checks: A', { branch: 'pool/a', merge: { state: 'conflict', at: 'then', fix: 'fix2' } })),
+      item('fix2', finished('Merge conflict: Fix the checks: A', { branch: 'pool/a' })),
     ])
     const { merger: m, writes } = merger(state, repos.lead)
     expect(await m.call('pool1', state, { checks: CHECKS })).toContain('Merged pool/a into main')
     expect(writes.map(w => [w.id, w.task.merge?.state, w.task.merge?.commit])).toEqual([
+      ['fix2', 'merged', originMain(repos)],
       ['fix1', 'merged', originMain(repos)],
       ['a', 'merged', originMain(repos)],
     ])
+  })
+
+  test('a task moved while it merged is left to whoever moved it', async () => {
+    const repos = fresh()
+    pushBranch(repos.ana, 'pool/a', { BROKEN: 'yes\n' })
+    const state = poolWith([item('a', finished('A'))])
+    const moved = poolWith([item('a', { ...finished('A'), state: 'in_progress' })])
+    const recorded = recorder()
+    const m = new PoolMerger(
+      recorded.ops,
+      new PoolGit(),
+      () => repos.lead,
+      () => moved,
+    )
+    expect(await m.call('pool1', state, { checks: CHECKS })).toContain('The task is in_progress now, so it stays as it is.')
+    expect(recorded.writes).toEqual([])
+  })
+
+  test('a pull request leaves what depends on it waiting until skip says it is merged', async () => {
+    const state = poolWith([
+      item('a', finished('A', { merge: { state: 'pr', at: 'then', url: 'https://github.com/team/app/pull/7' } })),
+      item('b', finished('B', { dependsOn: ['a'] })),
+    ])
+    const { merger: m, writes } = merger(state, root)
+    expect(await m.call('pool1', state, { checks: [] })).toBe('Nothing is ready to merge: b (B) waits for a.')
+    expect(await m.call('pool1', state, { task: 'a', checks: [] })).toContain('Once it is merged, pass skip')
+    expect(await m.call('pool1', state, { task: 'a', checks: [], skip: true })).toBe(
+      'Marked a (A) merged, without merging pool/a. Next to merge: b (B).',
+    )
+    expect(writes.map(w => [w.id, w.task.merge?.state])).toEqual([['a', 'merged']])
   })
 
   test('a main that already fails is not blamed on the task, and nothing on the board moves', async () => {

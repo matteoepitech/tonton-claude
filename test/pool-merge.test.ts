@@ -242,6 +242,11 @@ describe('merging end to end', () => {
     )
     expect(back.params?.content).toContain(`${branch} conflicts with main in app.txt`)
     expect(back.params?.content).toContain('git merge origin/main')
+    // The short message an older agent would show too, in the pool's activity as well.
+    await eventually(
+      () => pooled(worker, 'message').find(n => n.params?.content?.includes('came back from the merge')),
+      'the message to the worker',
+    )
     const state = await eventually(async () => {
       const current = await stateOf(owner)
       return current?.events.some(e => e.body?.kind === 'merge_conflict') && current
