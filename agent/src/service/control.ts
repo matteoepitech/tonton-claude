@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { paths } from '../config'
 import { binaryPath, IS_WINDOWS, windowlessBinaryPath } from '../install/system'
 import { proxyEnvironment } from '../proxy'
+import { searchPath } from './search-path'
 
 // Starts the background service at login and restarts it on a new binary: a Run key on Windows, a LaunchAgent on
 // macOS, a user systemd unit on Linux.
@@ -29,11 +30,19 @@ function exec(command: string[]): boolean {
 const escapeXml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /**
- * Restarted after a crash, not after Quit in the menu bar (a clean exit). `proxy` comes from the shell that runs the
- * install: launchd and systemd start the service without the shell's variables.
+ * Restarted after a crash, not after Quit in the menu bar (a clean exit). `proxy` and `path` come from the shell that
+ * runs the install: launchd and systemd start the service without the shell's variables, and with a PATH that has neither
+ * Homebrew nor the user's own folders, where tmux and the coding tools are (search-path.ts).
  */
-export function launchAgentPlist(binary: string, home: string, proxy: [string, string][] = proxyEnvironment()): string {
-  const variables = [['TONTON_HOME', home], ...proxy].map(([name, value]) => `<key>${name}</key><string>${escapeXml(value)}</string>`)
+export function launchAgentPlist(
+  binary: string,
+  home: string,
+  proxy: [string, string][] = proxyEnvironment(),
+  path = searchPath(),
+): string {
+  const variables = [['TONTON_HOME', home], ['PATH', path], ...proxy].map(
+    ([name, value]) => `<key>${name}</key><string>${escapeXml(value)}</string>`,
+  )
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -49,9 +58,11 @@ export function launchAgentPlist(binary: string, home: string, proxy: [string, s
 `
 }
 
-export function systemdUnit(binary: string, home: string, proxy: [string, string][] = proxyEnvironment()): string {
+export function systemdUnit(binary: string, home: string, proxy: [string, string][] = proxyEnvironment(), path = searchPath()): string {
   // Quoted, with `%` doubled: systemd reads it as a specifier, and proxy passwords are often percent-encoded.
-  const variables = proxy.map(([name, value]) => `Environment="${name}=${value.replace(/[\\"]/g, '\\$&').replace(/%/g, '%%')}"\n`)
+  const variables = [['PATH', path] as [string, string], ...proxy].map(
+    ([name, value]) => `Environment="${name}=${value.replace(/[\\"]/g, '\\$&').replace(/%/g, '%%')}"\n`,
+  )
   return `[Unit]
 Description=Tonton Claude agent
 After=network-online.target

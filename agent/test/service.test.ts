@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { withoutConsole } from '../src/install/system'
 import { launchAgentPlist, systemdUnit } from '../src/service/control'
+import { searchPath, usualFolders } from '../src/service/search-path'
 
 test('the windowless Windows copy only differs by its subsystem', () => {
   // A minimal PE: "MZ", the header offset at 0x3c, "PE\0\0", then the optional header.
@@ -22,6 +23,23 @@ test('macOS restarts the service after a crash, not after Quit', () => {
   expect(plist).toContain('<string>/Users/me/.tonton/bin/tonton</string><string>service</string>')
   expect(plist).toContain('<key>SuccessfulExit</key><false/>')
   expect(launchAgentPlist('/a&b/tonton', '/a&b')).toContain('/a&amp;b/tonton')
+})
+
+test("the service finds tmux and the coding tools where they are installed, not only in launchd's short PATH", () => {
+  const exists = (folder: string) => ['/opt/homebrew/bin', '/usr/local/bin', '/Users/me/.local/bin'].includes(folder)
+  const darwin = usualFolders('darwin', '/Users/me')
+  expect(searchPath('/usr/bin:/bin:/usr/sbin:/sbin', darwin, exists)).toBe(
+    '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/Users/me/.local/bin',
+  )
+  // What its owner set comes first, each folder once.
+  expect(searchPath('/Users/me/.local/bin:/usr/bin', darwin, exists)).toBe('/Users/me/.local/bin:/usr/bin:/opt/homebrew/bin:/usr/local/bin')
+  expect(searchPath('', usualFolders('linux', '/home/me'), folder => folder === '/usr/bin')).toBe('/usr/bin')
+  expect(usualFolders('win32')).toEqual([])
+  // Written in the LaunchAgent and the systemd unit, so every program the service starts finds them.
+  expect(launchAgentPlist('/b', '/h', [], '/usr/bin:/opt/homebrew/bin')).toContain(
+    '<key>PATH</key><string>/usr/bin:/opt/homebrew/bin</string>',
+  )
+  expect(systemdUnit('/b', '/h', [], '/usr/bin:/snap/bin')).toContain('Environment="PATH=/usr/bin:/snap/bin"')
 })
 
 test('Linux runs it as a user unit', () => {

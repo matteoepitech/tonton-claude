@@ -1,0 +1,28 @@
+// The folders the background service looks for programs in. Started by launchd or systemd, it gets a short PATH
+// (`/usr/bin:/bin:/usr/sbin:/sbin` on macOS) without Homebrew, MacPorts or the user's own bin folders, where tmux, git and
+// the coding tools usually are: a pool machine then could not start a session. The service adds the usual ones that
+// exist after what it was given, so a PATH its owner set still wins.
+
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { delimiter, join } from 'node:path'
+
+/** Where package managers and installers put programs, by platform. Windows services see the user's PATH already. */
+export function usualFolders(platform: NodeJS.Platform = process.platform, home = homedir()): string[] {
+  if (platform === 'win32') return []
+  const user = [join(home, '.local', 'bin'), join(home, '.bun', 'bin'), join(home, '.npm-global', 'bin'), join(home, 'bin')]
+  const system = ['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
+  if (platform === 'darwin') return ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/opt/local/bin', ...system, ...user]
+  return ['/home/linuxbrew/.linuxbrew/bin', '/snap/bin', ...system, ...user]
+}
+
+/** The PATH with the usual folders that exist added after its own, each once. */
+export function searchPath(
+  path = process.env.PATH ?? '',
+  folders = usualFolders(),
+  exists: (folder: string) => boolean = existsSync,
+): string {
+  const parts = path.split(delimiter).filter(Boolean)
+  for (const folder of folders) if (!parts.includes(folder) && exists(folder)) parts.push(folder)
+  return parts.join(delimiter)
+}
