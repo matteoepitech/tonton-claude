@@ -133,11 +133,19 @@ extension SessionVault {
 public struct PoolInfo: Codable, Equatable, Sendable {
     public var name: String
     public var goal: String?
+    /// `hackathon`: a pool against a deadline (docs/pools.md, Hackathon mode).
+    public var template: String?
+    public var repo: String?
+    /// ISO date and time the work must be done by.
+    public var deadline: String?
+    public var startedAt: String?
 
     public init(name: String, goal: String? = nil) {
         self.name = name
         self.goal = goal
     }
+
+    public var isHackathon: Bool { template == "hackathon" || deadline != nil }
 }
 
 public struct PoolMemberProfile: Codable, Equatable, Sendable {
@@ -178,6 +186,10 @@ public enum PoolTaskState: String, Codable, Sendable {
 public struct PoolSessionRef: Codable, Equatable, Sendable {
     public let account: String
     public let session: String
+
+    public init(account: String, session: String) {
+        (self.account, self.session) = (account, session)
+    }
 }
 
 public struct PoolTask: Codable, Equatable, Sendable {

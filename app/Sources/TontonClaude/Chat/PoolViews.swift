@@ -60,6 +60,13 @@ struct PoolPanel: View {
             }
             if let goal = state.info?.goal { Text(goal).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(3) }
             VStack(alignment: .leading, spacing: 3) {
+                if let deadline = state.info?.deadline {
+                    // A hackathon: the countdown moves while the panel is open.
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        row("Time", PoolHackathon.countdown(deadline, now: context.date) ?? "")
+                            .foregroundStyle(PoolHackathon.isLate(deadline, now: context.date) ? Theme.danger : Theme.text)
+                    }
+                }
                 row("Role", PoolLabels.role(of: member, in: state))
                 row("Takes", PoolTaskSize.of(member.profile, tool: session.codingTool).label)
                 row("Task", PoolLabels.task(of: session.id, in: state))
@@ -84,6 +91,22 @@ struct PoolPanel: View {
                     }
                 }
                 .frame(maxHeight: 160)
+            }
+            if board.summary.role == .owner || board.summary.role == .admin {
+                let leads = state.orchestrator?.account == member.account && state.orchestrator?.session == member.session
+                HStack {
+                    if leads {
+                        Button("Not the orchestrator") { pools.setOrchestrator(nil, pool: board.id) }
+                            .help("The pool then has no orchestrator until you make another session it.")
+                    } else {
+                        Button("Make this session the orchestrator") {
+                            pools.setOrchestrator(PoolSessionRef(account: member.account, session: member.session), pool: board.id)
+                        }
+                        .help("It plans the project and hands the tasks to the other sessions.")
+                    }
+                    Spacer()
+                }
+                .font(.notch(11))
             }
             HStack {
                 if let url = pools.websiteURL(of: board.id) {
@@ -119,6 +142,8 @@ struct PoolJoinView: View {
     @State private var form: PoolJoinForm
     @State private var poolId: String?
     @State private var error: String?
+    /// Owner and admins: make the session the pool's orchestrator once it joins.
+    @State private var lead = false
 
     init(session: SessionSummary) {
         self.session = session
@@ -142,9 +167,45 @@ struct PoolJoinView: View {
         .task { await pools.refresh() }
     }
 
+    private var selected: PoolBoard? {
+        let id = poolId ?? pools.joinable.first?.id
+        return pools.joinable.first { $0.id == id }
+    }
+
+    private var canLead: Bool { selected.map { $0.summary.role == .owner || $0.summary.role == .admin } ?? false }
+
+    /// Puts the session in the pool, and makes it the orchestrator when asked.
+    private func join(_ form: PoolJoinForm) {
+        guard let pool = selected?.id else { return }
+        do {
+            try pools.join(session, pool: pool, form: form)
+            // Sent after the join on the same socket: the relay knows the session by then.
+            if lead && canLead { pools.setOrchestrator(pools.ref(of: session.id), pool: pool) }
+            notch.poolOf = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     @ViewBuilder private var fields: some View {
         Picker("Pool", selection: Binding(get: { poolId ?? pools.joinable.first?.id }, set: { poolId = $0 })) {
             ForEach(pools.joinable, id: \.id) { board in Text(board.name).tag(Optional(board.id)) }
+        }
+        if let state = selected?.state, state.info?.isHackathon == true {
+            // A hackathon: one click puts the session in as one of the pool's roles.
+            VStack(alignment: .leading, spacing: 4) {
+                if let left = PoolHackathon.countdown(state.info?.deadline) {
+                    Text(verbatim: left).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.accent)
+                }
+                Text("Join as").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.tertiary)
+                HStack(spacing: 4) {
+                    ForEach(PoolHackathon.joinRoles(of: state), id: \.self) { role in
+                        Button(PoolHackathon.roleLabel(role)) { join(.quick(session, area: role)) }
+                            .accessibilityLabel(String(localized: "Join the pool as \(PoolHackathon.roleLabel(role))"))
+                    }
+                }
+                Text("Or fill in the rest below.").font(.notch(10)).foregroundStyle(Theme.tertiary)
+            }
         }
         HStack(spacing: 4) {
             TextField("Area: front, back, infra…", text: $form.area).textFieldStyle(.roundedBorder)
@@ -166,20 +227,16 @@ struct PoolJoinView: View {
         }
         Toggle("Start pool tasks right away", isOn: $form.autoStart)
             .help("Off: the notch asks you before the session starts a task the pool gives it.")
+        if canLead {
+            Toggle("Make it the pool's orchestrator", isOn: $lead)
+                .help("It plans the project and hands the tasks to the other sessions, instead of taking tasks itself.")
+        }
         if let error { Text(error).font(.notch(10)).foregroundStyle(Theme.danger) }
         HStack {
             Spacer()
-            Button("Join pool") {
-                guard let pool = poolId ?? pools.joinable.first?.id else { return }
-                do {
-                    try pools.join(session, pool: pool, form: form)
-                    notch.poolOf = nil
-                } catch {
-                    self.error = error.localizedDescription
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
+            Button("Join pool") { join(form) }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
         }
     }
 }

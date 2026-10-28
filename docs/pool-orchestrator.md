@@ -59,3 +59,22 @@ The reviewer gets a `<pool kind="review">` with the branch, the criteria and wha
 out, runs the tests, and calls `review_accept` (the task is done) or `review_reject` with notes (it goes back to its
 author, who gets the notes with it). Without a review session, a finished task is done at once and the orchestrator
 checks it.
+
+## Hackathons
+
+A pool made from the hackathon template (docs/pools.md, Hackathon mode) has a deadline. Its orchestrator gets this on
+top of its guide, in the same `<pool kind="role">`, or on its own when the deadline comes later:
+
+```
+This pool is a hackathon: its deadline and time left are in pool_overview.
+1. Plan for the time left, not for the whole idea: first the smallest app that demos well, then what can be added.
+2. Keep main demo-ready: merge small and often, and never leave main broken.
+3. Notices come at half time, one hour and fifteen minutes before the end. At one hour, start no new feature; at fifteen minutes, freeze main.
+4. Near the end, the final checklist task comes on the board: the build passes on main, a demo script, the README. Hand it to a session and see it done.
+```
+
+Its agent tells it, once each, at half time, one hour and fifteen minutes before the deadline. A mark already past
+when the agent first sees the deadline is not told late. At the first of the last two, the agent adds the **Final
+checklist** task (simple, on its own branch) and says its id: the build passes on main from a fresh clone, a demo
+script under three minutes, and a README that says what it is, how to run it and who built which part.
+`pool_overview` shows the deadline and the time left.

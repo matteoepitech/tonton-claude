@@ -4137,6 +4137,26 @@
         }
       }
     },
+    "It plans the project and hands the tasks to the other sessions, instead of taking tasks itself." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elle planifie le projet et donne les tâches aux autres sessions, au lieu d’en prendre elle-même."
+          }
+        }
+      }
+    },
+    "It plans the project and hands the tasks to the other sessions." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elle planifie le projet et donne les tâches aux autres sessions."
+          }
+        }
+      }
+    },
     "Its agent is offline." : {
       "localizations" : {
         "fr" : {
@@ -4167,6 +4187,16 @@
         }
       }
     },
+    "Join as" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre comme"
+          }
+        }
+      }
+    },
     "Join pool" : {
       "localizations" : {
         "fr" : {
@@ -4183,6 +4213,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rejoindre un pool…"
+          }
+        }
+      }
+    },
+    "Join the pool as %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre le pool comme %@"
           }
         }
       }
@@ -4474,6 +4514,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Écran principal"
+          }
+        }
+      }
+    },
+    "Make it the pool's orchestrator" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En faire l’orchestrateur du pool"
+          }
+        }
+      }
+    },
+    "Make this session the orchestrator" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faire de cette session l’orchestrateur"
           }
         }
       }
@@ -4949,6 +5009,16 @@
         }
       }
     },
+    "Not the orchestrator" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus l’orchestrateur"
+          }
+        }
+      }
+    },
     "Notch" : {
       "localizations" : {
         "fr" : {
@@ -5286,6 +5356,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ou un emoji"
+          }
+        }
+      }
+    },
+    "Or fill in the rest below." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ou remplissez le reste ci-dessous."
           }
         }
       }
@@ -7505,6 +7585,16 @@
         }
       }
     },
+    "The pool then has no orchestrator until you make another session it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pool n’a alors plus d’orchestrateur, jusqu’à ce qu’une autre session le devienne."
+          }
+        }
+      }
+    },
     "The relay did not keep the name. It may be too old to rename sessions." : {
       "localizations" : {
         "fr" : {
@@ -7727,6 +7817,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ce relais est trop ancien pour partager des sessions : il lui faut la version 0.8.0 ou ultérieure."
+          }
+        }
+      }
+    },
+    "Time" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temps"
           }
         }
       }

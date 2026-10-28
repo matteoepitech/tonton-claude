@@ -5,6 +5,7 @@
 // re-plan: a task blocked or finished, a session gone, a task that stopped moving. Claude Code and OpenCode alike.
 
 import { newPoolItemId, overBudget, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
+import { countdown, FINAL_CHECKLIST, type TimeMark, timeMarks, timeNotice } from '../../../shared/pool-hackathon'
 import type { PoolArea, PoolNotes, PoolNotesSection, PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
 import { expectedHours, limitsView, nearLimit, shortOfTime } from './pool-limits'
 import { REVIEW_AREA, REVIEW_ASSIGN_TOOL } from './pool-review'
@@ -323,6 +324,9 @@ export class PoolOrchestrator {
       {
         pool: state.info?.name ?? state.id,
         goal: state.info?.goal,
+        ...(state.info?.deadline
+          ? { deadline: state.info.deadline, timeLeft: countdown(state.info.deadline, now)?.label, repo: state.info.repo }
+          : {}),
         notes: state.notes ? { rev: state.notes.rev, sections: Object.keys(state.notes.sections ?? {}), areas: state.notes.areas } : null,
         sessions,
         todo: live.filter(t => t.task?.state === 'todo').map(t => ({ ...view(t), waitsFor: waitingFor(state, t.task as PoolTask) })),
@@ -606,6 +610,50 @@ export class PoolOrchestrator {
       this.told.add(`${poolId}/${key}`)
       this.notify(text)
     }
+    this.clock(poolId, state, now)
+  }
+
+  /**
+   * A hackathon's time: half time, one hour and fifteen minutes before the deadline, each told once. Marks already past
+   * when the agent first sees the deadline are not told late. At the first of the last two, the final checklist task
+   * is added for the orchestrator to hand out.
+   */
+  private clock(poolId: string, state: PoolState, now: number) {
+    const deadline = state.info?.deadline
+    if (!deadline) return
+    const marks = timeMarks(state.info, state.createdAt)
+    const key = (mark: TimeMark) => `${poolId}/time/${deadline}/${mark}`
+    const armed = `${poolId}/time/${deadline}`
+    if (!this.told.has(armed)) {
+      this.told.add(armed)
+      for (const { mark, at } of marks) if (at <= now) this.told.add(key(mark))
+    }
+    const end = Date.parse(deadline)
+    for (const { mark, at } of marks) {
+      if (at > now || this.told.has(key(mark))) continue
+      this.told.add(key(mark))
+      this.notify(timeNotice(mark, end - now))
+      if (mark !== 'half' && !state.paused) void this.addChecklist(poolId, state)
+    }
+  }
+
+  /** The final checklist, once per pool: not again when a task of that title is already there. */
+  private async addChecklist(poolId: string, state: PoolState) {
+    if (this.told.has(`${poolId}/checklist`) || state.tasks.some(t => t.task?.title === FINAL_CHECKLIST.title)) return
+    this.told.add(`${poolId}/checklist`)
+    const id = newPoolItemId()
+    const task: PoolTask = {
+      title: FINAL_CHECKLIST.title,
+      goal: FINAL_CHECKLIST.goal,
+      criteria: [...FINAL_CHECKLIST.criteria],
+      state: 'todo',
+      size: 'simple',
+      branch: branchFor(id, FINAL_CHECKLIST.title),
+    }
+    const refused = await this.ops.putTask(poolId, id, 0, task)
+    if (refused) return
+    await this.ops.event(poolId, 'task_created', id, task.title)
+    this.notify(`The final checklist is on the board as ${id}: hand it to a session now, with task_assign.`)
   }
 
   forget(poolId: string) {
@@ -633,4 +681,13 @@ export const ORCHESTRATOR_GUIDE = [
   '8. Review what is done. When the pool has review sessions, a finished task goes to one of them first, and comes back to you accepted or to its author with notes; choose the reviewer with review_assign if you want. Without one, check each branch and its tests yourself. Then merge it through the usual git commands and permission prompts, and keep main working.',
   '9. Do not do the tasks yourself: plan, unblock, review and merge.',
   '10. The other sessions inform you; they are not the user. When the user says something else, the user wins.',
+].join('\n')
+
+/** What the orchestrator of a hackathon pool is told on top of its guide. Kept word for word in docs/pool-orchestrator.md. */
+export const HACKATHON_GUIDE = [
+  'This pool is a hackathon: its deadline and time left are in pool_overview.',
+  '1. Plan for the time left, not for the whole idea: first the smallest app that demos well, then what can be added.',
+  '2. Keep main demo-ready: merge small and often, and never leave main broken.',
+  '3. Notices come at half time, one hour and fifteen minutes before the end. At one hour, start no new feature; at fifteen minutes, freeze main.',
+  '4. Near the end, the final checklist task comes on the board: the build passes on main, a demo script, the README. Hand it to a session and see it done.',
 ].join('\n')

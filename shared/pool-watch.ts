@@ -20,7 +20,9 @@ import type {
   PoolAppMessage,
   PoolInfo,
   PoolMemberProfile,
+  PoolNotes,
   PoolRole,
+  PoolSessionRef,
   PoolSummary,
   PoolTask,
   PoolTaskWire,
@@ -77,6 +79,8 @@ export class PoolWatch {
   /** Updates are opened one after the other, in the order they came. */
   private queue: Promise<void> = Promise.resolve()
   private listProblem: string | null = null
+  /** The notes a pool made from a template starts with, written once its first snapshot comes. */
+  private readonly startingNotes = new Map<string, PoolNotes>()
 
   constructor(private readonly options: PoolWatchOptions) {}
 
@@ -133,9 +137,11 @@ export class PoolWatch {
 
   // MARK: Pools
 
-  async create(info: PoolInfo, profile?: PoolMemberProfile): Promise<string | null> {
+  /** A new pool. `notes`: what it starts with, such as a hackathon's areas, written once the pool is open. */
+  async create(info: PoolInfo, profile?: PoolMemberProfile, notes?: PoolNotes): Promise<string | null> {
     return this.act(async () => {
       const { pool } = await this.options.api.create(this.options.accountKey, this.options.account, info, profile)
+      if (notes) this.startingNotes.set(pool.id, notes)
       await this.refresh()
       return pool.id
     })
@@ -184,6 +190,11 @@ export class PoolWatch {
     const opened = this.opened.get(poolId)
     if (!opened?.vault) return false
     return this.options.link.sendPool({ t: 'pool_info', poolId, info: await opened.vault.seal(info) })
+  }
+
+  /** Owner and admins: the pool session that plans and hands out the work, or none. */
+  setOrchestrator(poolId: string, orchestrator: PoolSessionRef | null): boolean {
+    return this.options.link.sendPool({ t: 'pool_orchestrator', poolId, orchestrator })
   }
 
   /** This member's own name in the pool. */
@@ -294,6 +305,7 @@ export class PoolWatch {
       opened.state = opened.vault ? await opened.vault.snapshot(update.pool) : null
       opened.conflicts.clear()
       await this.republish(poolId, opened)
+      await this.writeStartingNotes(poolId, opened)
     } else if (update.t === 'pool_key') {
       // A rotation: the new key opens what is written from now on. A new snapshot reads everything with it.
       this.options.link.subscribePool(poolId)
@@ -357,6 +369,15 @@ export class PoolWatch {
       publicKey: await sealPoolMemberKey(opened.keyring, poolId, this.options.account, opened.secret),
       secret: await sealPoolMemberSecret(this.options.accountKey, opened.secret),
     })
+  }
+
+  private async writeStartingNotes(poolId: string, opened: Opened) {
+    const notes = this.startingNotes.get(poolId)
+    if (!notes || !opened.vault || !opened.state) return
+    this.startingNotes.delete(poolId)
+    // Someone wrote notes first: theirs stay.
+    if (opened.state.notes) return
+    this.options.link.sendPool({ t: 'pool_notes', poolId, rev: 0, blob: await opened.vault.seal(notes) })
   }
 
   private async infoOf(summary: PoolSummary): Promise<PoolInfo | null> {

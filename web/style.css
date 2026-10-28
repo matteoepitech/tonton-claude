@@ -954,3 +954,35 @@ canvas.qr {
     margin-left: 0;
   }
 }
+.pool-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pool-hackathon {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 22px;
+}
+.pool-hackathon[hidden] {
+  display: none;
+}
+.pool-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.pool-roles label {
+  flex-direction: row;
+  align-items: center;
+}
+.countdown {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.countdown.late {
+  color: var(--danger);
+}

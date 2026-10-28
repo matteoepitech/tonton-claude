@@ -6,6 +6,11 @@
 import {
   assignableRoles,
   canKick,
+  countdown,
+  HACKATHON_ROLES,
+  hackathonInfo,
+  hackathonNotes,
+  hackathonRoleLabel,
   type InviteSummary,
   invitableRoles,
   type ListedPool,
@@ -36,6 +41,10 @@ type View = { kind: 'pool'; id: string } | { kind: 'new' } | { kind: 'join' } | 
 
 let view: View = null
 let tab = 'tasks'
+/** A hackathon pool just made: its page opens on the team's QR code. */
+let teamQrFor: string | null = null
+/** Redraws the page while a pool with a deadline shows, so its countdown moves. */
+let ticker: ReturnType<typeof setInterval> | null = null
 
 export interface PoolTab {
   id: string
@@ -174,7 +183,8 @@ export function renderPoolMain(main: HTMLElement, context: PoolsContext, onBack:
   const pool = context.watch.pool(poolId)
   const state = pool?.state
   const name = state?.info?.name ?? context.watch.pools.find(listed => listed.summary.id === poolId)?.info?.name ?? 'A pool'
-  page.header.replaceChildren(
+  const clock = countdown(state?.info?.deadline)
+  const headerParts: HTMLElement[] = [
     back,
     element(
       'span',
@@ -184,7 +194,15 @@ export function renderPoolMain(main: HTMLElement, context: PoolsContext, onBack:
         [state?.info?.goal, pool ? roleLabel(pool.role) : null, state?.paused ? 'Paused' : null].filter(Boolean).join(' · '),
       ),
     ),
-  )
+  ]
+  if (clock) {
+    const left = element('em', clock.label)
+    left.className = clock.ended || clock.left < 900_000 ? 'countdown late' : 'countdown'
+    left.title = `Deadline: ${new Date(state?.info?.deadline ?? '').toLocaleString()}`
+    headerParts.push(left)
+  }
+  page.header.replaceChildren(...headerParts)
+  keepTicking(context, Boolean(clock && !clock.ended))
   if (!pool || !state) {
     page.tabs.replaceChildren()
     page.body.replaceChildren(element('p', pool?.problem ?? 'Opening the pool…'))
@@ -222,6 +240,18 @@ export function renderPoolMain(main: HTMLElement, context: PoolsContext, onBack:
   const body = element('div')
   ;(visible.find(item => item.id === tab) ?? visible[0]).render(body, pool, state, context, controls)
   page.body.replaceChildren(...children, body)
+  if (teamQrFor === pool.id && poolAbilities(pool.role).invite) {
+    teamQrFor = null
+    controls.openPanel(teamQrPanel(context, pool, state, controls))
+  }
+}
+
+function keepTicking(context: PoolsContext, needed: boolean) {
+  if (needed && !ticker) ticker = setInterval(() => context.rerender(), 30_000)
+  if (!needed && ticker) {
+    clearInterval(ticker)
+    ticker = null
+  }
 }
 
 function newPoolForm(context: PoolsContext): HTMLElement {
@@ -233,29 +263,99 @@ function newPoolForm(context: PoolsContext): HTMLElement {
   goal.rows = 3
   const you = element('input')
   you.placeholder = 'Your name in the pool'
+  const hackathon = hackathonFields()
   const create = element('button', 'Create')
   create.className = 'primary'
+  const problem = element('p')
+  problem.className = 'error'
+  problem.setAttribute('role', 'alert')
   const form = element(
     'form',
     element('label', element('span', 'Name'), name),
     element('label', element('span', 'Goal'), goal),
     element('label', element('span', 'You'), you),
+    hackathon.root,
     element('p', 'The pool gets its own key, made in this browser. The relay only keeps it sealed with your account key.'),
+    problem,
     element('div', create),
   )
   form.className = 'pool-form'
   form.onsubmit = async event => {
     event.preventDefault()
     if (!name.value.trim()) return
+    const info = { name: name.value.trim(), ...(goal.value.trim() ? { goal: goal.value.trim() } : {}) }
+    const setup = hackathon.setup()
+    if (typeof setup === 'string') {
+      problem.textContent = setup
+      return
+    }
     create.disabled = true
     const id = await context.watch.create(
-      { name: name.value.trim(), ...(goal.value.trim() ? { goal: goal.value.trim() } : {}) },
+      setup ? hackathonInfo(info, setup) : info,
       you.value.trim() ? { name: you.value.trim() } : undefined,
+      setup ? hackathonNotes(setup) : undefined,
     )
     create.disabled = false
-    if (id) go({ kind: 'pool', id }, context)
+    if (!id) return
+    if (setup) teamQrFor = id
+    go({ kind: 'pool', id }, context)
   }
   return form
+}
+
+/** The hackathon template: a deadline, the repository, and the roles the orchestrator splits the work by. */
+function hackathonFields() {
+  const on = element('input')
+  on.type = 'checkbox'
+  const deadline = element('input')
+  deadline.type = 'datetime-local'
+  deadline.value = localInput(new Date(Math.ceil(Date.now() / 3_600_000) * 3_600_000 + 24 * 3_600_000))
+  const repo = element('input')
+  repo.placeholder = 'https://github.com/team/app'
+  const roles = HACKATHON_ROLES.map(role => {
+    const box = element('input')
+    box.type = 'checkbox'
+    box.checked = true
+    box.value = role
+    return { box, row: element('label', box, ` ${hackathonRoleLabel(role)}`) }
+  })
+  const rolesRow = element('div', ...roles.map(role => role.row))
+  rolesRow.className = 'pool-roles'
+  const details = element(
+    'div',
+    element('label', element('span', 'Deadline'), deadline),
+    element('label', element('span', 'Repository'), repo),
+    element('span', 'Roles'),
+    rolesRow,
+    element(
+      'p',
+      'The orchestrator plans for the time left and hears at half time, one hour and fifteen minutes before the end. One QR code joins the team.',
+    ),
+  )
+  details.className = 'pool-hackathon'
+  details.hidden = true
+  on.onchange = () => {
+    details.hidden = !on.checked
+  }
+  const toggle = element('label', on, ' Hackathon: a deadline, roles and one QR code for the team')
+  toggle.className = 'pool-check'
+  return {
+    root: element('div', toggle, details),
+    /** Null for an ordinary pool, or why the template is not filled right. */
+    setup: () => {
+      if (!on.checked) return null
+      const end = new Date(deadline.value)
+      if (Number.isNaN(end.getTime()) || end.getTime() <= Date.now()) return 'Give the hackathon a deadline in the future.'
+      const picked = roles.filter(role => role.box.checked).map(role => role.box.value)
+      return { deadline: end.toISOString(), repo: repo.value.trim(), roles: picked }
+    },
+  }
+}
+
+/** `2026-10-28T18:00` in local time, as a datetime-local input takes it. */
+function localInput(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 function joinForm(context: PoolsContext): HTMLElement {
@@ -336,21 +436,36 @@ function renderMembers(body: HTMLElement, pool: OpenPool, state: PoolState, cont
     row.className = 'member'
     return row
   })
+  const choose = poolAbilities(pool.role).chooseOrchestrator
   const sessions = state.sessions.map(session => {
     const profile = session.profile
     const what = [
       profile?.tool === 'opencode' ? 'OpenCode' : profile?.tool === 'claude' ? 'Claude Code' : null,
+      profile?.area ? hackathonRoleLabel(profile.area) : null,
       profile?.machine,
       profile?.skills,
     ]
     const status = !session.online ? 'offline' : session.ready ? 'ready' : 'joining'
-    const row = element(
-      'div',
+    // The relay says who leads: a profile could claim it.
+    const leads = state.orchestrator?.account === session.account && state.orchestrator.session === session.session
+    const cells: HTMLElement[] = [
       element('span', element('strong', sessionName(state, session)), element('small', what.filter(Boolean).join(' · '))),
       element('em', status),
-    )
+    ]
+    if (choose && leads) {
+      const stop = element('button', 'Not the orchestrator')
+      stop.title = 'The pool then has no orchestrator until you make another session it.'
+      stop.onclick = () => void watch.setOrchestrator(pool.id, null)
+      cells.push(stop)
+    } else if (choose) {
+      const make = element('button', 'Make orchestrator')
+      make.title = 'It plans the project and hands the tasks to the other sessions.'
+      make.onclick = () => void watch.setOrchestrator(pool.id, { account: session.account, session: session.session })
+      cells.push(make)
+    }
+    const row = element('div', ...cells)
     row.className = 'member'
-    if (profile?.orchestrator) row.classList.add('orchestrator')
+    if (leads) row.classList.add('orchestrator')
     return row
   })
   body.replaceChildren(
@@ -358,6 +473,9 @@ function renderMembers(body: HTMLElement, pool: OpenPool, state: PoolState, cont
     ...rows,
     element('h2', 'Sessions'),
     ...(sessions.length ? sessions : [element('p', 'No session works for the pool yet. Members put theirs in from the notch.')]),
+    ...(state.sessions.length && !state.orchestrator && choose
+      ? [element('p', 'No orchestrator yet: make one session the orchestrator, and it plans the work for the others.')]
+      : []),
   )
   body.firstElementChild?.classList.add('pool-toolbar')
 }
@@ -396,6 +514,9 @@ function renderInvites(body: HTMLElement, pool: OpenPool, state: PoolState, cont
   const add = element('button', 'New invite')
   add.className = 'primary'
   add.onclick = () => page.openPanel(inviteForm(context, pool, page))
+  const team = element('button', 'One QR for the team')
+  team.title = 'An invite for up to 100 machines, valid until the deadline or for a day'
+  team.onclick = () => page.openPanel(teamQrPanel(context, pool, state, page))
   const rows = (listed ?? []).map(invite => {
     const revoke = element('button', 'Revoke')
     revoke.onclick = async () => {
@@ -416,7 +537,7 @@ function renderInvites(body: HTMLElement, pool: OpenPool, state: PoolState, cont
     row.className = 'member'
     return row
   })
-  const toolbar = element('div', element('h2', 'Invites'), add)
+  const toolbar = element('div', element('h2', 'Invites'), team, add)
   toolbar.className = 'pool-toolbar'
   body.replaceChildren(
     toolbar,
@@ -426,6 +547,32 @@ function renderInvites(body: HTMLElement, pool: OpenPool, state: PoolState, cont
       `Removing a member gives the pool a new key and revokes every open invite. ${state.members.length} member${state.members.length === 1 ? '' : 's'} now.`,
     ),
   )
+}
+
+/**
+ * One invite every machine of the team joins with: up to 100 uses, as members, until the deadline (a day without one).
+ * Made when the panel opens; the QR code shows on the screen for everyone to scan.
+ */
+function teamQrPanel(context: PoolsContext, pool: OpenPool, state: PoolState, page: PageControls): HTMLElement {
+  const left = countdown(state.info?.deadline)?.left ?? 0
+  const hours = left > 0 ? Math.min(720, Math.max(1, Math.ceil(left / 3_600_000))) : 24
+  const result = element('div', element('p', 'Making the invite…'))
+  const close = element('button', 'Close')
+  close.type = 'button'
+  close.onclick = () => page.openPanel(null)
+  const panel = element(
+    'div',
+    element('h3', 'Join the team'),
+    element('p', 'Scan it from the web app on each machine, then put its sessions in the pool from the notch.'),
+    result,
+    element('div', close),
+  )
+  panel.className = 'pool-form'
+  void context.watch.invite(pool.id, { uses: 100, hours, role: 'member' }).then(made => {
+    invitesOf.delete(pool.id)
+    result.replaceChildren(...(made ? inviteResult(made.link) : [element('p', 'The invite could not be made.')]))
+  })
+  return panel
 }
 
 function inviteForm(context: PoolsContext, pool: OpenPool, page: PageControls): HTMLElement {
@@ -588,6 +735,12 @@ function infoForm(context: PoolsContext, pool: OpenPool, state: PoolState): HTML
   const goal = element('textarea')
   goal.value = state.info?.goal ?? ''
   goal.rows = 3
+  const hackathon = state.info?.template === 'hackathon'
+  const deadline = element('input')
+  deadline.type = 'datetime-local'
+  if (state.info?.deadline) deadline.value = localInput(new Date(state.info.deadline))
+  const repo = element('input')
+  repo.value = state.info?.repo ?? ''
   const save = element('button', 'Save')
   save.className = 'primary'
   const close = element('button', 'Close')
@@ -596,6 +749,7 @@ function infoForm(context: PoolsContext, pool: OpenPool, state: PoolState): HTML
     'form',
     element('label', element('span', 'Name'), name),
     element('label', element('span', 'Goal'), goal),
+    ...(hackathon ? [element('label', element('span', 'Deadline'), deadline), element('label', element('span', 'Repository'), repo)] : []),
     element('div', close, save),
   )
   form.className = 'pool-form'
@@ -603,8 +757,14 @@ function infoForm(context: PoolsContext, pool: OpenPool, state: PoolState): HTML
   form.onsubmit = async event => {
     event.preventDefault()
     if (!name.value.trim()) return
-    if (await context.watch.updateInfo(pool.id, { name: name.value.trim(), ...(goal.value.trim() ? { goal: goal.value.trim() } : {}) }))
-      form.remove()
+    // The rest of the info, such as a hackathon's, stays as it was.
+    const next = { ...state.info, name: name.value.trim(), goal: goal.value.trim() || undefined }
+    if (hackathon) {
+      const end = new Date(deadline.value)
+      if (!Number.isNaN(end.getTime())) next.deadline = end.toISOString()
+      next.repo = repo.value.trim() || undefined
+    }
+    if (await context.watch.updateInfo(pool.id, JSON.parse(JSON.stringify(next)))) form.remove()
   }
   return form
 }

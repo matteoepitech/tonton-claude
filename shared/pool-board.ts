@@ -49,6 +49,8 @@ export interface PoolAbilities {
   write: boolean
   /** Kick members and viewers (admins), or anyone but itself (owner); rotate the key. */
   kick: boolean
+  /** Make a pool session the orchestrator, or none. */
+  chooseOrchestrator: boolean
   /** The owner deletes; everyone else leaves. */
   remove: boolean
   leave: boolean
@@ -62,6 +64,7 @@ export function poolAbilities(role: PoolRole): PoolAbilities {
     manageAdmins: role === 'owner',
     write: role !== 'viewer',
     kick: lead,
+    chooseOrchestrator: lead,
     remove: role === 'owner',
     leave: role !== 'owner',
   }
