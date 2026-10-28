@@ -72,6 +72,12 @@ export interface PoolTask {
   size?: PoolTaskSize
   /** The files and folders the task works in, from its area. */
   paths?: string[]
+  /** How long it should take, in hours. Missing: by its size, 1 for small and 3 for large (docs/pools.md). */
+  hours?: number
+  /** In review: the session checking it. The assignee stays its author. */
+  reviewer?: { account: string; session: string }
+  /** What the last review said: why it was sent back, or what the reviewer noted when accepting it. */
+  review?: string
 }
 
 /** An area of the code and the paths it owns, so two sessions rarely edit the same files. */
@@ -107,6 +113,8 @@ export interface PoolEventBody {
   /** `spend` events: what the session spent since it joined the pool, as its agent counts it. */
   costUSD?: number
   seconds?: number
+  /** `limits` events: the account's plan usage, as the session's agent last read it. Claude Code only. */
+  limits?: PoolLimits
 }
 
 /**
@@ -133,6 +141,21 @@ export interface PoolBudgets {
   member?: PoolBudget
   /** One member, by account. */
   members?: Record<string, PoolBudget>
+}
+
+/** A window of a Claude plan: how much of it is used, and when it starts over. */
+export interface PoolLimitWindow {
+  /** 0 to 100. */
+  usedPercent: number
+  resetsAt: string
+}
+
+/** What a Claude Code session shares of its account's plan, so the orchestrator plans around it. */
+export interface PoolLimits {
+  fiveHour?: PoolLimitWindow
+  sevenDay?: PoolLimitWindow
+  /** When the 5-hour window runs out at the current pace (shared/limit-forecast.ts). Missing: not before it resets. */
+  runsOutAt?: string
 }
 
 // Sealed with the account key: what a member keeps for itself.

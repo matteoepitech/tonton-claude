@@ -142,7 +142,8 @@ The agent turns a pool session into tools, served by the MCP channel for Claude 
 | `pool_tasks`, `task_claim`, `task_update`, `task_done` | all | Read and move tasks; done means a summary, the branch, the tests run |
 | `pool_send`, `pool_inbox` | all | Messages to a session, a role or everyone |
 | `pool_notes_read`, `pool_notes_write` | all | The shared notes, whole or one section at a time |
-| `pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign` | orchestrator | Plan and hand out work ([pool-orchestrator.md](pool-orchestrator.md)) |
+| `review_accept`, `review_reject` | the task's reviewer | Accept a task in review, or send it back to its author with notes |
+| `pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign`, `review_assign` | orchestrator | Plan and hand out work ([pool-orchestrator.md](pool-orchestrator.md)) |
 
 A task assigned to a session, or a message to it, arrives like a message from the notch, but marked as coming from the
 pool and from which member: `<pool kind="task" from="Ana · orchestrator" task="…">…</pool>`, or `kind="message"`. What
@@ -181,8 +182,41 @@ Details:
   says who changed what. A session is told, as a short `<pool kind="notes">` notice and never with the whole text, when
   it joins a pool that has notes and whenever another session or a member changes them.
 - **The orchestrator's notices.** Its agent tells it, as `<pool kind="notice" from="Tonton">`, when to re-plan: a task
-  blocked, sent to review or done (with what that frees), its session gone or offline, a task in progress that has not
-  moved for 30 minutes. It also gets its guide once, as `<pool kind="role">`.
+  blocked, sent to review (with its reviewer), sent back by review, or done (with what that frees), its session gone or
+  offline or near the end of its plan's window, a task in progress that has not moved for 30 minutes. It also gets its
+  guide once, as `<pool kind="role">`.
+
+### Account limits
+
+Members use different Claude accounts and plans, and a session that hits its limit half-way leaves its task half-done.
+
+- A Claude Code session's agent shares its plan with each of its pools as a `limits` event, sealed with the pool key:
+  the 5-hour and weekly windows (how much is used, when each resets), as its status line reports them, and when the
+  5-hour window runs out at the current pace. The forecast is the notch's (`LimitForecast`): the rise over the last
+  half hour, nothing with under five minutes of readings or no rise (`shared/limit-forecast.ts`, the same table of
+  cases on both sides). It is posted when the session joins, when the figures move (whole percents, the forecast to
+  five minutes, at most once a minute), and again every ten minutes.
+- A task takes `hours` (by default 1 for a small task, 3 for a large one). The orchestrator's rules skip a session
+  whose 5-hour or weekly window is used up, or whose 5-hour window runs out before that; naming it by hand is refused
+  with why, unless forced. `pool_status` and `pool_overview` show each session's plan.
+- Within twenty minutes of running out, or past 95 % of its 5-hour window, a session holding a task is told once to
+  hand it over: commit and push its branch, then `task_update` blocked with a summary that starts with "Handover:". The
+  orchestrator is told too, and reassigns it.
+- OpenCode sessions have no Claude plan: they share nothing, show as "no plan limit", are never skipped for time, and
+  still get the simpler tasks first.
+
+### Review
+
+When the pool has sessions of the `review` area, `task_done` sends a finished task to one of them (its previous
+reviewer first, then the one with the fewest reviews waiting, never its author nor the orchestrator) instead of marking
+it done. Its author is free for another task meanwhile. The reviewer gets a `<pool kind="review">` with the branch, the
+criteria and what the author said, checks the branch out, runs the tests, and calls `review_accept` (the task is done,
+with the reviewer's note) or `review_reject` with what to fix: the task goes back to its author with the notes, and its
+next `task_done` goes to review again. A review is delivered only when the task's author, the orchestrator or a person
+asked for it; a reviewer's rejection is the only task change another session may hand back. The orchestrator can pick
+the reviewer with `review_assign`. Review sessions get no build task from the rules. Without a review session, a
+finished task is done at once, and the orchestrator checks it before merging. Each step posts an event
+(`review_assigned`, `review_rejected`, `review_accepted`), for the timeline.
 
 ## Control
 

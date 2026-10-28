@@ -113,4 +113,20 @@ final class PoolTests: XCTestCase {
         let profile = try JSONDecoder().decode(PoolSessionProfile.self, from: Data(#"{"tool":"opencode","takes":"any"}"#.utf8))
         XCTAssertEqual(profile.takes, "any")
     }
+
+    func testLimitsAndReviewReadAsTheAgentSealsThem() throws {
+        let event =
+            #"{"kind":"limits","limits":{"fiveHour":{"usedPercent":42.5,"resetsAt":"2026-10-27T14:00:00Z"},"runsOutAt":"2026-10-27T12:00:00Z"}}"#
+        let body = try JSONDecoder().decode(PoolEventBody.self, from: Data(event.utf8))
+        XCTAssertEqual(body.limits?.fiveHour, PoolLimitWindow(usedPercent: 42.5, resetsAt: "2026-10-27T14:00:00Z"))
+        XCTAssertEqual(body.limits?.runsOutAt, "2026-10-27T12:00:00Z")
+        XCTAssertNil(body.limits?.sevenDay)
+        let task =
+            #"{"title":"Checkout","state":"review","hours":2,"reviewer":{"account":"acc_rev","session":"rev"},"review":"Fix the total"}"#
+        let decoded = try JSONDecoder().decode(PoolTask.self, from: Data(task.utf8))
+        XCTAssertEqual(decoded.state, .review)
+        XCTAssertEqual(decoded.hours, 2)
+        XCTAssertEqual(decoded.reviewer?.session, "rev")
+        XCTAssertEqual(decoded.review, "Fix the total")
+    }
 }

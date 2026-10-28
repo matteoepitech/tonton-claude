@@ -195,6 +195,12 @@ public struct PoolTask: Codable, Equatable, Sendable {
     public var size: String?
     /// The files and folders it works in.
     public var paths: [String]?
+    /// How long it should take, in hours; nil: by its size.
+    public var hours: Double?
+    /// In review: the session checking it. The assignee stays its author.
+    public var reviewer: PoolSessionRef?
+    /// What the last review said.
+    public var review: String?
 
     public init(
         title: String, goal: String? = nil, criteria: [String]? = nil, area: String? = nil, state: PoolTaskState,
@@ -247,6 +253,9 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
         (self.kind, self.text, self.taskId, self.tool, self.model) = (kind, text, taskId, tool, model)
         (self.costUSD, self.seconds) = (costUSD, seconds)
     }
+
+    /// `limits` events: the account's plan usage, from a Claude Code session's agent.
+    public var limits: PoolLimits?
 }
 
 /// Auto-approve rules proposed to the pool's sessions. They apply only where a machine owner accepted them.
@@ -281,6 +290,21 @@ public struct PoolBudgets: Codable, Equatable, Sendable {
     public init(pool: PoolBudget? = nil, member: PoolBudget? = nil, members: [String: PoolBudget]? = nil) {
         (self.pool, self.member, self.members) = (pool, member, members)
     }
+}
+
+/// A window of a Claude plan, as a pool session shares it.
+public struct PoolLimitWindow: Codable, Equatable, Sendable {
+    /// 0 to 100.
+    public var usedPercent: Double
+    public var resetsAt: String
+}
+
+/// What a Claude Code session shares of its account's plan, so the orchestrator plans around it.
+public struct PoolLimits: Codable, Equatable, Sendable {
+    public var fiveHour: PoolLimitWindow?
+    public var sevenDay: PoolLimitWindow?
+    /// When the 5-hour window runs out at the current pace; nil: not before it resets.
+    public var runsOutAt: String?
 }
 
 /// Seals with the latest pool key it holds and opens with whichever version sealed a blob. What another member sealed
