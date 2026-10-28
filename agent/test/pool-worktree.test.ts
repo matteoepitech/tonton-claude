@@ -39,6 +39,17 @@ describe('a task worktree', () => {
     expect(existsSync(join(second.cwd, 'later.md'))).toBe(true)
   })
 
+  test('tasks that start at once on a new machine share one clone, and each gets its worktree', async () => {
+    const repos = makeRepos(join(dir, 'together'))
+    const workdir = join(dir, 'together-work')
+    const ids = ['task0011abc', 'task0012abc', 'task0013abc']
+    const trees = await Promise.all(ids.map(id => prepareTaskTree(workdir, repos.origin, id, `pool/${id}`)))
+    for (const [index, tree] of trees.entries()) {
+      if (typeof tree === 'string') throw new Error(tree)
+      expect(git(tree.cwd, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(`pool/${ids[index]}`)
+    }
+  })
+
   test('a task retried on another machine starts from the branch an earlier attempt pushed', async () => {
     const repos = makeRepos(join(dir, 'retried'))
     pushBranch(repos.ana, 'pool/task0003abc-docs', { 'docs.md': 'first attempt' })

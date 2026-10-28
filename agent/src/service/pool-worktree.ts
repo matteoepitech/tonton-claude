@@ -62,9 +62,54 @@ export function workFolder(workdir: string, home?: string): string | null {
  */
 export async function prepareTaskTree(workdir: string, repo: string, taskId: string, branch: string): Promise<TaskTree | string> {
   if (!TASK_ID.test(taskId) || !isTaskBranch(branch)) return 'The task has no id or branch this machine can use.'
-  const prepared = await prepareRepository(workdir, repo)
-  if (typeof prepared === 'string') return prepared
-  const { clone } = prepared
+  const place = clonePlace(workdir, repo)
+  if (typeof place === 'string') return place
+  return oneAtATime(place.clone, async () => {
+    const prepared = await cloneAndFetch(place, repo)
+    return typeof prepared === 'string' ? prepared : addTaskTree(prepared.clone, taskId, branch)
+  })
+}
+
+/**
+ * Makes sure `<workdir>/repo` is a clone of the repository, and fetches it: where the orchestrator works, and what the
+ * tasks' worktrees come from. The clone's real path, or why not.
+ */
+export async function prepareRepository(workdir: string, repo: string): Promise<{ clone: string } | string> {
+  const place = clonePlace(workdir, repo)
+  if (typeof place === 'string') return place
+  return oneAtATime(place.clone, () => cloneAndFetch(place, repo))
+}
+
+interface ClonePlace {
+  /** The work folder, as its owner wrote it. */
+  root: string
+  /** `<root>/repo`. */
+  clone: string
+}
+
+function clonePlace(workdir: string, repo: string): ClonePlace | string {
+  if (!isRepository(repo)) return 'The pool’s repository is not a URL or a path git can clone.'
+  const root = workFolder(workdir)
+  if (!root) return `${workdir} is not a full path on this machine.`
+  return { root, clone: join(root, 'repo') }
+}
+
+async function cloneAndFetch({ root, clone }: ClonePlace, repo: string): Promise<{ clone: string } | string> {
+  try {
+    mkdirSync(root, { recursive: true, mode: 0o755 })
+  } catch (error) {
+    return `Could not make ${root}: ${String(error)}`
+  }
+  if (!existsSync(join(clone, '.git'))) {
+    const cloned = await git(['clone', '--', repo, clone], root, CLONE_TIMEOUT_MS)
+    if (cloned !== null) return `git clone failed: ${cloned}`
+  }
+  const fetched = await git(['fetch', '--prune', 'origin'], clone)
+  if (fetched !== null) return `git fetch failed: ${fetched}`
+  return { clone: join(realpathSync(root), 'repo') }
+}
+
+async function addTaskTree(clone: string, taskId: string, branch: string): Promise<TaskTree | string> {
   const root = dirname(clone)
   const cwd = join(root, 'tasks', taskId)
   // Inside the owner's folder, whatever the names hold.
@@ -83,26 +128,20 @@ export async function prepareTaskTree(workdir: string, repo: string, taskId: str
 }
 
 /**
- * Makes sure `<workdir>/repo` is a clone of the repository, and fetches it: where the orchestrator works, and what the
- * tasks' worktrees come from. The clone's real path, or why not.
+ * What runs git in a clone, by its path. Tasks dispatched to a machine at once, and its orchestrator session, would
+ * otherwise race on the first clone (the second `git clone` finds the folder taken), then on the clone's own locks.
  */
-export async function prepareRepository(workdir: string, repo: string): Promise<{ clone: string } | string> {
-  if (!isRepository(repo)) return 'The pool’s repository is not a URL or a path git can clone.'
-  const root = workFolder(workdir)
-  if (!root) return `${workdir} is not a full path on this machine.`
-  const clone = join(root, 'repo')
-  try {
-    mkdirSync(root, { recursive: true, mode: 0o755 })
-  } catch (error) {
-    return `Could not make ${root}: ${String(error)}`
+const busy = new Map<string, Promise<unknown>>()
+
+/** Runs `run` once whatever ran in the same clone before has ended, well or not. */
+function oneAtATime<T>(clone: string, run: () => Promise<T>): Promise<T> {
+  const next = (busy.get(clone) ?? Promise.resolve()).catch(() => undefined).then(run)
+  busy.set(clone, next)
+  const done = () => {
+    if (busy.get(clone) === next) busy.delete(clone)
   }
-  if (!existsSync(join(clone, '.git'))) {
-    const cloned = await git(['clone', '--', repo, clone], root, CLONE_TIMEOUT_MS)
-    if (cloned !== null) return `git clone failed: ${cloned}`
-  }
-  const fetched = await git(['fetch', '--prune', 'origin'], clone)
-  if (fetched !== null) return `git fetch failed: ${fetched}`
-  return { clone: join(realpathSync(root), 'repo') }
+  next.then(done, done)
+  return next
 }
 
 /** Runs git in `cwd`: null once it worked, otherwise the end of what it said. */
