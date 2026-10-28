@@ -10,6 +10,8 @@ import { receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { acquireLock, releaseLock } from './control'
 import { cpuTimes, readHealth } from './health'
+import { PoolLead } from './pool-lead'
+import { DispatchLoop } from './pool-loop'
 import { MachinePools } from './pool-machines'
 import { PoolWorker } from './pool-worker'
 import { writeStatus } from './status'
@@ -39,7 +41,8 @@ export async function runService(args: string[]) {
   process.on('SIGINT', stop)
 
   let connection: RelayConnection | null = null
-  let worker: PoolWorker | null = null
+  /** What the machine does for its pools: workers, the orchestrator session and the control loop on the orchestrator's. */
+  let autopilot: { stop(): void }[] = []
   let current: string | null = null
   const follow = () => {
     const config = loadConfig()
@@ -48,9 +51,9 @@ export async function runService(args: string[]) {
     current = identity
     connection?.stop()
     connection = null
-    // The sessions it runs for pools keep running: a new worker finds them again in its slots.
-    worker?.stop()
-    worker = null
+    // The sessions it runs for pools keep running: the new ones find them again in their slots.
+    for (const part of autopilot) part.stop()
+    autopilot = []
     if (!config) {
       writeStatus('not-configured', null)
       return
@@ -61,10 +64,16 @@ export async function runService(args: string[]) {
       config.key,
       config.machineId,
       build => relay.post(build),
-      poolId => machineWorker.changed(poolId),
+      poolId => {
+        worker.changed(poolId)
+        lead.changed(poolId)
+        loop.changed(poolId)
+      },
     )
-    const machineWorker = new PoolWorker(pools, config.key, build => relay.post(build), { machineName: config.machine })
-    worker = machineWorker
+    const worker = new PoolWorker(pools, { machineName: config.machine })
+    const lead = new PoolLead(pools, { machineName: config.machine })
+    const loop = new DispatchLoop(pools)
+    autopilot = [worker, lead, loop]
     const relay: RelayConnection = new RelayConnection(config, 'service', {
       connected: () => {
         writeStatus('connected', config.server)

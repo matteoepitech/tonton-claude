@@ -86,7 +86,10 @@ describe('names', () => {
   test("a task's branch is its own when it has a good one, else made from its title", () => {
     expect(taskBranch('task0001abc', 'API client', 'pool/task0001abc-api-client')).toBe('pool/task0001abc-api-client')
     expect(taskBranch('task0001abc', 'API client', 'main')).toBe('pool/task0001abc-api-client')
-    expect(taskBranch('task0001abc', 'API client', 'pool/task0002abc-other')).toBe('pool/task0001abc-api-client')
+    // As the orchestrator names them (channel/pool-orchestrator.ts, branchFor), and nothing git could misread.
+    expect(taskBranch('task0001abc', 'API client', 'pool/task00-api')).toBe('pool/task00-api')
+    expect(taskBranch('task0001abc', 'API client', 'pool/../main')).toBe('pool/task0001abc-api-client')
+    expect(taskBranch('task0001abc', 'API client', 'pool/a b')).toBe('pool/task0001abc-api-client')
     expect(taskBranch('task0001abc', 'Écran de connexion !!')).toBe('pool/task0001abc-ecran-de-connexion')
     expect(taskBranch('task0001abc', '🚀')).toBe('pool/task0001abc')
   })

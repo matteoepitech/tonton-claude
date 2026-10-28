@@ -27,7 +27,7 @@ import { postHook } from '../hook'
 import { openCodeStarts } from '../launch'
 import { log } from '../log'
 import { handleLogRequest } from '../logs'
-import { matchingRule, openSessionRules, readRules, receiveRules } from '../rules'
+import { matchingRule, modeAllows, openSessionRules, readRules, receiveRules } from '../rules'
 import { OPENCODE_COMMANDS, type OpenCodePermission, OpenCodeTracker, type SessionUpdate } from './events'
 
 const BACKLOG_SIZE = 400
@@ -173,8 +173,13 @@ class Link {
   ask(permission: OpenCodePermission) {
     const rules = [...(readRules()?.rules ?? []), ...this.sessionRules, ...this.pools.acceptedRules()]
     const rule = matchingRule(rules, permission.detail.toolName, permission.input)
-    if (rule) {
-      log('approved by an auto-approve rule', { tool: rule.tool })
+    // A pool machine's session: the mode its owner chose, sealed with the account key in its order, in its own folder.
+    const mode = this.pools.workerMode(this.config.machineId)
+    const root = this.cwd()
+    if (rule || (mode && root && modeAllows({ mode, root }, permission.detail.toolName, permission.input))) {
+      log(rule ? 'approved by an auto-approve rule' : 'approved by the pool machine’s mode', {
+        tool: rule?.tool ?? permission.detail.toolName,
+      })
       this.send({ op: 'reply', sessionID: this.sessionId, directory: this.cwd(), requestID: permission.requestId, decision: 'once' })
       return
     }

@@ -83,6 +83,7 @@ function recorder() {
       return null
     },
     putNotes: async () => null,
+    putDispatch: async () => null,
     message: async (_pool, to, text) => {
       messages.push({ to: to.session, text })
       return null

@@ -7,7 +7,8 @@
 
 import { newPoolItemId, overBudget, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
 import { countdown, FINAL_CHECKLIST, type TimeMark, timeMarks, timeNotice } from '../../../shared/pool-hackathon'
-import type { PoolArea, PoolNotes, PoolNotesSection, PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
+import type { PoolArea, PoolDispatch, PoolNotes, PoolNotesSection, PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
+import { DISPATCH_TOOLS, dispatching, LOOP_EVENTS, machinesView, nextDispatch } from './pool-dispatch'
 import { expectedHours, limitsView, nearLimit, shortOfTime } from './pool-limits'
 import { landed, mergeQueue, type PoolMerger, TASK_MERGE_TOOL } from './pool-merge'
 import { REVIEW_AREA, REVIEW_ASSIGN_TOOL } from './pool-review'
@@ -86,6 +87,7 @@ export const ORCHESTRATOR_TOOLS: PoolToolSpec[] = [
   },
   REVIEW_ASSIGN_TOOL,
   TASK_MERGE_TOOL,
+  ...DISPATCH_TOOLS,
 ]
 
 /** What the orchestrator needs from the pool tools: sealing, posting and waiting on the relay are theirs. */
@@ -93,6 +95,8 @@ export interface PoolOps {
   /** Writes the task over revision `rev` (0 for a new one): null once the relay took it, otherwise why not. */
   putTask(poolId: string, id: string, rev: number, next: PoolTask): Promise<string | null>
   putNotes(poolId: string, rev: number, notes: PoolNotes): Promise<string | null>
+  /** Turns the control loop on or off over revision `rev` (docs/pool-autopilot.md). */
+  putDispatch(poolId: string, rev: number, dispatch: PoolDispatch): Promise<string | null>
   message(poolId: string, to: { account: string; session: string }, text: string): Promise<string | null>
   event(poolId: string, kind: string, taskId: string | undefined, text: string | undefined): Promise<void>
   descriptions(state: PoolState): Map<string, SessionDescription>
@@ -264,6 +268,8 @@ export function overlapping(state: PoolState, id: string, paths: string[]): Pool
 export class PoolOrchestrator {
   /** Notices already given, by what they are about, so each one comes once. */
   private readonly told = new Set<string>()
+  /** The last event seen per pool, so that the control loop's events are told once, as they come. */
+  private readonly loopSeen = new Map<string, number>()
   /** What each task looked like last time, per pool, to notice what changed. */
   private readonly last = new Map<string, Map<string, { state: string; session?: string; online?: boolean }>>()
 
@@ -281,6 +287,8 @@ export class PoolOrchestrator {
       return "Only the pool's orchestrator plans and assigns. Its owner or an admin makes a session the orchestrator, from the app or the website."
     }
     if (name === 'pool_overview') return this.overview(state)
+    // Stopping the loop is always possible, a pause included: the loop hands out nothing in a paused pool anyway.
+    if (name === 'dispatch_stop' || (name === 'dispatch_start' && !state.paused)) return this.dispatch(poolId, state, name, args)
     if (state.paused) return 'The pool is paused: nothing can change in it until its owner resumes it.'
     switch (name) {
       case 'plan_create':
@@ -297,6 +305,17 @@ export class PoolOrchestrator {
         return this.merger()?.call(poolId, state, args) ?? "This session's agent does not know its folder: it cannot merge."
     }
     return `No such tool: ${name}.`
+  }
+
+  private async dispatch(poolId: string, state: PoolState, name: string, args: Args): Promise<string> {
+    const on = name === 'dispatch_start'
+    const next = nextDispatch(state, on, args.note)
+    if (typeof next === 'string') return next
+    const result = await this.ops.putDispatch(poolId, state.dispatch?.rev ?? 0, next)
+    if (result) return result
+    return on
+      ? 'The dispatch is on: the control loop hands out the tasks to do, and notices tell you what it did.'
+      : 'The dispatch is off: tasks already handed out go on, nothing new is handed out.'
   }
 
   private overview(state: PoolState): string {
@@ -349,6 +368,8 @@ export class PoolOrchestrator {
         merged: live.filter(t => t.task?.state === 'done' && landed(t.task)).length,
         // Finished branches not in main yet, in the order task_merge takes them.
         toMerge: mergeQueue(state),
+        // On autopilot: the machines that take the work, and whether the control loop hands it out.
+        ...(state.machines?.length ? { machines: machinesView(state), dispatch: dispatching(state) ? 'on' : 'off' } : {}),
       },
       null,
       1,
@@ -594,7 +615,10 @@ export class PoolOrchestrator {
           ])
         }
       }
-      if (ACTIVE.has(task.state) && task.assignee) {
+      // On autopilot, the control loop gives a machine's task that stopped or lost its session to another machine, and
+      // says so: the orchestrator is not asked to reassign it.
+      const looped = Boolean(task.machine) && dispatching(state)
+      if (ACTIVE.has(task.state) && task.assignee && !looped) {
         const session = task.assignee.session
         if (!holder)
           notices.push([`left/${item.id}/${session}`, `The session holding ${item.id} (${task.title}) left the pool: reassign it.`])
@@ -614,7 +638,7 @@ export class PoolOrchestrator {
           `${who}'s 5-hour window ${short} while it holds ${item.id} (${task.title}). It was told to hand it over: reassign it with task_reassign once it has, or now.`,
         ])
       }
-      if (task.state === 'in_progress' && now - Date.parse(item.updatedAt) > this.stallMs) {
+      if (task.state === 'in_progress' && !looped && now - Date.parse(item.updatedAt) > this.stallMs) {
         // Once per revision: it is said again only if the task moves, then stops again.
         notices.push([
           `stalled/${item.id}/${item.rev}`,
@@ -622,12 +646,27 @@ export class PoolOrchestrator {
         ])
       }
     }
+    notices.push(...this.loopNotices(poolId, state, first))
     for (const [key, text] of notices) {
       if (this.told.has(`${poolId}/${key}`)) continue
       this.told.add(`${poolId}/${key}`)
       this.notify(text)
     }
     this.clock(poolId, state, now)
+  }
+
+  /**
+   * What the control loop of the orchestrator machine did, from its events: only its own, as the relay attests their
+   * machine, and only those that came since the orchestrator started watching.
+   */
+  private loopNotices(poolId: string, state: PoolState, first: boolean): [key: string, text: string][] {
+    const lead = state.orchestratorMachine
+    const since = this.loopSeen.get(poolId) ?? Number.POSITIVE_INFINITY
+    this.loopSeen.set(poolId, state.events.at(-1)?.seq ?? 0)
+    if (first || !lead) return []
+    return state.events
+      .filter(e => e.seq > since && e.machine === lead.machine && e.account === lead.account && LOOP_EVENTS.has(e.body?.kind ?? ''))
+      .map(e => [`loop/${e.seq}`, e.body?.text ?? e.body?.kind ?? ''] as [string, string])
   }
 
   /**

@@ -114,7 +114,7 @@ function worker(home: string) {
     id => work?.changed(id),
     join(home, 'pm.json'),
   )
-  work = new PoolWorker(pools, accountKey, build => connection.post(build), { machineName: 'Studio', home, launch, prepare, runs, end })
+  work = new PoolWorker(pools, { machineName: 'Studio', home, launch, prepare, runs, end })
   connection.connect()
   return { connection, pools, work }
 }

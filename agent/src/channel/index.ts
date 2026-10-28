@@ -92,10 +92,15 @@ export async function runChannel() {
   const follow = (link: SessionLink) => {
     log('following session', link)
     conversation?.stop()
-    conversation = new Conversation(link, config.machine, config.key, canChat, build => relay.post(build), {
-      deliver: text => void mcp.inject(text, 'pool'),
-      toolsChanged: () => void mcp.toolsChanged(),
-    })
+    conversation = new Conversation(
+      link,
+      config.machine,
+      config.key,
+      canChat,
+      build => relay.post(build),
+      { deliver: text => void mcp.inject(text, 'pool'), toolsChanged: () => void mcp.toolsChanged() },
+      config.machineId,
+    )
     conversation.start()
   }
 

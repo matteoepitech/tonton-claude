@@ -2,8 +2,9 @@
 
 One session of a pool is its orchestrator: an owner or an admin of the pool chooses it, from the app or the website,
 and the relay keeps the choice (`orchestrator` in the pool, in clear like every id). Its Claude gets the orchestrator's
-tools (`pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign`, `review_assign`, `task_merge`) and the
-guide below, once, when its session becomes the orchestrator. See [pools.md](pools.md) for the rest.
+tools (`pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign`, `review_assign`, `task_merge`,
+`dispatch_start`, `dispatch_stop`) and the guide below, once, when its session becomes the orchestrator. See
+[pools.md](pools.md) for the rest, and Autopilot below for pools whose machines take the work.
 
 ## What it is told
 
@@ -102,11 +103,48 @@ Tasks end as pushed branches. The orchestrator brings them into main with `task_
 - **What shows.** The tool's answer, in the orchestrator's conversation, says what happened, what it frees and what is
   next. Each attempt posts an event for the activity and the task's history: `merged`, `pr_opened`, `merge_conflict`,
   `merge_failed` or `main_broken`.
-- **For a loop.** The autopilot's control loop (#253) can do the same in code: `mergeQueue(state)` lists what is ready,
-  and `PoolMerger.merge()` merges one with the same checks and records it the same way.
+- **Not the loop's.** The autopilot's control loop (see Autopilot) hands out work and never merges: merging stays with
+  the orchestrator, through its permission prompts. When every task is done, the loop's last notice says how many
+  finished branches wait in `mergeQueue(state)`.
 
 The task keeps what happened in `merge`, sealed with the rest: `state` (`merged`, `pr`, `conflict` or `failed`), `at`,
 `commit`, `url`, `files`, `command`, `output` (the end of it) and `fix`.
+
+## Autopilot
+
+When the admin makes one of their own pool machines the orchestrator machine (issue #253), its background
+service starts the orchestrator session itself, Claude Code in its clone of the repository (`<workdir>/repo`), and the
+relay makes that session the orchestrator. The machine's service also runs the control loop
+(`agent/src/service/pool-loop.ts`), which hands out the tasks while the dispatch is on. The orchestrator gets this on
+top of its guide, in the same `<pool kind="role">` (`AUTOPILOT_GUIDE` in `agent/src/channel/pool-dispatch.ts`):
+
+```
+This pool runs on autopilot: members put whole machines in it, and the control loop of your machine hands the tasks out.
+1. pool_overview lists the machines: their tool, how many sessions each runs, its mode, its areas and what it runs now.
+2. Plan with plan_create and create the tasks with task_create, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines.
+3. When the user says go, call dispatch_start; when they say pause, dispatch_stop. The loop hands each task whose dependencies are done to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most.
+4. Notices tell you what the loop did. Answer the blocked tasks, merge the finished branches with task_merge, and re-plan when tasks fail.
+5. The user talks to you here: answer their questions about the pool from pool_overview.
+```
+
+- **The dispatch.** `dispatch_start` and `dispatch_stop` set the pool's sealed `PoolDispatch` (a revision, like the
+  rules), which the owner and admins can also set from the website. Starting is refused while the pool has no machine
+  or no orchestrator machine, and while it is paused; stopping always works.
+- **The loop's rules.** The same as the tools', for machines instead of sessions: a machine takes as many tasks as its
+  capacity; by its tool or its owner's `takes`, simple tasks go to OpenCode machines first and large ones never to a
+  machine that takes simple ones only; the task's area first; a task waits for its `depends_on`; a Claude Code machine
+  whose account's plan runs out before the task would be done does not get it; nothing goes past a member's or the
+  pool's budget. One change at a time, over the task's revision.
+- **What it gives back.** A task whose machine left the pool or stayed offline for two minutes, that its machine did
+  not start within fifteen minutes (cloning a large repository comes first), whose session left the pool, or that has
+  not moved for 30 minutes while its session did no work either goes back to the board with why, and is handed out
+  again. Each time counts in its `attempts`: at the third it is blocked, and the
+  orchestrator hears of it like any blocked task. While the dispatch is on, the orchestrator is not asked to reassign a
+  machine's task that stalled or lost its session: the loop does it.
+- **Notices.** What the loop does it posts as events of its machine, which the relay attests: `dispatched`, `retried`,
+  `dispatch_waiting` (why the tasks to do wait, said again only when that changes) and `dispatch_done`. The
+  orchestrator's agent tells each one to its Claude as a `<pool kind="notice" from="Tonton">`, so the admin's chat
+  shows it. When every task is done, the loop says so and stops the dispatch.
 
 ## Hackathons
 

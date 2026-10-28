@@ -56,6 +56,17 @@ const call = async (name: string, args: Record<string, unknown>) => {
 claude.fallbackNotificationHandler = async notification => {
   const content = String((notification.params as { content?: unknown } | undefined)?.content ?? '')
   note(`delivered: ${content}`)
+  // Made the orchestrator of a pool on autopilot: it plans one task and starts the dispatch, as the user asked.
+  if (/<pool kind="role"/.test(content) && content.includes('runs on autopilot')) {
+    await call('task_create', {
+      title: 'SECRET landing page',
+      goal: 'A landing page that says what the shop sells, with a form to sign up for the launch.',
+      criteria: ['the page says what the shop sells', 'the form takes an email'],
+      size: 'large',
+    })
+    await call('dispatch_start', { note: 'Go' })
+    return
+  }
   const task = /<pool kind="task"[^>]* task="([^"]+)"/.exec(content)?.[1]
   const branch = /Branch: (pool\/\S+)\./.exec(content)?.[1]
   if (!task) return
