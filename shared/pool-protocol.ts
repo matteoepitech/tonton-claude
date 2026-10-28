@@ -3,7 +3,7 @@
 // key, which the members share and the relay never gets. Mirrors app/Sources/TontonCore/Pool.swift.
 
 import type { PoolKeyWrapWire } from './pool-keys'
-import type { Sealed, SessionStatus } from './protocol'
+import type { PermissionRule, Sealed, SessionStatus } from './protocol'
 
 export type { PoolKeyWrapWire } from './pool-keys'
 
@@ -40,9 +40,17 @@ export interface PoolSessionProfile {
   project?: string
   machine?: string
   tool?: 'claude' | 'opencode'
-  /** The one session that plans and assigns. */
+  /** Older profiles only: the orchestrator is now the pool's `orchestrator` field, which only owners and admins set. */
   orchestrator?: boolean
+  /**
+   * The kind of task its owner gives it: `simple` (tests, docs, small fixes, boilerplate) or `large` (features that need
+   * broad context). Missing: by its tool, simple for OpenCode and large for Claude Code (docs/pools.md, Sizes of work).
+   */
+  takes?: PoolTaskSize
 }
+
+/** `simple`: tests, docs, small fixes, boilerplate, a page that follows an existing pattern. `large`: a feature, an area. */
+export type PoolTaskSize = 'simple' | 'large'
 
 export type PoolTaskState = 'todo' | 'assigned' | 'in_progress' | 'review' | 'done' | 'blocked'
 
@@ -56,13 +64,30 @@ export interface PoolTask {
   assignee?: { account: string; session: string }
   /** Ids of the tasks it waits for. */
   dependsOn?: string[]
+  /** `pool/<id>-<slug>`: the branch the work goes on, one per task. */
   branch?: string
   /** What was done, when it is done or blocked. */
   summary?: string
+  /** Missing: `large`. Decides who the orchestrator hands it to. */
+  size?: PoolTaskSize
+  /** The files and folders the task works in, from its area. */
+  paths?: string[]
 }
 
+/** An area of the code and the paths it owns, so two sessions rarely edit the same files. */
+export interface PoolArea {
+  name: string
+  paths: string[]
+}
+
+/** The sections of the shared notes, each replaced on its own. */
+export type PoolNotesSection = 'goal' | 'stack' | 'contracts' | 'decisions'
+
 export interface PoolNotes {
+  /** Free text, for anything the sections do not hold. Older clients read and write only this. */
   text: string
+  sections?: Partial<Record<PoolNotesSection, string>>
+  areas?: PoolArea[]
 }
 
 export interface PoolMessageBody {
@@ -84,16 +109,46 @@ export interface PoolEventBody {
   model?: string
   /** `usage` events. */
   usage?: PoolUsage
+  /** `spend` events: what the session spent since it joined the pool, as its agent counts it. */
+  costUSD?: number
+  seconds?: number
 }
 
-/** A pool session's spending and its account's windows, for the control center, the leaderboard and the orchestrator. */
+/**
+ * A pool session's tokens and its account's windows, for the control center, the leaderboard and the orchestrator. What
+ * it spent goes in `spend` events, which the budgets count.
+ */
 export interface PoolUsage {
-  /** Spent by the session so far, at list price. */
-  costUSD?: number
   tokens?: { input: number; output: number }
   /** Claude Code only: OpenCode has no plan limits. */
   fiveHour?: { usedPercent: number; resetsAt?: string }
   sevenDay?: { usedPercent: number; resetsAt?: string }
+}
+
+/**
+ * Auto-approve rules the owner or an admin proposes for the pool's sessions. A proposal does nothing by itself: each
+ * machine owner accepts it for a session, and only what they accepted reaches that session's agent (`PoolRulesAcceptance`).
+ */
+export interface PoolRules {
+  rules: PermissionRule[]
+  /** Why, in a few words. */
+  note?: string
+}
+
+/** A spending cap: cost at list price, time Claude worked. Missing: no cap. */
+export interface PoolBudget {
+  costUSD?: number
+  hours?: number
+}
+
+/** Set by the owner and admins. Each agent counts its own session and stops taking pool tasks past a cap. */
+export interface PoolBudgets {
+  /** The whole pool. */
+  pool?: PoolBudget
+  /** Each member, all its sessions together, unless `members` names it. */
+  member?: PoolBudget
+  /** One member, by account. */
+  members?: Record<string, PoolBudget>
 }
 
 // Sealed with the account key: what a member keeps for itself.
@@ -118,6 +173,19 @@ export interface PoolSessionOrder {
    * Missing: ask first.
    */
   autoStart?: boolean
+}
+
+/**
+ * From a machine owner's app to its session's agent: apply these pool rules, exactly these, in this session. The rules
+ * are copied in, so the relay can neither swap the proposal nor hand the acceptance to another session.
+ */
+export interface PoolRulesAcceptance {
+  poolId: string
+  sessionId: string
+  /** The revision of the proposal that was accepted. */
+  rev: number
+  rules: PermissionRule[]
+  issuedAt: string
 }
 
 // What the relay sends: clear fields and sealed blobs.
@@ -165,6 +233,8 @@ export interface PoolSessionWire {
   ready: boolean
   /** The session's status, which the relay sees anyway. Missing from older relays, and while it has none. */
   status?: SessionStatus
+  /** The revision of the pool rules its owner accepted for it, 0 for none. Missing from older relays. */
+  accepted?: number
 }
 
 /** A task: its revision goes up with every change, so two members never overwrite each other unknowingly. */
@@ -192,6 +262,39 @@ export interface PoolPostWire extends PoolAuthor {
   blob: Sealed
 }
 
+/** The pool's rules or budgets: who set them last, and the sealed `PoolRules` or `PoolBudgets`. Same shape as the notes. */
+export type PoolPolicyWire = PoolNotesWire
+
+/** What the audit log records. The relay writes it in clear: it already knows each of these, as it enforces them. */
+export type PoolAuditAction =
+  | 'created'
+  | 'joined'
+  | 'left'
+  | 'kicked'
+  | 'role'
+  | 'owner'
+  | 'rotated'
+  | 'invite_created'
+  | 'invite_revoked'
+  | 'session_joined'
+  | 'session_left'
+  | 'paused'
+  | 'resumed'
+  | 'stopped'
+  | 'rules_proposed'
+  | 'rules_accepted'
+  | 'budgets_set'
+
+/** One line of the audit log: who did what, to whom, when. */
+export interface PoolAuditWire extends PoolAuthor {
+  seq: number
+  ts: string
+  action: PoolAuditAction
+  target?: { account?: string; session?: string }
+  /** The revision of the rules or budgets, or the key version. */
+  rev?: number
+}
+
 export interface PoolSnapshot {
   id: string
   createdAt: string
@@ -207,6 +310,21 @@ export interface PoolSnapshot {
   events: PoolPostWire[]
   /** For the account it is sent to: its private key for the pool and the later pool keys wrapped for it. */
   own?: { secret: Sealed | null; wraps: PoolKeyWrapWire[] }
+  /** Missing from older relays. */
+  rules?: PoolPolicyWire | null
+  budgets?: PoolPolicyWire | null
+  /** The latest lines of the audit log, oldest first. */
+  audit?: PoolAuditWire[]
+  /**
+   * The one pool session that plans and assigns, set by an owner or an admin. In clear, like every id: the relay
+   * attests it, so no member can make its own session the orchestrator. Missing from older relays.
+   */
+  orchestrator?: PoolSessionRef | null
+}
+
+export interface PoolSessionRef {
+  account: string
+  session: string
 }
 
 // app or agent -> relay. Agents add their `sessionId`; the relay attaches the sender to what it keeps.
@@ -234,6 +352,18 @@ export type PoolAppMessage =
   /** Puts one of the account's sessions in the pool: `order` is a `PoolSessionOrder` sealed with the account key. */
   | { t: 'pool_join_session'; poolId: string; sessionId: string; order: Sealed; profile: Sealed }
   | { t: 'pool_leave_session'; poolId: string; sessionId: string }
+  /** Owner and admins: stop or let through the tasks and messages to the pool's sessions. */
+  | { t: 'pool_pause'; poolId: string; paused: boolean }
+  /** Owner and admins: stop one session's pool work, or every session's when `target` is null. A member stops its own. */
+  | { t: 'pool_stop'; poolId: string; target: { account: string; session: string } | null }
+  /** Owner and admins: a new sealed `PoolRules` proposal. `rev`: the revision it replaces, 0 at first. */
+  | { t: 'pool_rules'; poolId: string; rev: number; blob: Sealed }
+  /** Owner and admins: new sealed `PoolBudgets`. */
+  | { t: 'pool_budgets'; poolId: string; rev: number; blob: Sealed }
+  /** A machine owner, for one of its own sessions: a `PoolRulesAcceptance` sealed with its account key. */
+  | { t: 'pool_accept_rules'; poolId: string; sessionId: string; rev: number; acceptance: Sealed }
+  /** Owner and admins: make one of the pool's sessions the orchestrator, or none. */
+  | { t: 'pool_orchestrator'; poolId: string; orchestrator: PoolSessionRef | null }
 
 export type PoolAgentMessage =
   | (PoolPost & { sessionId: string })
@@ -251,19 +381,34 @@ export type PoolUpdate =
   | { t: 'pool_message'; poolId: string; message: PoolPostWire }
   | { t: 'pool_event'; poolId: string; event: PoolPostWire }
   | { t: 'pool_info'; poolId: string; info: Sealed; paused: boolean; keyVersion: number }
+  | { t: 'pool_orchestrator'; poolId: string; orchestrator: PoolSessionRef | null }
   | { t: 'pool_member'; poolId: string; member: PoolMemberWire }
   | { t: 'pool_member_left'; poolId: string; account: string }
   | { t: 'pool_session'; poolId: string; session: PoolSessionWire }
   | { t: 'pool_session_left'; poolId: string; account: string; session: string }
   /** To one member only: the pool key was rotated, here is the new version wrapped for it. */
   | { t: 'pool_key'; poolId: string; wrap: PoolKeyWrapWire }
+  | { t: 'pool_rules'; poolId: string; rules: PoolPolicyWire }
+  | { t: 'pool_budgets'; poolId: string; budgets: PoolPolicyWire }
+  | { t: 'pool_audit'; poolId: string; entry: PoolAuditWire }
   /** A change sent against an older revision was refused: here is the current one. */
-  | { t: 'pool_conflict'; poolId: string; kind: 'task' | 'notes'; id?: string; current: PoolTaskWire | PoolNotesWire | null }
+  | {
+      t: 'pool_conflict'
+      poolId: string
+      kind: 'task' | 'notes' | 'rules' | 'budgets'
+      id?: string
+      current: PoolTaskWire | PoolNotesWire | null
+    }
   /** The account left, or the pool is gone. */
   | { t: 'pool_removed'; poolId: string }
   | { t: 'pool_error'; poolId: string; message: string }
 
 // relay -> agent: a session joins or leaves a pool.
 export type PoolToAgent =
-  | { t: 'pool_join'; sessionId: string; poolId: string; order: Sealed }
+  /** `acceptance`: the pool rules its owner accepted for it, a sealed `PoolRulesAcceptance`, when there are. */
+  | { t: 'pool_join'; sessionId: string; poolId: string; order: Sealed; acceptance?: Sealed }
   | { t: 'pool_left'; sessionId: string; poolId: string }
+  /** The owner or an admin stopped this session's pool work: interrupt the turn. `pool_left` follows. */
+  | { t: 'pool_stop'; sessionId: string; poolId: string }
+  /** Its owner accepted the pool rules for it, or newer ones. */
+  | { t: 'pool_accept'; sessionId: string; poolId: string; acceptance: Sealed }

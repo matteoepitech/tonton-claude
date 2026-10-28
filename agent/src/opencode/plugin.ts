@@ -1,4 +1,4 @@
-import { POOL_TOOLS } from '../channel/pool-work'
+import { ALL_POOL_TOOLS } from '../channel/pool-work'
 import { FORWARDED_EVENTS } from './events'
 
 /** The file name in OpenCode's plugins folder. */
@@ -21,7 +21,7 @@ import { spawn } from 'node:child_process'
 
 const COMMAND = ${JSON.stringify(command)}
 const FORWARDED = new Set(${JSON.stringify(FORWARDED_EVENTS)})
-const POOL_TOOLS = ${JSON.stringify(POOL_TOOLS)}
+const POOL_TOOLS = ${JSON.stringify(ALL_POOL_TOOLS)}
 const TOOL_TIMEOUT_MS = 30000
 const state = (globalThis.__tontonClaude ??= { bridge: null, inputs: new Map(), client: null, calls: new Map(), nextCall: 0 })
 state.calls ??= new Map()

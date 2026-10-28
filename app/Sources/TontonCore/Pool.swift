@@ -78,7 +78,29 @@ struct PoolSessionOrder: Codable, Equatable {
     var autoStart: Bool? = nil
 }
 
+/// From a machine owner's app to its session's agent: apply these pool rules, exactly these, in this session.
+struct PoolRulesAcceptance: Codable, Equatable {
+    let poolId: String
+    let sessionId: String
+    /// The revision of the proposal that was accepted.
+    let rev: Int
+    let rules: [PermissionRule]
+    let issuedAt: String
+}
+
 extension SessionVault {
+    /// The pool rules the machine owner accepts for one of its sessions: only that session's agent opens it, and it
+    /// applies these rules, not whatever the pool proposes later.
+    public func sealPoolRulesAcceptance(
+        poolId: String, sessionId: String, rev: Int, rules: [PermissionRule], issuedAt: Date = Date()
+    )
+        throws -> String
+    {
+        let acceptance = PoolRulesAcceptance(
+            poolId: poolId, sessionId: sessionId, rev: rev, rules: rules, issuedAt: ISO8601DateFormatter().string(from: issuedAt))
+        return try E2E.seal(acceptance, with: key)
+    }
+
     /// The member's copy of the pool key, for the relay to keep.
     public func sealPoolKeyGrant(poolId: String, key poolKey: String, version: Int) throws -> String {
         try E2E.seal(PoolKeyGrant(poolId: poolId, key: poolKey, version: version), with: key)
@@ -133,15 +155,19 @@ public struct PoolSessionProfile: Codable, Equatable, Sendable {
     public var machine: String?
     /// `claude` or `opencode`.
     public var tool: String?
+    /// Older profiles only: the orchestrator is the pool's `orchestrator`, which only owners and admins set.
     public var orchestrator: Bool?
+    /// `simple` or `large`: the kind of task its owner gives it. Nil: by its tool (`PoolTaskSize.default(for:)`).
+    public var takes: String?
 
     public init(
         area: String? = nil, skills: String? = nil, repo: String? = nil, project: String? = nil, machine: String? = nil,
-        tool: String? = nil, orchestrator: Bool? = nil
+        tool: String? = nil, orchestrator: Bool? = nil, takes: String? = nil
     ) {
         (self.area, self.skills, self.repo, self.project, self.machine, self.tool, self.orchestrator) = (
             area, skills, repo, project, machine, tool, orchestrator
         )
+        self.takes = takes
     }
 }
 
@@ -162,12 +188,35 @@ public struct PoolTask: Codable, Equatable, Sendable {
     public var state: PoolTaskState
     public var assignee: PoolSessionRef?
     public var dependsOn: [String]?
+    /// `pool/<id>-<slug>`: one branch per task.
     public var branch: String?
     public var summary: String?
+    /// `simple` or `large`; nil: large.
+    public var size: String?
+    /// The files and folders it works in.
+    public var paths: [String]?
+
+    public init(
+        title: String, goal: String? = nil, criteria: [String]? = nil, area: String? = nil, state: PoolTaskState,
+        assignee: PoolSessionRef? = nil, dependsOn: [String]? = nil, branch: String? = nil, summary: String? = nil
+    ) {
+        (self.title, self.goal, self.criteria, self.area, self.state) = (title, goal, criteria, area, state)
+        (self.assignee, self.dependsOn, self.branch, self.summary) = (assignee, dependsOn, branch, summary)
+    }
+}
+
+/// An area of the code and the paths it owns.
+public struct PoolArea: Codable, Equatable, Sendable {
+    public var name: String
+    public var paths: [String]
+
 }
 
 public struct PoolNotes: Codable, Equatable, Sendable {
     public var text: String
+    /// `goal`, `stack`, `contracts`, `decisions`.
+    public var sections: [String: String]?
+    public var areas: [PoolArea]?
 }
 
 public struct PoolMessageBody: Codable, Equatable, Sendable {
@@ -189,9 +238,55 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
     public var model: String?
     /// `usage` events: what the session spent and how much of its account's windows is left.
     public var usage: PoolUsage?
+    /// `spend` events: what the session spent since it joined the pool.
+    public var costUSD: Double?
+    public var seconds: Double?
+
+    public init(
+        kind: String, text: String? = nil, taskId: String? = nil, tool: String? = nil, model: String? = nil,
+        costUSD: Double? = nil, seconds: Double? = nil
+    ) {
+        (self.kind, self.text, self.taskId, self.tool, self.model) = (kind, text, taskId, tool, model)
+        (self.costUSD, self.seconds) = (costUSD, seconds)
+    }
 }
 
-/// A pool session's spending and its account's windows, as its agent shares them with the pool (`usage` events).
+/// Auto-approve rules proposed to the pool's sessions. They apply only where a machine owner accepted them.
+public struct PoolRules: Codable, Equatable, Sendable {
+    public var rules: [PermissionRule]
+    public var note: String?
+
+    public init(rules: [PermissionRule], note: String? = nil) {
+        self.rules = rules
+        self.note = note
+    }
+}
+
+/// A spending cap: cost at list price, time Claude worked. Nil: no cap.
+public struct PoolBudget: Codable, Equatable, Sendable {
+    public var costUSD: Double?
+    public var hours: Double?
+
+    public init(costUSD: Double? = nil, hours: Double? = nil) {
+        self.costUSD = costUSD
+        self.hours = hours
+    }
+}
+
+public struct PoolBudgets: Codable, Equatable, Sendable {
+    public var pool: PoolBudget?
+    /// Each member, all its sessions together, unless `members` names it.
+    public var member: PoolBudget?
+    /// One member, by account.
+    public var members: [String: PoolBudget]?
+
+    public init(pool: PoolBudget? = nil, member: PoolBudget? = nil, members: [String: PoolBudget]? = nil) {
+        (self.pool, self.member, self.members) = (pool, member, members)
+    }
+}
+
+/// A pool session's tokens and its account's windows, as its agent shares them with the pool (`usage` events). What it
+/// spent comes in `spend` events, the ones the budgets count.
 public struct PoolUsage: Codable, Equatable, Sendable {
     public struct Tokens: Codable, Equatable, Sendable {
         public var input: Double
@@ -201,7 +296,6 @@ public struct PoolUsage: Codable, Equatable, Sendable {
         public var usedPercent: Double
         public var resetsAt: String?
     }
-    public var costUSD: Double?
     public var tokens: Tokens?
     /// Claude Code only: OpenCode has no plan limits.
     public var fiveHour: Window?
@@ -300,6 +394,8 @@ public struct PoolSessionWire: Codable, Equatable, Sendable {
     public let ready: Bool
     /// The session's status, which the relay sees anyway. Nil from older relays.
     public var status: String? = nil
+    /// The revision of the pool rules its owner accepted for it, 0 for none. Nil from older relays.
+    public let accepted: Int?
 }
 
 /// A task, the notes, a message or an event: who wrote it, when, and the sealed blob.
@@ -317,6 +413,22 @@ public struct PoolItemWire: Codable, Equatable, Sendable {
     public let blob: String
 }
 
+/// A line of the pool's audit log, which the relay writes in clear: who did what, to whom, when.
+public struct PoolAuditWire: Codable, Equatable, Sendable {
+    public struct Target: Codable, Equatable, Sendable {
+        public let account: String?
+        public let session: String?
+    }
+    public let seq: Int
+    public let ts: String
+    public let account: String
+    public let session: String?
+    /// `paused`, `stopped`, `kicked`, `rules_accepted`… (shared/pool-protocol.ts).
+    public let action: String
+    public let target: Target?
+    public let rev: Int?
+}
+
 public struct PoolSnapshot: Codable, Equatable, Sendable {
     public let id: String
     public let createdAt: String
@@ -331,6 +443,12 @@ public struct PoolSnapshot: Codable, Equatable, Sendable {
     public let events: [PoolItemWire]
     /// For the account it was sent to: its private key and the pool keys wrapped for it.
     public let own: PoolOwnKeys?
+    /// The proposed rules and the budgets, sealed `PoolRules` and `PoolBudgets`. Nil from older relays.
+    public let rules: PoolItemWire?
+    public let budgets: PoolItemWire?
+    public let audit: [PoolAuditWire]?
+    /// The session that plans and assigns, as an owner or an admin set it. Nil: none, or an older relay.
+    public let orchestrator: PoolSessionRef?
 }
 
 /// The pool messages of the relay, on the app's socket (`RelayMessage.pool`).
@@ -341,6 +459,8 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
     case message(poolId: String, PoolItemWire)
     case event(poolId: String, PoolItemWire)
     case info(poolId: String, info: String, paused: Bool, keyVersion: Int)
+    /// The pool's orchestrator changed; nil: none.
+    case orchestrator(poolId: String, PoolSessionRef?)
     case member(poolId: String, PoolMemberWire)
     case memberLeft(poolId: String, account: String)
     case session(poolId: String, PoolSessionWire)
@@ -349,11 +469,16 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
     case key(poolId: String, PoolKeyWrapWire)
     /// A change sent over an older revision was refused: the current one, if any.
     case conflict(poolId: String, kind: String, id: String?, current: PoolItemWire?)
+    case rules(poolId: String, PoolItemWire)
+    case budgets(poolId: String, PoolItemWire)
+    case audit(poolId: String, PoolAuditWire)
     case removed(poolId: String)
     case error(poolId: String, message: String)
 
     private enum Keys: String, CodingKey {
         case t, pool, poolId, task, notes, message, event, info, paused, keyVersion, member, account, session, kind, id, current, wrap
+        case rules, budgets, entry
+        case orchestrator
     }
 
     public init(from decoder: Decoder) throws {
@@ -372,6 +497,8 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
         case "pool_event": self = .event(poolId: poolId, try value(.event))
         case "pool_info":
             self = .info(poolId: poolId, info: try value(.info), paused: try value(.paused), keyVersion: try value(.keyVersion))
+        case "pool_orchestrator":
+            self = .orchestrator(poolId: poolId, try container.decodeIfPresent(PoolSessionRef.self, forKey: .orchestrator))
         case "pool_member": self = .member(poolId: poolId, try value(.member))
         case "pool_member_left": self = .memberLeft(poolId: poolId, account: try value(.account))
         case "pool_session": self = .session(poolId: poolId, try value(.session))
@@ -382,6 +509,9 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
                 poolId: poolId, kind: try value(.kind), id: try container.decodeIfPresent(String.self, forKey: .id),
                 current: try container.decodeIfPresent(PoolItemWire.self, forKey: .current))
         case "pool_key": self = .key(poolId: poolId, try value(.wrap))
+        case "pool_rules": self = .rules(poolId: poolId, try value(.rules))
+        case "pool_budgets": self = .budgets(poolId: poolId, try value(.budgets))
+        case "pool_audit": self = .audit(poolId: poolId, try value(.entry))
         case "pool_removed": self = .removed(poolId: poolId)
         case "pool_error": self = .error(poolId: poolId, message: try value(.message))
         default: throw DecodingError.dataCorruptedError(forKey: .t, in: container, debugDescription: "unknown pool message \(t)")

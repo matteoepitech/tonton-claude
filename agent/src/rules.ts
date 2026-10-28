@@ -120,6 +120,36 @@ export function addSessionRules(sessionId: string, rules: PermissionRule[], fold
 /** Once the session ends, nothing it allowed carries over. */
 export function clearSessionRules(sessionId: string, folder = paths.sessionRules) {
   rmSync(sessionRulesFile(sessionId, folder), { force: true })
+  rmSync(poolRulesFile(sessionId, folder), { force: true })
+}
+
+// MARK: Accepted from a pool
+
+/**
+ * The pool rules the machine owner accepted for this session (agent/src/channel/pool-safety.ts), next to the session's
+ * own: replaced as a whole whenever an acceptance changes, gone when the session leaves its pools or ends.
+ */
+const poolRulesFile = (sessionId: string, folder: string) => join(folder, `${sessionId.replace(/[^\w-]/g, '_')}.pool.json`)
+
+export function poolRules(sessionId: string, folder = paths.sessionRules): PermissionRule[] {
+  try {
+    const rules = JSON.parse(readFileSync(poolRulesFile(sessionId, folder), 'utf8'))
+    return Array.isArray(rules) ? rules.filter(isRule) : []
+  } catch {
+    return []
+  }
+}
+
+export function setPoolRules(sessionId: string, rules: PermissionRule[], folder = paths.sessionRules) {
+  const file = poolRulesFile(sessionId, folder)
+  if (!rules.length) {
+    rmSync(file, { force: true })
+    return
+  }
+  mkdirSync(folder, { recursive: true, mode: 0o700 })
+  const partial = `${file}.${process.pid}.tmp`
+  writeFileSync(partial, JSON.stringify(rules.filter(isRule).slice(0, MAX_RULES)), { mode: 0o600 })
+  renameSync(partial, file)
 }
 
 function isRule(rule: unknown): rule is PermissionRule {

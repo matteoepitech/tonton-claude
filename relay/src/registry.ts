@@ -188,6 +188,43 @@ const MIGRATIONS = [
      PRIMARY KEY (pool_id, account_id, version),
      FOREIGN KEY (pool_id, account_id) REFERENCES pool_members(pool_id, account_id) ON DELETE CASCADE
    );`,
+  // The pool session that plans and assigns (docs/pools.md, The orchestrator): ids in clear, set by owners and admins.
+  `ALTER TABLE pools ADD COLUMN orchestrator_account TEXT;
+   ALTER TABLE pools ADD COLUMN orchestrator_session TEXT;`,
+  // Pool safety (relay/src/pool-safety.ts): the rules and budgets the owner and admins set, sealed with the pool key;
+  // each machine owner's acceptance of the rules for one of its sessions, sealed with its account key; and the audit
+  // log, in clear, of what the relay enforced.
+  `CREATE TABLE pool_policies (
+     pool_id TEXT NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL,
+     rev INTEGER NOT NULL,
+     updated_at TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (pool_id, kind)
+   );
+   CREATE TABLE pool_acceptances (
+     pool_id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT NOT NULL,
+     rev INTEGER NOT NULL,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (pool_id, account_id, session_id),
+     FOREIGN KEY (pool_id, account_id, session_id) REFERENCES pool_sessions(pool_id, account_id, session_id) ON DELETE CASCADE
+   );
+   CREATE TABLE pool_audit (
+     seq INTEGER PRIMARY KEY,
+     pool_id TEXT NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
+     ts TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT,
+     action TEXT NOT NULL,
+     target_account TEXT,
+     target_session TEXT,
+     rev INTEGER
+   );
+   CREATE INDEX pool_audit_pool ON pool_audit(pool_id, seq);`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */

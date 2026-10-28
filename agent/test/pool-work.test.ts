@@ -109,11 +109,13 @@ async function join(autoStart = false) {
         account: 'acc_ana',
         session: 'ses_ana',
         joinedAt: 'now',
-        profile: await vault.seal({ area: 'front', orchestrator: true }),
+        profile: await vault.seal({ area: 'front' }),
         online: true,
         ready: true,
       },
     ],
+    // The relay says who the orchestrator is: an owner or an admin chose it.
+    orchestrator: { account: 'acc_ana', session: 'ses_ana' },
     events: [
       {
         id: 'e0',
@@ -183,6 +185,9 @@ test('pool_status shows every session with its member, area, coding tool and mod
   // This session posted what it runs on when it joined.
   expect(sessions[ME]).toMatchObject({ member: 'Me', area: 'back', tool: 'claude', model: 'claude-opus-5-5', you: true })
   expect(sessions.ses_ana).toMatchObject({ member: 'Ana', tool: 'opencode', model: 'gpt-5', orchestrator: true })
+  // With no choice in their profiles: OpenCode takes the simpler tasks, Claude Code the larger ones.
+  expect(sessions[ME].takes).toBe('large')
+  expect(sessions.ses_ana.takes).toBe('simple')
 })
 
 test('a task assigned to the session is delivered once, marked, and says to ask the user first by default', async () => {
@@ -292,7 +297,7 @@ test('what other members write cannot close or forge the envelope', () => {
 })
 
 test('the session shares its usage with the pool, sealed, and again only when it changes enough to show', async () => {
-  usage = { costUSD: 1.234, tokens: { input: 52_000, output: 3000 }, fiveHour: { usedPercent: 40 } }
+  usage = { tokens: { input: 52_000, output: 3000 }, fiveHour: { usedPercent: 40 } }
   await join()
   const usageEvents = async () => {
     const opened: PoolEventBody[] = []
@@ -304,8 +309,8 @@ test('the session shares its usage with the pool, sealed, and again only when it
     return opened
   }
   expect(await usageEvents()).toEqual([{ kind: 'usage', usage }])
-  // A fraction of a cent and a few tokens more: the pool would show the same, nothing is posted.
-  usage = { costUSD: 1.2341, tokens: { input: 52_100, output: 3000 }, fiveHour: { usedPercent: 40.2 } }
+  // A few tokens more: the pool would show the same, nothing is posted.
+  usage = { tokens: { input: 52_100, output: 3000 }, fiveHour: { usedPercent: 40.2 } }
   work.descriptionChanged()
   await settle()
   expect(await usageEvents()).toHaveLength(1)

@@ -32,6 +32,7 @@ export async function poolRoute(ctx: RelayContext, req: Request, path: string, a
   if (rest === '/leave' && req.method === 'POST') {
     if (role === 'owner') return fail(403, 'The owner cannot leave: delete the pool instead.')
     ctx.leavePool(poolId, accountId)
+    ctx.auditPool(poolId, { accountId, sessionId: null }, 'left')
     return json({ ok: true })
   }
   if (rest === '/members' && req.method === 'GET') return json(ctx.pools.members(poolId))
@@ -41,10 +42,12 @@ export async function poolRoute(ctx: RelayContext, req: Request, path: string, a
   if (rest === '/owner' && req.method === 'POST') return transferOwner(ctx, req, poolId, accountId, role)
   if (rest?.startsWith('/invites')) {
     if (role !== 'owner' && role !== 'admin') return fail(403, 'Only the owner and admins manage invites.')
-    if (!inviteId && req.method === 'POST') return createInvite(ctx, req, poolId, role)
+    if (!inviteId && req.method === 'POST') return createInvite(ctx, req, poolId, accountId, role)
     if (!inviteId && req.method === 'GET') return json(ctx.pools.invites(poolId))
     if (inviteId && req.method === 'DELETE') {
-      return ctx.pools.revokeInvite(poolId, inviteId) ? json({ ok: true }) : fail(404, 'No such invite.')
+      if (!ctx.pools.revokeInvite(poolId, inviteId)) return fail(404, 'No such invite.')
+      ctx.auditPool(poolId, { accountId, sessionId: null }, 'invite_revoked')
+      return json({ ok: true })
     }
   }
   return fail(404, 'not found')
@@ -70,10 +73,11 @@ async function createPool(ctx: RelayContext, req: Request, accountId: string): P
   if (profile !== null && !isSealed(profile, MAX_POOL_INFO_BYTES)) return fail(400, 'Bad request.')
   const pool = ctx.pools.create(accountId, body.id, body.info, body.key, profile, keys)
   if (!pool) return fail(409, 'This id is taken, or this account is in as many pools as it may be.')
+  ctx.auditPool(pool.id, { accountId, sessionId: null }, 'created')
   return json({ pool })
 }
 
-async function createInvite(ctx: RelayContext, req: Request, poolId: string, role: PoolRole): Promise<Response> {
+async function createInvite(ctx: RelayContext, req: Request, poolId: string, accountId: string, role: PoolRole): Promise<Response> {
   const body = await readJson<{ uses?: unknown; hours?: unknown; role?: unknown }>(req, 1024)
   const { uses, hours } = body ?? {}
   const invited = body?.role ?? 'member'
@@ -84,6 +88,7 @@ async function createInvite(ctx: RelayContext, req: Request, poolId: string, rol
   if (invited === 'admin' && role !== 'owner') return fail(403, 'Only the owner invites admins.')
   const invite = ctx.pools.createInvite(poolId, invited, uses, Date.now() + hours * 3_600_000)
   if (!invite) return fail(403, 'This pool has as many open invites as it may. Revoke one first.')
+  ctx.auditPool(poolId, { accountId, sessionId: null }, 'invite_created')
   return json(invite)
 }
 
@@ -106,6 +111,7 @@ async function joinPool(ctx: RelayContext, req: Request, accountId: string, ip: 
   if (joined.fresh) {
     const member = ctx.pools.member(joined.poolId, accountId)
     if (member) ctx.broadcastPool(joined.poolId, { t: 'pool_member', poolId: joined.poolId, member })
+    ctx.auditPool(joined.poolId, { accountId, sessionId: null }, 'joined')
   }
   return json({ pool: ctx.pools.summary(joined.poolId, accountId) })
 }
@@ -130,6 +136,7 @@ async function setRole(
   ctx.pools.setRole(poolId, target, role)
   const member = ctx.pools.member(poolId, target)
   if (member) ctx.broadcastPool(poolId, { t: 'pool_member', poolId, member })
+  ctx.auditPool(poolId, { accountId: actor, sessionId: null }, 'role', { account: target })
   return json({ ok: true })
 }
 
@@ -176,6 +183,9 @@ async function rotate(
     return fail(result.reason === 'version' ? 409 : 400, why)
   }
   ctx.poolKeyRotated(poolId, version, result.remaining, kick && result.kicked ? { account: kick, sessions: result.kicked } : null)
+  const author = { accountId: actor, sessionId: null }
+  if (kick) ctx.auditPool(poolId, author, 'kicked', { account: kick }, version)
+  else ctx.auditPool(poolId, author, 'rotated', {}, version)
   return json({ ok: true, keyVersion: version })
 }
 
@@ -188,6 +198,7 @@ async function transferOwner(ctx: RelayContext, req: Request, poolId: string, ac
     const member = ctx.pools.member(poolId, account)
     if (member) ctx.broadcastPool(poolId, { t: 'pool_member', poolId, member })
   }
+  ctx.auditPool(poolId, { accountId: actor, sessionId: null }, 'owner', { account: body.account })
   return json({ ok: true })
 }
 

@@ -30,8 +30,10 @@ export interface SessionCard {
   task: { id: string; title: string; state: PoolTaskState } | null
   /** The last thing it wrote to the pool or moved, ISO. */
   lastActivity: string | null
-  /** As its agent last shared it. */
+  /** Tokens and its account's windows, as its agent last shared them (`usage` events). */
   usage: PoolUsage | null
+  /** What it spent since it joined, at list price, as its agent counts it for the budgets (`spend` events). */
+  costUSD: number | null
 }
 
 export interface MemberCard {
@@ -67,6 +69,7 @@ function sessionCard(state: PoolState, session: PoolSession): SessionCard {
   const { account } = session
   const described = latestFrom(state.events, 'session', account, session.session)
   const usage = latestFrom(state.events, 'usage', account, session.session)?.body?.usage ?? null
+  const costUSD = latestFrom(state.events, 'spend', account, session.session)?.body?.costUSD ?? null
   const mine = state.tasks.filter(item => item.task?.assignee?.account === account && item.task.assignee.session === session.session)
   let task: SessionCard['task'] = null
   for (const wanted of TASK_ORDER) {
@@ -90,7 +93,7 @@ function sessionCard(state: PoolState, session: PoolSession): SessionCard {
     area: session.profile?.area,
     tool: described?.body?.tool ?? session.profile?.tool ?? 'claude',
     model: described?.body?.model,
-    orchestrator: session.profile?.orchestrator === true,
+    orchestrator: state.orchestrator?.account === account && state.orchestrator.session === session.session,
     online: session.online,
     ready: session.ready,
     status: session.status,
@@ -98,6 +101,7 @@ function sessionCard(state: PoolState, session: PoolSession): SessionCard {
     task,
     lastActivity,
     usage,
+    costUSD,
   }
 }
 
@@ -241,7 +245,7 @@ const EVENT_LABELS: Record<string, string> = {
 }
 
 /** Kinds kept out of the activity: they say how a session is doing, not what happened. */
-const QUIET_KINDS = new Set(['usage'])
+const QUIET_KINDS = new Set(['usage', 'spend'])
 
 export const eventLabel = (kind: string): string => EVENT_LABELS[kind] ?? kind.replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase())
 
@@ -445,18 +449,25 @@ export function leaderboard(state: PoolState, period: LeaderPeriod, now = new Da
     if (finished.startedAt) credited.secondsWorked += Math.max(0, (Date.parse(finished.at) - Date.parse(finished.startedAt)) / 1000)
   }
 
-  // Spending is a running total per session: the period's share is the latest reading less the one before it began.
+  // Spending and tokens are running totals per session: the period's share is the latest reading less the one before it
+  // began. The cost comes from `spend` events, the ones the budgets count, the tokens from `usage` events.
   for (const current of rows.values()) {
+    const mine = (kind: string) =>
+      ordered.filter(event => event.body?.kind === kind && event.account === current.account && event.session === current.session)
+    let spentBefore: number | undefined
+    let spent: number | undefined
+    for (const event of mine('spend')) {
+      if (start && event.ts < start) spentBefore = event.body?.costUSD
+      else spent = event.body?.costUSD
+    }
+    if (spent !== undefined) current.costUSD = Math.max(0, spent - (spentBefore ?? 0))
     let before: PoolUsage | undefined
     let latest: PoolUsage | undefined
-    for (const event of ordered) {
-      if (event.body?.kind !== 'usage' || event.account !== current.account || event.session !== current.session || !event.body.usage)
-        continue
-      if (start && event.ts < start) before = event.body.usage
-      else latest = event.body.usage
+    for (const event of mine('usage')) {
+      if (start && event.ts < start) before = event.body?.usage
+      else latest = event.body?.usage
     }
     if (!latest) continue
-    if (latest.costUSD !== undefined) current.costUSD = Math.max(0, latest.costUSD - (before?.costUSD ?? 0))
     if (latest.tokens) {
       const total = latest.tokens.input + latest.tokens.output
       const earlier = before?.tokens ? before.tokens.input + before.tokens.output : 0

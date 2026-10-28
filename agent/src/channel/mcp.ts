@@ -4,7 +4,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { z } from 'zod'
 import type { PermissionDetail } from '../../../shared/protocol'
 import { VERSION } from '../config'
-import { POOL_INSTRUCTIONS, type PoolToolSpec } from './pool-work'
+import { ALL_POOL_TOOLS, POOL_INSTRUCTIONS, type PoolToolSpec } from './pool-work'
 
 const INSTRUCTIONS = [
   'The user can also drive this session remotely from Tonton Claude, a macOS notch app.',
@@ -59,8 +59,11 @@ export class ChannelServer {
       tools: tools.list().map(spec => ({ name: spec.name, description: spec.description, inputSchema: inputSchema(spec) })),
     }))
     this.server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
-      if (!tools.list().some(spec => spec.name === params.name)) {
-        return { content: [{ type: 'text', text: 'This session is not in a pool.' }], isError: true }
+      const listed = tools.list()
+      if (!listed.length) return { content: [{ type: 'text', text: 'This session is not in a pool.' }], isError: true }
+      // An orchestrator's tool called by another session gets its answer from the pool tools: who may call it.
+      if (!listed.some(spec => spec.name === params.name) && !ALL_POOL_TOOLS.some(spec => spec.name === params.name)) {
+        return { content: [{ type: 'text', text: `No such tool: ${params.name}.` }], isError: true }
       }
       const text = await tools.call(params.name, (params.arguments ?? {}) as Record<string, unknown>)
       return { content: [{ type: 'text', text }] }

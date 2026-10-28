@@ -4,6 +4,8 @@
 import { isPoolRole } from './pool'
 import type { PoolKeyWrapWire } from './pool-keys'
 import type {
+  PoolAuditAction,
+  PoolAuditWire,
   PoolMemberWire,
   PoolNotesWire,
   PoolPostWire,
@@ -21,6 +23,11 @@ const isText = (value: unknown): value is string => typeof value === 'string'
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0
 const isNullableText = (value: unknown): value is string | null => value === null || isText(value)
 const isAuthor = (value: Fields) => isText(value.account) && isNullableText(value.session)
+const isSessionRef = (value: unknown): value is { account: string; session: string } =>
+  isFields(value) && isText(value.account) && isText(value.session)
+/** Null for none, undefined for a wrong shape. */
+const orchestrator = (value: unknown) =>
+  value === null ? null : isSessionRef(value) ? { account: value.account, session: value.session } : undefined
 
 const isMember = (value: unknown): value is PoolMemberWire =>
   isFields(value) &&
@@ -47,7 +54,8 @@ const isSession = (value: unknown): value is PoolSessionWire =>
   isText(value.joinedAt) &&
   isNullableText(value.profile) &&
   typeof value.online === 'boolean' &&
-  typeof value.ready === 'boolean'
+  typeof value.ready === 'boolean' &&
+  (value.accepted === undefined || isCount(value.accepted))
 
 const isTask = (value: unknown): value is PoolTaskWire =>
   isFields(value) && isText(value.id) && isCount(value.rev) && isText(value.updatedAt) && isText(value.blob) && isAuthor(value)
@@ -57,6 +65,51 @@ const isNotes = (value: unknown): value is PoolNotesWire =>
 
 const isPost = (value: unknown): value is PoolPostWire =>
   isFields(value) && isText(value.id) && isCount(value.seq) && isText(value.ts) && isText(value.blob) && isAuthor(value)
+
+const AUDIT_ACTIONS: ReadonlySet<string> = new Set<PoolAuditAction>([
+  'created',
+  'joined',
+  'left',
+  'kicked',
+  'role',
+  'owner',
+  'rotated',
+  'invite_created',
+  'invite_revoked',
+  'session_joined',
+  'session_left',
+  'paused',
+  'resumed',
+  'stopped',
+  'rules_proposed',
+  'rules_accepted',
+  'budgets_set',
+])
+
+/** A line of the audit log, its unknown fields dropped; an action this client does not know is left out. */
+function audit(value: unknown): PoolAuditWire | null {
+  if (!isFields(value) || !isCount(value.seq) || !isText(value.ts) || !isAuthor(value) || !AUDIT_ACTIONS.has(String(value.action))) {
+    return null
+  }
+  const target = isFields(value.target)
+    ? {
+        ...(isText(value.target.account) ? { account: value.target.account } : {}),
+        ...(isText(value.target.session) ? { session: value.target.session } : {}),
+      }
+    : undefined
+  return {
+    seq: value.seq,
+    ts: value.ts,
+    account: value.account as string,
+    session: value.session as string | null,
+    action: value.action as PoolAuditAction,
+    ...(target ? { target } : {}),
+    ...(isCount(value.rev) ? { rev: value.rev } : {}),
+  }
+}
+
+/** A policy of the snapshot: null when there is none, undefined when its shape is wrong or an older relay left it out. */
+const policy = (value: unknown) => (value === null ? null : isNotes(value) ? value : undefined)
 
 const list = <T>(value: unknown, check: (item: unknown) => item is T): T[] | null => (Array.isArray(value) ? value.filter(check) : null)
 
@@ -73,7 +126,29 @@ function snapshot(value: unknown): PoolSnapshot | null {
   if (notes === undefined) return null
   const { id, createdAt, paused, keyVersion, info } = value
   const mine = own(value.own)
-  return { id, createdAt, paused, keyVersion, info, members, sessions, tasks, notes, messages, events, ...(mine ? { own: mine } : {}) }
+  const rules = policy(value.rules)
+  const budgets = policy(value.budgets)
+  const log = Array.isArray(value.audit) ? value.audit.map(audit).filter((entry): entry is PoolAuditWire => entry !== null) : undefined
+  // Older relays send none, and a wrong shape is left out rather than trusted: the state reads either as no orchestrator.
+  const lead = orchestrator(value.orchestrator)
+  return {
+    id,
+    createdAt,
+    paused,
+    keyVersion,
+    info,
+    members,
+    sessions,
+    tasks,
+    notes,
+    messages,
+    events,
+    ...(mine ? { own: mine } : {}),
+    ...(rules !== undefined ? { rules } : {}),
+    ...(budgets !== undefined ? { budgets } : {}),
+    ...(log ? { audit: log } : {}),
+    ...(lead !== undefined ? { orchestrator: lead } : {}),
+  }
 }
 
 /** A pool message from the relay, or null for one this client does not know or with the wrong shape. */
@@ -98,6 +173,10 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
       return isText(value.info) && typeof value.paused === 'boolean' && isCount(value.keyVersion)
         ? { t: 'pool_info', poolId, info: value.info, paused: value.paused, keyVersion: value.keyVersion }
         : null
+    case 'pool_orchestrator': {
+      const lead = orchestrator(value.orchestrator)
+      return lead === undefined ? null : { t: 'pool_orchestrator', poolId, orchestrator: lead }
+    }
     case 'pool_member':
       return isMember(value.member) ? { t: 'pool_member', poolId, member: value.member } : null
     case 'pool_member_left':
@@ -108,8 +187,16 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
       return isText(value.account) && isText(value.session)
         ? { t: 'pool_session_left', poolId, account: value.account, session: value.session }
         : null
+    case 'pool_rules':
+      return isNotes(value.rules) ? { t: 'pool_rules', poolId, rules: value.rules } : null
+    case 'pool_budgets':
+      return isNotes(value.budgets) ? { t: 'pool_budgets', poolId, budgets: value.budgets } : null
+    case 'pool_audit': {
+      const entry = audit(value.entry)
+      return entry ? { t: 'pool_audit', poolId, entry } : null
+    }
     case 'pool_conflict': {
-      if (value.kind !== 'task' && value.kind !== 'notes') return null
+      if (value.kind !== 'task' && value.kind !== 'notes' && value.kind !== 'rules' && value.kind !== 'budgets') return null
       const current =
         value.current === null
           ? null
@@ -134,13 +221,22 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
   }
 }
 
-/** A join or leave order for an agent, or null. */
+/** A join, leave, stop or acceptance for an agent, or null. */
 export function parsePoolToAgent(value: unknown): PoolToAgent | null {
   if (!isFields(value) || !isText(value.sessionId) || !isText(value.poolId)) return null
-  if (value.t === 'pool_join')
-    return isText(value.order) ? { t: 'pool_join', sessionId: value.sessionId, poolId: value.poolId, order: value.order } : null
-  if (value.t === 'pool_left') return { t: 'pool_left', sessionId: value.sessionId, poolId: value.poolId }
+  const { sessionId, poolId } = value
+  if (value.t === 'pool_join') {
+    if (!isText(value.order)) return null
+    return { t: 'pool_join', sessionId, poolId, order: value.order, ...(isText(value.acceptance) ? { acceptance: value.acceptance } : {}) }
+  }
+  if (value.t === 'pool_left') return { t: 'pool_left', sessionId, poolId }
+  if (value.t === 'pool_stop') return { t: 'pool_stop', sessionId, poolId }
+  if (value.t === 'pool_accept')
+    return isText(value.acceptance) ? { t: 'pool_accept', sessionId, poolId, acceptance: value.acceptance } : null
   return null
 }
+
+/** The relay's messages for an agent that are orders to it rather than changes of a pool. */
+export const isPoolOrderType = (t: unknown): boolean => t === 'pool_join' || t === 'pool_left' || t === 'pool_stop' || t === 'pool_accept'
 
 export const isPoolMessageType = (t: unknown): boolean => typeof t === 'string' && t.startsWith('pool_')

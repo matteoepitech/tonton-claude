@@ -1483,12 +1483,32 @@
         }
       }
     },
+    "A member" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un membre"
+          }
+        }
+      }
+    },
     "A message from the notch waits this long before it goes, with an Undo button." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un message envoyé depuis l’encoche attend ce délai avant de partir, avec un bouton Annuler."
+          }
+        }
+      }
+    },
+    "A pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un pool"
           }
         }
       }
@@ -1579,6 +1599,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ARCHIVES"
+          }
+        }
+      }
+    },
+    "Accept" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accepter"
           }
         }
       }
@@ -1769,6 +1799,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Après 6 heures"
+          }
+        }
+      }
+    },
+    "Agent" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent"
           }
         }
       }
@@ -2019,6 +2059,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Archiver les conversations terminées"
+          }
+        }
+      }
+    },
+    "Area: front, back, infra…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Domaine : front, back, infra…"
           }
         }
       }
@@ -2661,6 +2711,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirmer"
+          }
+        }
+      }
+    },
+    "Connect to the relay to put a session in a pool." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous au relais pour mettre une session dans un pool."
           }
         }
       }
@@ -3651,6 +3711,16 @@
         }
       }
     },
+    "Gives it" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lui confier"
+          }
+        }
+      }
+    },
     "Glass" : {
       "comment" : "A macOS alert sound",
       "localizations" : {
@@ -3843,6 +3913,38 @@
         }
       }
     },
+    "I agree: start the pool task “%@” (%@). Claim it with task_claim, then work on it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I agree: start the pool task “%1$@” (%2$@). Claim it with task_claim, then work on it."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "D’accord : commence la tâche du pool « %1$@ » (%2$@). Prends-la avec `task_claim`, puis travaille dessus."
+          }
+        }
+      }
+    },
+    "I refused the pool task “%@” (%@): do not start it. It is back on the pool's board." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I refused the pool task “%1$@” (%2$@): do not start it. It is back on the pool's board."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "J’ai refusé la tâche du pool « %1$@ » (%2$@) : ne la commence pas. Elle est de nouveau sur le tableau du pool."
+          }
+        }
+      }
+    },
     "Icon" : {
       "localizations" : {
         "fr" : {
@@ -3875,6 +3977,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Image %1$lld sur %2$lld"
+          }
+        }
+      }
+    },
+    "In pool %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dans le pool %@"
           }
         }
       }
@@ -4025,12 +4137,52 @@
         }
       }
     },
+    "Its agent is offline." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son agent est hors ligne."
+          }
+        }
+      }
+    },
     "Its keys leave this Mac. The account stays on the relay: its recovery key adds it back." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ses clés quittent ce Mac. Le compte reste sur le relais : sa clé de récupération le rajoute."
+          }
+        }
+      }
+    },
+    "Join a pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre un pool"
+          }
+        }
+      }
+    },
+    "Join pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre le pool"
+          }
+        }
+      }
+    },
+    "Join pool…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre un pool…"
           }
         }
       }
@@ -4092,6 +4244,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Grande"
+          }
+        }
+      }
+    },
+    "Large tasks: features that need context" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grandes tâches : des fonctionnalités qui demandent du contexte"
           }
         }
       }
@@ -4182,6 +4344,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ouvrir à la connexion"
+          }
+        }
+      }
+    },
+    "Leave pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitter le pool"
           }
         }
       }
@@ -4352,6 +4524,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Message à Claude…  (↩ envoyer, ⌥↩ à la ligne)"
+          }
+        }
+      }
+    },
+    "Messages" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages"
           }
         }
       }
@@ -4727,6 +4909,16 @@
         }
       }
     },
+    "No task yet" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore de tâche"
+          }
+        }
+      }
+    },
     "None" : {
       "localizations" : {
         "fr" : {
@@ -4868,6 +5060,16 @@
         }
       }
     },
+    "Off: the notch asks you before the session starts a task the pool gives it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désactivé : l’encoche vous demande avant que la session commence une tâche que le pool lui donne."
+          }
+        }
+      }
+    },
     "Offline" : {
       "localizations" : {
         "fr" : {
@@ -4914,6 +5116,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En ligne"
+          }
+        }
+      }
+    },
+    "Only sessions an agent serves can join a pool: this one is read from this Mac's files." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seules les sessions servies par un agent peuvent rejoindre un pool : celle-ci est lue depuis les fichiers de ce Mac."
           }
         }
       }
@@ -5004,6 +5216,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ouvrir au survol"
+          }
+        }
+      }
+    },
+    "Open on the website" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir sur le site"
           }
         }
       }
@@ -5199,6 +5421,16 @@
         }
       }
     },
+    "Pick an area" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir un domaine"
+          }
+        }
+      }
+    },
     "Pick an icon and a color for %@" : {
       "localizations" : {
         "fr" : {
@@ -5256,6 +5488,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Joué avec la bannière."
+          }
+        }
+      }
+    },
+    "Pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pool"
+          }
+        }
+      }
+    },
+    "Pool %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pool %@"
+          }
+        }
+      }
+    },
+    "Pool task from %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tâche du pool de %@"
+          }
+        }
+      }
+    },
+    "Pool…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pool…"
           }
         }
       }
@@ -5328,6 +5600,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pincement"
+          }
+        }
+      }
+    },
+    "Put this session in a pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre cette session dans un pool"
           }
         }
       }
@@ -5528,6 +5810,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rétablir"
+          }
+        }
+      }
+    },
+    "Refuse" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refuser"
           }
         }
       }
@@ -5742,6 +6034,16 @@
         }
       }
     },
+    "Repository folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dossier du dépôt"
+          }
+        }
+      }
+    },
     "Reset" : {
       "localizations" : {
         "fr" : {
@@ -5828,6 +6130,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tout de suite"
+          }
+        }
+      }
+    },
+    "Role" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rôle"
           }
         }
       }
@@ -6490,6 +6802,16 @@
         }
       }
     },
+    "Simple tasks: tests, docs, small fixes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tâches simples : tests, docs, petits correctifs"
+          }
+        }
+      }
+    },
     "Size of the open notch." : {
       "localizations" : {
         "fr" : {
@@ -6744,6 +7066,16 @@
         }
       }
     },
+    "Start pool tasks right away" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commencer tout de suite les tâches du pool"
+          }
+        }
+      }
+    },
     "Starting" : {
       "localizations" : {
         "fr" : {
@@ -6906,6 +7238,26 @@
         }
       }
     },
+    "Takes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prend"
+          }
+        }
+      }
+    },
+    "Task" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tâche"
+          }
+        }
+      }
+    },
     "Tasks" : {
       "localizations" : {
         "fr" : {
@@ -7009,6 +7361,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Impossible de créer le code QR. Copiez plutôt la clé de récupération depuis Réglages › Relais."
+          }
+        }
+      }
+    },
+    "The agent on %@ is too old for pools. Update agent first." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’agent de %@ est trop ancien pour les pools. Mettez d’abord l’agent à jour."
           }
         }
       }
@@ -7193,6 +7555,16 @@
         }
       }
     },
+    "The session asks you first before it starts a pool task. Refuse puts it back on the pool's board." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La session vous demande avant de commencer une tâche du pool. Refuser la remet sur le tableau du pool."
+          }
+        }
+      }
+    },
     "The tool failed" : {
       "localizations" : {
         "fr" : {
@@ -7249,6 +7621,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ce Mac"
+          }
+        }
+      }
+    },
+    "This account is in no pool yet. Make one or join one on the relay's website." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce compte n’est encore dans aucun pool. Créez-en un ou rejoignez-en un sur le site du relais."
           }
         }
       }
@@ -7315,6 +7697,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le coût du mois a dépassé %1$@ : %2$@ jusqu’ici"
+          }
+        }
+      }
+    },
+    "This pool's key is missing." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La clé de ce pool manque."
+          }
+        }
+      }
+    },
+    "This relay is too old for pools: it needs 0.8.0 or later." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce relais est trop ancien pour les pools : il faut la version 0.8.0 ou plus récente."
           }
         }
       }
@@ -7782,6 +8184,16 @@
         }
       }
     },
+    "Waiting for its agent to take the order…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente de son agent, qui doit prendre l’ordre…"
+          }
+        }
+      }
+    },
     "Waiting for permission" : {
       "localizations" : {
         "fr" : {
@@ -7838,6 +8250,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ce que fait Claude sur chacune de vos machines."
+          }
+        }
+      }
+    },
+    "What it knows, in a few words" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce qu’elle sait, en quelques mots"
           }
         }
       }
@@ -7978,6 +8400,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Au travail"
+          }
+        }
+      }
+    },
+    "Working for the pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Travaille pour le pool"
           }
         }
       }
@@ -8278,6 +8710,16 @@
         }
       }
     },
+    "orchestrator" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "orchestrateur"
+          }
+        }
+      }
+    },
     "pattern, empty for any call" : {
       "localizations" : {
         "fr" : {
@@ -8294,6 +8736,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "demandes d’autorisation"
+          }
+        }
+      }
+    },
+    "pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pool"
           }
         }
       }

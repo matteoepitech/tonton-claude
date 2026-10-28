@@ -6,27 +6,40 @@ import { bytesToBase64Url } from './base64'
 import { type AccountKey, newAccountKey, open, seal } from './crypto'
 import { PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
 import type {
+  PoolArea,
+  PoolAuditWire,
   PoolAuthor,
+  PoolBudget,
+  PoolBudgets,
   PoolEventBody,
   PoolInfo,
   PoolKeyGrant,
   PoolMemberProfile,
   PoolMessageBody,
+  PoolNotes,
+  PoolNotesSection,
+  PoolPolicyWire,
   PoolRole,
+  PoolRules,
+  PoolRulesAcceptance,
   PoolSessionOrder,
   PoolSessionProfile,
+  PoolSessionRef,
   PoolSnapshot,
   PoolTask,
+  PoolTaskSize,
   PoolTaskState,
   PoolUpdate,
   PoolUsage,
 } from './pool-protocol'
-import type { Sealed, SessionStatus } from './protocol'
+import type { PermissionRule, Sealed, SessionStatus } from './protocol'
 
 const KEY = /^[A-Za-z0-9_-]{43}$/
 const TASK_STATES: readonly PoolTaskState[] = ['todo', 'assigned', 'in_progress', 'review', 'done', 'blocked']
 const ROLES: readonly PoolRole[] = ['owner', 'admin', 'member', 'viewer']
 const STATUSES: readonly SessionStatus[] = ['starting', 'working', 'waiting', 'permission', 'idle', 'error', 'ended', 'offline']
+export const POOL_NOTES_SECTIONS: readonly PoolNotesSection[] = ['goal', 'stack', 'contracts', 'decisions']
+const isSize = (value: unknown): value is PoolTaskSize => value === 'simple' || value === 'large'
 /** The longest text kept from a field another member wrote. */
 const MAX_TEXT = 64 * 1024
 
@@ -78,6 +91,39 @@ export async function openPoolSessionOrder(
   return { poolId, sessionId, key: order.key, version: order.version, issuedAt: order.issuedAt, ...autoStart }
 }
 
+/** What a machine owner accepted of the pool rules, for one of its sessions: only its agent opens it. */
+export function sealPoolRulesAcceptance(accountKey: AccountKey, acceptance: Omit<PoolRulesAcceptance, 'issuedAt'>, issuedAt = new Date()) {
+  const sealed: PoolRulesAcceptance = { ...acceptance, issuedAt: issuedAt.toISOString() }
+  return seal(accountKey, sealed)
+}
+
+/** The acceptance, as the session's agent checks it: sealed with the account key, for this session and this pool. */
+export async function openPoolRulesAcceptance(
+  accountKey: AccountKey,
+  sealed: Sealed,
+  sessionId: string,
+  poolId: string,
+): Promise<PoolRulesAcceptance | null> {
+  const acceptance = await open<Partial<PoolRulesAcceptance>>(accountKey, sealed).catch(() => null)
+  if (!acceptance || acceptance.sessionId !== sessionId || acceptance.poolId !== poolId) return null
+  if (!isCount(acceptance.rev) || typeof acceptance.issuedAt !== 'string' || !Array.isArray(acceptance.rules)) return null
+  return { poolId, sessionId, rev: acceptance.rev, rules: permissionRules(acceptance.rules), issuedAt: acceptance.issuedAt }
+}
+
+const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0
+const MAX_POOL_RULES = 100
+
+/** The rules of a list another member sealed, as the agent's matcher takes them (agent/src/rules.ts). */
+function permissionRules(value: unknown[]): PermissionRule[] {
+  return value
+    .map(fields)
+    .filter((rule): rule is Fields => rule !== null)
+    .filter(rule => typeof rule.tool === 'string' && rule.tool.length > 0 && rule.tool.length <= 128)
+    .filter(rule => rule.pattern === undefined || (typeof rule.pattern === 'string' && rule.pattern.length <= 1000))
+    .slice(0, MAX_POOL_RULES)
+    .map(rule => (typeof rule.pattern === 'string' ? { tool: rule.tool as string, pattern: rule.pattern } : { tool: rule.tool as string }))
+}
+
 const isVersion = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1
 
 // MARK: Payloads another member sealed
@@ -110,6 +156,7 @@ export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | n
   const f = fields(value)
   if (!f) return null
   const tool: PoolSessionProfile['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
+  const takes: PoolSessionProfile['takes'] = f.takes === 'simple' || f.takes === 'large' ? f.takes : undefined
   return defined({
     area: text(f.area),
     skills: text(f.skills),
@@ -118,7 +165,13 @@ export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | n
     machine: text(f.machine),
     tool,
     orchestrator: f.orchestrator === true ? true : undefined,
+    takes,
   })
+}
+
+/** What kind of task a session takes: its owner's choice, or by its tool when it made none. */
+export function poolTaskSize(profile: PoolSessionProfile | null, tool: 'claude' | 'opencode'): PoolTaskSize {
+  return profile?.takes ?? (tool === 'opencode' ? 'simple' : 'large')
 }
 
 export function decodePoolTask(value: unknown): PoolTask | null {
@@ -135,7 +188,28 @@ export function decodePoolTask(value: unknown): PoolTask | null {
     dependsOn: texts(f.dependsOn),
     branch: text(f.branch),
     summary: text(f.summary),
+    size: isSize(f.size) ? f.size : undefined,
+    paths: texts(f.paths),
   })
+}
+
+/** The shared notes: free text, the sections, the areas with the paths they own. */
+export function decodePoolNotes(value: unknown): PoolNotes | null {
+  const f = fields(value)
+  const body = text(f?.text)
+  if (!f || body === undefined) return null
+  const raw = fields(f.sections)
+  const sections = raw
+    ? defined(Object.fromEntries(POOL_NOTES_SECTIONS.map(name => [name, text(raw[name])])) as Partial<Record<PoolNotesSection, string>>)
+    : undefined
+  const areas = Array.isArray(f.areas)
+    ? f.areas.flatMap((area): PoolArea[] => {
+        const a = fields(area)
+        const name = text(a?.name)
+        return a && name !== undefined ? [{ name, paths: texts(a.paths) ?? [] }] : []
+      })
+    : undefined
+  return defined({ text: body, sections: sections && Object.keys(sections).length ? sections : undefined, areas })
 }
 
 export function decodePoolMessageBody(value: unknown): PoolMessageBody | null {
@@ -152,11 +226,51 @@ export function decodePoolEventBody(value: unknown): PoolEventBody | null {
   const kind = text(f?.kind)
   if (!f || kind === undefined) return null
   const tool: PoolEventBody['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
-  return defined({ kind, text: text(f.text), taskId: text(f.taskId), tool, model: text(f.model), usage: decodePoolUsage(f.usage) })
+  return defined({
+    kind,
+    text: text(f.text),
+    taskId: text(f.taskId),
+    tool,
+    model: text(f.model),
+    costUSD: amount(f.costUSD),
+    seconds: amount(f.seconds),
+    usage: decodePoolUsage(f.usage),
+  })
 }
 
 const amount = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+
+export function decodePoolRules(value: unknown): PoolRules | null {
+  const f = fields(value)
+  if (!f || !Array.isArray(f.rules)) return null
+  return defined({ rules: permissionRules(f.rules), note: text(f.note) })
+}
+
+function decodeBudget(value: unknown): PoolBudget | undefined {
+  const f = fields(value)
+  if (!f) return undefined
+  const budget = defined({ costUSD: amount(f.costUSD), hours: amount(f.hours) })
+  return budget.costUSD === undefined && budget.hours === undefined ? undefined : budget
+}
+
+export function decodePoolBudgets(value: unknown): PoolBudgets | null {
+  const f = fields(value)
+  if (!f) return null
+  const listed = fields(f.members)
+  const members = listed
+    ? Object.fromEntries(
+        Object.entries(listed)
+          .map(([account, budget]) => [account, decodeBudget(budget)] as const)
+          .filter((entry): entry is readonly [string, PoolBudget] => entry[1] !== undefined),
+      )
+    : undefined
+  return defined({
+    pool: decodeBudget(f.pool),
+    member: decodeBudget(f.member),
+    members: members && Object.keys(members).length ? members : undefined,
+  })
+}
 
 function decodeWindow(value: unknown): { usedPercent: number; resetsAt?: string } | undefined {
   const f = fields(value)
@@ -164,7 +278,7 @@ function decodeWindow(value: unknown): { usedPercent: number; resetsAt?: string 
   return f && usedPercent !== undefined ? defined({ usedPercent: Math.min(usedPercent, 100), resetsAt: text(f.resetsAt) }) : undefined
 }
 
-/** What a session spent, as its agent posted it: a field of the wrong type is left out. Undefined when nothing is left. */
+/** A session's tokens and windows, as its agent posted them: a field of the wrong type is left out. Undefined when nothing is left. */
 export function decodePoolUsage(value: unknown): PoolUsage | undefined {
   const f = fields(value)
   if (!f) return undefined
@@ -172,7 +286,6 @@ export function decodePoolUsage(value: unknown): PoolUsage | undefined {
   const input = amount(tokens?.input)
   const output = amount(tokens?.output)
   const usage = defined({
-    costUSD: amount(f.costUSD),
     tokens: input !== undefined && output !== undefined ? { input, output } : undefined,
     fiveHour: decodeWindow(f.fiveHour),
     sevenDay: decodeWindow(f.sevenDay),
@@ -202,6 +315,15 @@ export interface PoolSession {
   ready: boolean
   /** As the relay sees it; null from older relays. */
   status: SessionStatus | null
+  /** The revision of the pool rules its owner accepted for it, 0 for none. */
+  accepted: number
+}
+
+/** The pool's rules or budgets as last set, opened; `value` is null when the blob does not open. */
+export interface PoolPolicyItem<T> extends PoolAuthor {
+  rev: number
+  updatedAt: string
+  value: T | null
 }
 
 export interface PoolTaskItem extends PoolAuthor {
@@ -229,11 +351,19 @@ export interface PoolState {
   sessions: PoolSession[]
   /** In the order the relay listed them, then the order they were made. */
   tasks: PoolTaskItem[]
-  notes: (PoolAuthor & { rev: number; updatedAt: string; text: string | null }) | null
+  /** `text` is null when the notes do not open with the pool key. */
+  notes: (PoolAuthor & { rev: number; updatedAt: string; text: string | null } & Pick<PoolNotes, 'sections' | 'areas'>) | null
   messages: PoolPostItem<PoolMessageBody>[]
   events: PoolPostItem<PoolEventBody>[]
   /** This member's private key for the pool (sealed with its account key) and the pool keys wrapped for it. */
   own: { secret: Sealed | null; wraps: PoolKeyWrapWire[] }
+  /** Auto-approve rules proposed to the sessions: they apply where a machine owner accepted them. */
+  rules: PoolPolicyItem<PoolRules> | null
+  budgets: PoolPolicyItem<PoolBudgets> | null
+  /** The latest lines of the audit log, oldest first. */
+  audit: PoolAuditWire[]
+  /** The session that plans and assigns, as an owner or an admin set it on the relay. */
+  orchestrator: PoolSessionRef | null
 }
 
 /** How many messages and events a client keeps in memory. */
@@ -251,7 +381,19 @@ export class PoolVault {
     this.keyring = typeof key === 'string' ? new PoolKeyring(key, 1) : key
   }
 
-  seal(value: PoolInfo | PoolMemberProfile | PoolSessionProfile | PoolTask | { text: string } | PoolMessageBody | PoolEventBody) {
+  seal(
+    value:
+      | PoolInfo
+      | PoolMemberProfile
+      | PoolSessionProfile
+      | PoolTask
+      | PoolNotes
+      | { text: string }
+      | PoolMessageBody
+      | PoolEventBody
+      | PoolRules
+      | PoolBudgets,
+  ) {
     return this.keyring.seal(value)
   }
 
@@ -286,6 +428,10 @@ export class PoolVault {
       messages,
       events,
       own: pool.own ?? { secret: null, wraps: [] },
+      rules: pool.rules ? await this.policy(pool.rules, decodePoolRules) : null,
+      budgets: pool.budgets ? await this.policy(pool.budgets, decodePoolBudgets) : null,
+      audit: (pool.audit ?? []).slice(-KEPT_POSTS),
+      orchestrator: pool.orchestrator ?? null,
     }
   }
 
@@ -307,6 +453,8 @@ export class PoolVault {
         return { ...state, events: [...state.events, await this.post(update.event, decodePoolEventBody)].slice(-KEPT_POSTS) }
       case 'pool_info':
         return { ...state, info: await this.read(update.info, decodePoolInfo), paused: update.paused, keyVersion: update.keyVersion }
+      case 'pool_orchestrator':
+        return { ...state, orchestrator: update.orchestrator }
       case 'pool_member': {
         const member = await this.member(update.member)
         const others = state.members.filter(m => m.account !== member.account)
@@ -317,18 +465,33 @@ export class PoolVault {
           ...state,
           members: state.members.filter(m => m.account !== update.account),
           sessions: state.sessions.filter(s => s.account !== update.account),
+          // The relay drops an orchestrator whose session left: so does the client.
+          orchestrator: state.orchestrator?.account === update.account ? null : state.orchestrator,
         }
       case 'pool_session': {
         const session = await this.session(update.session)
         const others = state.sessions.filter(s => s.account !== session.account || s.session !== session.session)
         return { ...state, sessions: [...others, session] }
       }
-      case 'pool_session_left':
-        return { ...state, sessions: state.sessions.filter(s => s.account !== update.account || s.session !== update.session) }
+      case 'pool_session_left': {
+        const lead = state.orchestrator
+        const gone = lead?.account === update.account && lead.session === update.session
+        return {
+          ...state,
+          sessions: state.sessions.filter(s => s.account !== update.account || s.session !== update.session),
+          orchestrator: gone ? null : lead,
+        }
+      }
       case 'pool_key': {
         const others = state.own.wraps.filter(wrap => wrap.version !== update.wrap.version)
         return { ...state, own: { ...state.own, wraps: [...others, update.wrap].sort((a, b) => a.version - b.version) } }
       }
+      case 'pool_rules':
+        return { ...state, rules: await this.policy(update.rules, decodePoolRules) }
+      case 'pool_budgets':
+        return { ...state, budgets: await this.policy(update.budgets, decodePoolBudgets) }
+      case 'pool_audit':
+        return { ...state, audit: [...state.audit, update.entry].slice(-KEPT_POSTS) }
       case 'pool_removed':
         return null
       case 'pool_conflict':
@@ -356,8 +519,14 @@ export class PoolVault {
       online,
       ready,
       status: isSessionStatus(session.status) ? session.status : null,
+      accepted: session.accepted ?? 0,
       profile: await this.read(session.profile, decodePoolSessionProfile),
     }
+  }
+
+  private async policy<T>(policy: PoolPolicyWire, decode: (value: unknown) => T | null): Promise<PoolPolicyItem<T>> {
+    const { rev, updatedAt, account, session } = policy
+    return { rev, updatedAt, account, session, value: await this.read(policy.blob, decode) }
   }
 
   private async task(task: PoolSnapshot['tasks'][number]): Promise<PoolTaskItem> {
@@ -367,12 +536,67 @@ export class PoolVault {
 
   private async notes(notes: NonNullable<PoolSnapshot['notes']>) {
     const { rev, updatedAt, account, session } = notes
-    const opened = await this.read(notes.blob, value => text(fields(value)?.text) ?? null)
-    return { rev, updatedAt, account, session, text: opened }
+    const opened = await this.read(notes.blob, decodePoolNotes)
+    return { rev, updatedAt, account, session, text: opened?.text ?? null, sections: opened?.sections, areas: opened?.areas }
   }
 
   private async post<T>(post: PoolSnapshot['messages'][number], decode: (value: unknown) => T | null): Promise<PoolPostItem<T>> {
     const { id, seq, ts, account, session } = post
     return { id, seq, ts, account, session, body: await this.read(post.blob, decode) }
   }
+}
+
+// MARK: Budgets
+
+/** What a session spent in the pool, from the latest `spend` event its agent posted. */
+export interface PoolSpend {
+  costUSD: number
+  seconds: number
+}
+
+/** The latest spend of each session, by `account/session`. */
+export function poolSpend(state: Pick<PoolState, 'events'>): Map<string, PoolSpend & { account: string; session: string }> {
+  const spend = new Map<string, PoolSpend & { account: string; session: string }>()
+  for (const event of state.events) {
+    if (event.body?.kind !== 'spend' || !event.session) continue
+    spend.set(`${event.account}/${event.session}`, {
+      account: event.account,
+      session: event.session,
+      costUSD: event.body.costUSD ?? 0,
+      seconds: event.body.seconds ?? 0,
+    })
+  }
+  return spend
+}
+
+/** The cap that applies to one member: its own if the budgets name it, else the one for every member. */
+export function memberBudget(budgets: PoolBudgets | null | undefined, account: string): PoolBudget | undefined {
+  return budgets?.members?.[account] ?? budgets?.member
+}
+
+/**
+ * Why a member's sessions may take no more pool tasks, or null: past its own cap or past the pool's. `fresh` is what one
+ * session spent by now, newer than its last `spend` event: its own agent knows it before the pool does.
+ */
+export function overBudget(
+  state: Pick<PoolState, 'events' | 'budgets'>,
+  account: string,
+  fresh?: { session: string } & PoolSpend,
+): string | null {
+  const budgets = state.budgets?.value
+  if (!budgets) return null
+  const spend = poolSpend(state)
+  if (fresh) spend.set(`${account}/${fresh.session}`, { account, ...fresh })
+  const total = (list: PoolSpend[]) =>
+    list.reduce((sum, s) => ({ costUSD: sum.costUSD + s.costUSD, seconds: sum.seconds + s.seconds }), { costUSD: 0, seconds: 0 })
+  const past = (budget: PoolBudget | undefined, used: PoolSpend, whose: string): string | null => {
+    if (budget?.costUSD !== undefined && used.costUSD >= budget.costUSD) return `${whose} budget of $${budget.costUSD} is spent`
+    if (budget?.hours !== undefined && used.seconds >= budget.hours * 3600) return `${whose} budget of ${budget.hours} h is used up`
+    return null
+  }
+  const all = [...spend.values()]
+  return (
+    past(memberBudget(budgets, account), total(all.filter(s => s.account === account)), "This member's") ??
+    past(budgets.pool, total(all), "The pool's")
+  )
 }

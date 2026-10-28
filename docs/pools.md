@@ -32,20 +32,21 @@ minutes costs more than one session doing everything. The orchestrator:
 A pool mixes Claude Code and OpenCode sessions, with nothing to change on either side. They are not equally capable:
 OpenCode sessions take the simpler, well-bounded tasks (tests, docs, small fixes, boilerplate, a page following an
 existing pattern), and Claude Code sessions take the features that need broad context. `pool_status` shows each
-session's coding tool and model for that. The machine owner can override it per session in its profile.
+session's coding tool and model for that, and the kind of task it takes (`takes`: `simple` or `large`). The machine owner
+picks it when the session joins; without a choice it follows the tool. The orchestrator's tools apply these rules: [pool-orchestrator.md](pool-orchestrator.md).
 
 ## What the relay keeps
 
 | Store | Clear to the relay | Sealed with the pool key |
 |---|---|---|
-| Pools | id, owner, created at, paused or not, key version | name, goal |
+| Pools | id, owner, created at, paused or not, key version, the orchestrator's account and session | name, goal |
 | Members | account id, role, joined at | display name |
 | Member keys | account id, key version | the pool key it joined with, and its P-256 private key, both sealed with that member's account key; its public key, sealed with each version of the pool key it saw |
 | Key wraps | account id, version, who made it | a later version of the pool key, wrapped for that member (see Keys) |
 | Invites | id, role, token hash, uses left, expiry | — |
-| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order; its status, which the relay already sees for its own account and now shows the members | profile (area, skills, repo, orchestrator); the order, sealed with the account key |
-| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, state, assignee, dependencies, branch, summary |
-| Notes | revision, updated at, who changed them last | the notes |
+| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order; its status, which the relay already sees for its own account and now shows the members | profile (area, skills, repo, tool, kind of task); the order, sealed with the account key |
+| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, size, paths, state, assignee, dependencies, branch, summary |
+| Notes | revision, updated at, who changed them last | free text, the sections (goal, stack, contracts, decisions), the areas and the paths each owns |
 | Messages | id, order, sender account and session, time | text, and who it is for (a session, an area or everyone) |
 | Events | id, order, sender account and session, time | what happened (task moved, merge, blocker…), and each session's usage: cost, tokens, its account's windows |
 
@@ -76,6 +77,11 @@ The account's REST routes (`relay/src/pool-routes.ts`):
 | `POST /api/pools/<id>/members/<account>/kick` | owner, admins | Kicks a member and rotates the key in one step. Only the owner kicks admins; nobody kicks the owner |
 | `POST /api/pools/<id>/rotate` | owner, admins | Rotates the key without kicking, after someone left for instance |
 
+Owners and admins choose the pool's orchestrator with `pool_orchestrator` (a pool session, or none); everyone gets
+`pool_orchestrator`, and the snapshot carries it. It is in clear, like every id, so that the relay attests it: no member
+can make its own session the orchestrator by writing it in a sealed profile. An orchestrator whose session leaves the
+pool is no orchestrator any more.
+
 On the app socket (`relay/src/pool-sockets.ts`, types in `shared/pool-protocol.ts`): `pool_subscribe` answers with a
 `pool_snapshot` (the latest 200 messages and 500 events), then every change. Members post `pool_task`, `pool_notes`,
 `pool_message`, `pool_event`; viewers only read. `pool_join_session` puts one of the account's own sessions in the pool:
@@ -87,6 +93,11 @@ A member publishes its public key again with each new version of the pool key (`
 sessions' agents). After a rotation, each member left gets `pool_key` with its own wrap, and everyone gets `pool_info`
 with the new key version. The kicked member gets `pool_removed`: its apps stop following the pool and its sessions'
 agents get `pool_left`. Its app sockets stay open, since they carry its own sessions.
+
+The safety messages on the app socket (see Control): `pool_pause`, `pool_stop`, `pool_rules`, `pool_budgets` from the
+owner and admins, `pool_accept_rules` from a machine owner for its own session. Members get `pool_info` (paused or not),
+`pool_rules`, `pool_budgets` and `pool_audit`; a session's agent also gets `pool_stop` and `pool_accept`. A snapshot
+carries the rules, the budgets and the latest 300 lines of the audit log, and each session's accepted revision.
 
 ## Keys
 
@@ -130,8 +141,8 @@ The agent turns a pool session into tools, served by the MCP channel for Claude 
 | `pool_status` | all | The pool, its sessions, their areas, tasks and limits |
 | `pool_tasks`, `task_claim`, `task_update`, `task_done` | all | Read and move tasks; done means a summary, the branch, the tests run |
 | `pool_send`, `pool_inbox` | all | Messages to a session, a role or everyone |
-| `pool_notes_read`, `pool_notes_write` | all | The shared notes |
-| `plan_create`, `task_create`, `task_assign`, `task_reassign` | orchestrator | Plan and hand out work |
+| `pool_notes_read`, `pool_notes_write` | all | The shared notes, whole or one section at a time |
+| `pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign` | orchestrator | Plan and hand out work ([pool-orchestrator.md](pool-orchestrator.md)) |
 
 A task assigned to a session, or a message to it, arrives like a message from the notch, but marked as coming from the
 pool and from which member: `<pool kind="task" from="Ana · orchestrator" task="…">…</pool>`, or `kind="message"`. What
@@ -140,8 +151,10 @@ other members wrote cannot close that envelope or forge its attributes. The chan
 secrets outside the project, or acting on another repository.
 
 The machine owner chooses per session, in the join order sealed with the account key (`autoStart`): start pool tasks
-right away, or (the default) tell the user and wait until they agree. Until the notch has a button for it (#234), the
-user answers in the terminal or with a message from the notch.
+right away, or (the default) tell the user and wait until they agree. The notch shows such a task as a card in the
+session's conversation: **Accept** sends the session a message from its owner to claim it; **Refuse** puts the task back
+on the board (state `todo`, no assignee, a `refused` event) and tells the session to leave it. The user can also answer
+in the terminal.
 
 Details:
 
@@ -154,16 +167,65 @@ Details:
   says to read the task again. Claiming, blocking and finishing a task also post an event, for the timeline.
 - An agent sends 20 messages a minute at most, under the relay's own limit per member.
 - A paused pool still reads; nothing is posted to it and nothing is delivered from it.
-- Creating and assigning tasks is the orchestrator's (#221).
+- Creating and assigning tasks is the orchestrator's: Claude Code lists its tools to the orchestrator only, OpenCode's
+  plugin registers them for every session and they answer the others that only the orchestrator plans.
+- **Who hands out work.** A session takes a task assigned to it only from the orchestrator, from a person (a member's
+  app or the website), or from itself. The relay attests who wrote each task last, so another member's Claude cannot
+  hand work to the others' sessions.
+- **A branch per task.** The orchestrator's tasks get `pool/<id>-<slug>`. The task tells the session to pull main and
+  work there, never on main; the agent never runs git itself, Claude does through its permission prompts. `task_done`
+  needs the branch and the tests that pass (or "none" and why). A merge conflict is reported with `task_update`
+  (blocked), which tells the orchestrator.
+- **Shared notes.** Free text plus sections (goal, stack, contracts, decisions) and areas with the paths each owns.
+  `pool_notes_write` changes one part and keeps the others; each change posts a `notes_changed` event, so the timeline
+  says who changed what. A session is told, as a short `<pool kind="notes">` notice and never with the whole text, when
+  it joins a pool that has notes and whenever another session or a member changes them.
+- **The orchestrator's notices.** Its agent tells it, as `<pool kind="notice" from="Tonton">`, when to re-plan: a task
+  blocked, sent to review or done (with what that frees), its session gone or offline, a task in progress that has not
+  moved for 30 minutes. It also gets its guide once, as `<pool kind="role">`.
 
 ## Control
 
-- Pool tasks go through the session's permission prompts and auto-approve rules like anything else. A pool can propose
-  rules; each machine owner accepts them or not.
-- The owner and admins can pause the pool (the relay stops forwarding tasks and messages), stop a session's work
-  (its agent interrupts the turn and leaves the pool) or stop everything. Every machine owner can leave at any time.
-- A budget per member and per pool (cost, time), counted by each agent from its own usage.
-- Every start, stop, join, kick, rotation and rule change goes to the events, for the audit log.
+Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safety.ts`, for Claude Code and OpenCode alike.
+
+- **Permissions stay with each machine owner.** A pool task or message reaches Claude like a message from the notch and
+  goes through the session's permission prompts and auto-approve rules like anything else. Nothing a member writes can
+  carry a verdict or a rule: those only come from the machine owner's own app, sealed with its account key.
+- **Pool rules.** The owner and admins propose auto-approve rules (`pool_rules`, a `PoolRules` sealed with the pool key,
+  with a revision). A proposal applies nowhere by itself. A machine owner accepts it for one of its sessions
+  (`pool_accept_rules`): its app seals a `PoolRulesAcceptance` with the account key, the rules copied in, for that session
+  and that pool. Only the machine owner may send it for its session, and only its session's agent gets it, again with
+  each join order. The agent applies exactly the accepted rules, never a later proposal, and drops them when the session
+  leaves the pool. Claude Code's PermissionRequest hook reads them from `~/.tonton/session-rules/<session>.pool.json`;
+  the OpenCode bridge keeps them in memory. Members see in clear which revision each session accepted.
+- **Pause.** The owner and admins pause and resume the pool (`pool_pause`). While it is paused, the relay sends tasks
+  and messages to the apps only, and takes no tasks, notes or messages from the sessions; they still post their
+  spending. On resume, every session's agent gets the pool again, with what was held back.
+- **Stop.** The owner and admins stop a session's pool work, or every session's (`pool_stop`); a member stops its own.
+  The relay tells the agent (`pool_stop`), which interrupts the turn (Escape in tmux for Claude Code, OpenCode's own
+  interrupt), and takes the session out of the pool. Without tmux, Claude Code's turn cannot be interrupted: the user is
+  told. Every machine owner can also take a session out (`pool_leave_session`) or leave the pool at any time.
+- **Budgets.** The owner and admins set `PoolBudgets` (`pool_budgets`, sealed): a cap for the pool, one for every member,
+  or one for a named member, in cost at list price and hours Claude worked. Each agent counts what its session spent
+  since it joined the pool, from its own meta (kept in `~/.tonton/pool-spend.json`, so a restart does not reset it), and
+  posts it as a sealed `spend` event. A member's cap counts all its sessions. Past a cap the session posts
+  `budget_reached` once, refuses `task_claim` and gets no new tasks; `pool_status` shows the spending and the caps.
+  The orchestrator hands nothing to a session past its member's or the pool's budget, not even with `force`, and its
+  tools refuse to hand out work while the pool is paused.
+- **Audit log.** The relay writes a line, in clear, for what it enforces: `created`, `joined`, `left`, `kicked`, `role`,
+  `owner`, `rotated`, `invite_created`, `invite_revoked`, `session_joined`, `session_left`, `paused`, `resumed`,
+  `stopped`, `rules_proposed`, `rules_accepted`, `budgets_set`. Each line has who, when, the member or session it was
+  about, and the revision. It says nothing about what a task, a rule or a budget holds: those stay sealed. The latest
+  lines come with the snapshot, new ones as `pool_audit`; 5000 per pool are kept.
+
+## The notch
+
+The Mac app lists the account's pools when it connects and follows each one on its socket (`app/Sources/TontonClaude/Data/PoolStore.swift`,
+the logic in `TontonCore/PoolState.swift` and `PoolJoin.swift`). A session joins from its context menu or the pool
+button of its chat header: the pool, its area, what it knows, its repository folder, the kind of task it takes, and
+whether it starts pool tasks right away. Only sessions an agent serves join, from an agent of 0.8.0 or later. The row and
+the header show its role, and the pool button its task, its agent's state and the pool's latest messages for it, with a
+link to the pool on the website (`<relay>/#pool=<id>`) and a way to leave. Pools are made and joined on the website.
 
 ## The website
 
@@ -189,14 +251,15 @@ The relay serves a website at `/`, built on the client core like the web app: si
 - The **status** comes from the relay, which knows it anyway: each pool session in the snapshot carries `status`, and the
   members get a new `pool_session` when it changes, never with every entry. Older relays send none: the page then says
   online or offline only.
-- The **usage** comes from each session's agent: a `usage` event, sealed with the pool key, with what the session spent,
-  its tokens (cache included) and its account's 5-hour and weekly windows (Claude Code only). The agent posts it when it
-  would show differently (cents, thousands of tokens, whole percents), at most once a minute (`agent/src/channel/
+- The **usage** comes from each session's agent: a `usage` event, sealed with the pool key, with its tokens (cache
+  included) and its account's 5-hour and weekly windows (Claude Code only). What it spent comes from its `spend` events,
+  the same numbers the budgets count, so the control center and the leaderboard never disagree with them. The agent posts it when it
+  would show differently (thousands of tokens, whole percents), at most once a minute (`agent/src/channel/
   pool-usage.ts`), for Claude Code and OpenCode alike.
 - **Activity** (`web/activity.ts`) lists everything in order: joins of members and sessions, messages, task changes,
   blockers, merges, key changes and the other audit events, newest first. It searches what was said and done, filters
   by member, session and kind, and downloads what it shows as JSON or Markdown, from the page itself (a blob link), or
-  copies it as Markdown. `usage` events stay out of it.
+  copies it as Markdown. `usage` and `spend` events stay out of it.
 - **Leaderboard** (`web/leaderboard.ts`) ranks sessions and members by tasks done, then time, for today, this run (since
   the last `resumed` or `started` event, else since the pool was made) or all time. A task counts once, for the session it
   was assigned to when it was done last; its time runs from its first move to in progress to that moment. Spending is
@@ -223,6 +286,8 @@ The relay serves a website at `/`, built on the client core like the web app: si
 | Prompt injection between Claudes | Pool messages are marked as such and never count as the user. Permission prompts and rules stay with each machine owner. |
 | A leaked invite | Single use or short-lived, revocable; after it, rotate the key. |
 | A runaway pool | Budgets, pause, stop all, and each owner can leave. |
+| A rule slipped into a session | A proposal applies nowhere until the machine owner accepts it; the acceptance is sealed with its account key, for one session and one pool, the rules copied in. The relay can neither make one nor move one to another session. |
+| A relay that ignores a pause or a stop | It could keep forwarding; the agents trust the relay for pauses and stops, as they trust it for roles. The audit log shows what it claims to have enforced. |
 
 ## Versions
 

@@ -48,6 +48,10 @@ function pool(): PoolState {
     id: 'pool12345678',
     createdAt: '2026-10-26T09:00:00.000Z',
     paused: false,
+    rules: null,
+    budgets: null,
+    audit: [],
+    orchestrator: { account: ANA, session: 'ses_claude' },
     keyVersion: 1,
     info: { name: 'Hack', goal: 'Ship it' },
     members: [
@@ -63,6 +67,7 @@ function pool(): PoolState {
         online: true,
         ready: true,
         status: 'working',
+        accepted: 0,
       },
       {
         account: BOB,
@@ -72,8 +77,18 @@ function pool(): PoolState {
         online: true,
         ready: true,
         status: 'permission',
+        accepted: 0,
       },
-      { account: BOB, session: 'ses_gone', joinedAt: '2026-10-26T09:13:00.000Z', profile: null, online: false, ready: false, status: null },
+      {
+        account: BOB,
+        session: 'ses_gone',
+        joinedAt: '2026-10-26T09:13:00.000Z',
+        profile: null,
+        online: false,
+        ready: false,
+        status: null,
+        accepted: 0,
+      },
     ],
     tasks: [
       task(
@@ -103,15 +118,17 @@ function busy(): PoolState {
     // Yesterday: the old task, started by the agent and finished from the website.
     event('2026-10-26T10:10:00.000Z', ANA, 'ses_claude', { kind: 'task_moved', taskId: 't3', text: 'in_progress' }),
     event('2026-10-26T11:10:00.000Z', ANA, null, { kind: 'task_moved', taskId: 't3', text: 'In progress → Done' }),
-    event('2026-10-26T20:00:00.000Z', ANA, 'ses_claude', { kind: 'usage', usage: { costUSD: 2, tokens: { input: 10_000, output: 1000 } } }),
+    event('2026-10-26T20:00:00.000Z', ANA, 'ses_claude', { kind: 'usage', usage: { tokens: { input: 10_000, output: 1000 } } }),
+    event('2026-10-26T20:00:00.000Z', ANA, 'ses_claude', { kind: 'spend', costUSD: 2, seconds: 600 }),
     event('2026-10-27T08:00:00.000Z', ANA, null, { kind: 'resumed' }),
     // Today: Bob's OpenCode session does the login page in 30 minutes.
     event('2026-10-27T09:00:00.000Z', BOB, 'ses_open', { kind: 'task_moved', taskId: 't1', text: 'in_progress' }),
     event('2026-10-27T09:30:00.000Z', BOB, 'ses_open', { kind: 'task_moved', taskId: 't1', text: 'done' }),
     event('2026-10-27T09:40:00.000Z', ANA, 'ses_claude', {
       kind: 'usage',
-      usage: { costUSD: 5.5, tokens: { input: 40_000, output: 4000 }, fiveHour: { usedPercent: 61 } },
+      usage: { tokens: { input: 40_000, output: 4000 }, fiveHour: { usedPercent: 61 } },
     }),
+    event('2026-10-27T09:40:00.000Z', ANA, 'ses_claude', { kind: 'spend', costUSD: 5.5, seconds: 1800 }),
     event('2026-10-27T09:45:00.000Z', ANA, 'ses_claude', { kind: 'blocked', taskId: 't2', text: 'Waiting for the schema' }),
   ]
   state.messages = [

@@ -1,12 +1,13 @@
-import type { PoolSessionWire, PoolUpdate } from '../../shared/pool-protocol'
+import type { PoolAuditAction, PoolSessionWire, PoolSnapshot, PoolUpdate } from '../../shared/pool-protocol'
 import type { MachineSummary, SessionSummary, ShareSummary } from '../../shared/protocol'
 import { ApnsClient, type Pusher } from './apns'
 import { SessionArchive } from './archive'
 import type { RelayConfig } from './config'
 import { Hub } from './hub'
-import { RATE_LIMITS } from './limits'
+import { POOL_SNAPSHOT_AUDIT, RATE_LIMITS } from './limits'
 import type { RelayCounts } from './metrics'
-import { type PoolSessionOrderRow, PoolStore } from './pools'
+import { PoolSafetyStore } from './pool-safety'
+import { type Author, type PoolSessionOrderRow, PoolStore } from './pools'
 import { PushService } from './push'
 import { RateLimiter } from './rate-limit'
 import { Registry, type Share } from './registry'
@@ -34,6 +35,8 @@ export class RelayContext {
   readonly sessions: SessionStore
   /** Pools, their members, sessions and sealed work (docs/pools.md). */
   readonly pools: PoolStore
+  /** Pauses, rules, budgets, acceptances and the audit log of pools (relay/src/pool-safety.ts). */
+  readonly poolSafety: PoolSafetyStore
   /** Posts per pool member in the current minute, to cap how fast one member can write to a pool. */
   readonly poolPosts = new Map<string, { minute: number; count: number }>()
   /** The status pool members were last told, per pool session: `account/session`. */
@@ -56,6 +59,7 @@ export class RelayContext {
     this.registry = new Registry(config.dataDir)
     this.archive = new SessionArchive(this.registry.db)
     this.pools = new PoolStore(this.registry.db)
+    this.poolSafety = new PoolSafetyStore(this.registry.db)
     this.sessions = new SessionStore(
       {
         updated: (accountId, session) => {
@@ -96,9 +100,46 @@ export class RelayContext {
     return this.pools.sessionOrders(poolId).map(({ accountId, sessionId }) => ({ accountId, sessionId }))
   }
 
-  /** To every app that follows the pool and to the agents of its sessions. */
+  /**
+   * To every app that follows the pool and to the agents of its sessions. While the pool is paused, tasks and messages
+   * reach the apps only: the sessions get them when it resumes.
+   */
   broadcastPool(poolId: string, message: PoolUpdate) {
-    this.hub.sendToPool(poolId, message, this.poolSessions(poolId))
+    const held = (message.t === 'pool_task' || message.t === 'pool_message') && this.poolSafety.isPaused(poolId)
+    this.hub.sendToPool(poolId, message, held ? [] : this.poolSessions(poolId))
+  }
+
+  /** What a member sees on subscribing, its rules, budgets and audit log included. */
+  poolSnapshot(poolId: string, forAccount: string): PoolSnapshot | null {
+    const pool = this.pools.snapshot(poolId, (account, session) => this.poolLive(poolId, account, session), forAccount)
+    if (!pool) return null
+    return {
+      ...pool,
+      rules: this.poolSafety.policy(poolId, 'rules'),
+      budgets: this.poolSafety.policy(poolId, 'budgets'),
+      audit: this.poolSafety.auditLog(poolId, POOL_SNAPSHOT_AUDIT),
+    }
+  }
+
+  /** The pool resumed: every session's agent gets the pool as it is now, with what was held back. */
+  resendPoolToAgents(poolId: string) {
+    for (const { accountId, sessionId } of this.poolSessions(poolId)) {
+      const agent = this.hub.agentOf(accountId, sessionId)
+      const pool = agent ? this.poolSnapshot(poolId, accountId) : null
+      if (agent && pool) this.hub.send(agent, { t: 'pool_snapshot', pool })
+    }
+  }
+
+  /** A line of the pool's audit log, kept and sent to every member. */
+  auditPool(poolId: string, author: Author, action: PoolAuditAction, target?: { account?: string; session?: string }, rev?: number) {
+    const entry = this.poolSafety.audit(poolId, author, action, target, rev)
+    this.broadcastPool(poolId, { t: 'pool_audit', poolId, entry })
+  }
+
+  /** The join order for a session's agent, with the rules its owner accepted for it, if any. */
+  poolJoin(poolId: string, accountId: string, sessionId: string, order: string) {
+    const acceptance = this.poolSafety.acceptance(poolId, accountId, sessionId)
+    return { t: 'pool_join' as const, sessionId, poolId, order, ...(acceptance ? { acceptance } : {}) }
   }
 
   /** The owner deleted the pool: its members and its sessions' agents are told, then forget it. */

@@ -5,10 +5,10 @@
 // member's private key, and publishes the member's public key under it: agents hold the account key, like the apps.
 // Used by the channel of a Claude Code session and by the OpenCode bridge alike; Claude's pool tools read it (#220).
 
-import { openPoolSessionOrder, type PoolState, PoolVault } from '../../../shared/pool'
+import { openPoolRulesAcceptance, openPoolSessionOrder, type PoolState, PoolVault } from '../../../shared/pool'
 import { needsRepublish, PoolKeyring, resolvePoolKeyring, sealPoolMemberKey } from '../../../shared/pool-keys'
-import type { PoolUpdate } from '../../../shared/pool-protocol'
-import type { AgentMessage } from '../../../shared/protocol'
+import type { PoolRulesAcceptance, PoolUpdate } from '../../../shared/pool-protocol'
+import type { AgentMessage, PermissionRule } from '../../../shared/protocol'
 import { log } from '../log'
 
 type Post = (build: () => Promise<AgentMessage | null>) => void
@@ -21,6 +21,18 @@ interface Membership {
   vault: PoolVault
   /** Null until the relay sent the snapshot that follows the acknowledgement. */
   state: PoolState | null
+  /** The pool rules the machine owner accepted for this session, if it did. */
+  acceptance: PoolRulesAcceptance | null
+}
+
+/** What pool safety (agent/src/channel/pool-safety.ts) is told of. */
+export interface PoolSafetyHooks {
+  /** The accepted pool rules changed: an acceptance came, or the session left a pool. */
+  rulesChanged(): void
+  /** The owner or an admin stopped this session's work in the pool: interrupt the turn. */
+  stopped(poolId: string): void
+  /** The session left the pool, whatever the reason. */
+  left(poolId: string): void
 }
 
 export class SessionPools {
@@ -29,6 +41,7 @@ export class SessionPools {
   private readonly listeners = new Set<(update: PoolUpdate) => void>()
   /** Updates are opened one after the other, so the state follows the relay's order. */
   private queue: Promise<void> = Promise.resolve()
+  private safety: PoolSafetyHooks = { rulesChanged: () => {}, stopped: () => {}, left: () => {} }
 
   constructor(
     private readonly sessionId: () => string,
@@ -38,8 +51,8 @@ export class SessionPools {
     private changed: (poolId: string) => void = () => {},
   ) {}
 
-  /** A join order from the relay: kept and acknowledged if it is this session's. */
-  receive(poolId: string, order: string) {
+  /** A join order from the relay: kept and acknowledged if it is this session's, with the rules accepted for it. */
+  receive(poolId: string, order: string, acceptance?: string) {
     this.post(async () => {
       const sessionId = this.sessionId()
       const opened = await openPoolSessionOrder(this.accountKey, order, sessionId, poolId)
@@ -51,18 +64,64 @@ export class SessionPools {
       const autoStart = opened.autoStart === true
       if (known?.key !== opened.key) {
         const keyring = new PoolKeyring(opened.key, opened.version)
-        this.pools.set(poolId, { key: opened.key, version: opened.version, autoStart, vault: new PoolVault(keyring), state: null })
+        const vault = new PoolVault(keyring)
+        this.pools.set(poolId, { key: opened.key, version: opened.version, autoStart, vault, state: null, acceptance: null })
       } else known.autoStart = autoStart
       log('session joined a pool', { pool: poolId })
+      if (acceptance) await this.openAcceptance(poolId, acceptance)
       this.changed(poolId)
       return { t: 'pool_ack', sessionId, poolId }
     })
   }
 
+  /** The machine owner accepted pool rules for this session, or newer ones. */
+  accept(poolId: string, acceptance: string) {
+    this.post(async () => {
+      await this.openAcceptance(poolId, acceptance)
+      return null
+    })
+  }
+
+  /** Taken only if it opens with the account key and names this session and this pool: the relay could not make one. */
+  private async openAcceptance(poolId: string, sealed: string) {
+    const membership = this.pools.get(poolId)
+    if (!membership) return
+    const opened = await openPoolRulesAcceptance(this.accountKey, sealed, this.sessionId(), poolId)
+    if (!opened) {
+      log('dropped pool rules that are not for this session or do not open with the account key')
+      return
+    }
+    // An older acceptance the relay hands again never replaces a newer one.
+    if (membership.acceptance && membership.acceptance.issuedAt > opened.issuedAt) return
+    membership.acceptance = opened
+    log('pool rules accepted for this session', { pool: poolId, rules: opened.rules.length })
+    this.safety.rulesChanged()
+  }
+
+  /** The owner or an admin stopped this session's work in the pool. The relay takes it out next (`pool_left`). */
+  stop(poolId: string) {
+    if (!this.pools.has(poolId)) return
+    log('pool work stopped', { pool: poolId })
+    this.safety.stopped(poolId)
+  }
+
   remove(poolId: string) {
-    if (!this.pools.delete(poolId)) return
+    const membership = this.pools.get(poolId)
+    if (!membership) return
+    this.pools.delete(poolId)
     log('session left a pool', { pool: poolId })
+    this.safety.left(poolId)
+    if (membership.acceptance) this.safety.rulesChanged()
     this.changed(poolId)
+  }
+
+  /** Every pool rule the machine owner accepted for this session, in every pool it is in. */
+  acceptedRules(): PermissionRule[] {
+    return [...this.pools.values()].flatMap(membership => membership.acceptance?.rules ?? [])
+  }
+
+  useSafety(hooks: PoolSafetyHooks) {
+    this.safety = hooks
   }
 
   /** A change in one of the session's pools. */

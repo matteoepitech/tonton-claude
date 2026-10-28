@@ -85,9 +85,8 @@ final class PoolTests: XCTestCase {
 
     func testUsageEventsAndSessionStatusReadAsTheAgentAndTheRelaySendThem() throws {
         let json =
-            #"{"kind":"usage","usage":{"costUSD":1.25,"tokens":{"input":120000,"output":4000},"fiveHour":{"usedPercent":42,"resetsAt":"2026-10-27T18:00:00.000Z"}}}"#
+            #"{"kind":"usage","usage":{"tokens":{"input":120000,"output":4000},"fiveHour":{"usedPercent":42,"resetsAt":"2026-10-27T18:00:00.000Z"}}}"#
         let event = try JSONDecoder().decode(PoolEventBody.self, from: Data(json.utf8))
-        XCTAssertEqual(event.usage?.costUSD, 1.25)
         XCTAssertEqual(event.usage?.tokens, PoolUsage.Tokens(input: 120_000, output: 4000))
         XCTAssertEqual(event.usage?.fiveHour?.usedPercent, 42)
         XCTAssertNil(event.usage?.sevenDay)
@@ -97,5 +96,36 @@ final class PoolTests: XCTestCase {
         // Older relays send no status.
         let older = #"{"account":"acc","session":"ses_1","joinedAt":"2026-10-27T10:00:00Z","profile":null,"online":false,"ready":false}"#
         XCTAssertNil(try JSONDecoder().decode(PoolSessionWire.self, from: Data(older.utf8)).status)
+    }
+
+    func testTheOrchestratorAndTheStructuredNotesDecodeAsTheClientCoreWritesThem() throws {
+        let decode = { (json: String) in try JSONDecoder().decode(RelayMessage.self, from: Data(json.utf8)) }
+        let set = #"{"t":"pool_orchestrator","poolId":"pool00000001","orchestrator":{"account":"acct","session":"ses_1"}}"#
+        guard case .pool(.orchestrator("pool00000001", let lead)) = try decode(set) else { return XCTFail("not an orchestrator") }
+        XCTAssertEqual(lead, PoolSessionRef(account: "acct", session: "ses_1"))
+        guard case .pool(.orchestrator(_, nil)) = try decode(#"{"t":"pool_orchestrator","poolId":"p","orchestrator":null}"#) else {
+            return XCTFail("not none")
+        }
+        let snapshot = #"""
+            {"t":"pool_snapshot","pool":{"id":"pool00000001","createdAt":"x","paused":false,"keyVersion":1,"info":"sealed",
+            "members":[],"sessions":[],"tasks":[],"notes":null,"messages":[],"events":[],
+            "orchestrator":{"account":"acct","session":"ses_1"}}}
+            """#
+        guard case .pool(.snapshot(let pool)) = try decode(snapshot) else { return XCTFail("not a snapshot") }
+        XCTAssertEqual(pool.orchestrator?.session, "ses_1")
+
+        // What shared/pool.ts seals for the notes, a task and a profile.
+        let vault = try PoolVault(key: E2E.newKey())
+        let notes = #"{"text":"","sections":{"goal":"A shop","contracts":"GET /v1/items"},"areas":[{"name":"front","paths":["web/"]}]}"#
+        let opened = try JSONDecoder().decode(PoolNotes.self, from: Data(notes.utf8))
+        XCTAssertEqual(opened.sections?["contracts"], "GET /v1/items")
+        XCTAssertEqual(opened.areas, [PoolArea(name: "front", paths: ["web/"])])
+        XCTAssertEqual(vault.open(try vault.seal(opened), as: PoolNotes.self), opened)
+        let task = try JSONDecoder().decode(
+            PoolTask.self, from: Data(#"{"title":"Page","state":"assigned","size":"small","paths":["web/"],"branch":"pool/abc-page"}"#.utf8)
+        )
+        XCTAssertEqual([task.size, task.branch], ["small", "pool/abc-page"])
+        let profile = try JSONDecoder().decode(PoolSessionProfile.self, from: Data(#"{"tool":"opencode","takes":"any"}"#.utf8))
+        XCTAssertEqual(profile.takes, "any")
     }
 }

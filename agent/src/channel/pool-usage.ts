@@ -1,6 +1,7 @@
-// What a pool session spent and how much of its account's windows is left, shared with the pool sealed with the pool key:
-// the control center, the leaderboard and the orchestrator read it (docs/pools.md). Posted as a `usage` event only when
-// it changes enough to matter, and at most once a minute: a session writes its meta far more often than that.
+// A pool session's tokens and how much of its account's windows is left, shared with the pool sealed with the pool key:
+// the control center, the leaderboard and the orchestrator read it (docs/pools.md). What it spent is not here: the
+// `spend` events of pool-safety.ts carry it, and the budgets count them. Posted as a `usage` event only when it changes
+// enough to matter, and at most once a minute: a session writes its meta far more often than that.
 
 import type { PoolUsage } from '../../../shared/pool-protocol'
 import type { TokenCounts, UsageLimit } from '../../../shared/protocol'
@@ -9,16 +10,10 @@ import type { TokenCounts, UsageLimit } from '../../../shared/protocol'
 export const USAGE_INTERVAL_MS = 60_000
 
 /** A session's usage as the pool sees it, from its meta. Undefined when there is nothing to tell. */
-export function poolUsage(meta: {
-  costUSD?: number
-  tokens?: TokenCounts
-  fiveHourLimit?: UsageLimit
-  sevenDayLimit?: UsageLimit
-}): PoolUsage | undefined {
+export function poolUsage(meta: { tokens?: TokenCounts; fiveHourLimit?: UsageLimit; sevenDayLimit?: UsageLimit }): PoolUsage | undefined {
   const window = (limit: UsageLimit | undefined) =>
     limit ? { usedPercent: limit.usedPercent, ...(limit.resetsAt ? { resetsAt: limit.resetsAt } : {}) } : undefined
   const usage: PoolUsage = {
-    ...(meta.costUSD !== undefined ? { costUSD: meta.costUSD } : {}),
     // The pool counts what was read and written, cache included, as Claude Code's own total does.
     ...(meta.tokens
       ? { tokens: { input: meta.tokens.input + meta.tokens.cacheRead + meta.tokens.cacheWrite, output: meta.tokens.output } }
@@ -29,11 +24,11 @@ export function poolUsage(meta: {
   return Object.keys(usage).length ? usage : undefined
 }
 
-/** Two readings that would show the same: cents, thousands of tokens, whole percents. */
+/** Two readings that would show the same: thousands of tokens, whole percents. */
 export function usageMark(usage: PoolUsage): string {
   const tokens = usage.tokens ? `${Math.round(usage.tokens.input / 1000)}/${Math.round(usage.tokens.output / 1000)}` : ''
   const window = (w: PoolUsage['fiveHour']) => (w ? `${Math.round(w.usedPercent)}@${w.resetsAt ?? ''}` : '')
-  return [usage.costUSD === undefined ? '' : usage.costUSD.toFixed(2), tokens, window(usage.fiveHour), window(usage.sevenDay)].join('|')
+  return [tokens, window(usage.fiveHour), window(usage.sevenDay)].join('|')
 }
 
 /**

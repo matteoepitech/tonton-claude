@@ -1,10 +1,20 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { open, seal } from '../../../shared/crypto'
-import type { Entry, PermissionRule, PromptPayload, RelayToAgent, SealedEntry, SessionCommand, SessionInfo } from '../../../shared/protocol'
+import type {
+  Entry,
+  PermissionRule,
+  PromptPayload,
+  RelayToAgent,
+  SealedEntry,
+  SessionCommand,
+  SessionInfo,
+  TurnTime,
+} from '../../../shared/protocol'
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { withAttachments } from '../channel'
 import { branchOf, isTodoWrite, projectOf } from '../channel/conversation'
+import { PoolSafety } from '../channel/pool-safety'
 import { poolUsage } from '../channel/pool-usage'
 import { PoolWork } from '../channel/pool-work'
 import { SessionPools } from '../channel/pools'
@@ -57,6 +67,11 @@ class Link {
   readonly pools: SessionPools
   /** Claude's pool tools for this session, and what the pool sends it, as for Claude Code. */
   readonly work: PoolWork
+  /** Budgets, stops and the pool rules its owner accepted, as for Claude Code. */
+  readonly safety: PoolSafety
+  /** Turns that ended, from the statuses OpenCode reports, for the time budgets: OpenCode writes no turn times. */
+  private turns: TurnTime[] = []
+  private turnStarted: number | null = null
 
   constructor(
     readonly sessionId: string,
@@ -92,6 +107,22 @@ class Link {
         return { tool: 'opencode', model: meta.model, usage: poolUsage(meta) }
       },
     )
+    this.safety = new PoolSafety(
+      this.pools,
+      () => sessionId,
+      build => this.relay.post(build),
+      () => ({ costUSD: this.tracker.meta(sessionId).costUSD, turns: this.turns }),
+      {
+        interrupt: () => {
+          this.send({ op: 'interrupt', sessionID: sessionId, directory: this.cwd() })
+          return null
+        },
+        notice: text => this.add([{ id: `notice-${crypto.randomUUID()}`, ts: new Date().toISOString(), kind: 'system', text }]),
+        // OpenCode's permissions are answered here, in the bridge: the rules stay in memory.
+        rulesChanged: () => {},
+      },
+    )
+    this.work.useSafety(this.safety)
     this.relay.connect()
   }
 
@@ -123,11 +154,23 @@ class Link {
     this.relay.post(async () => ({ t: 'meta', sessionId: this.sessionId, meta: await seal(this.config.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd() ?? process.cwd()), title: meta.title, tool: 'opencode' })
     this.work.descriptionChanged()
+    this.safety.usageChanged()
+  }
+
+  /** A status from OpenCode: a turn starts with the prompt and ends when OpenCode is done or fails. */
+  turn(hook: string) {
+    if (hook === 'UserPromptSubmit') this.turnStarted ??= Date.now()
+    else if ((hook === 'Stop' || hook === 'StopFailure' || hook === 'SessionEnd') && this.turnStarted !== null) {
+      const seconds = Math.round((Date.now() - this.turnStarted) / 1000)
+      this.turns = [...this.turns, { end: new Date().toISOString(), seconds }].slice(-20)
+      this.turnStarted = null
+      this.safety.usageChanged()
+    }
   }
 
   /** Shows a request in the notch, unless an auto-approve rule from the app answers it. */
   ask(permission: OpenCodePermission) {
-    const rules = [...(readRules()?.rules ?? []), ...this.sessionRules]
+    const rules = [...(readRules()?.rules ?? []), ...this.sessionRules, ...this.pools.acceptedRules()]
     const rule = matchingRule(rules, permission.detail.toolName, permission.input)
     if (rule) {
       log('approved by an auto-approve rule', { tool: rule.tool })
@@ -145,6 +188,7 @@ class Link {
 
   stop() {
     this.relay.stop()
+    this.work.stop()
   }
 
   flushed(): Promise<void> {
@@ -174,8 +218,10 @@ class Link {
     if (!('sessionId' in message) || message.sessionId !== this.sessionId) return
     if (message.t === 'share') this.shares.receive(message.shareId, message.order)
     else if (message.t === 'unshare') this.shares.remove(message.shareId)
-    else if (message.t === 'pool_join') this.pools.receive(message.poolId, message.order)
+    else if (message.t === 'pool_join') this.pools.receive(message.poolId, message.order, message.acceptance)
     else if (message.t === 'pool_left') this.pools.remove(message.poolId)
+    else if (message.t === 'pool_stop') this.pools.stop(message.poolId)
+    else if (message.t === 'pool_accept') this.pools.accept(message.poolId, message.acceptance)
     else if (message.t === 'verdict') {
       const permission = [...this.pending.values()].find(item => shortId(item.requestId) === message.requestId)
       if (!permission) return
@@ -296,6 +342,7 @@ export async function runOpenCode() {
     if (update.permission) link.ask(update.permission)
     if (update.permissionClosed) link.close(update.permissionClosed)
     const { status } = update
+    if (status) link.turn(status.hook)
     if (status) {
       const event = { hook_event_name: status.hook, session_id: update.sessionId, notification_type: status.notificationType }
       statuses = statuses.then(() => postHook(config, event, status.text)).catch(error => log('opencode: status failed', String(error)))

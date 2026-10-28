@@ -148,9 +148,9 @@ function sessionRow(session: SessionCard): HTMLElement {
 
 function usageText(session: SessionCard): string | null {
   const usage = session.usage
-  if (!usage) return null
   const parts: string[] = []
-  if (usage.costUSD !== undefined) parts.push(`$${usage.costUSD.toFixed(2)}`)
+  if (session.costUSD !== null) parts.push(`$${session.costUSD.toFixed(2)}`)
+  if (!usage) return parts.join(' · ') || null
   if (usage.tokens) parts.push(`${compact(usage.tokens.input + usage.tokens.output)} tokens`)
   if (usage.fiveHour) parts.push(`${Math.round(usage.fiveHour.usedPercent)}% of 5 h`)
   if (usage.sevenDay) parts.push(`${Math.round(usage.sevenDay.usedPercent)}% of the week`)

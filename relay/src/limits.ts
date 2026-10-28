@@ -56,6 +56,12 @@ export const POOL_SNAPSHOT_MESSAGES = 200
 export const POOL_SNAPSHOT_EVENTS = 500
 /** Posts (tasks, notes, messages, events) one member may send to one pool per minute. */
 export const MAX_POOL_POSTS_PER_MINUTE = 240
+/** The sealed rules the owner and admins propose, the sealed budgets, and one machine owner's acceptance of the rules. */
+export const MAX_POOL_RULES_BYTES = 64 * 1024
+export const MAX_POOL_BUDGETS_BYTES = 16 * 1024
+/** Lines of a pool's audit log kept, oldest first to go, and how many a snapshot carries. */
+export const MAX_POOL_AUDIT = 5000
+export const POOL_SNAPSHOT_AUDIT = 300
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
 /** iPhones and iPads that get pushes, per account. The least recently registered goes first. */
