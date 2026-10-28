@@ -63,7 +63,7 @@ export function PoolPage({ poolId }: { poolId: string }) {
           <ArrowLeftIcon />
         </Button>
         <span className="flex min-w-0 flex-col">
-          <strong className="truncate">{name}</strong>
+          <strong className="truncate font-serif text-2xl font-normal tracking-tight">{name}</strong>
           {state?.info?.goal && <small className="truncate text-xs text-muted-foreground">{state.info.goal}</small>}
         </span>
         {pool && <Badge variant="secondary">{roleLabel(pool.role)}</Badge>}

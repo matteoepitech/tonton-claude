@@ -39,8 +39,8 @@ export function Pools() {
     )
   }
   return (
-    <div className="grid min-h-0 flex-1 md:grid-cols-[280px_1fr]">
-      <nav className={cn('flex flex-col gap-1 overflow-y-auto border-e p-2', view && 'hidden md:flex')}>
+    <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[260px_1fr]">
+      <nav className={cn('glass flex flex-col gap-1 overflow-y-auto rounded-2xl border p-2', view && 'hidden md:flex')}>
         <div className="flex gap-2 p-1">
           <Button size="sm" onClick={() => store.showPool({ kind: 'new' })}>
             <PlusIcon />
@@ -59,7 +59,7 @@ export function Pools() {
               type="button"
               onClick={() => store.showPool({ kind: 'pool', id: summary.id })}
               className={cn(
-                'flex w-full flex-col rounded-lg px-2 py-2 text-left hover:bg-accent',
+                'flex w-full flex-col rounded-xl px-3 py-2 text-left transition-colors hover:bg-accent',
                 view?.kind === 'pool' && view.id === summary.id && 'bg-accent',
               )}
             >
@@ -73,7 +73,7 @@ export function Pools() {
         ))}
         {watch.problem && <Problem>{watch.problem}</Problem>}
       </nav>
-      <main className={cn('flex min-h-0 min-w-0 flex-col', !view && 'hidden md:flex')}>
+      <main className={cn('glass flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border', !view && 'hidden md:flex')}>
         {view?.kind === 'pool' ? (
           <PoolPage poolId={view.id} />
         ) : view?.kind === 'new' ? (
@@ -81,7 +81,7 @@ export function Pools() {
         ) : view?.kind === 'join' ? (
           <JoinPool invite={view.invite} />
         ) : (
-          <Empty className="m-auto">Pick a pool, or make one.</Empty>
+          <Empty className="m-auto font-serif text-2xl text-muted-foreground">Pick a pool, or make one.</Empty>
         )}
       </main>
     </div>

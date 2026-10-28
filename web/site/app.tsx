@@ -14,6 +14,27 @@ import { cn } from './ui/cn'
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 
 export function App() {
+  return (
+    <>
+      <Aura />
+      <Page />
+    </>
+  )
+}
+
+/** The lights drifting behind every page (app.css). */
+function Aura() {
+  return (
+    <div className="aura" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <span />
+    </div>
+  )
+}
+
+function Page() {
   const store = useStore()
   if (store.starting) return <Loading>Opening…</Loading>
   if (store.shared) return <SharedSession />
@@ -21,28 +42,42 @@ export function App() {
   return <Shell />
 }
 
+/** The three places of the site, each with its own colored dot. */
+const MODES = [
+  { value: 'sessions', label: 'Sessions', dot: 'bg-[var(--aura-orange)]' },
+  { value: 'pools', label: 'Pools', dot: 'bg-[var(--aura-sun)]' },
+  { value: 'hero', label: 'Tonton', dot: 'bg-[var(--aura-pink)]' },
+] as const
+
 function Shell() {
   const store = useStore()
   const state = store.state
   const saved = store.saved
   if (!state || !saved) return null
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5">
-        <strong className="whitespace-nowrap">Tonton Claude</strong>
-        <Tabs value={store.mode} onValueChange={value => store.setMode(value as typeof store.mode)}>
-          <TabsList className="h-8">
-            <TabsTrigger value="sessions">Sessions</TabsTrigger>
-            <TabsTrigger value="pools">Pools</TabsTrigger>
-            <TabsTrigger value="hero">Tonton</TabsTrigger>
+    <div className="flex h-full flex-col gap-3 p-3">
+      <header className="glass flex flex-wrap items-center gap-x-4 gap-y-2 rounded-full border px-4 py-2">
+        <strong className="font-serif text-lg whitespace-nowrap tracking-tight">Tonton Claude</strong>
+        <Tabs value={store.mode} onValueChange={value => store.setMode(value as typeof store.mode)} className="mx-auto">
+          <TabsList className="h-9 bg-transparent">
+            {MODES.map(mode => (
+              <TabsTrigger key={mode.value} value={mode.value} className="data-[state=active]:bg-secondary data-[state=active]:shadow-none">
+                <span className={cn('size-1.5 rounded-full', mode.dot)} />
+                {mode.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
-        <Connection state={state.connection === 'connected' ? 'connected' : state.connection === 'connecting' ? 'connecting' : 'offline'} />
-        <span className="hidden text-xs text-muted-foreground sm:inline">{new URL(saved.relay).host}</span>
-        <Button variant="ghost" size="sm" className="ms-auto" onClick={() => void store.signOut()}>
-          <LogOutIcon />
-          Sign out
-        </Button>
+        <span className="flex items-center gap-3">
+          <Connection
+            state={state.connection === 'connected' ? 'connected' : state.connection === 'connecting' ? 'connecting' : 'offline'}
+          />
+          <span className="hidden text-xs text-muted-foreground lg:inline">{new URL(saved.relay).host}</span>
+          <Button variant="ghost" size="sm" onClick={() => void store.signOut()}>
+            <LogOutIcon />
+            Sign out
+          </Button>
+        </span>
       </header>
       {store.mode === 'pools' ? <Pools /> : store.mode === 'hero' ? <HeroPage key={saved.accountId ?? saved.relay} /> : <Sessions />}
     </div>
@@ -56,16 +91,16 @@ function Sessions() {
   const session = state.sessions.find(s => s.id === state.selectedId)
   const showChat = store.showingChat && session
   return (
-    <div className="grid min-h-0 flex-1 md:grid-cols-[280px_1fr]">
-      <nav className={cn('overflow-y-auto border-e p-2', showChat && 'hidden md:block')}>
+    <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[280px_1fr]">
+      <nav className={cn('glass overflow-y-auto rounded-2xl border p-2', showChat && 'hidden md:block')}>
         <SessionList state={state} folded={store.folded} onPick={picked => store.select(picked.id)} onFold={key => store.toggleFold(key)} />
       </nav>
-      <main className={cn('flex min-h-0 min-w-0 flex-col', !showChat && 'hidden md:flex')}>
+      <main className={cn('glass flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border', !showChat && 'hidden md:flex')}>
         {session ? (
           // Keyed by the session: its own files view, its own draft.
           <Chat key={session.id} session={session} state={state} client={store.client} onBack={() => store.select(null)} />
         ) : (
-          <Empty className="m-auto">Pick a session.</Empty>
+          <Empty className="m-auto font-serif text-2xl text-muted-foreground">Pick a session.</Empty>
         )}
         {state.error && <p className="border-t px-4 py-2 text-xs text-destructive">{state.error}</p>}
       </main>

@@ -8,8 +8,17 @@ import { Problem } from './common'
 import { useStore } from './store'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
+import { cn } from './ui/cn'
 import { Textarea } from './ui/fields'
 import { Checkbox } from './ui/menu'
+
+/** What the site holds, as colored tags in the headline. */
+const TAGS = [
+  { label: 'sessions', className: 'border-[var(--aura-orange)]/60 text-[var(--aura-orange)]' },
+  { label: 'pools', className: 'border-[var(--aura-pink)]/60 text-[var(--aura-pink)]' },
+  { label: 'machines', className: 'border-[var(--aura-blue)] text-[#6b83e6]' },
+  { label: 'plans', className: 'border-[var(--aura-sun)] text-[#c99400]' },
+]
 
 export function SignIn() {
   const store = useStore()
@@ -36,12 +45,28 @@ export function SignIn() {
   }
 
   return (
-    <main className="flex min-h-full items-center justify-center p-4">
+    <main className="flex min-h-full flex-col items-center justify-center gap-10 px-4 py-12">
+      <div className="flex max-w-3xl flex-col items-center gap-6 text-center">
+        <h1 className="font-serif text-5xl leading-[1.02] font-normal tracking-tight text-balance sm:text-7xl">
+          Every Claude you run.
+          <br />
+          In one calm place.
+        </h1>
+        <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 text-lg text-muted-foreground">
+          Your
+          {TAGS.map(tag => (
+            <span key={tag.label} className={cn('rounded-full border px-3 py-0.5 text-base', tag.className)}>
+              {tag.label}
+            </span>
+          ))}
+          from every machine, sealed end to end.
+        </p>
+      </div>
       <Card className="w-full max-w-md p-6">
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <KeyRoundIcon className="size-5 text-primary" />
-            <h1 className="text-xl font-semibold">Tonton Claude</h1>
+            <h2 className="font-serif text-xl tracking-tight">Sign in</h2>
           </div>
           <p className="text-muted-foreground">
             Paste the recovery key of your account, from the Mac app: Settings › Relay › Recovery key, or scan its QR code in Settings ›
