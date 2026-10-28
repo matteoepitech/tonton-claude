@@ -6,8 +6,10 @@
 
 import { newPoolItemId, POOL_NOTES_SECTIONS, type PoolSession, type PoolState, type PoolTaskItem, poolTaskSize } from '../../../shared/pool'
 import { routeView } from '../../../shared/pool-model'
+import { PLAN_PROPOSED } from '../../../shared/pool-plan'
 import type {
   PoolDispatch,
+  PoolEventBody,
   PoolLimits,
   PoolMessageBody,
   PoolNotes,
@@ -219,7 +221,7 @@ export class PoolWork {
       putNotes: (poolId, rev, notes) => this.saveNotes(poolId, rev, notes),
       putDispatch: (poolId, rev, dispatch) => this.saveDispatch(poolId, rev, dispatch),
       message: (poolId, to, text) => this.message(poolId, { text, to: { session: to } }),
-      event: (poolId, kind, taskId, text) => this.event(poolId, kind, taskId, text),
+      event: (poolId, kind, taskId, text, extra) => this.event(poolId, kind, taskId, text, extra),
       descriptions: state => this.descriptions(state),
       who: (state, account, session) => this.who(state, account, session),
     }
@@ -625,10 +627,12 @@ export class PoolWork {
     return confirmed
   }
 
-  private async event(poolId: string, kind: string, taskId: string | undefined, text: string | undefined) {
+  private async event(poolId: string, kind: string, taskId: string | undefined, text: string | undefined, extra?: Partial<PoolEventBody>) {
     const vault = this.pools.vault(poolId)
     if (!vault) return
-    const blob = await vault.seal({ kind, ...(taskId ? { taskId } : {}), ...(text ? { text: text.slice(0, 500) } : {}) })
+    // A plan's summary is the orchestrator's message to the user: longer than a line of the timeline.
+    const max = kind === PLAN_PROPOSED ? 2000 : 500
+    const blob = await vault.seal({ ...extra, kind, ...(taskId ? { taskId } : {}), ...(text ? { text: text.slice(0, max) } : {}) })
     this.post(async () => ({ t: 'pool_event', sessionId: this.sessionId(), poolId, id: newPoolItemId(), blob }))
   }
 

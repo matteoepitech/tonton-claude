@@ -3,7 +3,7 @@
 // dispatch, the board at a glance, and what the control loop did. The other members see who runs it and what it does.
 import { BotIcon, PauseIcon, PlayIcon } from 'lucide-react'
 import { useEffect } from 'react'
-import { BOARD_COLUMNS, board, memberName, type PoolState, poolAbilities } from '../../../shared'
+import { BOARD_COLUMNS, board, memberName, type PoolState, pendingPlan, poolAbilities } from '../../../shared'
 import { Empty } from '../common'
 import { ago } from '../format'
 import { Chat } from '../sessions/chat'
@@ -12,6 +12,7 @@ import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 import { cn } from '../ui/cn'
 import type { TabProps } from './page'
+import { PlanCard } from './plan'
 
 /** The events the control loop posts as the orchestrator machine. */
 const LOOP_KINDS = new Set(['dispatched', 'retried', 'blocked', 'dispatch_waiting', 'dispatch_done', 'orchestrator_failed'])
@@ -20,6 +21,7 @@ export function Orchestrator({ pool, state }: TabProps) {
   const store = useStore()
   const lead = state.orchestrator
   const mine = lead && lead.account === store.account
+  const plan = pendingPlan(state)
   const session = mine ? store.state?.sessions.find(s => s.id === lead.session) : undefined
   // The relay sends the conversation of the session the client follows: the orchestrator's while this tab shows, and
   // the one the Sessions page had open again after.
@@ -38,13 +40,18 @@ export function Orchestrator({ pool, state }: TabProps) {
     // On phones the chat and its side column scroll as one page; side by side, each scrolls on its own.
     <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[1fr_300px] lg:overflow-hidden">
       <section className="flex min-h-[65dvh] flex-col border-e lg:min-h-0" aria-label="Orchestrator chat">
+        {plan && (
+          <div className="max-h-[50%] shrink-0 overflow-y-auto border-b p-3">
+            <PlanCard pool={pool} state={state} plan={plan} />
+          </div>
+        )}
         {session && store.state ? (
           <Chat
             key={session.id}
             session={session}
             state={store.state}
             client={store.client}
-            placeholder="Tell the orchestrator what to build, then “Go”… (Enter sends)"
+            placeholder="Tell the orchestrator what to build: it proposes a plan… (Enter sends)"
           />
         ) : (
           <div className="m-auto flex max-w-md flex-col items-center gap-3 p-6 text-center">
@@ -108,7 +115,7 @@ function Dispatch({ poolId, state, canSet }: { poolId: string; state: PoolState;
       <p className="text-xs text-muted-foreground">
         {on
           ? 'Every free slot of every online machine gets the next task that fits.'
-          : 'Tasks wait on the board. The orchestrator starts the dispatch when you say “Go”.'}
+          : 'Tasks wait on the board. The dispatch starts when you accept the orchestrator’s plan.'}
       </p>
       {state.dispatch?.value?.note && <p className="text-xs">{state.dispatch.value.note}</p>}
       {canSet && (

@@ -71,7 +71,7 @@ interface StandInPlan {
   tasks: { title: string; goal: string; criteria: string[]; size: 'simple' | 'large'; area?: string; after?: number[] }[]
 }
 
-/** Writes the plan, then each task with the ids of those it waits for, then starts the dispatch. */
+/** Writes the plan, then each task with the ids of those it waits for, then proposes it for the user to accept. */
 async function planFrom(file: string) {
   const plan = JSON.parse(readFileSync(file, 'utf8')) as StandInPlan
   await call('plan_create', { goal: plan.goal, contracts: plan.contracts, stack: plan.stack, areas: plan.areas })
@@ -86,14 +86,14 @@ async function planFrom(file: string) {
     }
     ids.push(id)
   }
-  await call('dispatch_start', { note: 'Go' })
+  await call('plan_propose', { summary: plan.goal })
 }
 
 claude.fallbackNotificationHandler = async notification => {
   const content = String((notification.params as { content?: unknown } | undefined)?.content ?? '')
   note(`delivered: ${content}`)
-  // Made the orchestrator of a pool on autopilot: it plans and starts the dispatch, as the user asked. The demo gives it
-  // a plan; the tests, one task.
+  // Made the orchestrator of a pool on autopilot: it plans and proposes the plan, which the user accepts. The demo gives
+  // it a plan; the tests, one task.
   if (/<pool kind="role"/.test(content) && content.includes('runs on autopilot')) {
     if (process.env.TONTON_STAND_IN_PLAN) return planFrom(process.env.TONTON_STAND_IN_PLAN)
     await call('task_create', {
@@ -102,7 +102,7 @@ claude.fallbackNotificationHandler = async notification => {
       criteria: ['the page says what the shop sells', 'the form takes an email'],
       size: 'large',
     })
-    await call('dispatch_start', { note: 'Go' })
+    await call('plan_propose', { summary: 'A landing page first.' })
     return
   }
   const task = /<pool kind="task"[^>]* task="([^"]+)"/.exec(content)?.[1]

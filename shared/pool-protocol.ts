@@ -194,6 +194,17 @@ export interface PoolEventBody {
   seconds?: number
   /** `limits` events: the account's plan usage, as the session's agent last read it. Claude Code only. */
   limits?: PoolLimits
+  /** `plan_proposed` events: the plan the orchestrator asks an admin to accept (shared/pool-plan.ts). */
+  proposal?: PoolPlanProposal
+}
+
+/**
+ * The plan the orchestrator proposes (`plan_propose`), as its agent worked it out: its tasks in the order the control loop
+ * hands them out, and the machine each one starts on as soon as an admin accepts it. A task without a machine starts
+ * later, once what it waits for is done or a slot frees. The text of the event says it in the orchestrator's words.
+ */
+export interface PoolPlanProposal {
+  tasks: { id: string; machine?: PoolMachineRef }[]
 }
 
 /**

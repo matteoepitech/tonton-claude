@@ -11,7 +11,9 @@ import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { RelayClient, type SocketLike } from '../shared/client'
 import { newAccountKey, seal } from '../shared/crypto'
+import type { PoolState } from '../shared/pool'
 import { PoolApi } from '../shared/pool-api'
+import { pendingPlan } from '../shared/pool-plan'
 import type { PoolMachineProfile } from '../shared/pool-protocol'
 import { PoolWatch } from '../shared/pool-watch'
 import { Vault } from '../shared/vault'
@@ -187,7 +189,21 @@ describe.skipIf(!hasTmux)('the pool autopilot', () => {
     expect(existsSync(join(dir, 'lead-work', 'repo', 'README.md'))).toBe(true)
   }, 120_000)
 
-  test('the orchestrator plans and starts the dispatch; the loop hands the task to the studio, whose session does it', async () => {
+  test('the orchestrator proposes its plan, and the admin accepts it: the dispatch starts', async () => {
+    const [, studio] = machines
+    const plan = await eventually(() => state() && pendingPlan(state() as PoolState), 'the plan proposed')
+    expect(plan.body.text).toBe('A landing page first.')
+    // Each task with where it starts: the large one on the studio, since the lead takes simple tasks only.
+    expect(plan.body.proposal.tasks).toEqual([{ id: expect.any(String), machine: { account: accountId, machine: studio.id } }])
+    expect(state()?.dispatch?.value?.on).not.toBe(true)
+    expect(await watch.acceptPlan(poolId)).toBe(true)
+    await eventually(() => state()?.dispatch?.value?.on, 'the dispatch on')
+    await eventually(() => state()?.events.some(e => e.body?.kind === 'plan_accepted'), 'the plan accepted')
+    expect(pendingPlan(state() as PoolState)).toBeNull()
+    await eventually(() => standIn(machines[0]).join('\n').includes('accepted the plan'), 'the notice at the orchestrator')
+  }, 120_000)
+
+  test('the loop hands the task to the studio, whose session does it', async () => {
     const [lead, studio] = machines
     const done = await eventually(() => state()?.tasks.find(t => t.task?.state === 'done'), 'the task done')
     expect(done.task?.title).toBe('SECRET landing page')

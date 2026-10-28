@@ -1,7 +1,8 @@
 // A pool on autopilot on one computer (docs/pool-autopilot.md, #261): a relay, three machines that each run their real
 // background service with a TONTON_HOME and a tmux server of their own, a sample project in a local git repository, and
 // a pool whose orchestrator machine plans it and hands its tasks out. Its sessions are stand-ins for Claude Code that run
-// the real channel (test/stand-in-claude.ts): the orchestrator writes the plan below and starts the dispatch; workers
+// the real channel (test/stand-in-claude.ts): the orchestrator writes the plan below and proposes it, the demo accepts
+// it as the admin would on the website, and the dispatch starts; workers
 // claim their task, commit on its branch, push it and finish it. No account, no token spent, nothing outside a temporary
 // folder. `bun scripts/pool-demo.ts` keeps it running and says how to watch it on the website; test/pool-demo.test.ts
 // runs it to the end.
@@ -16,6 +17,7 @@ import { RelayClient, type SocketLike } from '../shared/client'
 import { newAccountKey, seal } from '../shared/crypto'
 import type { PoolState } from '../shared/pool'
 import { PoolApi } from '../shared/pool-api'
+import { pendingPlan } from '../shared/pool-plan'
 import type { PoolMachineProfile } from '../shared/pool-protocol'
 import { PoolWatch } from '../shared/pool-watch'
 import { Vault } from '../shared/vault'
@@ -101,6 +103,11 @@ export interface PoolDemoOptions {
   port?: number
   /** Called on every change of the pool, once it is open. */
   onChange?: (state: PoolState) => void
+  /**
+   * How long the demo leaves the orchestrator's plan waiting before it accepts it, as the admin would with Accept on the
+   * website. Accepted there first, it goes on from there. 0: at once.
+   */
+  acceptAfterMs?: number
 }
 
 /** True where the demo runs: its sessions live in tmux, as on any pool machine. */
@@ -168,6 +175,8 @@ export async function startPoolDemo(options: PoolDemoOptions = {}): Promise<Pool
     const pool = await api.create(key, account, { name: 'Shop hackathon', repo: origin }, { name: 'Demo' })
     const poolId = pool.pool.id
     let watch: PoolWatch | undefined
+    /** The proposal the demo accepts, once. */
+    let accepting = ''
     const state = () => watch?.pool(poolId)?.state ?? undefined
     client = new RelayClient({
       vault: new Vault(key),
@@ -183,7 +192,13 @@ export async function startPoolDemo(options: PoolDemoOptions = {}): Promise<Pool
       link: client,
       onChange: () => {
         const now = state()
-        if (now) options.onChange?.(now)
+        if (!now) return
+        options.onChange?.(now)
+        const plan = pendingPlan(now)
+        if (plan && plan.id !== accepting) {
+          accepting = plan.id
+          setTimeout(() => void watch?.acceptPlan(poolId), options.acceptAfterMs ?? 0)
+        }
       },
     })
     client.start()
@@ -271,7 +286,8 @@ if (import.meta.main) {
     shown = now
   }
   console.log('Starting a relay, three machines and a pool…')
-  demo = await startPoolDemo({ port, onChange: show })
+  // Time to see the plan's card on the website and accept it there; the demo accepts it otherwise.
+  demo = await startPoolDemo({ port, onChange: show, acceptAfterMs: 60_000 })
   const running = demo
   console.log(`
 The pool runs on autopilot at ${running.relay}
@@ -280,6 +296,7 @@ Open it in a browser and sign in with this account token:
 
   ${running.token}
 
+The orchestrator proposes its plan in a moment: accept it on the website, or the demo does in a minute.
 The sample project is ${running.origin}; each task is pushed on its own branch there.
 Machines' logs: ${join(running.dir, 'machines', '<name>', 'tonton.log')}. Ctrl+C stops everything and deletes it.`)
   const quit = () => {

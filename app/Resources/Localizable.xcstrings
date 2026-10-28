@@ -1022,7 +1022,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$lld tâches faites sur %2$lld"
+            "value" : "%lld tâches finies sur %lld"
           }
         }
       }
@@ -1169,6 +1169,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld étincelles · %lld boosters"
+          }
+        }
+      }
+    },
+    "%lld tasks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld tâches"
           }
         }
       }
@@ -1793,6 +1803,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Accepter"
+          }
+        }
+      }
+    },
+    "Accept and start" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accepter et lancer"
           }
         }
       }
@@ -5198,6 +5218,16 @@
         }
       }
     },
+    "Later" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus tard"
+          }
+        }
+      }
+    },
     "Launch at login" : {
       "localizations" : {
         "fr" : {
@@ -6392,6 +6422,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ou remplissez le reste ci-dessous."
+          }
+        }
+      }
+    },
+    "Or tell it below what to change." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ou dites-lui ci-dessous ce qu’il faut changer."
           }
         }
       }
@@ -8911,6 +8951,16 @@
         }
       }
     },
+    "The dispatch starts: each machine starts its tasks." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La répartition démarre : chaque machine lance ses tâches."
+          }
+        }
+      }
+    },
     "The dispatch stays as it is: turn it on from the website, or ask the orchestrator." : {
       "localizations" : {
         "fr" : {
@@ -9007,6 +9057,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le modèle que Claude Code utilise dans cette session"
+          }
+        }
+      }
+    },
+    "The orchestrator's plan" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le plan de l’orchestrateur"
           }
         }
       }
@@ -9870,6 +9930,16 @@
         }
       }
     },
+    "Waiting for the owner or an admin to accept it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente du propriétaire ou d’un admin pour l’accepter."
+          }
+        }
+      }
+    },
     "Waiting for you" : {
       "localizations" : {
         "fr" : {
@@ -10176,6 +10246,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Votre jeton"
+          }
+        }
+      }
+    },
+    "and %lld more" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "et %lld de plus"
           }
         }
       }

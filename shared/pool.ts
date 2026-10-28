@@ -7,6 +7,7 @@ import { type AccountKey, newAccountKey, open, seal } from './crypto'
 import { PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
 import { decodePoolDispatch, decodePoolMachineProfile, decodePoolMachineRef, isPoolMachineMode } from './pool-machines'
 import { decodeTaskRoute, isModelTier } from './pool-model'
+import { decodePlanProposal } from './pool-plan'
 import type {
   PoolArea,
   PoolAuditWire,
@@ -296,6 +297,7 @@ export function decodePoolEventBody(value: unknown): PoolEventBody | null {
     seconds: amount(f.seconds),
     limits: decodePoolLimits(f.limits),
     usage: decodePoolUsage(f.usage),
+    proposal: decodePlanProposal(f.proposal),
   })
 }
 

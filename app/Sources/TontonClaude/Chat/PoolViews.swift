@@ -358,6 +358,10 @@ struct PoolTaskCards: View {
 
     var body: some View {
         if let membership = pools.membership(of: session.id) {
+            // The orchestrator's plan, above its conversation, where its owner talks to it.
+            if PoolLabels.leads(membership.session, in: membership.state), let plan = membership.state.pendingPlan {
+                PoolPlanCard(board: membership.board, state: membership.state, plan: plan)
+            }
             ForEach(membership.state.waitingTasks(of: session.id)) { item in
                 if let task = item.task {
                     PoolTaskCard(
@@ -416,8 +420,12 @@ struct PoolTaskCard: View {
 /// The words the pool views share.
 enum PoolLabels {
     static func role(of session: PoolState.Session, in pool: PoolState) -> String {
-        let leads = pool.orchestrator?.account == session.account && pool.orchestrator?.session == session.session
-        return leads ? String(localized: "orchestrator") : session.profile?.area ?? String(localized: "pool")
+        leads(session, in: pool) ? String(localized: "orchestrator") : session.profile?.area ?? String(localized: "pool")
+    }
+
+    /// The session is the pool's orchestrator.
+    static func leads(_ session: PoolState.Session, in pool: PoolState) -> Bool {
+        pool.orchestrator?.account == session.account && pool.orchestrator?.session == session.session
     }
 
     /// `Hackathon: Build the API`, never translated.

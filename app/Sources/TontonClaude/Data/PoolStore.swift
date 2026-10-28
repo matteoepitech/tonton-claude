@@ -177,6 +177,23 @@ final class PoolStore: ObservableObject {
         send(["t": "pool_stop_machine", "poolId": poolId, "machine": NSNull(), "stopped": stopped])
     }
 
+    /// Owner and admins: accepts the plan the orchestrator proposed. The dispatch starts, then the event says who
+    /// accepted it, which the orchestrator hears and which takes the card off every member's notch and page.
+    func acceptPlan(pool poolId: String) {
+        guard let board = boards[poolId], let state = board.state, state.pendingPlan != nil, let send else { return }
+        do {
+            let vault = board.poolVault
+            send([
+                "t": "pool_dispatch", "poolId": poolId, "rev": state.dispatchRev,
+                "blob": try vault.seal(PoolDispatch(on: true, note: "Plan accepted.")),
+            ])
+            let event = try vault.seal(PoolEventBody(kind: PoolState.planAccepted, text: "Accepted the plan: the dispatch is on."))
+            send(["t": "pool_event", "poolId": poolId, "id": Self.newItemId(), "blob": event])
+        } catch {
+            Logger.app.error("pool \(poolId): \(error.localizedDescription)")
+        }
+    }
+
     /// The pools one of the account's machines is in, with what it runs in each.
     func memberships(of machineId: String) -> [(board: PoolBoard, machine: PoolState.Machine, slots: [PoolState.Task])] {
         guard let account else { return [] }
