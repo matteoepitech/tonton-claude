@@ -790,7 +790,7 @@ export class PoolWork {
       task.dependsOn?.length ? `Waits for: ${task.dependsOn.join(', ')}` : '',
       task.size === 'simple' ? 'Size: simple, well-bounded.' : '',
       task.paths?.length ? `Its area owns: ${task.paths.join(', ')}. Leave other files to their areas, or say why in task_done.` : '',
-      task.branch ? branchSteps(task.branch) : '',
+      task.branch ? (this.pools.worker(state.id) ? workerSteps(task.branch) : branchSteps(task.branch)) : '',
       task.review ? `Sent back by review: ${task.review}\nFix it on the same branch, then call task_done again.` : '',
       mergeBrief(task),
     ].filter(Boolean)
@@ -921,6 +921,14 @@ export const POOL_INSTRUCTIONS = [
   'Use the pool_* and task_* tools to read the pool, take and finish tasks, and answer the other sessions.',
   'Each task has its own branch: work there, never on main, and run git yourself through the usual permission prompts.',
 ].join(' ')
+
+/**
+ * A pool machine's session runs in the task's own worktree, already on its branch (agent/src/service/pool-worktree.ts): it
+ * commits there and pushes it, for the orchestrator to merge.
+ */
+export function workerSteps(branch: string): string {
+  return `Branch: ${branch}. This session runs in the task's own worktree, already on it, from the latest main. Commit your work there, never on main, and push it (git push -u origin ${branch}) before task_done.`
+}
 
 /** How a session starts on a task's branch: Claude runs it, through its usual permission prompts. */
 export function branchSteps(branch: string): string {

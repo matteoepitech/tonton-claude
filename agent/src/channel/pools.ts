@@ -7,7 +7,7 @@
 
 import { openPoolRulesAcceptance, openPoolSessionOrder, type PoolState, PoolVault } from '../../../shared/pool'
 import { needsRepublish, PoolKeyring, resolvePoolKeyring, sealPoolMemberKey } from '../../../shared/pool-keys'
-import type { PoolRulesAcceptance, PoolUpdate } from '../../../shared/pool-protocol'
+import type { PoolMachineMode, PoolRulesAcceptance, PoolUpdate } from '../../../shared/pool-protocol'
 import type { AgentMessage, PermissionRule } from '../../../shared/protocol'
 import { log } from '../log'
 
@@ -18,11 +18,19 @@ interface Membership {
   version: number
   /** The machine owner's choice, from the order: start pool tasks at once, or ask the user first. */
   autoStart: boolean
+  /** A session a pool machine started for a task: the machine, and the mode its owner chose (docs/pool-autopilot.md). */
+  worker: PoolWorkerSession | null
   vault: PoolVault
   /** Null until the relay sent the snapshot that follows the acknowledgement. */
   state: PoolState | null
   /** The pool rules the machine owner accepted for this session, if it did. */
   acceptance: PoolRulesAcceptance | null
+}
+
+/** A pool machine's session, from the order its service sealed with the account key: never what the pool says. */
+export interface PoolWorkerSession {
+  machine: string
+  mode: PoolMachineMode
 }
 
 /** What pool safety (agent/src/channel/pool-safety.ts) is told of. */
@@ -62,11 +70,15 @@ export class SessionPools {
       }
       const known = this.pools.get(poolId)
       const autoStart = opened.autoStart === true
+      const worker = opened.machine && opened.mode ? { machine: opened.machine, mode: opened.mode } : null
       if (known?.key !== opened.key) {
         const keyring = new PoolKeyring(opened.key, opened.version)
         const vault = new PoolVault(keyring)
-        this.pools.set(poolId, { key: opened.key, version: opened.version, autoStart, vault, state: null, acceptance: null })
-      } else known.autoStart = autoStart
+        this.pools.set(poolId, { key: opened.key, version: opened.version, autoStart, worker, vault, state: null, acceptance: null })
+      } else {
+        known.autoStart = autoStart
+        known.worker = worker
+      }
       log('session joined a pool', { pool: poolId })
       if (acceptance) await this.openAcceptance(poolId, acceptance)
       this.changed(poolId)
@@ -205,6 +217,11 @@ export class SessionPools {
 
   autoStart(poolId: string): boolean {
     return this.pools.get(poolId)?.autoStart ?? false
+  }
+
+  /** Set when a pool machine started this session for one of the pool's tasks. */
+  worker(poolId: string): PoolWorkerSession | null {
+    return this.pools.get(poolId)?.worker ?? null
   }
 
   /** Every update of the session's pools, as it arrives; returns how to stop listening. */

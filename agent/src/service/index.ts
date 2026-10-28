@@ -1,4 +1,5 @@
 import { seal } from '../../../shared/crypto'
+import { parsePoolToMachine } from '../../../shared/pool-wire'
 import { RelayConnection } from '../channel/relay-connection'
 import { loadConfig, VERSION } from '../config'
 import { receiveDiagnoseRequest } from '../diagnose'
@@ -9,6 +10,8 @@ import { receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { acquireLock, releaseLock } from './control'
 import { cpuTimes, readHealth } from './health'
+import { MachinePools } from './pool-machines'
+import { PoolWorker } from './pool-worker'
 import { writeStatus } from './status'
 import { runTray } from './tray'
 
@@ -20,6 +23,7 @@ const HEALTH_INTERVAL_MS = 60_000
 /**
  * Runs in the background from login: keeps the machine reachable so the app can update it even with no claude open,
  * and shows the tray icon where the relay can be changed. Sessions keep their own connection, through their channel.
+ * When the machine is in a pool, it starts the sessions for the tasks dispatched to it (docs/pool-autopilot.md).
  */
 export async function runService(args: string[]) {
   if (!acquireLock(args.includes('--replace'))) {
@@ -35,6 +39,7 @@ export async function runService(args: string[]) {
   process.on('SIGINT', stop)
 
   let connection: RelayConnection | null = null
+  let worker: PoolWorker | null = null
   let current: string | null = null
   const follow = () => {
     const config = loadConfig()
@@ -43,12 +48,23 @@ export async function runService(args: string[]) {
     current = identity
     connection?.stop()
     connection = null
+    // The sessions it runs for pools keep running: a new worker finds them again in its slots.
+    worker?.stop()
+    worker = null
     if (!config) {
       writeStatus('not-configured', null)
       return
     }
     log('service: connecting', { relay: config.server })
     writeStatus('connecting', config.server)
+    const pools = new MachinePools(
+      config.key,
+      config.machineId,
+      build => relay.post(build),
+      poolId => machineWorker.changed(poolId),
+    )
+    const machineWorker = new PoolWorker(pools, config.key, build => relay.post(build), { machineName: config.machine })
+    worker = machineWorker
     const relay: RelayConnection = new RelayConnection(config, 'service', {
       connected: () => {
         writeStatus('connected', config.server)
@@ -63,7 +79,14 @@ export async function runService(args: string[]) {
         else if (message.t === 'start_answer') void handleStartAnswer(config, message.launchId, message.answer)
         else if (message.t === 'agent_logs') void handleLogRequest(config, message.requestId, message.request, relay)
         else if (message.t === 'diagnose') void receiveDiagnoseRequest(config, message.requestId, message.request, relay, 'service')
+        else if (message.t === 'pool_machine_join' || message.t === 'pool_machine_leave') {
+          const order = parsePoolToMachine(message)
+          if (order?.machineId !== config.machineId) return
+          if (order.t === 'pool_machine_join') pools.receive(order.poolId, order.order)
+          else pools.remove(order.poolId)
+        }
       },
+      pool: update => pools.apply(update),
     })
     connection = relay
     relay.connect()

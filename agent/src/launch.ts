@@ -1,6 +1,7 @@
 // Starts claude or opencode from the notch. An interactive Claude Code needs a terminal, so it runs in a detached tmux
 // session; the questions it asks on the way (loading the channel, trusting the folder) go to the notch, and only the
 // user's answer moves it on. OpenCode asks nothing: its session is made in its background service when it has one.
+// Pool machines start their sessions the same way (agent/src/service/pool-worker.ts), in the folder their owner chose.
 
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -103,13 +104,81 @@ export async function handleStartOrder(
   running++
   try {
     if (order.tool === 'opencode') await runOpenCodeLaunch(launchId, cwd, report, options)
-    else await runLaunch(launchId, cwd, report, { ...options, run })
+    else {
+      // Each question goes to the notch, and waits for the user's answer to it.
+      const confirm = (text: string, question: string) => {
+        report('asking', { text, question })
+        return waitForAnswer(launchId, question)
+      }
+      await runLaunch(launchId, cwd, report, confirm, { ...options, run })
+    }
   } finally {
     running--
   }
 }
 
+/** A session started for a pool machine's task: its id, and the tmux session that runs it. */
+export interface PoolLaunch {
+  sessionId: string
+  tmux: string
+}
+
+/** As the relay checks task ids: tmux reads nothing in them as a format. */
+const POOL_TASK_ID = /^[A-Za-z0-9_-]{8,40}$/
+
+/** The tmux session of a pool task's session. */
+export const poolTmuxName = (taskId: string) => `tonton-pool-${taskId}`
+
+/**
+ * Starts a session for a task a pool machine took, in the task's worktree: Claude Code in a detached tmux, or OpenCode
+ * through its service and a terminal on it. Claude Code's questions are answered yes without asking: the machine owner
+ * put the machine in the pool with this folder. The session id, or why it did not start.
+ */
+export async function launchForPool(
+  taskId: string,
+  cwd: string,
+  tool: 'claude' | 'opencode',
+  options: LaunchOptions = {},
+): Promise<PoolLaunch | string> {
+  if (!POOL_TASK_ID.test(taskId)) return 'The task has no id this machine can use.'
+  if (process.platform === 'win32') return 'Pool sessions run in tmux, which Windows does not have.'
+  if (!tmux(['-V']).ok) return 'Install tmux on this machine to run pool sessions.'
+  if (running >= MAX_RUNNING) return 'Too many sessions are starting on this machine.'
+  const name = poolTmuxName(taskId)
+  // A session left over from an earlier start of the task: this one replaces it.
+  tmux(['kill-session', '-t', `=${name}`])
+  let failure = 'The session did not start.'
+  const report: Report = (state, fields = {}) => {
+    if (state === 'failed') failure = fields.text ?? failure
+    // OpenCode 1 makes its session with the first message: nobody could hand it the task.
+    if (state === 'started' && !fields.sessionId) failure = 'Pool sessions need OpenCode 2 or later, whose service makes the session.'
+    log('pool session start', { task: taskId, state })
+  }
+  running++
+  try {
+    const sessionId =
+      tool === 'opencode'
+        ? await runOpenCodeLaunch(`pool-${taskId}`, cwd, report, options, name)
+        : await runLaunch(`pool-${taskId}`, cwd, report, async () => true, { ...options, run: options.run ?? paths.run }, name)
+    if (sessionId) return { sessionId, tmux: name }
+    tmux(['kill-session', '-t', `=${name}`])
+    return failure
+  } finally {
+    running--
+  }
+}
+
+/** Whether the pool task's session still runs in its tmux. */
+export const poolSessionRuns = (tmuxName: string): boolean => tmux(['has-session', '-t', `=${tmuxName}`]).ok
+
+/** Ends the pool task's session: its tmux goes, Claude Code with it. An OpenCode session stays in its service, idle. */
+export function endPoolSession(tmuxName: string) {
+  tmux(['kill-session', '-t', `=${tmuxName}`])
+}
+
 type Report = (state: StartState, fields?: Pick<StartDetail, 'text' | 'question' | 'sessionId'>) => void
+/** A question Claude Code asks while starting, with a new id: true to say yes. */
+type Confirm = (text: string, question: string) => Promise<boolean>
 
 /** Marks the start as run on this machine: `taken` if one of its processes already did. */
 export const claim = (launchId: string, run: string, now = Date.now()) => claimOnce(join(run, 'launches'), launchId, 2 * ORDER_TTL_MS, now)
@@ -122,8 +191,15 @@ export async function handleStartAnswer(config: AgentConfig, launchId: string, s
   if (answer.question === waiting.question) waiting.resolve(answer.confirm === true)
 }
 
-async function runLaunch(launchId: string, cwd: string, report: Report, options: LaunchOptions & { run: string }) {
-  const name = `tonton-${launchId}`
+/** The session id once claude runs and a hook linked it, or null when the start failed (and said why). */
+async function runLaunch(
+  launchId: string,
+  cwd: string,
+  report: Report,
+  confirmed: Confirm,
+  options: LaunchOptions & { run: string },
+  name = `tonton-${launchId}`,
+): Promise<string | null> {
   // `=name` matches that session only, not one whose name starts the same.
   const session = `=${name}`
   const pane = `=${name}:`
@@ -132,7 +208,7 @@ async function runLaunch(launchId: string, cwd: string, report: Report, options:
   // A login and interactive shell sets the user's PATH and the claude launcher, so the session gets the channel. tmux
   // reads `#` in the folder as a format.
   const created = tmux(['new-session', '-d', '-s', name, '-c', cwd.replaceAll('#', '##'), '-x', '200', '-y', '50', shell, '-lic', 'claude'])
-  if (!created.ok) return report('failed', { text: `tmux could not start: ${created.output}` })
+  if (!created.ok) return failed(report, `tmux could not start: ${created.output}`)
   const belongs = paneProcess(tmux(['display-message', '-p', '-t', pane, '#{pane_pid}']).output)
   report('starting')
   const answered = new Set<string>()
@@ -141,22 +217,23 @@ async function runLaunch(launchId: string, cwd: string, report: Report, options:
   while (Date.now() < deadline) {
     await Bun.sleep(POLL_MS)
     const capture = tmux(['capture-pane', '-p', '-t', pane])
-    if (!capture.ok) return report('failed', { text: `claude stopped before it was ready.\n\n${lastLines(screen)}` })
+    if (!capture.ok) return failed(report, `claude stopped before it was ready.\n\n${lastLines(screen)}`)
     screen = capture.output
     // A question already answered can stay on screen a moment: only a new one waits for the user.
     const question = QUESTIONS.find(q => screen.includes(q.marker) && !answered.has(q.marker))
     if (!question) {
       const sessionId = newSession(cwd, startedAt, options.run, belongs)
-      if (sessionId) return report('started', { text: `Running in tmux session ${name}.`, sessionId })
+      if (sessionId) {
+        report('started', { text: `Running in tmux session ${name}.`, sessionId })
+        return sessionId
+      }
       continue
     }
-    const id = crypto.randomUUID()
     const shown = lastLines(screen)
-    report('asking', { text: `${question.text}\n\n${shown}`, question: id })
-    const confirm = await waitForAnswer(launchId, id)
+    const confirm = await confirmed(`${question.text}\n\n${shown}`, crypto.randomUUID())
     if (!confirm) {
       tmux(['kill-session', '-t', session])
-      return report('failed', { text: 'Cancelled.' })
+      return failed(report, 'Cancelled.')
     }
     // The answer can come minutes later: Enter only goes to the screen the user saw. If it changed, they are asked again.
     if (lastLines(tmux(['capture-pane', '-p', '-t', pane]).output) !== shown) continue
@@ -168,34 +245,46 @@ async function runLaunch(launchId: string, cwd: string, report: Report, options:
   const left = tmux(['has-session', '-t', session]).ok
     ? `claude did not show up in the notch. It still runs: tmux attach -t ${name} on this machine to see it.`
     : 'claude stopped before it was ready.'
-  report('failed', { text: `${left}\n\n${lastLines(screen)}` })
+  return failed(report, `${left}\n\n${lastLines(screen)}`)
+}
+
+const failed = (report: Report, text: string): null => {
+  report('failed', { text })
+  return null
 }
 
 /**
  * OpenCode 2 keeps its sessions in a background service: the session is made there in the folder, so the notch has it at
  * once, then a terminal opens on it. OpenCode 1 makes its session with the first message, which is when the notch gets it.
  */
-async function runOpenCodeLaunch(launchId: string, cwd: string, report: Report, options: LaunchOptions) {
+async function runOpenCodeLaunch(
+  launchId: string,
+  cwd: string,
+  report: Report,
+  options: LaunchOptions,
+  name = `tonton-${launchId}`,
+): Promise<string | null> {
   const access = options.openCode ?? installedOpenCode
   const shell = options.shell ?? (process.env.SHELL || '/bin/sh')
   const version = access.version(shell)
-  if (version === null) return report('failed', { text: 'opencode was not found on this machine. Install it, then try again.' })
+  if (version === null) return failed(report, 'opencode was not found on this machine. Install it, then try again.')
   report('starting')
   const service = version >= 2 ? access.service(shell) : null
   const sessionId = service ? await createOpenCodeSession(service, cwd) : null
-  if (version >= 2 && !sessionId) return report('failed', { text: "OpenCode's background service did not make the session." })
-  const name = `tonton-${launchId}`
+  if (version >= 2 && !sessionId) return failed(report, "OpenCode's background service did not make the session.")
   const command = sessionId ? `opencode --session ${sessionId}` : 'opencode'
   const created = tmux(['new-session', '-d', '-s', name, '-c', cwd.replaceAll('#', '##'), '-x', '200', '-y', '50', shell, '-lic', command])
-  if (!created.ok) return report('failed', { text: `tmux could not start: ${created.output}` })
+  if (!created.ok) return failed(report, `tmux could not start: ${created.output}`)
   await Bun.sleep(OPENCODE_SETTLE_MS)
-  if (!tmux(['has-session', '-t', `=${name}`]).ok) return report('failed', { text: 'opencode stopped before it was ready.' })
+  if (!tmux(['has-session', '-t', `=${name}`]).ok) return failed(report, 'opencode stopped before it was ready.')
   if (sessionId) {
     // OpenCode says nothing about a session until it is written to: the bridge learns it from this file.
     announceOpenCodeSession(options.run ?? paths.run, sessionId, cwd)
-    return report('started', { text: `Running in tmux session ${name}.`, sessionId })
+    report('started', { text: `Running in tmux session ${name}.`, sessionId })
+    return sessionId
   }
   report('started', { text: `Running in tmux session ${name}. The session shows up in the notch with its first message.` })
+  return null
 }
 
 /** Where the launcher leaves the OpenCode sessions it made, for the bridge of the OpenCode service to follow. */

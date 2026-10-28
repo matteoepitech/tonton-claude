@@ -313,7 +313,8 @@ function cleanEnv(extra: Record<string, string>): Record<string, string> {
 }
 
 /** Git never waits for a password nor an editor, and speaks English, which the outcome reads. */
-const gitEnv = () => cleanEnv({ GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_MERGE_AUTOEDIT: 'no', LC_ALL: 'C', LANGUAGE: 'C' })
+export const gitEnv = () =>
+  cleanEnv({ GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_MERGE_AUTOEDIT: 'no', LC_ALL: 'C', LANGUAGE: 'C' })
 
 /** Runs a command and keeps what it printed, both streams together. A check runs in its own group, so a timeout stops all of it. */
 function run(argv: string[], options: { cwd: string; env: Record<string, string>; timeoutMs: number; group?: boolean }): Promise<Ran> {
