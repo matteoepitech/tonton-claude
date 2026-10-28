@@ -127,9 +127,29 @@ final class PoolStore: ObservableObject {
         send(["t": "pool_add_machine", "poolId": poolId, "machineId": machine.id, "order": order, "profile": sealed])
     }
 
-    /// Takes the machine out of the pool: its pool sessions end, and their tasks go back to the board.
+    /// Takes the machine out of the pool: its pool sessions end, and the control loop gives back the tasks it held.
     func removeMachine(_ machineId: String, pool poolId: String) {
         send?(["t": "pool_remove_machine", "poolId": poolId, "machineId": machineId])
+    }
+
+    /// Its owner, or the pool's owner and admins: the machine ends its pool sessions and takes no work until started again.
+    func stopMachine(_ machineId: String, stopped: Bool, pool poolId: String) {
+        send?(["t": "pool_stop_machine", "poolId": poolId, "machine": machineId, "stopped": stopped])
+    }
+
+    /// Owner and admins: every machine of the pool at once. Stopping turns the dispatch off first, as the website does, so
+    /// that nothing new starts; starting them leaves the dispatch as it is.
+    func stopEveryMachine(_ stopped: Bool, pool poolId: String) {
+        guard let board = boards[poolId], let send else { return }
+        if stopped, let state = board.state, state.dispatch?.on == true {
+            do {
+                let blob = try board.poolVault.seal(PoolDispatch(on: false, note: "Every machine was stopped."))
+                send(["t": "pool_dispatch", "poolId": poolId, "rev": state.dispatchRev, "blob": blob])
+            } catch {
+                Logger.app.error("pool \(poolId): \(error.localizedDescription)")
+            }
+        }
+        send(["t": "pool_stop_machine", "poolId": poolId, "machine": NSNull(), "stopped": stopped])
     }
 
     /// The pools one of the account's machines is in, with what it runs in each.

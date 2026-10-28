@@ -99,11 +99,22 @@ struct MachinePools: View {
                 Text(board.name).font(.system(size: 12, weight: .medium))
                 Text(summary(entry)).font(.system(size: 11.5)).foregroundStyle(Theme.textDim).lineLimit(1)
                 Spacer()
+                if entry.stopped {
+                    Button("Start") { pools.stopMachine(machine.id, stopped: false, pool: board.id) }
+                        .buttonStyle(ThemeButtonStyle())
+                        .help("It takes the pool's tasks again.")
+                } else {
+                    Button("Stop") { pools.stopMachine(machine.id, stopped: true, pool: board.id) }
+                        .buttonStyle(ThemeButtonStyle())
+                        .help("Its pool sessions end, and their tasks go back to the board. It takes no tasks until you start it again.")
+                }
                 Button("Remove") { pools.removeMachine(machine.id, pool: board.id) }
                     .buttonStyle(ThemeButtonStyle())
-                    .help("Its pool sessions end, and their tasks go back to the board.")
+                    .help("Its pool sessions end, and it leaves the pool.")
             }
-            if !entry.ready && entry.online {
+            if entry.stopped {
+                Text("Stopped: it takes no tasks until you start it again.").font(.system(size: 11.5)).foregroundStyle(Theme.textDim)
+            } else if !entry.ready && entry.online {
                 Text("Its agent has not taken the order: update the agent to \(MachineInfo.poolMachinesSince) or later.")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.warning)
             }

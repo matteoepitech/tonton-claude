@@ -114,11 +114,12 @@ describe('machineCards', () => {
         machine(ANA, 'mac_sealed', null),
         { ...machine(ANA, 'mac_off', profile('Off', 2)), online: false, ready: false },
         { ...machine(ANA, 'mac_old', profile('Old', 2)), ready: false },
+        { ...machine(ANA, 'mac_stopped', profile('Stopped', 2)), stopped: true },
       ],
       tasks: [busy('mac_full'), busy('mac_full')],
     })
     const free = new Map(machineCards(state, ANA).map(card => [card.machine.machine, card.free]))
-    expect(Object.fromEntries(free)).toEqual({ mac_full: 0, mac_sealed: 0, mac_off: 0, mac_old: 0 })
+    expect(Object.fromEntries(free)).toEqual({ mac_full: 0, mac_sealed: 0, mac_off: 0, mac_old: 0, mac_stopped: 0 })
   })
 
   test('a slot without a session: starting, waiting for its machine, or left the pool', () => {
@@ -132,8 +133,10 @@ describe('machineCards', () => {
     const waiting = on('mac_off')
     const state = pool({ machines, tasks: [starting, waiting, stopped] })
     expect(phases(state)).toEqual({ [starting.id]: 'starting', [waiting.id]: 'waiting', [stopped.id]: 'left' })
-    // A paused pool starts nothing.
+    // A paused pool starts nothing, nor a stopped machine.
     expect(phases({ ...state, paused: true })[starting.id]).toBe('waiting')
+    const halted = { ...state, machines: state.machines?.map(m => (m.machine === 'mac_on' ? { ...m, stopped: true } : m)) }
+    expect(phases(halted)[starting.id]).toBe('waiting')
   })
 
   test("this account's machines come first, then by name, named by their profile or the account's own list", () => {
