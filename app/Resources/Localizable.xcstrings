@@ -196,6 +196,16 @@
         }
       }
     },
+    "%@ is stopped" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ est arrêtée"
+          }
+        }
+      }
+    },
     "%@ of %@" : {
       "comment" : "Last 40 lines of 12 KB",
       "localizations" : {
@@ -4479,6 +4489,16 @@
         }
       }
     },
+    "It takes the pool's tasks again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elle reprend les tâches du pool."
+          }
+        }
+      }
+    },
     "Its agent has not taken the order: update the agent to %@ or later." : {
       "localizations" : {
         "fr" : {
@@ -4519,6 +4539,16 @@
         }
       }
     },
+    "Its other pool sessions end, and their tasks go back to the board. This orchestrator session goes on." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses autres sessions du pool s’arrêtent, et leurs tâches retournent au tableau. Cette session orchestrateur continue."
+          }
+        }
+      }
+    },
     "Its pool sessions do anything without asking, commands included: only for a machine or a virtual machine you give to the work, never one with your own files on it." : {
       "localizations" : {
         "fr" : {
@@ -4539,12 +4569,32 @@
         }
       }
     },
-    "Its pool sessions end, and their tasks go back to the board." : {
+    "Its pool sessions end, and it leaves the pool." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ses sessions du pool s’arrêtent, et leurs tâches retournent au tableau."
+            "value" : "Ses sessions du pool s’arrêtent, et elle quitte le pool."
+          }
+        }
+      }
+    },
+    "Its pool sessions end, and their tasks go back to the board. It takes no tasks until you start it again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses sessions du pool s’arrêtent, et leurs tâches retournent au tableau. Elle ne prend plus de tâche jusqu’à ce que vous la relanciez."
+          }
+        }
+      }
+    },
+    "Its pool sessions end, this one too, and their tasks go back to the board." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses sessions du pool s’arrêtent, celle-ci aussi, et leurs tâches retournent au tableau."
           }
         }
       }
@@ -7664,6 +7714,16 @@
         }
       }
     },
+    "Start every machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relancer toutes les machines"
+          }
+        }
+      }
+    },
     "Start here" : {
       "localizations" : {
         "fr" : {
@@ -7674,12 +7734,32 @@
         }
       }
     },
+    "Start machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relancer la machine"
+          }
+        }
+      }
+    },
     "Start pool tasks right away" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Commencer tout de suite les tâches du pool"
+          }
+        }
+      }
+    },
+    "Started by %@ for the pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lancée par %@ pour le pool"
           }
         }
       }
@@ -7734,12 +7814,72 @@
         }
       }
     },
+    "Stop" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter"
+          }
+        }
+      }
+    },
+    "Stop %@? It takes no tasks until it is started again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter %@ ? Elle ne prend plus de tâche jusqu’à ce qu’on la relance."
+          }
+        }
+      }
+    },
     "Stop dictating" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêter la dictée"
+          }
+        }
+      }
+    },
+    "Stop every machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter toutes les machines"
+          }
+        }
+      }
+    },
+    "Stop every machine? The dispatch stops, and their pool sessions end. Nothing starts again until you start the machines and the dispatch." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter toutes les machines ? La distribution des tâches s’arrête, et leurs sessions du pool aussi. Rien ne repart avant que vous relanciez les machines et la distribution."
+          }
+        }
+      }
+    },
+    "Stop machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter la machine"
+          }
+        }
+      }
+    },
+    "Stopped: it takes no tasks until you start it again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêtée : elle ne prend plus de tâche jusqu’à ce que vous la relanciez."
           }
         }
       }
@@ -8043,6 +8183,26 @@
         }
       }
     },
+    "The dispatch stays as it is: turn it on from the website, or ask the orchestrator." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La distribution des tâches reste telle quelle : activez-la depuis le site web, ou demandez-le à l’orchestrateur."
+          }
+        }
+      }
+    },
+    "The dispatch stops, and every machine ends its pool sessions." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La distribution des tâches s’arrête, et chaque machine arrête ses sessions du pool."
+          }
+        }
+      }
+    },
     "The git branch of the session's folder: %@" : {
       "localizations" : {
         "fr" : {
@@ -8299,6 +8459,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ce n’est pas une clé de récupération valide."
+          }
+        }
+      }
+    },
+    "This machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette machine"
           }
         }
       }

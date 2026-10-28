@@ -245,8 +245,8 @@ Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safe
   interrupt), and takes the session out of the pool. Without tmux, Claude Code's turn cannot be interrupted: the user is
   told. Every machine owner can also take a session out (`pool_leave_session`) or leave the pool at any time.
 - **Stop a machine.** A machine put in the pool for the autopilot is stopped by its owner, or by the owner and admins
-  (`pool_stop_machine`); the owner and admins stop every machine at once, and the website turns the dispatch off with
-  them. The relay keeps the machine `stopped`, in clear, interrupts the sessions it started for the pool's tasks and
+  (`pool_stop_machine`); the owner and admins stop every machine at once, and the website and the notch turn the
+  dispatch off with them. The relay keeps the machine `stopped`, in clear, interrupts the sessions it started for the pool's tasks and
   takes them out, like `pool_stop`; its service gives their tasks back to the board as they were, uncounted, and takes no
   work until the machine is started again (`stopped: false`). The control loop hands it nothing, and gives back what it
   held when the machine cannot. The orchestrator session an orchestrator machine runs goes on: the admin still talks to
@@ -272,7 +272,10 @@ the logic in `TontonCore/PoolState.swift` and `PoolJoin.swift`). A session joins
 button of its chat header: the pool, its area, what it knows, its repository folder, the kind of task it takes, and
 whether it starts pool tasks right away. Only sessions an agent serves join, from an agent of 0.8.0 or later. The row and
 the header show its role, and the pool button its task, its agent's state and the pool's latest messages for it, with a
-link to the pool on the website (`<relay>/#pool=<id>`) and a way to leave. Pools are made and joined on the website.
+link to the pool on the website (`<relay>/#pool=<id>`) and a way to leave. For a session a pool machine started, the
+pool button also stops that machine; for the owner and admins, it stops every machine of the pool at once, the dispatch
+first, or starts them again (`pool_stop_machine`). Settings › Machines stops and starts each of the account's machines
+in each pool. Pools are made and joined on the website.
 
 ## The website
 
@@ -299,12 +302,14 @@ The relay serves a website at `/`, built on the client core like the web app: si
   online, ready or with an agent to update, the orchestrator machine, what it runs, how many sessions at once, what its
   sessions may do without asking ("everything passes" is flagged), the tasks it takes and its areas. Below come its
   slots: each task dispatched to it (assigned, in progress or blocked), its state and failed attempts, and the session
-  working on it, or why there is none yet (its machine is starting one, the machine is offline or the pool paused, or
-  the session left), then the free slots of a machine that takes tasks (`web/site/pools/machines-model.ts`). A member
-  opens its own sessions from there; the owner and admins, or the session's owner, **Stop** one (`pool_stop`): it ends,
-  and its machine puts the task back on the board. The machine's owner, the pool's owner and admins **Remove** it: its
-  sessions end, and the tasks it held stay on the board as they are. Owners and admins make one of their own machines
-  the orchestrator machine.
+  working on it, or why there is none yet (its machine is starting one, the machine is offline, stopped or the pool
+  paused, or the session left), then the free slots of a machine that takes tasks (`web/site/pools/machines-model.ts`).
+  A member opens its own sessions from there; the owner and admins, or the session's owner, **Stop** one (`pool_stop`):
+  it ends, and its machine puts the task back on the board. The machine's owner, the pool's owner and admins **Stop
+  machine** (it ends its pool sessions and takes nothing until **Start machine**) and **Remove** it: its sessions end,
+  and the control loop gives back the tasks it held while the dispatch is on. The owner and admins **Stop every
+  machine** at once, which turns the dispatch off first, and **Start every machine**, which leaves the dispatch off.
+  Owners and admins make one of their own machines the orchestrator machine.
 - **Control center** (`web/site/pools/control.tsx`) shows every member with its machines and pool sessions: tool and model (from the
   session's `session` event), area, whether it is the orchestrator, online or not, its status, its current task, when it
   last wrote to the pool, and its usage. A count per status (working, needs its owner, idle, offline) sits on top, and
