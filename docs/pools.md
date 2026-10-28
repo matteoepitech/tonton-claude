@@ -44,11 +44,11 @@ picks it when the session joins; without a choice it follows the tool. The orche
 | Member keys | account id, key version | the pool key it joined with, and its P-256 private key, both sealed with that member's account key; its public key, sealed with each version of the pool key it saw |
 | Key wraps | account id, version, who made it | a later version of the pool key, wrapped for that member (see Keys) |
 | Invites | id, role, token hash, uses left, expiry | — |
-| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order | profile (area, skills, repo, tool, kind of task); the order, sealed with the account key |
+| Pool sessions | account id, session id, joined at; whether its agent is connected and took its order; its status, which the relay already sees for its own account and now shows the members | profile (area, skills, repo, tool, kind of task); the order, sealed with the account key |
 | Tasks | id, revision, updated at, who changed it last | goal, criteria, area, size, paths, state, assignee, dependencies, branch, summary |
 | Notes | revision, updated at, who changed them last | free text, the sections (goal, stack, contracts, decisions), the areas and the paths each owns |
 | Messages | id, order, sender account and session, time | text, and who it is for (a session, an area or everyone) |
-| Events | id, order, sender account and session, time | what happened (task moved, merge, blocker…) |
+| Events | id, order, sender account and session, time | what happened (task moved, merge, blocker…), and each session's usage: cost, tokens, its account's windows |
 
 Like everything else: ids, roles, states the relay must enforce, sizes and timing in clear, the rest sealed. Pool data
 lives in SQLite (new `MIGRATIONS` entries) with caps in `limits.ts`: 50 members, 100 sessions, 500 tasks, 2000 messages
@@ -236,13 +236,36 @@ The relay serves a website at `/`, built on the client core like the web app: si
   policy of `tonton-web.html` allows sockets only. Opened from disk, the page says where to go.
 - The list shows each pool's name, opened with the member's keys. **New pool** makes the pool and its key in the
   browser; **Join** takes an invite pasted from a teammate (`tontonpool1.…`, for this relay only).
-- A pool's page has tabs, each a name and a function in `POOL_TABS` (`web/pools.ts`): **Tasks**, **Members**,
-  **Invites** (owner and admins) and **Settings**. The control center, the activity, the leaderboard and the notes come as
-  more tabs.
+- A pool's page has tabs, each a name and a function in `POOL_TABS` (`web/pools.ts`): **Tasks**, **Control center**,
+  **Activity**, **Leaderboard**, **Members**, **Invites** (owner and admins) and **Settings**. The notes come as one more
+  tab.
 - **Tasks** is the board: one column per state (to do, assigned, in progress, in review, done, blocked), live. A task
   opens with its goal, criteria, area, assignee, dependencies, branch, summary and history (the `task_*` events each
   change leaves). Members create, edit and move tasks; viewers read. A change over a revision someone else changed
   meanwhile is refused by the relay: the board shows their version, marked "changed meanwhile".
+- **Control center** (`web/control.ts`) shows every member with its machines and pool sessions: tool and model (from the
+  session's `session` event), area, whether it is the orchestrator, online or not, its status, its current task, when it
+  last wrote to the pool, and its usage. A count per status (working, needs its owner, idle, offline) sits on top, and
+  the filters by role, member and status in the panel. Below, a graph of who talks to whom, drawn in SVG from the
+  messages: a line from each writer to the session, the area or everyone it wrote to, thicker with more messages.
+- The **status** comes from the relay, which knows it anyway: each pool session in the snapshot carries `status`, and the
+  members get a new `pool_session` when it changes, never with every entry. Older relays send none: the page then says
+  online or offline only.
+- The **usage** comes from each session's agent: a `usage` event, sealed with the pool key, with its tokens (cache
+  included) and its account's 5-hour and weekly windows (Claude Code only). What it spent comes from its `spend` events,
+  the same numbers the budgets count, so the control center and the leaderboard never disagree with them. The agent posts it when it
+  would show differently (thousands of tokens, whole percents), at most once a minute (`agent/src/channel/
+  pool-usage.ts`), for Claude Code and OpenCode alike.
+- **Activity** (`web/activity.ts`) lists everything in order: joins of members and sessions, messages, task changes,
+  blockers, merges, key changes and the other audit events, newest first. It searches what was said and done, filters
+  by member, session and kind, and downloads what it shows as JSON or Markdown, from the page itself (a blob link), or
+  copies it as Markdown. `usage` and `spend` events stay out of it.
+- **Leaderboard** (`web/leaderboard.ts`) ranks sessions and members by tasks done, then time, for today, this run (since
+  the last `resumed` or `started` event, else since the pool was made) or all time. A task counts once, for the session it
+  was assigned to when it was done last; its time runs from its first move to in progress to that moment. Spending is
+  the period's share of each session's running total. Lines changed are not counted: no event carries them yet.
+- The three tabs work out what they show in `shared/pool-stats.ts`, from the pool's state alone, so any client computes
+  the same.
 - **Members** lists the members and the pool's sessions (tool, machine, online or not). Roles change from a menu, by the
   rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and says who could
   not get the new one.

@@ -498,7 +498,7 @@ export class PoolStore {
     sessionId: string,
     order: string,
     profile: string,
-  ): Omit<PoolSessionWire, 'online' | 'ready'> | null {
+  ): Omit<PoolSessionWire, 'online' | 'ready' | 'status'> | null {
     return this.db.transaction(() => {
       const known = this.db
         .query('SELECT joined_at FROM pool_sessions WHERE pool_id = ? AND account_id = ? AND session_id = ?')
@@ -551,7 +551,7 @@ export class PoolStore {
     return rows.map(row => ({ poolId, accountId: row.account_id, sessionId: row.session_id, order: row.order_blob }))
   }
 
-  sessions(poolId: string): Omit<PoolSessionWire, 'online' | 'ready'>[] {
+  sessions(poolId: string): Omit<PoolSessionWire, 'online' | 'ready' | 'status'>[] {
     // With the revision of the rules its owner accepted for it (relay/src/pool-safety.ts).
     const rows = this.db
       .query(
@@ -660,10 +660,10 @@ export class PoolStore {
 
   // MARK: Snapshot
 
-  /** Everything a member sees on subscribing. `live` tells whether a session's agent is connected and ready. */
+  /** Everything a member sees on subscribing. `live` tells whether a session's agent is connected and ready, and its status. */
   snapshot(
     poolId: string,
-    live: (accountId: string, sessionId: string) => { online: boolean; ready: boolean },
+    live: (accountId: string, sessionId: string) => Pick<PoolSessionWire, 'online' | 'ready' | 'status'>,
     forAccount: string | null = null,
   ): PoolSnapshot | null {
     const pool = this.db.query('SELECT * FROM pools WHERE id = ?').get(poolId) as PoolRow | null

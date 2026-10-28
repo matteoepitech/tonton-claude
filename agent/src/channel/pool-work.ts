@@ -5,10 +5,19 @@
 // user. Planning and assigning (`plan_create`, `task_create`, `task_assign`…) are the orchestrator's: pool-orchestrator.ts.
 
 import { newPoolItemId, POOL_NOTES_SECTIONS, type PoolSession, type PoolState, type PoolTaskItem, poolTaskSize } from '../../../shared/pool'
-import type { PoolMessageBody, PoolNotes, PoolNotesSection, PoolTask, PoolTaskState, PoolUpdate } from '../../../shared/pool-protocol'
+import type {
+  PoolMessageBody,
+  PoolNotes,
+  PoolNotesSection,
+  PoolTask,
+  PoolTaskState,
+  PoolUpdate,
+  PoolUsage,
+} from '../../../shared/pool-protocol'
 import type { AgentMessage } from '../../../shared/protocol'
 import { log } from '../log'
 import { isOrchestrator, ORCHESTRATOR_GUIDE, ORCHESTRATOR_TOOLS, PoolOrchestrator, parseArea, STALL_MS } from './pool-orchestrator'
+import { UsageSharing } from './pool-usage'
 import type { SessionPools } from './pools'
 
 type Post = (build: () => Promise<AgentMessage | null>) => void
@@ -122,6 +131,8 @@ const INBOX_SIZE = 20
 export interface SessionDescription {
   tool: 'claude' | 'opencode'
   model?: string
+  /** Its tokens and its account's windows, shared with the pool as `usage` events (pool-usage.ts). What it spent goes in `spend` events (pool-safety.ts). */
+  usage?: PoolUsage
 }
 
 type Args = Record<string, unknown>
@@ -133,6 +144,17 @@ export class PoolWork {
   private readonly described = new Map<string, string>()
   private sent: number[] = []
   private active = false
+  private readonly usage = new UsageSharing((poolId, usage) => {
+    const vault = this.pools.vault(poolId)
+    if (!vault) return
+    this.post(async () => ({
+      t: 'pool_event',
+      sessionId: this.sessionId(),
+      poolId,
+      id: newPoolItemId(),
+      blob: await vault.seal({ kind: 'usage', usage }),
+    }))
+  })
   /** Budgets and spending (agent/src/channel/pool-safety.ts): past a budget, the session takes no more tasks. */
   private safety: { blocked(poolId: string): string | null; status(poolId: string): Record<string, unknown> | undefined } | null = null
   /** Whether the session is the orchestrator of one of its pools: it gets the orchestrator's tools then. */
@@ -188,7 +210,7 @@ export class PoolWork {
     clearInterval(this.stallTimer)
   }
 
-  /** The model may have changed: the pool sees it with the next `session` event. */
+  /** The model or the usage may have changed: the pool sees it with the next `session` or `usage` event. */
   descriptionChanged() {
     for (const poolId of this.pools.ids()) this.announce(poolId)
   }
@@ -489,6 +511,7 @@ export class PoolWork {
       if (!this.pools.ids().includes(poolId)) {
         this.seen.delete(poolId)
         this.described.delete(poolId)
+        this.usage.forget(poolId)
         this.notesSeen.delete(poolId)
         this.guided.delete(poolId)
         this.orchestrator.forget(poolId)
@@ -595,11 +618,12 @@ export class PoolWork {
     )
   }
 
-  /** Posts what the session runs on when it joins, and again when its model changes. */
+  /** Posts what the session runs on when it joins, and again when its model changes; its tokens and windows when they change. */
   private announce(poolId: string) {
     const vault = this.pools.vault(poolId)
     if (!vault || !this.pools.state(poolId)) return
     const description = this.describe()
+    this.usage.share(poolId, description.usage)
     const mark = `${description.tool}/${description.model ?? ''}`
     if (this.described.get(poolId) === mark) return
     this.described.set(poolId, mark)

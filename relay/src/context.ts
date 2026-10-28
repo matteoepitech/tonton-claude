@@ -1,4 +1,4 @@
-import type { PoolAuditAction, PoolSnapshot, PoolUpdate } from '../../shared/pool-protocol'
+import type { PoolAuditAction, PoolSessionWire, PoolSnapshot, PoolUpdate } from '../../shared/pool-protocol'
 import type { MachineSummary, SessionSummary, ShareSummary } from '../../shared/protocol'
 import { ApnsClient, type Pusher } from './apns'
 import { SessionArchive } from './archive'
@@ -39,6 +39,8 @@ export class RelayContext {
   readonly poolSafety: PoolSafetyStore
   /** Posts per pool member in the current minute, to cap how fast one member can write to a pool. */
   readonly poolPosts = new Map<string, { minute: number; count: number }>()
+  /** The status pool members were last told, per pool session: `account/session`. */
+  private readonly poolStatuses = new Map<string, string>()
   /** The sealed copies of shared sessions. */
   readonly shares = new ShareStreams()
   private readonly archive: SessionArchive
@@ -63,9 +65,11 @@ export class RelayContext {
         updated: (accountId, session) => {
           this.hub.sendToApps(accountId, { t: 'session', session })
           this.pushSharedStatus(accountId, session)
+          this.poolStatusChanged(accountId, session)
           this.push?.sessionsChanged(accountId)
         },
         removed: (accountId, sessionId) => {
+          this.poolStatuses.delete(`${accountId}/${sessionId}`)
           this.hub.sendToApps(accountId, { t: 'removed', sessionId })
           this.push?.sessionsChanged(accountId)
         },
@@ -107,7 +111,7 @@ export class RelayContext {
 
   /** What a member sees on subscribing, its rules, budgets and audit log included. */
   poolSnapshot(poolId: string, forAccount: string): PoolSnapshot | null {
-    const pool = this.pools.snapshot(poolId, (account, session) => this.hub.poolSessionState(poolId, account, session), forAccount)
+    const pool = this.pools.snapshot(poolId, (account, session) => this.poolLive(poolId, account, session), forAccount)
     if (!pool) return null
     return {
       ...pool,
@@ -192,12 +196,27 @@ export class RelayContext {
     if (announce) this.broadcastPool(poolId, { t: 'pool_session_left', poolId, account: accountId, session: sessionId })
   }
 
+  /** Whether a pool session's agent is connected and ready, and its status: the relay sees it anyway, the members see it too. */
+  poolLive(poolId: string, accountId: string, sessionId: string): Pick<PoolSessionWire, 'online' | 'ready' | 'status'> {
+    const status = this.sessions.list(accountId).find(session => session.id === sessionId)?.status
+    return { ...this.hub.poolSessionState(poolId, accountId, sessionId), ...(status ? { status } : {}) }
+  }
+
+  /** A session's status changed: the pools it works for see it, once per change rather than with every entry. */
+  private poolStatusChanged(accountId: string, session: SessionSummary) {
+    const key = `${accountId}/${session.id}`
+    if (this.poolStatuses.get(key) === session.status) return
+    const orders = this.pools.ordersFor(accountId, session.id)
+    if (!orders.length) return
+    this.poolStatuses.set(key, session.status)
+    for (const order of orders) this.poolSessionChanged(order.poolId, accountId, session.id)
+  }
+
   /** A pool session's agent connected, left or took its order: the members see it. */
   poolSessionChanged(poolId: string, accountId: string, sessionId: string) {
     const session = this.pools.sessions(poolId).find(s => s.account === accountId && s.session === sessionId)
     if (session) {
-      const live = this.hub.poolSessionState(poolId, accountId, sessionId)
-      this.broadcastPool(poolId, { t: 'pool_session', poolId, session: { ...session, ...live } })
+      this.broadcastPool(poolId, { t: 'pool_session', poolId, session: { ...session, ...this.poolLive(poolId, accountId, sessionId) } })
     }
   }
 

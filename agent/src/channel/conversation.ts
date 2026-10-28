@@ -10,6 +10,7 @@ import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import { PoolSafety } from './pool-safety'
+import { poolUsage } from './pool-usage'
 import { PoolWork } from './pool-work'
 import { SessionPools } from './pools'
 import type { SessionLink } from './session-link'
@@ -86,7 +87,7 @@ export class Conversation {
       () => link.sessionId,
       post,
       text => pool.deliver(text),
-      () => ({ tool: 'claude', model: this.model }),
+      () => ({ tool: 'claude', model: this.model, usage: poolUsage({ tokens: this.tokens, ...this.usage }) }),
       () => pool.toolsChanged(),
     )
     this.safety = new PoolSafety(
