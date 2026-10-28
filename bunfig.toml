@@ -1,0 +1,3 @@
+# Every test run starts with test/preload.ts: agent code imported by a test never writes to the developer's ~/.tonton.
+[test]
+preload = ["./test/preload.ts"]
