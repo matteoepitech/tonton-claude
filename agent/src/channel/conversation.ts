@@ -118,6 +118,7 @@ export class Conversation {
       },
     )
     this.work.useSafety(this.safety)
+    this.work.useRepository(() => this.cwd())
     this.tailer = link.transcriptPath
       ? new Tailer(link.transcriptPath, {
           lines: (lines, initial) => this.onLines(lines, initial),

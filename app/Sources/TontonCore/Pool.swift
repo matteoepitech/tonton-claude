@@ -217,6 +217,9 @@ public struct PoolTask: Codable, Equatable, Sendable {
     public var machine: PoolMachineRef?
     /// How many times it went back to the board because its machine or its session failed it.
     public var attempts: Int?
+    /// What became of its branch when the orchestrator merged it into main. Kept so that a task the app writes back
+    /// still says so.
+    public var merge: PoolTaskMerge?
 
     public init(
         title: String, goal: String? = nil, criteria: [String]? = nil, area: String? = nil, state: PoolTaskState,
@@ -225,6 +228,24 @@ public struct PoolTask: Codable, Equatable, Sendable {
         (self.title, self.goal, self.criteria, self.area, self.state) = (title, goal, criteria, area, state)
         (self.assignee, self.dependsOn, self.branch, self.summary) = (assignee, dependsOn, branch, summary)
     }
+}
+
+/// The orchestrator's merge of a task's branch into main: `merged`, `pr`, `conflict` or `failed`. Every field is optional,
+/// so a record from a newer agent never stops the task from opening.
+public struct PoolTaskMerge: Codable, Equatable, Sendable {
+    public var state: String?
+    public var at: String?
+    /// `merged`: the commit main points to with it.
+    public var commit: String?
+    /// `pr`: the pull request's address.
+    public var url: String?
+    /// `conflict`: the files that conflict.
+    public var files: [String]?
+    /// `failed`: the check that fails.
+    public var command: String?
+    public var output: String?
+    /// The task made to fix it.
+    public var fix: String?
 }
 
 /// An area of the code and the paths it owns.

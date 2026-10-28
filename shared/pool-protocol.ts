@@ -98,6 +98,32 @@ export interface PoolTask {
   machine?: PoolMachineRef
   /** How many times the task went back to `todo` because its machine or its session failed it. Missing: none. */
   attempts?: number
+  /** What became of its branch when the orchestrator merged it into main (docs/pool-orchestrator.md, Merging). */
+  merge?: PoolTaskMerge
+}
+
+/**
+ * `merged`: on main. `pr`: a pull request is open for it. `conflict`: it does not merge with main. `failed`: merged with
+ * main, a check fails. The last two send the task back to its author, or to a new task named in `fix`.
+ */
+export type PoolTaskMergeState = 'merged' | 'pr' | 'conflict' | 'failed'
+
+export interface PoolTaskMerge {
+  state: PoolTaskMergeState
+  /** ISO time of the attempt. */
+  at: string
+  /** `merged`: the commit main points to with it. */
+  commit?: string
+  /** `pr`: the pull request's address. */
+  url?: string
+  /** `conflict`: the files that conflict. */
+  files?: string[]
+  /** `failed`: the check that fails. */
+  command?: string
+  /** `conflict` and `failed`: the end of what git or the check printed. */
+  output?: string
+  /** The task made to fix it, when its author could not take it back. */
+  fix?: string
 }
 
 /** An area of the code and the paths it owns, so two sessions rarely edit the same files. */

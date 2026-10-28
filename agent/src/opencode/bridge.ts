@@ -123,6 +123,7 @@ class Link {
       },
     )
     this.work.useSafety(this.safety)
+    this.work.useRepository(() => this.cwd())
     this.relay.connect()
   }
 
