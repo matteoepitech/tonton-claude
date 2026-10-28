@@ -146,12 +146,13 @@ final class PoolStateTests: XCTestCase {
         XCTAssertNil(PoolBoard(summary: summary, vault: SessionVault(key: try E2E.key(fromBase64URL: E2E.newKey()))))
     }
 
-    func testJoiningTakesTheToolsKindOfTaskAndAsksFirst() {
+    func testJoiningTakesTheToolsKindOfTaskAndStartsItsTasks() {
         let claude = SessionSummary.preview(tool: nil)
         let opencode = SessionSummary.preview(tool: "opencode")
         XCTAssertEqual(PoolJoinForm(session: claude).takes, .large)
         XCTAssertEqual(PoolJoinForm(session: opencode).takes, .simple)
-        XCTAssertFalse(PoolJoinForm(session: claude).autoStart)
+        // It starts what the pool gives it unless its owner says otherwise: permission prompts still come to them.
+        XCTAssertTrue(PoolJoinForm(session: claude).autoStart)
         var form = PoolJoinForm(session: opencode)
         form.area = "  Front "
         form.skills = ""
