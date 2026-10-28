@@ -7,7 +7,7 @@ import { Hub } from './hub'
 import { POOL_SNAPSHOT_AUDIT, RATE_LIMITS } from './limits'
 import type { RelayCounts } from './metrics'
 import { type PoolMachineRow, PoolMachineStore, toMachineWire } from './pool-machines'
-import { PoolSafetyStore } from './pool-safety'
+import { PoolSafetyStore, stopSessions } from './pool-safety'
 import { type Author, type PoolSessionOrderRow, PoolStore } from './pools'
 import { PushService } from './push'
 import { RateLimiter } from './rate-limit'
@@ -178,6 +178,24 @@ export class RelayContext {
       this.poolOrchestratorChanged(poolId)
     }
     this.broadcastPool(poolId, { t: 'pool_machine_left', poolId, account: row.accountId, machine: machineId })
+  }
+
+  /**
+   * A machine stopped, or started again. Stopped, the sessions it started for the pool's tasks are interrupted and taken
+   * out, and its service gives their tasks back and takes no more until it is started again. The orchestrator session it
+   * runs goes on: the admin still talks to it.
+   */
+  poolMachineStopped(row: PoolMachineRow, stopped: boolean, author: Author) {
+    if (!this.poolMachines.setStopped(row.poolId, row.machineId, stopped)) return
+    if (stopped) {
+      const lead = this.pools.orchestrator(row.poolId)
+      const workers = this.pools
+        .sessionsOfMachine(row.poolId, row.machineId)
+        .filter(session => session.accountId !== lead?.account || session.sessionId !== lead.session)
+      stopSessions(this, row.poolId, author, workers)
+    }
+    this.auditPool(row.poolId, author, stopped ? 'machine_stopped' : 'machine_started', { account: row.accountId, machine: row.machineId })
+    this.poolMachineChanged(row.poolId, row.machineId)
   }
 
   /** The machine was revoked: it leaves its pools, as its owner took it out. */

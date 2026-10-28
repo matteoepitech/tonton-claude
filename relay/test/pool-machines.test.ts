@@ -446,4 +446,89 @@ describe('pool machines on the relay', () => {
     await Bun.sleep(150)
     expect(all(again, 'pool_machine_join')).toEqual([])
   })
+
+  test('a machine is stopped by its owner or an admin: its worker sessions end, its orchestrator session goes on', async () => {
+    const admin = await account(1)
+    const member = await account(1)
+    const other = await account(1)
+    const id = await pool(admin)
+    await enter(admin, member, id)
+    await enter(admin, other, id)
+    const adminApp = await connect('/ws/app', admin.token)
+    const memberApp = await connect('/ws/app', member.token)
+    const otherApp = await connect('/ws/app', other.token)
+    adminApp.send({ t: 'pool_subscribe', poolId: id })
+    await eventually(() => last(adminApp, 'pool_snapshot'), 'the snapshot')
+    const [mine] = member.machines
+    const [lead] = admin.machines
+    const services = [await service(mine.token), await service(lead.token)]
+    addMachine(memberApp, id, mine.machineId)
+    addMachine(adminApp, id, lead.machineId)
+    await eventually(() => services.every(s => last(s, 'pool_machine_join')), 'the orders')
+    services[0].send({ t: 'pool_machine_ack', machineId: mine.machineId, poolId: id })
+    services[1].send({ t: 'pool_machine_ack', machineId: lead.machineId, poolId: id })
+    adminApp.send({ t: 'pool_orchestrator_machine', poolId: id, machine: { account: admin.id, machine: lead.machineId } })
+    await eventually(() => last(adminApp, 'pool_orchestrator')?.machine, 'the orchestrator machine')
+
+    // A worker session on the member's machine, and the orchestrator session on the admin's.
+    const worker = await connect('/ws/agent', mine.token)
+    worker.send({ t: 'hello', sessionId: 'ses_work', info: 'sealed-info', channel: true })
+    const orchestrator = await connect('/ws/agent', lead.token)
+    orchestrator.send({ t: 'hello', sessionId: 'ses_orch', info: 'sealed-info', channel: true })
+    await Bun.sleep(100)
+    const put = (svc: Client, machineId: string, sessionId: string, lead = false) =>
+      svc.send({
+        t: 'pool_machine_session',
+        machineId,
+        poolId: id,
+        sessionId,
+        order: 'o',
+        profile: 'p',
+        ...(lead ? { orchestrator: true } : {}),
+      })
+    put(services[0], mine.machineId, 'ses_work')
+    put(services[1], lead.machineId, 'ses_orch', true)
+    await eventually(() => last(adminApp, 'pool_orchestrator')?.orchestrator?.session === 'ses_orch', 'the orchestrator session')
+
+    const stop = (app: Client, machine: string | null, stopped = true) => app.send({ t: 'pool_stop_machine', poolId: id, machine, stopped })
+    // Another member's machine, or every machine, is not a member's to stop.
+    stop(otherApp, mine.machineId)
+    await eventually(() => last(otherApp, 'pool_error')?.message.includes('stop a machine'), 'not another member’s machine')
+    stop(memberApp, null)
+    await eventually(() => last(memberApp, 'pool_error')?.message.includes('every machine'), 'not every machine')
+
+    // Its owner stops it: the worker session is interrupted and taken out; the machine shows stopped, in the audit too.
+    stop(memberApp, mine.machineId)
+    await eventually(() => last(worker, 'pool_stop'), 'the worker interrupted')
+    await eventually(() => last(worker, 'pool_left'), 'the worker out')
+    const shown = await eventually(
+      () => all(adminApp, 'pool_machine').find(m => m.machine.machine === mine.machineId && m.machine.stopped),
+      'stopped',
+    )
+    expect(shown.machine.stopped).toBe(true)
+    const line = await eventually(() => all(adminApp, 'pool_audit').find(m => m.entry.action === 'machine_stopped'), 'the audit')
+    expect(line.entry).toMatchObject({ account: member.id, target: { account: member.id, machine: mine.machineId } })
+
+    // Started again, it works again.
+    stop(memberApp, mine.machineId, false)
+    await eventually(() => all(adminApp, 'pool_audit').some(m => m.entry.action === 'machine_started'), 'started again')
+    expect(last(adminApp, 'pool_machine')?.machine.stopped).toBeUndefined()
+
+    // The admin stops every machine: the orchestrator's own machine too, but its orchestrator session goes on.
+    stop(adminApp, null)
+    await eventually(() => all(adminApp, 'pool_audit').filter(m => m.entry.action === 'machine_stopped').length === 3, 'every machine')
+    await Bun.sleep(100)
+    expect(all(orchestrator, 'pool_stop')).toEqual([])
+    adminApp.send({ t: 'pool_subscribe', poolId: id })
+    await eventually(() => all(adminApp, 'pool_snapshot').length === 2, 'a new snapshot')
+    const snapshot = last(adminApp, 'pool_snapshot')?.pool
+    expect(snapshot?.machines?.map(m => m.stopped)).toEqual([true, true])
+    expect(snapshot?.orchestrator).toEqual({ account: admin.id, session: 'ses_orch' })
+
+    // Its owner can always take it out, stopped and in a paused pool.
+    adminApp.send({ t: 'pool_pause', poolId: id, paused: true })
+    await eventually(() => last(adminApp, 'pool_info')?.paused, 'paused')
+    memberApp.send({ t: 'pool_remove_machine', poolId: id, machineId: mine.machineId })
+    await eventually(() => last(adminApp, 'pool_machine_left')?.machine === mine.machineId, 'taken out')
+  })
 })

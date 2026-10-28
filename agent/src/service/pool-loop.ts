@@ -15,7 +15,7 @@ import { mergeQueue } from '../channel/pool-merge'
 import { STALL_MS, waitingFor } from '../channel/pool-orchestrator'
 import { log } from '../log'
 import type { MachinePools } from './pool-machines'
-import { failedTask, MAX_ATTEMPTS } from './pool-worker'
+import { failedTask, freedTask, MAX_ATTEMPTS } from './pool-worker'
 
 export const LOOP_MS = 10_000
 /** A machine offline this long gives its tasks back: a short loss of the network does not. */
@@ -64,7 +64,7 @@ export function machineCandidates(state: PoolState, task: Pick<PoolTask, 'area' 
   const size = task.size ?? 'large'
   const rank = (kind: PoolTaskSize) => (size === 'simple' ? { simple: 0, large: 2 }[kind] : { large: 0, simple: 9 }[kind])
   return (state.machines ?? [])
-    .filter(machine => machine.online && machine.ready && machine.profile)
+    .filter(machine => machine.online && machine.ready && machine.profile && !machine.stopped)
     .filter(machine => !overBudget(state, machine.account))
     .map(machine => ({ machine, kind: kindOf(machine), free: (machine.profile?.capacity ?? 0) - held(state, machine.machine) }))
     .filter(c => c.free > 0 && rank(c.kind) < 9)
@@ -86,7 +86,9 @@ export function whyNoMachine(state: PoolState, task: Pick<PoolTask, 'size' | 'ho
   const size = task.size ?? 'large'
   const kinds = machines.filter(machine => size === 'simple' || kindOf(machine) === 'large')
   if (!kinds.length) return 'every machine of the pool takes simple tasks only'
-  const ready = kinds.filter(machine => machine.online && machine.ready)
+  const working = kinds.filter(machine => !machine.stopped)
+  if (!working.length) return 'every machine that takes it is stopped'
+  const ready = working.filter(machine => machine.online && machine.ready)
   if (!ready.length) return 'no machine that takes it is online with an agent that runs pool machines'
   const spent = ready.map(machine => overBudget(state, machine.account))
   if (spent.every(Boolean)) return (spent[0] as string).replace(/^./, first => first.toLowerCase())
@@ -164,7 +166,11 @@ export class DispatchLoop {
     if (!dispatching(state) || state.paused) return false
     const now = this.now()
     for (const item of state.tasks) {
-      const why = item.task?.machine && ACTIVE.has(item.task.state) ? this.trouble(state, item, now) : null
+      const held = item.task?.machine && ACTIVE.has(item.task.state) ? item.task.machine.machine : null
+      const machine = held ? state.machines?.find(m => m.machine === held) : undefined
+      // Its machine was stopped: the task goes elsewhere as it was, uncounted, when the machine cannot give it back.
+      if (machine?.stopped) return this.retry(poolId, item, `${machineName(state, machine)} was stopped`, false)
+      const why = held ? this.trouble(state, item, now) : null
       if (why) return this.retry(poolId, item, why)
     }
     const tasks = state.tasks.filter(item => item.task)
@@ -219,12 +225,16 @@ export class DispatchLoop {
     return now - since
   }
 
-  private async retry(poolId: string, item: PoolTaskItem, why: string): Promise<boolean> {
+  /** Puts the task back on the board, counted in its attempts unless nothing failed. */
+  private async retry(poolId: string, item: PoolTaskItem, why: string, counted = true): Promise<boolean> {
     const task = item.task as PoolTask
-    const next = failedTask(task, `${why[0].toUpperCase()}${why.slice(1)}.`)
+    const because = `${why[0].toUpperCase()}${why.slice(1)}.`
+    const next = counted ? failedTask(task, because) : freedTask(task, because)
     if (await this.pools.putTask(poolId, item, next)) return false
     const about = `${item.id} (${task.title})`
-    if (next.state === 'blocked') {
+    if (!counted) {
+      await this.pools.event(poolId, 'retried', item.id, `${about} went back to the board: ${why}.`)
+    } else if (next.state === 'blocked') {
       // The orchestrator hears of a blocked task from its own agent: the event is for the timeline.
       await this.pools.event(poolId, 'blocked', item.id, `${about} failed ${MAX_ATTEMPTS} times: ${why}.`)
     } else {

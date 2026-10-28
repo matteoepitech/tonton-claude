@@ -263,7 +263,7 @@ export function handleSafetyMessage(ctx: RelayContext, socket: Socket, poolId: s
 }
 
 /** Interrupts the sessions' turns, then takes them out of the pool. */
-function stopSessions(ctx: RelayContext, poolId: string, author: Author, sessions: { accountId: string; sessionId: string }[]) {
+export function stopSessions(ctx: RelayContext, poolId: string, author: Author, sessions: { accountId: string; sessionId: string }[]) {
   for (const { accountId, sessionId } of sessions) {
     const agent = ctx.hub.agentOf(accountId, sessionId)
     if (agent) ctx.hub.send(agent, { t: 'pool_stop', sessionId, poolId })

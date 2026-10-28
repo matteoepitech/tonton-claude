@@ -44,7 +44,8 @@ const isMachine = (value: unknown): value is PoolMachineWire =>
   isText(value.addedAt) &&
   isNullableText(value.profile) &&
   typeof value.online === 'boolean' &&
-  typeof value.ready === 'boolean'
+  typeof value.ready === 'boolean' &&
+  (value.stopped === undefined || typeof value.stopped === 'boolean')
 
 const isMember = (value: unknown): value is PoolMemberWire =>
   isFields(value) &&
@@ -104,6 +105,8 @@ const AUDIT_ACTIONS: ReadonlySet<string> = new Set<PoolAuditAction>([
   'budgets_set',
   'machine_added',
   'machine_removed',
+  'machine_stopped',
+  'machine_started',
   'dispatch_set',
 ])
 

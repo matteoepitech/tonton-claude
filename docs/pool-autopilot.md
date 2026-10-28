@@ -84,6 +84,14 @@ In the orchestrator machine's agent, while dispatch is on (a pool setting, seale
 
 The loop is plain code, not Claude: it costs no tokens and never forgets. Claude plans, merges and answers the admin.
 
+## Stopping
+
+A machine's owner, or the pool's owner and admins, stop a machine (`pool_stop_machine`, #260): the sessions it started
+for the pool's tasks end, their tasks go back to the board as they were, uncounted, and it takes no work until one of
+them starts it again. The owner and admins stop every machine at once, and the dispatch with them. The orchestrator
+session goes on, so the admin can still talk to it. A machine owner can always take their machine out of the pool,
+stopped or not. Each of these is a line of the audit log (docs/pools.md, Control).
+
 ## The website
 
 The pool page (#254) puts the orchestrator chat first, for the admin: the conversation with its live status, a box to

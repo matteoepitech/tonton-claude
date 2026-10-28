@@ -188,6 +188,17 @@ describe('pool machines end to end', () => {
     expect(stateOf(bob)?.audit.map(line => line.action)).toEqual(expect.arrayContaining(['machine_added', 'dispatch_set']))
   })
 
+  test('the admin stops every machine at once, and the dispatch with them; a machine is started again', async () => {
+    expect(await ana.watch.stopAllMachines(poolId)).toBe(true)
+    await eventually(() => stateOf(bob)?.machines?.every(m => m.stopped) && stateOf(bob)?.dispatch?.value?.on === false, 'all stopped')
+    expect(stateOf(bob)?.dispatch?.value).toEqual({ on: false, note: 'Every machine was stopped.' })
+    expect(stateOf(bob)?.audit.filter(line => line.action === 'machine_stopped')).toHaveLength(2)
+    // A member stops only its own machine, and starts it again.
+    expect(bob.watch.stopMachine(poolId, studio.machineId, false)).toBe(true)
+    await eventually(() => !stateOf(ana)?.machines?.find(m => m.machine === studio.machineId)?.stopped, 'the studio started again')
+    expect(stateOf(ana)?.machines?.find(m => m.machine === lead.machineId)?.stopped).toBe(true)
+  })
+
   test('the member takes its machine out; the relay never saw what it is', async () => {
     expect(bob.watch.removeMachine(poolId, studio.machineId)).toBe(true)
     await eventually(() => studio.messages.find(m => m.t === 'pool_machine_leave'), 'the service told')

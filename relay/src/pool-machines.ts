@@ -20,6 +20,8 @@ export interface PoolMachineRow {
   addedAt: string
   profile: string
   order: string
+  /** Its owner or an admin stopped it: it takes no work until one of them starts it again. */
+  stopped: boolean
 }
 
 interface MachineRow {
@@ -29,9 +31,11 @@ interface MachineRow {
   added_at: string
   profile_blob: string
   order_blob: string
+  stopped: number
 }
 
 const COLUMNS = 'pool_id, account_id, machine_id, added_at, profile_blob, order_blob'
+const READ = `${COLUMNS}, stopped`
 
 const toRow = (row: MachineRow): PoolMachineRow => ({
   poolId: row.pool_id,
@@ -40,6 +44,7 @@ const toRow = (row: MachineRow): PoolMachineRow => ({
   addedAt: row.added_at,
   profile: row.profile_blob,
   order: row.order_blob,
+  stopped: row.stopped === 1,
 })
 
 /** What the members see of a machine, with whether it is online and its service took the order. */
@@ -50,6 +55,7 @@ export const toMachineWire = (row: PoolMachineRow, live: { online: boolean; read
   profile: row.profile,
   online: live.online,
   ready: live.ready,
+  ...(row.stopped ? { stopped: true } : {}),
 })
 
 export class PoolMachineStore {
@@ -74,8 +80,17 @@ export class PoolMachineStore {
       this.db
         .query(`INSERT INTO pool_machines (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`)
         .run(poolId, accountId, machineId, addedAt, profile, order)
-      return { poolId, accountId, machineId, addedAt, profile, order }
+      return { poolId, accountId, machineId, addedAt, profile, order, stopped: false }
     })()
+  }
+
+  /** Stops the machine or lets it work again: false when it was so already. */
+  setStopped(poolId: string, machineId: string, stopped: boolean): boolean {
+    return (
+      this.db
+        .query('UPDATE pool_machines SET stopped = ? WHERE pool_id = ? AND machine_id = ? AND stopped != ?')
+        .run(stopped ? 1 : 0, poolId, machineId, stopped ? 1 : 0).changes > 0
+    )
   }
 
   remove(poolId: string, machineId: string): boolean {
@@ -84,13 +99,13 @@ export class PoolMachineStore {
 
   get(poolId: string, machineId: string): PoolMachineRow | null {
     const row = this.db
-      .query(`SELECT ${COLUMNS} FROM pool_machines WHERE pool_id = ? AND machine_id = ?`)
+      .query(`SELECT ${READ} FROM pool_machines WHERE pool_id = ? AND machine_id = ?`)
       .get(poolId, machineId) as MachineRow | null
     return row ? toRow(row) : null
   }
 
   list(poolId: string): PoolMachineRow[] {
-    const rows = this.db.query(`SELECT ${COLUMNS} FROM pool_machines WHERE pool_id = ? ORDER BY added_at`).all(poolId) as MachineRow[]
+    const rows = this.db.query(`SELECT ${READ} FROM pool_machines WHERE pool_id = ? ORDER BY added_at`).all(poolId) as MachineRow[]
     return rows.map(toRow)
   }
 
@@ -103,7 +118,7 @@ export class PoolMachineStore {
 
   /** Every pool the machine is in. */
   poolsOf(machineId: string): PoolMachineRow[] {
-    const rows = this.db.query(`SELECT ${COLUMNS} FROM pool_machines WHERE machine_id = ?`).all(machineId) as MachineRow[]
+    const rows = this.db.query(`SELECT ${READ} FROM pool_machines WHERE machine_id = ?`).all(machineId) as MachineRow[]
     return rows.map(toRow)
   }
 
@@ -135,11 +150,18 @@ export class PoolMachineStore {
   }
 }
 
-const MACHINE_APP_MESSAGES = new Set(['pool_add_machine', 'pool_remove_machine', 'pool_orchestrator_machine', 'pool_dispatch'])
+const MACHINE_APP_MESSAGES = new Set([
+  'pool_add_machine',
+  'pool_remove_machine',
+  'pool_stop_machine',
+  'pool_orchestrator_machine',
+  'pool_dispatch',
+])
 
 type MachineAppMessage =
   | { t: 'pool_add_machine'; poolId: string; machineId?: unknown; order?: unknown; profile?: unknown }
   | { t: 'pool_remove_machine'; poolId: string; machineId?: unknown }
+  | { t: 'pool_stop_machine'; poolId: string; machine?: unknown; stopped?: unknown }
   | { t: 'pool_orchestrator_machine'; poolId: string; machine?: unknown }
   | { t: 'pool_dispatch'; poolId: string; rev?: unknown; blob?: unknown }
 
@@ -173,6 +195,20 @@ export function handleMachineAppMessage(ctx: RelayContext, socket: Socket, poolI
       if (row.accountId !== accountId && !manages) return refuse('Only its owner, and the pool’s owner and admins, take a machine out.')
       ctx.poolMachineLeft(row)
       ctx.auditPool(poolId, author, 'machine_removed', { account: row.accountId, machine: row.machineId })
+      return
+    }
+    case 'pool_stop_machine': {
+      const { machine, stopped } = message
+      if ((machine !== null && !isMachineId(machine)) || typeof stopped !== 'boolean') return
+      // Every machine at once is the owner's and the admins'; one machine, its owner's too.
+      if (machine === null && !manages) return refuse('Only the owner and admins stop every machine.')
+      const rows = machine === null ? ctx.poolMachines.list(poolId) : [ctx.poolMachines.get(poolId, machine)]
+      if (!rows[0] && machine !== null) return refuse('No such machine in this pool.')
+      for (const row of rows) {
+        if (!row) continue
+        if (row.accountId !== accountId && !manages) return refuse('Only its owner, and the pool’s owner and admins, stop a machine.')
+        ctx.poolMachineStopped(row, stopped, author)
+      }
       return
     }
     case 'pool_orchestrator_machine': {

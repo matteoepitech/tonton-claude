@@ -40,6 +40,7 @@ const POOL_APP_MESSAGES = new Set([
   'pool_orchestrator',
   'pool_add_machine',
   'pool_remove_machine',
+  'pool_stop_machine',
   'pool_orchestrator_machine',
   'pool_dispatch',
 ])

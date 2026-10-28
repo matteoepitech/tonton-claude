@@ -183,6 +183,10 @@ describe('machines in the pool state', () => {
     await apply({ t: 'pool_machine', poolId: state.id, machine: await machine() })
     await apply({ t: 'pool_machine', poolId: state.id, machine: await machine({ ready: true }) })
     expect(state.machines?.map(m => m.ready)).toEqual([true])
+    await apply({ t: 'pool_machine', poolId: state.id, machine: await machine({ ready: true, stopped: true }) })
+    expect(state.machines?.[0].stopped).toBe(true)
+    await apply({ t: 'pool_machine', poolId: state.id, machine: await machine({ ready: true }) })
+    expect(state.machines?.[0].stopped).toBeUndefined()
     await apply({ t: 'pool_orchestrator', poolId: state.id, orchestrator: null, machine: ref })
     expect(state.orchestratorMachine).toEqual(ref)
     // An older relay names no machine: the one known stays.
@@ -209,6 +213,9 @@ describe('machines in the pool state', () => {
     const good = await machine()
     expect(parsePoolUpdate({ t: 'pool_machine', poolId: 'p', machine: good })).toEqual({ t: 'pool_machine', poolId: 'p', machine: good })
     expect(parsePoolUpdate({ t: 'pool_machine', poolId: 'p', machine: { ...good, ready: 'yes' } })).toBeNull()
+    // Stopped by its owner or an admin, or not: a wrong shape is no machine.
+    expect(parsePoolUpdate({ t: 'pool_machine', poolId: 'p', machine: { ...good, stopped: true } })).not.toBeNull()
+    expect(parsePoolUpdate({ t: 'pool_machine', poolId: 'p', machine: { ...good, stopped: 'yes' } })).toBeNull()
     expect(parsePoolUpdate({ t: 'pool_machine_left', poolId: 'p', account: 'a', machine: 7 })).toBeNull()
     expect(parsePoolUpdate({ t: 'pool_orchestrator', poolId: 'p', orchestrator: null, machine: { account: 'a' } })).toBeNull()
     expect(parsePoolUpdate({ t: 'pool_orchestrator', poolId: 'p', orchestrator: null, machine: null })).toEqual({

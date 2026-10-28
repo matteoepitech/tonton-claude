@@ -230,6 +230,18 @@ export class PoolWatch {
     return this.options.link.sendPool({ t: 'pool_remove_machine', poolId, machineId })
   }
 
+  /** Stops a machine (its pool sessions end, its tasks go back to the board) or lets it work again. Its owner, owner and admins. */
+  stopMachine(poolId: string, machineId: string, stopped = true): boolean {
+    return this.options.link.sendPool({ t: 'pool_stop_machine', poolId, machine: machineId, stopped })
+  }
+
+  /** Owner and admins: stops every machine of the pool at once, and the dispatch with them, so nothing new starts. */
+  async stopAllMachines(poolId: string): Promise<boolean> {
+    const dispatch = this.pool(poolId)?.state?.dispatch?.value
+    if (dispatch?.on) await this.setDispatch(poolId, { on: false, note: 'Every machine was stopped.' })
+    return this.options.link.sendPool({ t: 'pool_stop_machine', poolId, machine: null, stopped: true })
+  }
+
   /** Owner and admins: one of their own machines in the pool runs the orchestrator, or none. */
   setOrchestratorMachine(poolId: string, machine: PoolMachineRef | null): boolean {
     return this.options.link.sendPool({ t: 'pool_orchestrator_machine', poolId, machine })
