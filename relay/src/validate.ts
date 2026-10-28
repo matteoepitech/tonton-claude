@@ -41,3 +41,13 @@ export const isRevision = (value: unknown): value is number => typeof value === 
 
 /** An account id, as the relay issues them. */
 export const isAccountId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{12}$/.test(value)
+
+/** A machine id, as the relay issues them. */
+export const isMachineId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{12}$/.test(value)
+
+/** A pool machine named by its owner's account and its id. */
+export const isMachineRef = (value: unknown): value is { account: string; machine: string } =>
+  typeof value === 'object' &&
+  value !== null &&
+  isAccountId((value as { account?: unknown }).account) &&
+  isMachineId((value as { machine?: unknown }).machine)

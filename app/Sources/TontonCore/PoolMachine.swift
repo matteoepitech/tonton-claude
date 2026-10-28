@@ -1,0 +1,187 @@
+import Foundation
+
+// Pool machines (docs/pool-autopilot.md): members put whole machines in a pool, and each machine's agent service starts
+// the sessions for the tasks dispatched to it. Mirrors shared/pool-machines.ts. The profile is sealed with the pool key
+// for the members; the order, sealed with the account key, is what the machine's agent applies, so neither the pool nor
+// the relay can change the folder it works in or widen what its sessions may do.
+
+/// What the sessions a pool machine starts may do without asking. The machine owner's choice, never the pool's.
+public enum PoolMachineMode: String, Codable, CaseIterable, Sendable, Identifiable {
+    /// Every permission prompt goes to the machine owner, as for any session.
+    case ask
+    /// File edits and read-only tools pass, the rest asks.
+    case edits
+    /// Everything passes: only for a machine or a VM given to the work.
+    case full
+
+    public var id: String { rawValue }
+}
+
+/// A whole machine in a pool, as the members see it, sealed with the pool key.
+public struct PoolMachineProfile: Codable, Equatable, Sendable {
+    /// How many sessions a machine runs at once for one pool.
+    public static let capacities = 1...8
+
+    public var name: String?
+    /// `claude` or `opencode`.
+    public var tool: String
+    public var capacity: Int
+    /// The folder on the machine the pool's work goes in: the repository, and a git worktree per task.
+    public var workdir: String
+    public var mode: PoolMachineMode
+    /// `simple` or `large`. Nil: by its tool.
+    public var takes: String?
+    /// The areas it prefers.
+    public var areas: [String]?
+
+    public init(
+        name: String? = nil, tool: String, capacity: Int, workdir: String, mode: PoolMachineMode, takes: String? = nil,
+        areas: [String]? = nil
+    ) {
+        (self.name, self.tool, self.capacity, self.workdir, self.mode) = (name, tool, capacity, workdir, mode)
+        (self.takes, self.areas) = (takes, areas)
+    }
+
+    private enum Keys: String, CodingKey { case name, tool, capacity, workdir, mode, takes, areas }
+
+    /// What another member sealed is checked as the agent would: a profile it could not run reads as none.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        tool = try c.decode(String.self, forKey: .tool)
+        capacity = try c.decode(Int.self, forKey: .capacity)
+        workdir = try c.decode(String.self, forKey: .workdir)
+        mode = try c.decode(PoolMachineMode.self, forKey: .mode)
+        guard ["claude", "opencode"].contains(tool), Self.capacities.contains(capacity), Self.isWorkdir(workdir) else {
+            throw DecodingError.dataCorruptedError(forKey: .workdir, in: c, debugDescription: "not a profile an agent runs")
+        }
+        name = try? c.decodeIfPresent(String.self, forKey: .name)
+        takes = (try? c.decodeIfPresent(String.self, forKey: .takes)).flatMap { ["simple", "large"].contains($0) ? $0 : nil }
+        areas = (try? c.decodeIfPresent([String].self, forKey: .areas)).map { $0.filter { !$0.isEmpty } }.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encode(tool, forKey: .tool)
+        try c.encode(capacity, forKey: .capacity)
+        try c.encode(workdir, forKey: .workdir)
+        try c.encode(mode, forKey: .mode)
+        try c.encodeIfPresent(takes, forKey: .takes)
+        try c.encodeIfPresent(areas, forKey: .areas)
+    }
+
+    /// `/srv/pool`, `~/pool`, `C:\pool`: a folder from the root or the home folder, never relative, never climbing out.
+    public static func isWorkdir(_ path: String) -> Bool {
+        guard path.count <= 1024, path.wholeMatch(of: #/(\/|~\/|[A-Za-z]:[\\\/]).+/#) != nil else { return false }
+        let parts = path.split(whereSeparator: { $0 == "/" || $0 == "\\" })
+        return !parts.contains("..") && !path.contains(where: { $0 == "\0" || $0 == "\n" || $0 == "\r" })
+    }
+}
+
+/// What the owner fills in to put one of its machines in a pool (Settings › Machines › Add to pool…).
+public struct PoolMachineForm: Equatable, Sendable {
+    public enum Problem: Equatable, Sendable {
+        case capacity, workdir
+    }
+
+    public var tool: CodingTool
+    public var capacity: Int
+    public var workdir: String
+    public var mode: PoolMachineMode
+    public var takes: PoolTaskSize
+    /// Typed by the owner, comma separated or one per entry.
+    public var areas: [String]
+
+    /// One session at a time, asking for everything: what a machine runs until its owner says otherwise.
+    public init(tool: CodingTool = .claudeCode, workdir: String = "~/tonton-pool") {
+        self.tool = tool
+        capacity = 1
+        self.workdir = workdir
+        mode = .ask
+        takes = .default(for: tool)
+        areas = []
+    }
+
+    /// Why it can't be sent yet, or nil.
+    public var problem: Problem? {
+        if !PoolMachineProfile.capacities.contains(capacity) { return .capacity }
+        if !PoolMachineProfile.isWorkdir(workdir.trimmingCharacters(in: .whitespacesAndNewlines)) { return .workdir }
+        return nil
+    }
+
+    /// The profile, named after the machine, or nil while there is a problem.
+    public func profile(name: String?) -> PoolMachineProfile? {
+        guard problem == nil else { return nil }
+        let cleaned = areas.flatMap { $0.split(separator: ",") }.map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+        var seen = Set<String>()
+        let unique = cleaned.filter { !$0.isEmpty && seen.insert($0).inserted }
+        return PoolMachineProfile(
+            name: name, tool: tool == .openCode ? "opencode" : "claude", capacity: capacity,
+            workdir: workdir.trimmingCharacters(in: .whitespacesAndNewlines), mode: mode, takes: takes.rawValue,
+            areas: unique.isEmpty ? nil : Array(unique.prefix(20)))
+    }
+}
+
+/// From the machine owner's app to that machine's agent service: work for this pool, with its key, this way.
+struct PoolMachineOrder: Codable, Equatable {
+    let poolId: String
+    let machineId: String
+    let key: String
+    let version: Int
+    let issuedAt: String
+    let profile: PoolMachineProfile
+}
+
+extension SessionVault {
+    /// Puts one of the account's machines in a pool: its agent takes it only if it opens with the account key and names
+    /// that machine and that pool.
+    public func sealPoolMachineOrder(
+        poolId: String, machineId: String, key poolKey: String, version: Int, profile: PoolMachineProfile, issuedAt: Date = Date()
+    ) throws -> String {
+        let order = PoolMachineOrder(
+            poolId: poolId, machineId: machineId, key: poolKey, version: version, issuedAt: ISO8601DateFormatter().string(from: issuedAt),
+            profile: profile)
+        return try E2E.seal(order, with: key)
+    }
+}
+
+/// A pool machine, by its owner's account and its id.
+public struct PoolMachineRef: Codable, Equatable, Hashable, Sendable {
+    public let account: String
+    public let machine: String
+
+    public init(account: String, machine: String) {
+        (self.account, self.machine) = (account, machine)
+    }
+}
+
+/// A pool machine as the relay sends it.
+public struct PoolMachineWire: Codable, Equatable, Sendable {
+    public let account: String
+    public let machine: String
+    public let addedAt: String
+    /// `PoolMachineProfile`, sealed with the pool key.
+    public let profile: String?
+    /// Connected to the relay, as Settings › Machines shows it.
+    public let online: Bool
+    /// Its agent service took the order. Online but never ready: its agent is older.
+    public let ready: Bool
+}
+
+/// Whether the pool's control loop hands out tasks, sealed with the pool key.
+public struct PoolDispatch: Codable, Equatable, Sendable {
+    public var on: Bool
+    public var note: String?
+
+    public init(on: Bool, note: String? = nil) {
+        self.on = on
+        self.note = note
+    }
+}
+
+extension MachineInfo {
+    /// Agents from this version run pool machines; older ones ignore the order.
+    public static let poolMachinesSince = "0.9.0"
+
+    public var runsPoolMachines: Bool { runs(atLeast: Self.poolMachinesSince) }
+}

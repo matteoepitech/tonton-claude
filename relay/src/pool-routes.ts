@@ -166,6 +166,8 @@ async function rotate(
     return fail(400, 'Bad request.')
   const parsed = wraps.map(wrap => wrap as { account?: unknown; blob?: unknown })
   if (!parsed.every(wrap => isAccountId(wrap?.account) && isSealed(wrap.blob, MAX_POOL_KEY_BYTES))) return fail(400, 'Bad request.')
+  // Read before the kick: the machines go with their member.
+  const kickedMachines = kick ? ctx.poolMachines.ofAccount(poolId, kick) : []
   const result = ctx.pools.rotate(
     poolId,
     actor,
@@ -182,7 +184,12 @@ async function rotate(
     }[result.reason]
     return fail(result.reason === 'version' ? 409 : 400, why)
   }
-  ctx.poolKeyRotated(poolId, version, result.remaining, kick && result.kicked ? { account: kick, sessions: result.kicked } : null)
+  ctx.poolKeyRotated(
+    poolId,
+    version,
+    result.remaining,
+    kick && result.kicked ? { account: kick, sessions: result.kicked, machines: kickedMachines } : null,
+  )
   const author = { accountId: actor, sessionId: null }
   if (kick) ctx.auditPool(poolId, author, 'kicked', { account: kick }, version)
   else ctx.auditPool(poolId, author, 'rotated', {}, version)

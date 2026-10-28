@@ -7,6 +7,7 @@ import { open } from '../crypto'
 import { modelFamily, modelName } from '../model'
 import { openPoolGrant, openPoolSessionOrder } from '../pool'
 import { parsePoolInvite } from '../pool-link'
+import { openPoolMachineOrder } from '../pool-machines'
 import { acceptsCommands, displayStatusText, type Session } from '../session'
 import { parseShareLink } from '../share-link'
 import { Vault } from '../vault'
@@ -71,6 +72,16 @@ describe('vectors from the Swift implementation', () => {
     // As the agent checks it: for this session and this pool only.
     expect(await openPoolSessionOrder(vectors.key, blob('pool session order'), 's1', 'pool00000001')).toMatchObject({ version: 1 })
     expect(await openPoolSessionOrder(vectors.key, blob('pool session order'), 's2', 'pool00000001')).toBeNull()
+  })
+
+  test("the order that puts one of the account's machines in a pool is read as the app wrote it, by that machine only", async () => {
+    const blob = vectors.blobs.find(b => b.name === 'pool machine order')?.blob ?? ''
+    expect(await openPoolMachineOrder(vectors.key, blob, 'machine00001', 'pool00000001')).toMatchObject({
+      key: 'k'.repeat(43),
+      version: 1,
+      profile: { name: 'Studio ✨', tool: 'opencode', capacity: 3, workdir: '~/pool', mode: 'edits', takes: 'simple', areas: ['back'] },
+    })
+    expect(await openPoolMachineOrder(vectors.key, blob, 'machine00002', 'pool00000001')).toBeNull()
   })
 
   test('machines and sessions read the same as in the app', async () => {

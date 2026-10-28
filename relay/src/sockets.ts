@@ -1,5 +1,5 @@
 import type { WebSocketHandler } from 'bun'
-import type { PoolAgentMessage, PoolAppMessage } from '../../shared/pool-protocol'
+import type { PoolAgentMessage, PoolAppMessage, PoolMachineMessage } from '../../shared/pool-protocol'
 import type { AgentMessage, AppMessage, SealedEntry } from '../../shared/protocol'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
@@ -19,7 +19,14 @@ import {
   RECENT_HISTORY_BYTES,
   RECENT_HISTORY_ENTRIES,
 } from './limits'
-import { handleAgentPoolMessage, handleAppPoolMessage, poolSessionConnected, poolSessionDisconnected } from './pool-sockets'
+import { poolMachineConnected, poolMachineDisconnected } from './pool-machines'
+import {
+  handleAgentPoolMessage,
+  handleAppPoolMessage,
+  handleMachinePoolMessage,
+  poolSessionConnected,
+  poolSessionDisconnected,
+} from './pool-sockets'
 import { isLaunchId, isRequestId, isRequestToken, isSealed, isSessionId, isStartState, isText, isVersion } from './validate'
 
 export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<SocketData> {
@@ -43,6 +50,8 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
         ctx.hub.addMachineSocket(socket)
         const rules = machineId ? ctx.rules.get(machineId) : undefined
         if (rules) ctx.hub.send(socket, { t: 'rules', rules })
+        // The machine's pools, with the orders that put it there (docs/pool-autopilot.md).
+        poolMachineConnected(ctx, socket)
         onMachinePresence(ctx, socket)
       }
     },
@@ -73,6 +82,9 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
         poolSessionDisconnected(ctx, accountId, sessionId)
       }
       ctx.hub.removeMachineSocket(socket)
+      if (socket.data.service && socket.data.machineId && !ctx.hub.serviceSocket(socket.data.machineId)) {
+        poolMachineDisconnected(ctx, socket.data.machineId)
+      }
       onMachinePresence(ctx, socket)
     },
   }
@@ -110,8 +122,9 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
     ctx.hub.sendToApps(accountId, { t: 'diagnosis', machineId, requestId, diagnosis })
     return
   }
-  if (!isSessionId(message?.sessionId)) return
-  const sessionId = message.sessionId
+  if (handleMachinePoolMessage(ctx, socket, message as PoolMachineMessage)) return
+  const sessionId = (message as { sessionId?: unknown })?.sessionId
+  if (!isSessionId(sessionId)) return
   // Once announced, a socket only speaks for its own session.
   if (message.t !== 'hello' && socket.data.sessionId !== sessionId) return
   if (handleAgentPoolMessage(ctx, socket, message as PoolAgentMessage, sessionId)) return
@@ -305,7 +318,10 @@ const isShareOf = (ctx: RelayContext, accountId: string, sessionId: string, shar
   isText(shareId, 32) && ctx.registry.share(accountId, shareId)?.sessionId === sessionId
 
 function onMachinePresence(ctx: RelayContext, socket: Socket) {
-  if (socket.data.machineId) ctx.registry.touchMachine(socket.data.machineId)
+  if (socket.data.machineId) {
+    ctx.registry.touchMachine(socket.data.machineId)
+    ctx.poolMachinePresence(socket.data.machineId)
+  }
   ctx.pushMachines(socket.data.accountId)
 }
 

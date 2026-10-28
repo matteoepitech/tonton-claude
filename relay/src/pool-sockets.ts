@@ -1,8 +1,9 @@
 // Pool messages on the sockets (docs/pools.md): members' apps and the website subscribe to a pool and post to it; the
-// agents of pool sessions take their join order and post too. The relay checks who may do what from the roles it holds
-// in clear, attaches the sender from the socket, keeps the sealed blobs, and sends them on to every member.
+// agents of pool sessions take their join order and post too, and so do the services of pool machines
+// (docs/pool-autopilot.md). The relay checks who may do what from the roles it holds in clear, attaches the sender from
+// the socket, keeps the sealed blobs, and sends them on to every member.
 
-import type { PoolAgentMessage, PoolAppMessage, PoolPost } from '../../shared/pool-protocol'
+import type { PoolAgentMessage, PoolAppMessage, PoolMachineMessage, PoolPost } from '../../shared/pool-protocol'
 import type { RelayContext } from './context'
 import type { Socket } from './hub'
 import {
@@ -14,6 +15,7 @@ import {
   MAX_POOL_TASK_BYTES,
   MAX_START_ORDER_BYTES,
 } from './limits'
+import { handleMachineAppMessage, isMachineAppMessage, setDispatch } from './pool-machines'
 import { handleSafetyMessage, isSafetyMessage } from './pool-safety'
 import type { Author } from './pools'
 import { isAccountId, isPoolId, isPoolItemId, isRevision, isSealed, isSessionId } from './validate'
@@ -36,6 +38,10 @@ const POOL_APP_MESSAGES = new Set([
   'pool_budgets',
   'pool_accept_rules',
   'pool_orchestrator',
+  'pool_add_machine',
+  'pool_remove_machine',
+  'pool_orchestrator_machine',
+  'pool_dispatch',
 ])
 
 /** True when the message was a pool's: handled or dropped here. */
@@ -48,6 +54,10 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
   if (!role) return true
   if (isSafetyMessage(message.t)) {
     handleSafetyMessage(ctx, socket, poolId, role, message as Parameters<typeof handleSafetyMessage>[4])
+    return true
+  }
+  if (isMachineAppMessage(message.t)) {
+    handleMachineAppMessage(ctx, socket, poolId, role, message as Parameters<typeof handleMachineAppMessage>[4])
     return true
   }
 
@@ -122,7 +132,12 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
         ctx.hub.send(socket, { t: 'pool_error', poolId, message: 'Only a session of this pool can be its orchestrator.' })
         return true
       }
-      ctx.broadcastPool(poolId, { t: 'pool_orchestrator', poolId, orchestrator: ctx.pools.orchestrator(poolId) })
+      // One orchestrator: a session chosen by hand replaces the orchestrator machine, unless that machine started it.
+      const machine = ctx.poolMachines.orchestrator(poolId)
+      if (machine && (!lead || ctx.pools.sessionMachine(poolId, lead.account, lead.session) !== machine.machine)) {
+        ctx.poolMachines.setOrchestrator(poolId, null)
+      }
+      ctx.poolOrchestratorChanged(poolId)
       break
     }
     default:
@@ -132,7 +147,15 @@ export function handleAppPoolMessage(ctx: RelayContext, socket: Socket, message:
   return true
 }
 
-const POOL_AGENT_MESSAGES = new Set(['pool_ack', 'pool_member_key', 'pool_task', 'pool_notes', 'pool_message', 'pool_event'])
+const POOL_AGENT_MESSAGES = new Set([
+  'pool_ack',
+  'pool_member_key',
+  'pool_task',
+  'pool_notes',
+  'pool_message',
+  'pool_event',
+  'pool_dispatch',
+])
 
 /** True when the message was a pool's. `sessionId` is the session the agent socket speaks for. */
 export function handleAgentPoolMessage(ctx: RelayContext, socket: Socket, message: PoolAgentMessage, sessionId: string): boolean {
@@ -154,6 +177,16 @@ export function handleAgentPoolMessage(ctx: RelayContext, socket: Socket, messag
   }
   const role = ctx.pools.role(poolId, accountId)
   if (!role || role === 'viewer') return true
+  if (message.t === 'pool_dispatch') {
+    // Only the orchestrator session starts and stops the control loop, as the relay attests who it is.
+    const lead = ctx.pools.orchestrator(poolId)
+    if (lead?.account !== accountId || lead.session !== sessionId) {
+      ctx.hub.send(socket, { t: 'pool_error', poolId, message: 'Only the orchestrator starts or stops the dispatch.' })
+      return true
+    }
+    setDispatch(ctx, socket, poolId, { accountId, sessionId }, message.rev, message.blob)
+    return true
+  }
   // A paused pool takes nothing from its sessions but events: the agents still say what they spend.
   if (message.t !== 'pool_event' && ctx.poolSafety.isPaused(poolId)) {
     ctx.hub.send(socket, { t: 'pool_error', poolId, message: 'The pool is paused.' })
@@ -161,6 +194,112 @@ export function handleAgentPoolMessage(ctx: RelayContext, socket: Socket, messag
   }
   post(ctx, socket, poolId, { accountId, sessionId }, message)
   return true
+}
+
+const POOL_MACHINE_MESSAGES = new Set([
+  'pool_machine_ack',
+  'pool_member_key',
+  'pool_machine_session',
+  'pool_machine_session_left',
+  'pool_dispatch',
+  'pool_task',
+  'pool_message',
+  'pool_event',
+])
+
+/**
+ * True when the message was a pool machine's: handled or dropped here. Only the machine's own background service speaks
+ * for it, in the pools it is in; the relay attaches the machine to what it keeps.
+ */
+export function handleMachinePoolMessage(ctx: RelayContext, socket: Socket, message: PoolMachineMessage): boolean {
+  // A session's agent never names a machine: one that does speaks for the machine, and must be its service.
+  const fields = message as { t?: unknown; machineId?: unknown }
+  if (!POOL_MACHINE_MESSAGES.has(fields?.t as string) || fields.machineId === undefined) return false
+  const { accountId, machineId, service } = socket.data
+  if (!service || !machineId || fields.machineId !== machineId || !isPoolId(message.poolId)) return true
+  const { poolId } = message
+  if (ctx.poolMachines.get(poolId, machineId)?.accountId !== accountId) return true
+  const author: Author = { accountId, sessionId: null, machineId }
+  const refuse = (text: string) => ctx.hub.send(socket, { t: 'pool_error', poolId, message: text })
+
+  switch (message.t) {
+    case 'pool_machine_ack': {
+      ctx.hub.setPoolMachineReady(poolId, machineId, true)
+      const pool = ctx.poolSnapshot(poolId, accountId)
+      if (pool) ctx.hub.send(socket, { t: 'pool_snapshot', pool })
+      ctx.poolMachineChanged(poolId, machineId)
+      return true
+    }
+    case 'pool_member_key':
+      // Only the public key, like a session's agent: the private one is published by the member's apps.
+      if (isSealed(message.publicKey, MAX_POOL_KEY_BYTES)) memberKeyChanged(ctx, poolId, accountId, message.publicKey, null)
+      return true
+    case 'pool_machine_session':
+      joinMachineSession(ctx, socket, poolId, author, message)
+      return true
+    case 'pool_machine_session_left': {
+      const { sessionId } = message
+      // Only a session this machine started: those put in by hand are their owner's to take out.
+      if (!isSessionId(sessionId) || ctx.pools.sessionMachine(poolId, accountId, sessionId) !== machineId) return true
+      if (ctx.pools.removeSession(poolId, accountId, sessionId)) {
+        ctx.sessionLeftPool({ poolId, accountId, sessionId }, true)
+        ctx.auditPool(poolId, author, 'session_left', { account: accountId, session: sessionId })
+      }
+      return true
+    }
+    case 'pool_dispatch':
+      // The control loop runs on the orchestrator machine; it stops itself when every task is done.
+      if (ctx.poolMachines.orchestrator(poolId)?.machine !== machineId) {
+        refuse('Only the orchestrator machine starts or stops the dispatch.')
+        return true
+      }
+      setDispatch(ctx, socket, poolId, author, message.rev, message.blob)
+      return true
+  }
+  const role = ctx.pools.role(poolId, accountId)
+  if (!role || role === 'viewer') return true
+  if (message.t !== 'pool_event' && ctx.poolSafety.isPaused(poolId)) {
+    refuse('The pool is paused.')
+    return true
+  }
+  post(ctx, socket, poolId, author, message)
+  return true
+}
+
+/**
+ * A session the machine's service started, put in the pool: it must be the account's and run on that machine, as the
+ * relay sees it. Its agent gets the order like any session's. The orchestrator machine's session becomes the orchestrator.
+ */
+function joinMachineSession(
+  ctx: RelayContext,
+  socket: Socket,
+  poolId: string,
+  author: Author,
+  message: Extract<PoolMachineMessage, { t: 'pool_machine_session' }>,
+) {
+  const { accountId } = author
+  const machineId = author.machineId as string
+  const { sessionId, order, profile } = message
+  if (!isSessionId(sessionId) || !isSealed(order, MAX_START_ORDER_BYTES) || !isSealed(profile, MAX_POOL_INFO_BYTES)) return
+  const role = ctx.pools.role(poolId, accountId)
+  if (!role || role === 'viewer') return
+  if (ctx.sessions.list(accountId).find(session => session.id === sessionId)?.machineId !== machineId) {
+    ctx.hub.send(socket, { t: 'pool_error', poolId, message: 'No such session on this machine.' })
+    return
+  }
+  if (!ctx.pools.addSession(poolId, accountId, sessionId, order, profile, machineId)) {
+    ctx.hub.send(socket, { t: 'pool_error', poolId, message: 'This pool has as many sessions as it may.' })
+    return
+  }
+  ctx.hub.setPoolSessionReady(poolId, accountId, sessionId, false)
+  const agent = ctx.hub.agentOf(accountId, sessionId)
+  if (agent) ctx.hub.send(agent, ctx.poolJoin(poolId, accountId, sessionId, order))
+  ctx.auditPool(poolId, author, 'session_joined', { account: accountId, session: sessionId })
+  ctx.poolSessionChanged(poolId, accountId, sessionId)
+  if (message.orchestrator === true && ctx.poolMachines.orchestrator(poolId)?.machine === machineId) {
+    ctx.pools.setOrchestrator(poolId, { account: accountId, session: sessionId })
+    ctx.poolOrchestratorChanged(poolId)
+  }
 }
 
 /** A session's agent connected: it gets its pools' orders again, as shares get theirs. */

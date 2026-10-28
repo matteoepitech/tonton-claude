@@ -6,6 +6,8 @@ import type { PoolKeyWrapWire } from './pool-keys'
 import type {
   PoolAuditAction,
   PoolAuditWire,
+  PoolMachineRef,
+  PoolMachineWire,
   PoolMemberWire,
   PoolNotesWire,
   PoolPostWire,
@@ -13,6 +15,7 @@ import type {
   PoolSnapshot,
   PoolTaskWire,
   PoolToAgent,
+  PoolToMachine,
   PoolUpdate,
 } from './pool-protocol'
 
@@ -22,12 +25,26 @@ const isFields = (value: unknown): value is Fields => typeof value === 'object' 
 const isText = (value: unknown): value is string => typeof value === 'string'
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0
 const isNullableText = (value: unknown): value is string | null => value === null || isText(value)
-const isAuthor = (value: Fields) => isText(value.account) && isNullableText(value.session)
+const isOptionalText = (value: unknown): value is string | undefined => value === undefined || isText(value)
+/** The machine is the relay's attestation of who wrote it: a wrong shape drops the record rather than mislabel it. */
+const isAuthor = (value: Fields) => isText(value.account) && isNullableText(value.session) && isOptionalText(value.machine)
 const isSessionRef = (value: unknown): value is { account: string; session: string } =>
   isFields(value) && isText(value.account) && isText(value.session)
 /** Null for none, undefined for a wrong shape. */
 const orchestrator = (value: unknown) =>
   value === null ? null : isSessionRef(value) ? { account: value.account, session: value.session } : undefined
+const isMachineRef = (value: unknown): value is PoolMachineRef => isFields(value) && isText(value.account) && isText(value.machine)
+/** Null for none, undefined for a wrong shape. */
+const machineRef = (value: unknown): PoolMachineRef | null | undefined =>
+  value === null ? null : isMachineRef(value) ? { account: value.account, machine: value.machine } : undefined
+
+const isMachine = (value: unknown): value is PoolMachineWire =>
+  isFields(value) &&
+  isMachineRef(value) &&
+  isText(value.addedAt) &&
+  isNullableText(value.profile) &&
+  typeof value.online === 'boolean' &&
+  typeof value.ready === 'boolean'
 
 const isMember = (value: unknown): value is PoolMemberWire =>
   isFields(value) &&
@@ -55,7 +72,8 @@ const isSession = (value: unknown): value is PoolSessionWire =>
   isNullableText(value.profile) &&
   typeof value.online === 'boolean' &&
   typeof value.ready === 'boolean' &&
-  (value.accepted === undefined || isCount(value.accepted))
+  (value.accepted === undefined || isCount(value.accepted)) &&
+  isOptionalText(value.machine)
 
 const isTask = (value: unknown): value is PoolTaskWire =>
   isFields(value) && isText(value.id) && isCount(value.rev) && isText(value.updatedAt) && isText(value.blob) && isAuthor(value)
@@ -84,6 +102,9 @@ const AUDIT_ACTIONS: ReadonlySet<string> = new Set<PoolAuditAction>([
   'rules_proposed',
   'rules_accepted',
   'budgets_set',
+  'machine_added',
+  'machine_removed',
+  'dispatch_set',
 ])
 
 /** A line of the audit log, its unknown fields dropped; an action this client does not know is left out. */
@@ -95,6 +116,7 @@ function audit(value: unknown): PoolAuditWire | null {
     ? {
         ...(isText(value.target.account) ? { account: value.target.account } : {}),
         ...(isText(value.target.session) ? { session: value.target.session } : {}),
+        ...(isText(value.target.machine) ? { machine: value.target.machine } : {}),
       }
     : undefined
   return {
@@ -102,6 +124,7 @@ function audit(value: unknown): PoolAuditWire | null {
     ts: value.ts,
     account: value.account as string,
     session: value.session as string | null,
+    ...(isText(value.machine) ? { machine: value.machine } : {}),
     action: value.action as PoolAuditAction,
     ...(target ? { target } : {}),
     ...(isCount(value.rev) ? { rev: value.rev } : {}),
@@ -131,6 +154,10 @@ function snapshot(value: unknown): PoolSnapshot | null {
   const log = Array.isArray(value.audit) ? value.audit.map(audit).filter((entry): entry is PoolAuditWire => entry !== null) : undefined
   // Older relays send none, and a wrong shape is left out rather than trusted: the state reads either as no orchestrator.
   const lead = orchestrator(value.orchestrator)
+  // Likewise for the pool machines (docs/pool-autopilot.md): older relays have none.
+  const machines = list(value.machines, isMachine)
+  const leadMachine = machineRef(value.orchestratorMachine)
+  const dispatch = policy(value.dispatch)
   return {
     id,
     createdAt,
@@ -148,6 +175,9 @@ function snapshot(value: unknown): PoolSnapshot | null {
     ...(budgets !== undefined ? { budgets } : {}),
     ...(log ? { audit: log } : {}),
     ...(lead !== undefined ? { orchestrator: lead } : {}),
+    ...(machines ? { machines } : {}),
+    ...(leadMachine !== undefined ? { orchestratorMachine: leadMachine } : {}),
+    ...(dispatch !== undefined ? { dispatch } : {}),
   }
 }
 
@@ -175,7 +205,9 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
         : null
     case 'pool_orchestrator': {
       const lead = orchestrator(value.orchestrator)
-      return lead === undefined ? null : { t: 'pool_orchestrator', poolId, orchestrator: lead }
+      const machine = value.machine === undefined ? undefined : machineRef(value.machine)
+      if (lead === undefined || (value.machine !== undefined && machine === undefined)) return null
+      return { t: 'pool_orchestrator', poolId, orchestrator: lead, ...(machine !== undefined ? { machine } : {}) }
     }
     case 'pool_member':
       return isMember(value.member) ? { t: 'pool_member', poolId, member: value.member } : null
@@ -187,6 +219,14 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
       return isText(value.account) && isText(value.session)
         ? { t: 'pool_session_left', poolId, account: value.account, session: value.session }
         : null
+    case 'pool_machine':
+      return isMachine(value.machine) ? { t: 'pool_machine', poolId, machine: value.machine } : null
+    case 'pool_machine_left':
+      return isText(value.account) && isText(value.machine)
+        ? { t: 'pool_machine_left', poolId, account: value.account, machine: value.machine }
+        : null
+    case 'pool_dispatch':
+      return isNotes(value.dispatch) ? { t: 'pool_dispatch', poolId, dispatch: value.dispatch } : null
     case 'pool_rules':
       return isNotes(value.rules) ? { t: 'pool_rules', poolId, rules: value.rules } : null
     case 'pool_budgets':
@@ -196,7 +236,7 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
       return entry ? { t: 'pool_audit', poolId, entry } : null
     }
     case 'pool_conflict': {
-      if (value.kind !== 'task' && value.kind !== 'notes' && value.kind !== 'rules' && value.kind !== 'budgets') return null
+      if (!['task', 'notes', 'rules', 'budgets', 'dispatch'].includes(value.kind as string)) return null
       const current =
         value.current === null
           ? null
@@ -208,7 +248,8 @@ export function parsePoolUpdate(value: unknown): PoolUpdate | null {
               ? value.current
               : undefined
       if (current === undefined) return null
-      return { t: 'pool_conflict', poolId, kind: value.kind, ...(isText(value.id) ? { id: value.id } : {}), current }
+      const kind = value.kind as Extract<PoolUpdate, { t: 'pool_conflict' }>['kind']
+      return { t: 'pool_conflict', poolId, kind, ...(isText(value.id) ? { id: value.id } : {}), current }
     }
     case 'pool_key':
       return isWrap(value.wrap) ? { t: 'pool_key', poolId, wrap: value.wrap } : null
@@ -236,7 +277,22 @@ export function parsePoolToAgent(value: unknown): PoolToAgent | null {
   return null
 }
 
+/** A pool machine's order for its agent service, or null. */
+export function parsePoolToMachine(value: unknown): PoolToMachine | null {
+  if (!isFields(value) || !isText(value.machineId) || !isText(value.poolId)) return null
+  const { machineId, poolId } = value
+  if (value.t === 'pool_machine_join') return isText(value.order) ? { t: 'pool_machine_join', machineId, poolId, order: value.order } : null
+  if (value.t === 'pool_machine_leave') return { t: 'pool_machine_leave', machineId, poolId }
+  return null
+}
+
 /** The relay's messages for an agent that are orders to it rather than changes of a pool. */
-export const isPoolOrderType = (t: unknown): boolean => t === 'pool_join' || t === 'pool_left' || t === 'pool_stop' || t === 'pool_accept'
+export const isPoolOrderType = (t: unknown): boolean =>
+  t === 'pool_join' ||
+  t === 'pool_left' ||
+  t === 'pool_stop' ||
+  t === 'pool_accept' ||
+  t === 'pool_machine_join' ||
+  t === 'pool_machine_leave'
 
 export const isPoolMessageType = (t: unknown): boolean => typeof t === 'string' && t.startsWith('pool_')

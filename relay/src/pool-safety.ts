@@ -8,16 +8,18 @@ import type { PoolAuditAction, PoolAuditWire, PoolPolicyWire, PoolRole } from '.
 import type { RelayContext } from './context'
 import type { Socket } from './hub'
 import { MAX_POOL_AUDIT, MAX_POOL_BUDGETS_BYTES, MAX_POOL_RULES_BYTES } from './limits'
-import type { Author, Put } from './pools'
+import { type Author, byMachine, type Put } from './pools'
 import { isAccountId, isRevision, isSealed, isSessionId } from './validate'
 
-export type PolicyKind = 'rules' | 'budgets'
+/** `dispatch`: whether the control loop hands out tasks (docs/pool-autopilot.md), sealed like the rules and the budgets. */
+export type PolicyKind = 'rules' | 'budgets' | 'dispatch'
 
 interface PolicyRow {
   rev: number
   updated_at: string
   account_id: string
   session_id: string | null
+  machine_id: string | null
   blob: string
 }
 
@@ -26,9 +28,11 @@ interface AuditRow {
   ts: string
   account_id: string
   session_id: string | null
+  machine_id: string | null
   action: PoolAuditAction
   target_account: string | null
   target_session: string | null
+  target_machine: string | null
   rev: number | null
 }
 
@@ -37,6 +41,7 @@ const toPolicy = (row: PolicyRow): PoolPolicyWire => ({
   updatedAt: row.updated_at,
   account: row.account_id,
   session: row.session_id,
+  ...byMachine(row.machine_id),
   blob: row.blob,
 })
 
@@ -44,12 +49,14 @@ const toAudit = (row: AuditRow): PoolAuditWire => {
   const target = {
     ...(row.target_account ? { account: row.target_account } : {}),
     ...(row.target_session ? { session: row.target_session } : {}),
+    ...(row.target_machine ? { machine: row.target_machine } : {}),
   }
   return {
     seq: row.seq,
     ts: row.ts,
     account: row.account_id,
     session: row.session_id,
+    ...byMachine(row.machine_id),
     action: row.action,
     ...(Object.keys(target).length ? { target } : {}),
     ...(row.rev !== null ? { rev: row.rev } : {}),
@@ -73,24 +80,31 @@ export class PoolSafetyStore {
 
   policy(poolId: string, kind: PolicyKind): PoolPolicyWire | null {
     const row = this.db
-      .query('SELECT rev, updated_at, account_id, session_id, blob FROM pool_policies WHERE pool_id = ? AND kind = ?')
+      .query('SELECT rev, updated_at, account_id, session_id, machine_id, blob FROM pool_policies WHERE pool_id = ? AND kind = ?')
       .get(poolId, kind) as PolicyRow | null
     return row ? toPolicy(row) : null
   }
 
-  /** Writes the rules or the budgets over revision `rev` (0 at first). Refused when someone changed them since. */
+  /** Writes the rules, the budgets or the dispatch over revision `rev` (0 at first). Refused when someone changed them since. */
   putPolicy(poolId: string, kind: PolicyKind, rev: number, blob: string, author: Author): Put<PoolPolicyWire> {
     return this.db.transaction((): Put<PoolPolicyWire> => {
       const current = this.policy(poolId, kind)
       if ((current?.rev ?? 0) !== rev) return { ok: false, reason: 'conflict', current }
-      const row: PolicyRow = { rev: rev + 1, updated_at: now(), account_id: author.accountId, session_id: author.sessionId, blob }
+      const row: PolicyRow = {
+        rev: rev + 1,
+        updated_at: now(),
+        account_id: author.accountId,
+        session_id: author.sessionId,
+        machine_id: author.machineId ?? null,
+        blob,
+      }
       this.db
         .query(
-          `INSERT INTO pool_policies (pool_id, kind, rev, updated_at, account_id, session_id, blob) VALUES (?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO pool_policies (pool_id, kind, rev, updated_at, account_id, session_id, machine_id, blob) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (pool_id, kind) DO UPDATE SET rev = excluded.rev, updated_at = excluded.updated_at,
-             account_id = excluded.account_id, session_id = excluded.session_id, blob = excluded.blob`,
+             account_id = excluded.account_id, session_id = excluded.session_id, machine_id = excluded.machine_id, blob = excluded.blob`,
         )
-        .run(poolId, kind, row.rev, row.updated_at, row.account_id, row.session_id, row.blob)
+        .run(poolId, kind, row.rev, row.updated_at, row.account_id, row.session_id, row.machine_id, row.blob)
       return { ok: true, value: toPolicy(row) }
     })()
   }
@@ -117,7 +131,7 @@ export class PoolSafetyStore {
     poolId: string,
     author: Author,
     action: PoolAuditAction,
-    target: { account?: string; session?: string } = {},
+    target: { account?: string; session?: string; machine?: string } = {},
     rev?: number,
   ): PoolAuditWire {
     return this.db.transaction(() => {
@@ -125,17 +139,30 @@ export class PoolSafetyStore {
         ts: now(),
         account_id: author.accountId,
         session_id: author.sessionId,
+        machine_id: author.machineId ?? null,
         action,
         target_account: target.account ?? null,
         target_session: target.session ?? null,
+        target_machine: target.machine ?? null,
         rev: rev ?? null,
       }
       const { lastInsertRowid } = this.db
         .query(
-          `INSERT INTO pool_audit (pool_id, ts, account_id, session_id, action, target_account, target_session, rev)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO pool_audit (pool_id, ts, account_id, session_id, machine_id, action, target_account, target_session, target_machine, rev)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(poolId, row.ts, row.account_id, row.session_id, row.action, row.target_account, row.target_session, row.rev)
+        .run(
+          poolId,
+          row.ts,
+          row.account_id,
+          row.session_id,
+          row.machine_id,
+          row.action,
+          row.target_account,
+          row.target_session,
+          row.target_machine,
+          row.rev,
+        )
       this.db
         .query(
           `DELETE FROM pool_audit WHERE pool_id = ? AND seq <= (
@@ -150,7 +177,7 @@ export class PoolSafetyStore {
   auditLog(poolId: string, limit: number): PoolAuditWire[] {
     const rows = this.db
       .query(
-        `SELECT seq, ts, account_id, session_id, action, target_account, target_session, rev FROM pool_audit
+        `SELECT seq, ts, account_id, session_id, machine_id, action, target_account, target_session, target_machine, rev FROM pool_audit
          WHERE pool_id = ? ORDER BY seq DESC LIMIT ?`,
       )
       .all(poolId, limit) as AuditRow[]

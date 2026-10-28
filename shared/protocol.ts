@@ -4,7 +4,7 @@
 // `Sealed` string: AES-256-GCM encrypted with the account key, which only the Mac app and the enrolled machines hold.
 // The relay routes and stores these blobs without being able to read them.
 
-import type { PoolAgentMessage, PoolAppMessage, PoolToAgent } from './pool-protocol'
+import type { PoolAgentMessage, PoolAppMessage, PoolMachineMessage, PoolToAgent, PoolToMachine } from './pool-protocol'
 
 export type Sealed = string // base64(nonce[12] | ciphertext | tag[16])
 
@@ -366,6 +366,8 @@ export type AgentMessage =
   | { t: 'diagnosis'; requestId: string; diagnosis: Sealed }
   // What a pool session posts, and its answer to a join order (shared/pool-protocol.ts).
   | PoolAgentMessage
+  // What the background service of a pool machine posts (docs/pool-autopilot.md).
+  | PoolMachineMessage
 
 // relay -> agent. A pool session also gets the pool's `PoolUpdate`s.
 export type RelayToAgent =
@@ -387,6 +389,8 @@ export type RelayToAgent =
   | { t: 'diagnose'; requestId: string; request: Sealed }
   // The session joins or leaves a pool: `order` is a `PoolSessionOrder` sealed with the account key.
   | PoolToAgent
+  // To the background service: the machine joins or leaves a pool, with a `PoolMachineOrder` sealed with the account key.
+  | PoolToMachine
 
 // hook -> relay (HTTP POST /api/hook)
 export interface HookPost {

@@ -225,6 +225,27 @@ const MIGRATIONS = [
      rev INTEGER
    );
    CREATE INDEX pool_audit_pool ON pool_audit(pool_id, seq);`,
+  // Pool machines (docs/pool-autopilot.md): whole machines members put in a pool, with their profile sealed with the pool
+  // key and the order sealed with the owner's account key; the admin's machine that runs the orchestrator; and the
+  // machine whose agent service wrote a task, a post, a policy or put a session in the pool, as the relay attests it.
+  `CREATE TABLE pool_machines (
+     pool_id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     machine_id TEXT NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
+     added_at TEXT NOT NULL,
+     profile_blob TEXT NOT NULL,
+     order_blob TEXT NOT NULL,
+     PRIMARY KEY (pool_id, machine_id),
+     FOREIGN KEY (pool_id, account_id) REFERENCES pool_members(pool_id, account_id) ON DELETE CASCADE
+   );
+   CREATE INDEX pool_machines_machine ON pool_machines(machine_id);
+   ALTER TABLE pools ADD COLUMN orchestrator_machine TEXT;
+   ALTER TABLE pool_sessions ADD COLUMN machine_id TEXT;
+   ALTER TABLE pool_tasks ADD COLUMN machine_id TEXT;
+   ALTER TABLE pool_posts ADD COLUMN machine_id TEXT;
+   ALTER TABLE pool_policies ADD COLUMN machine_id TEXT;
+   ALTER TABLE pool_audit ADD COLUMN machine_id TEXT;
+   ALTER TABLE pool_audit ADD COLUMN target_machine TEXT;`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */

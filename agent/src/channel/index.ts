@@ -47,7 +47,8 @@ export async function runChannel() {
       else if (message.t === 'start_answer') void handleStartAnswer(config, message.launchId, message.answer)
       else if (message.t === 'agent_logs') void handleLogRequest(config, message.requestId, message.request, relay)
       else if (message.t === 'diagnose') void receiveDiagnoseRequest(config, message.requestId, message.request, relay, 'channel')
-      else if (conversation && message.sessionId === conversation.link.sessionId) {
+      // Orders for a pool machine go to the background service: a session's channel leaves them.
+      else if (conversation && 'sessionId' in message && message.sessionId === conversation.link.sessionId) {
         if (message.t === 'share') conversation.shares.receive(message.shareId, message.order)
         else if (message.t === 'unshare') conversation.shares.remove(message.shareId)
         else if (message.t === 'pool_join') conversation.pools.receive(message.poolId, message.order, message.acceptance)
