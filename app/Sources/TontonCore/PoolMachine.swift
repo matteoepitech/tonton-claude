@@ -185,3 +185,51 @@ extension MachineInfo {
 
     public var runsPoolMachines: Bool { runs(atLeast: Self.poolMachinesSince) }
 }
+
+extension PoolMachineMode {
+    /// As Settings › Machines › Add to pool… offers it.
+    public var label: String {
+        switch self {
+        case .ask: String(core: "Ask for everything")
+        case .edits: String(core: "File edits pass")
+        case .full: String(core: "Everything passes")
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .ask: String(core: "Every permission request of its pool sessions comes to you, as for any session.")
+        case .edits: String(core: "Its pool sessions edit files and read without asking. Commands and the rest still ask you.")
+        case .full:
+            String(
+                core: """
+                    Its pool sessions do anything without asking, commands included: only for a machine or a virtual machine you \
+                    give to the work, never one with your own files on it.
+                    """)
+        }
+    }
+}
+
+extension PoolState {
+    /// What a pool machine runs now: the tasks dispatched to it that are not done yet, the session in each slot.
+    public func slots(of machine: PoolMachineRef) -> [Task] {
+        tasks.filter { item in
+            guard let task = item.task, task.machine == machine else { return false }
+            return task.state == .assigned || task.state == .inProgress || task.state == .blocked
+        }
+    }
+}
+
+extension PoolTaskState {
+    /// As a pool machine's slot shows it.
+    public var label: String {
+        switch self {
+        case .todo: String(core: "to do")
+        case .assigned: String(core: "assigned")
+        case .inProgress: String(core: "in progress")
+        case .review: String(core: "in review")
+        case .done: String(core: "finished")
+        case .blocked: String(core: "blocked")
+        }
+    }
+}

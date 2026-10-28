@@ -37,6 +37,7 @@ struct MachinesPane: View {
                     ForEach(Array(store.machines.enumerated()), id: \.element.id) { index, m in
                         if index > 0 { Hairline() }
                         MachineRow(machine: m)
+                        MachinePools(machine: m)
                         if let request = store.diagnoses[m.id] {
                             Hairline()
                             DiagnosisPanel(
@@ -155,6 +156,7 @@ struct MachineRow: View {
     @State private var confirmRevoke = false
     @State private var wakeSent = false
     @State private var pickingStyle = false
+    @State private var addingToPool = false
 
     var body: some View {
         let sessions = store.sessions.filter { $0.machineId == machine.id }
@@ -204,6 +206,10 @@ struct MachineRow: View {
                 Button("Diagnose") { store.diagnose(machine) }.disabled(!machine.online)
                 Button("Show agent log") { store.requestLog(of: machine) }.disabled(!machine.online)
                 Divider()
+                // Its agent starts the sessions: an older one would ignore the order.
+                Button(machine.runsPoolMachines ? "Add to pool…" : "Add to pool… (update the agent first)") { addingToPool = true }
+                    .disabled(!machine.runsPoolMachines)
+                Divider()
                 Button("Revoke access…", role: .destructive) { confirmRevoke = true }
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 12)).foregroundStyle(Theme.textDim).frame(width: 22, height: 22)
@@ -214,6 +220,7 @@ struct MachineRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .sheet(isPresented: $addingToPool) { AddToPoolView(machine: machine) { addingToPool = false } }
         .confirmationDialog("Revoke \(machine.name)?", isPresented: $confirmRevoke) {
             Button("Revoke", role: .destructive) { Task { try? await store.revoke(machine) } }
         } message: {

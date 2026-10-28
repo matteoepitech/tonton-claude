@@ -391,6 +391,22 @@
         }
       }
     },
+    "%@ · %lld at once · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$lld at once · %3$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$lld à la fois · %3$@"
+          }
+        }
+      }
+    },
     "%@ · agent %@" : {
       "comment" : "The agent's version",
       "localizations" : {
@@ -1051,6 +1067,46 @@
         }
       }
     },
+    "%lld sessions at once" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld session at once"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sessions at once"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld session à la fois"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sessions à la fois"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld to look at" : {
       "localizations" : {
         "fr" : {
@@ -1693,6 +1749,16 @@
         }
       }
     },
+    "Add %@ to a pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter %@ à un pool"
+          }
+        }
+      }
+    },
     "Add Tonton Claude's filter to a Focus in System Settings › Focus, then pick the alerts it silences." : {
       "localizations" : {
         "fr" : {
@@ -1749,6 +1815,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ajouter une note"
+          }
+        }
+      }
+    },
+    "Add to pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter au pool"
+          }
+        }
+      }
+    },
+    "Add to pool…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter à un pool…"
+          }
+        }
+      }
+    },
+    "Add to pool… (update the agent first)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter à un pool… (mettez d’abord l’agent à jour)"
           }
         }
       }
@@ -2069,6 +2165,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Domaine : front, back, infra…"
+          }
+        }
+      }
+    },
+    "Areas" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Domaines"
+          }
+        }
+      }
+    },
+    "Ask for everything" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout demander"
           }
         }
       }
@@ -2711,6 +2827,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirmer"
+          }
+        }
+      }
+    },
+    "Connect to the relay to add a machine to a pool." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous au relais pour ajouter une machine à un pool."
           }
         }
       }
@@ -3449,6 +3575,26 @@
         }
       }
     },
+    "Every permission request of its pool sessions comes to you, as for any session." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaque demande d’autorisation de ses sessions du pool vous arrive, comme pour toute session."
+          }
+        }
+      }
+    },
+    "Everything passes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout passe"
+          }
+        }
+      }
+    },
     "Everything recorded" : {
       "localizations" : {
         "fr" : {
@@ -3525,6 +3671,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Échec"
+          }
+        }
+      }
+    },
+    "File edits pass" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les modifications de fichiers passent"
           }
         }
       }
@@ -3707,6 +3863,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Obtenir un nouveau jeton"
+          }
+        }
+      }
+    },
+    "Give it a work folder from the root or your home folder, such as ~/tonton-pool." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Donnez-lui un dossier de travail depuis la racine ou votre dossier personnel, par exemple ~/tonton-pool."
           }
         }
       }
@@ -4157,6 +4323,16 @@
         }
       }
     },
+    "Its agent has not taken the order: update the agent to %@ or later." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son agent n’a pas pris l’ordre : mettez l’agent à jour en %@ ou plus récent."
+          }
+        }
+      }
+    },
     "Its agent is offline." : {
       "localizations" : {
         "fr" : {
@@ -4167,12 +4343,52 @@
         }
       }
     },
+    "Its agent starts a session for each task the pool gives it, in a folder of its own, and ends it when the task is done." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son agent lance une session pour chaque tâche que le pool lui donne, dans un dossier à elle, et la termine quand la tâche est faite."
+          }
+        }
+      }
+    },
     "Its keys leave this Mac. The account stays on the relay: its recovery key adds it back." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ses clés quittent ce Mac. Le compte reste sur le relais : sa clé de récupération le rajoute."
+          }
+        }
+      }
+    },
+    "Its pool sessions do anything without asking, commands included: only for a machine or a virtual machine you give to the work, never one with your own files on it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses sessions du pool font tout sans demander, commandes comprises : seulement pour une machine ou une machine virtuelle que vous donnez au travail, jamais une qui contient vos propres fichiers."
+          }
+        }
+      }
+    },
+    "Its pool sessions edit files and read without asking. Commands and the rest still ask you." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses sessions du pool modifient des fichiers et lisent sans demander. Les commandes et le reste vous demandent toujours."
+          }
+        }
+      }
+    },
+    "Its pool sessions end, and their tasks go back to the board." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses sessions du pool s’arrêtent, et leurs tâches retournent au tableau."
           }
         }
       }
@@ -6270,6 +6486,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En cours"
+          }
+        }
+      }
+    },
+    "Runs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lance"
           }
         }
       }
@@ -8484,12 +8710,32 @@
         }
       }
     },
+    "Without asking" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sans demander"
+          }
+        }
+      }
+    },
     "Without it, open Tonton Claude from Spotlight to get back here." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sans elle, ouvrez Tonton Claude depuis Spotlight pour revenir ici."
+          }
+        }
+      }
+    },
+    "Work folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dossier de travail"
           }
         }
       }
@@ -8594,6 +8840,16 @@
         }
       }
     },
+    "assigned" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "attribuée"
+          }
+        }
+      }
+    },
     "at list price" : {
       "localizations" : {
         "fr" : {
@@ -8620,6 +8876,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "batterie %lld %% ⚡"
+          }
+        }
+      }
+    },
+    "blocked" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquée"
           }
         }
       }
@@ -8694,6 +8960,16 @@
         }
       }
     },
+    "finished" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terminée"
+          }
+        }
+      }
+    },
     "finished tasks" : {
       "localizations" : {
         "fr" : {
@@ -8710,6 +8986,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "depuis l’encoche"
+          }
+        }
+      }
+    },
+    "front, back… (optional)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "front, back… (facultatif)"
+          }
+        }
+      }
+    },
+    "in progress" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en cours"
+          }
+        }
+      }
+    },
+    "in review" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en relecture"
           }
         }
       }
@@ -8946,6 +9252,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ce Mac seulement"
+          }
+        }
+      }
+    },
+    "to do" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "à faire"
           }
         }
       }
