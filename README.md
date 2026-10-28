@@ -109,7 +109,8 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **What's new.** The first time a new version of the app starts, its release notes open, read from the release on GitHub.
   **Settings › General** turns that off, and its **What's new** link, next to the version, shows them again.
 - **Starting a session.** <kbd>+</kbd> in the open notch, or <kbd>⌘</kbd> <kbd>N</kbd>, starts claude in a folder of any
-  machine, in a tmux session you can attach to later. The machine needs tmux, so not Windows. The questions Claude Code
+  machine, in a tmux session you can attach to later. The machine needs tmux, so not Windows: the installer adds it with
+  Homebrew or the system's package manager when it is missing. The questions Claude Code
   asks on the way, like trusting the folder, show up in the notch: nothing is confirmed for you.
 - **Naming a session.** Right-click a session › **Rename…** and type a name: it shows instead of the project on every
   Mac of the account, encrypted like the rest. **Show the project name** brings the project back.

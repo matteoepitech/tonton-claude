@@ -26,9 +26,10 @@ import { useStore } from '../store'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/card'
 import { cn } from '../ui/cn'
+import { type Action, ContextMenu, MenuActions } from '../ui/context-menu'
 import { Confirm, Dialog, DialogContent, DialogFooter, DialogHeader } from '../ui/dialog'
 import { Field, Input } from '../ui/fields'
-import { Checkbox, Menu, MenuContent, MenuItem, MenuTrigger } from '../ui/menu'
+import { Checkbox, Menu, MenuContent, MenuTrigger } from '../ui/menu'
 import { NativeSelect } from '../ui/select'
 import { type MachineCard, type MachineSlot, machineCards, type SlotPhase } from './machines-model'
 import type { TabProps } from './page'
@@ -112,84 +113,77 @@ function MachineRow({ card, pool, state }: { card: MachineCard; pool: OpenPool; 
   const [asking, setAsking] = useState<'stop' | 'remove' | 'models' | null>(null)
   const status = machine.stopped ? 'stopped' : !machine.online ? 'offline' : machine.ready ? null : 'update the agent'
   const busy = card.slots.length
+  // The same in its menu and on a right-click.
+  const actions: Action[] = manages
+    ? [
+        card.mine && profile ? { label: 'Models…', icon: SparklesIcon, onSelect: () => setAsking('models') } : null,
+        card.mine && can.chooseOrchestrator
+          ? {
+              label: card.orchestrator ? 'Not the orchestrator' : 'Run the orchestrator here',
+              icon: BotIcon,
+              onSelect: () =>
+                store.pools?.setOrchestratorMachine(
+                  pool.id,
+                  card.orchestrator ? null : { account: machine.account, machine: machine.machine },
+                ),
+            }
+          : null,
+        null,
+        machine.stopped
+          ? { label: 'Start it', icon: PowerIcon, onSelect: () => store.pools?.stopMachine(pool.id, machine.machine, false) }
+          : { label: 'Stop it', icon: PowerOffIcon, destructive: true, onSelect: () => setAsking('stop') },
+        { label: 'Remove from the pool', icon: XIcon, destructive: true, onSelect: () => setAsking('remove') },
+      ]
+    : []
   return (
-    <div className="flex flex-col gap-2 px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-2">
-        <StatusDot status={machine.stopped || !machine.online ? 'offline' : busy ? 'working' : 'idle'} />
-        <strong className="truncate text-sm font-medium">{card.name}</strong>
-        {card.orchestrator && (
-          <Badge title="It runs the orchestrator, and takes tasks too">
-            <BotIcon className="size-3" />
-            orchestrator
-          </Badge>
-        )}
-        {status && <Badge variant={machine.stopped ? 'destructive' : machine.online ? 'warning' : 'secondary'}>{status}</Badge>}
-        {profile?.mode === 'full' && (
-          <Badge variant="outline" title="Its owner lets its sessions run commands without asking.">
-            no prompts
-          </Badge>
-        )}
-        <span className="ms-auto shrink-0 text-xs text-muted-foreground">
-          {profile ? `${machinePlanLabel(profile)} · ${busy}/${profile.capacity} busy` : 'its settings could not be read'}
-        </span>
-        {manages && (
-          <Menu>
-            <MenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-7" aria-label={`What to do with ${card.name}`}>
-                <EllipsisIcon />
-              </Button>
-            </MenuTrigger>
-            <MenuContent align="end">
-              {card.mine && profile && (
-                <MenuItem onSelect={() => setAsking('models')}>
-                  <SparklesIcon />
-                  Models…
-                </MenuItem>
-              )}
-              {card.mine && can.chooseOrchestrator && (
-                <MenuItem
-                  onSelect={() =>
-                    store.pools?.setOrchestratorMachine(
-                      pool.id,
-                      card.orchestrator ? null : { account: machine.account, machine: machine.machine },
-                    )
-                  }
-                >
-                  <BotIcon />
-                  {card.orchestrator ? 'Not the orchestrator' : 'Run the orchestrator here'}
-                </MenuItem>
-              )}
-              {machine.stopped ? (
-                <MenuItem onSelect={() => store.pools?.stopMachine(pool.id, machine.machine, false)}>
-                  <PowerIcon />
-                  Start it
-                </MenuItem>
-              ) : (
-                <MenuItem variant="destructive" onSelect={() => setAsking('stop')}>
-                  <PowerOffIcon />
-                  Stop it
-                </MenuItem>
-              )}
-              <MenuItem variant="destructive" onSelect={() => setAsking('remove')}>
-                <XIcon />
-                Remove from the pool
-              </MenuItem>
-            </MenuContent>
-          </Menu>
-        )}
-      </div>
-      {card.slots.length > 0 && (
-        <div className="flex flex-col gap-1 ps-4">
-          {card.slots.map(slot => (
-            <Slot key={slot.task.id} slot={slot} pool={pool} state={state} />
-          ))}
+    <>
+      <ContextMenu actions={actions}>
+        <div className="flex flex-col gap-2 px-3 py-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <StatusDot status={machine.stopped || !machine.online ? 'offline' : busy ? 'working' : 'idle'} />
+            <strong className="truncate text-sm font-medium">{card.name}</strong>
+            {card.orchestrator && (
+              <Badge title="It runs the orchestrator, and takes tasks too">
+                <BotIcon className="size-3" />
+                orchestrator
+              </Badge>
+            )}
+            {status && <Badge variant={machine.stopped ? 'destructive' : machine.online ? 'warning' : 'secondary'}>{status}</Badge>}
+            {profile?.mode === 'full' && (
+              <Badge variant="outline" title="Its owner lets its sessions run commands without asking.">
+                no prompts
+              </Badge>
+            )}
+            <span className="ms-auto shrink-0 text-xs text-muted-foreground">
+              {profile ? `${machinePlanLabel(profile)} · ${busy}/${profile.capacity} busy` : 'its settings could not be read'}
+            </span>
+            {manages && (
+              <Menu>
+                <MenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-7" aria-label={`What to do with ${card.name}`}>
+                    <EllipsisIcon />
+                  </Button>
+                </MenuTrigger>
+                <MenuContent align="end">
+                  <MenuActions actions={actions} />
+                </MenuContent>
+              </Menu>
+            )}
+          </div>
+          {card.slots.length > 0 && (
+            <div className="flex flex-col gap-1 ps-4">
+              {card.slots.map(slot => (
+                <Slot key={slot.task.id} slot={slot} pool={pool} state={state} />
+              ))}
+            </div>
+          )}
+          {machine.online && !machine.ready && !machine.stopped && (
+            <p className="ps-4 text-xs text-warning">
+              Its agent is too old to take tasks: its owner clicks Update agent in Settings › Machines.
+            </p>
+          )}
         </div>
-      )}
-      {machine.online && !machine.ready && !machine.stopped && (
-        <p className="ps-4 text-xs text-warning">
-          Its agent is too old to take tasks: its owner clicks Update agent in Settings › Machines.
-        </p>
-      )}
+      </ContextMenu>
       <Confirm
         open={asking === 'stop'}
         onOpenChange={open => setAsking(open ? 'stop' : null)}
@@ -209,7 +203,7 @@ function MachineRow({ card, pool, state }: { card: MachineCard; pool: OpenPool; 
       {card.mine && profile && (
         <ModelsDialog card={card} pool={pool} open={asking === 'models'} onOpenChange={open => setAsking(open ? 'models' : null)} />
       )}
-    </div>
+    </>
   )
 }
 

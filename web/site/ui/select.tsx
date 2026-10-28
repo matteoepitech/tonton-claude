@@ -11,7 +11,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50 data-[placeholder]:text-muted-foreground [&>span]:truncate',
+        'flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-input bg-popover/70 px-3 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50 data-[placeholder]:text-muted-foreground [&>span]:truncate',
         className,
       )}
       {...props}
@@ -30,7 +30,7 @@ export function SelectContent({ className, children, position = 'popper', ...pro
       <SelectPrimitive.Content
         position={position}
         className={cn(
-          'relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md',
+          'relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-y-auto rounded-xl border bg-popover p-1 text-popover-foreground shadow-md',
           position === 'popper' && 'w-full min-w-(--radix-select-trigger-width) translate-y-1',
           className,
         )}
@@ -46,7 +46,7 @@ export function SelectItem({ className, children, ...props }: ComponentProps<typ
   return (
     <SelectPrimitive.Item
       className={cn(
-        'relative flex w-full cursor-default items-center rounded-sm py-1.5 ps-2 pe-8 text-sm outline-none select-none focus:bg-accent data-[disabled]:opacity-50',
+        'relative flex w-full cursor-default items-center rounded-lg py-1.5 ps-2 pe-8 text-sm outline-none select-none focus:bg-accent data-[disabled]:opacity-50',
         className,
       )}
       {...props}
@@ -65,7 +65,7 @@ export function NativeSelect({ className, ...props }: ComponentProps<'select'>) 
   return (
     <select
       className={cn(
-        'h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+        'h-8 rounded-full border border-input bg-popover/70 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
         className,
       )}
       {...props}

@@ -84,12 +84,14 @@ describe('the background service', () => {
   })
 
   test('in its LaunchAgent on macOS', () => {
-    const plist = launchAgentPlist('/Users/me/.tonton/bin/tonton', '/Users/me/.tonton', [...proxy, ['NO_PROXY', 'a&b']])
+    const plist = launchAgentPlist('/Users/me/.tonton/bin/tonton', '/Users/me/.tonton', [...proxy, ['NO_PROXY', 'a&b']], '/usr/bin')
     expect(plist).toContain(
-      '<key>TONTON_HOME</key><string>/Users/me/.tonton</string><key>HTTPS_PROXY</key><string>http://jane:p%40ss@proxy.corp:3128</string>',
+      '<key>TONTON_HOME</key><string>/Users/me/.tonton</string><key>PATH</key><string>/usr/bin</string><key>HTTPS_PROXY</key><string>http://jane:p%40ss@proxy.corp:3128</string>',
     )
     expect(plist).toContain('<key>NO_PROXY</key><string>a&amp;b</string>')
-    expect(launchAgentPlist('/b', '/h', [])).toContain('<dict><key>TONTON_HOME</key><string>/h</string></dict>')
+    expect(launchAgentPlist('/b', '/h', [], '/bin')).toContain(
+      '<dict><key>TONTON_HOME</key><string>/h</string><key>PATH</key><string>/bin</string></dict>',
+    )
   })
 
   test('in its systemd unit on Linux, quoted, with percent signs kept', () => {
@@ -97,6 +99,6 @@ describe('the background service', () => {
     expect(unit).toContain('Environment="HTTPS_PROXY=http://jane:p%%40ss@proxy.corp:3128"\n')
     expect(unit).toContain('Environment="NO_PROXY=localhost, .corp"\n')
     expect(unit).toContain('Environment="NO_PROXY=say \\"hi\\"\\\\"\n')
-    expect(systemdUnit('/b', '/h', [])).toContain('Environment=TONTON_HOME=/h\nExecStart="/b" service')
+    expect(systemdUnit('/b', '/h', [], '/bin')).toContain('Environment=TONTON_HOME=/h\nEnvironment="PATH=/bin"\nExecStart="/b" service')
   })
 })

@@ -37,6 +37,35 @@ fetch() {
   chmod +x "$tmp/$1"
 }
 
+# Sessions started from the notch and a pool's sessions run in tmux. Installed with Homebrew or the system's package
+# manager when it is missing; a failure only warns, the agent works without it for the rest. With sudo only from a
+# terminal: Update agent runs this without one, and must never wait for a password.
+install_tmux() {
+  for found in tmux /opt/homebrew/bin/tmux /usr/local/bin/tmux; do command -v "$found" >/dev/null 2>&1 && return 0; done
+  missing="tmux is missing: sessions from the notch and pool machines need it."
+  if [ "$os" = darwin ]; then
+    brew=$(command -v brew || { [ -x /opt/homebrew/bin/brew ] && echo /opt/homebrew/bin/brew; } || { [ -x /usr/local/bin/brew ] && echo /usr/local/bin/brew; } || true)
+    if [ -z "$brew" ]; then echo "$missing Install Homebrew (https://brew.sh), then: brew install tmux" >&2; return 0; fi
+    echo "Installing tmux with Homebrew..."
+    "$brew" install tmux >/dev/null 2>&1 || echo "$missing Homebrew could not install it: brew install tmux" >&2
+    return 0
+  fi
+  if [ "$(id -u)" = 0 ]; then sudo=""; elif command -v sudo >/dev/null 2>&1 && { sudo -n true 2>/dev/null || [ -t 2 ]; }; then sudo=sudo; else
+    echo "$missing Install it with your package manager." >&2
+    return 0
+  fi
+  if command -v apt-get >/dev/null 2>&1; then set -- apt-get install -y tmux
+  elif command -v dnf >/dev/null 2>&1; then set -- dnf install -y tmux
+  elif command -v yum >/dev/null 2>&1; then set -- yum install -y tmux
+  elif command -v pacman >/dev/null 2>&1; then set -- pacman -S --noconfirm tmux
+  elif command -v zypper >/dev/null 2>&1; then set -- zypper --non-interactive install tmux
+  elif command -v apk >/dev/null 2>&1; then set -- apk add tmux
+  else echo "$missing Install it with your package manager." >&2; return 0
+  fi
+  echo "Installing tmux ($1)..."
+  $sudo "$@" >/dev/null 2>&1 </dev/null || echo "$missing It could not be installed: $* (as root)" >&2
+}
+
 echo "Downloading Tonton Claude $VERSION ($os-$arch)..."
 curl -fsSL "$release/SHA256SUMS" -o "$tmp/SHA256SUMS"
 fetch "tonton-$os-$arch"
@@ -47,4 +76,5 @@ if [ "$os" = darwin ]; then
 fi
 # A rename keeps running sessions on the old binary instead of corrupting it.
 mv -f "$tmp/tonton-$os-$arch" "$dir/tonton"
+install_tmux
 "$dir/tonton" install "$@"
