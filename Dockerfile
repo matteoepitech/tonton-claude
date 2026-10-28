@@ -7,11 +7,12 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY shared shared
 COPY relay relay
-# The website it serves.
+# The website it serves, and the build that bundles it with Tailwind.
 COPY web web
+COPY scripts scripts
 RUN arch=$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64) && \
-    bun build --compile --minify --target=bun-linux-$arch --define=process.env.TONTON_VERSION=\"$VERSION\" \
-      relay/src/main.ts --outfile /tonton-relay && \
+    bun scripts/build.ts --version "$VERSION" tonton-relay-linux-$arch && \
+    cp dist/tonton-relay-linux-$arch /tonton-relay && \
     mkdir /data
 
 FROM debian:bookworm-slim

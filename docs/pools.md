@@ -275,18 +275,24 @@ The relay serves a website at `/`, built on the client core like the web app: si
   policy of `tonton-web.html` allows sockets only. Opened from disk, the page says where to go.
 - The list shows each pool's name, opened with the member's keys. **New pool** makes the pool and its key in the
   browser; **Join** takes an invite pasted from a teammate (`tontonpool1.…`, for this relay only).
-- A pool's page has tabs, each a name and a function in `POOL_TABS` (`web/pools.ts`): **Tasks**, **Control center**,
-  **Activity**, **Leaderboard**, **Members**, **Invites** (owner and admins) and **Settings**. The notes come as one more
-  tab.
+- A pool's page has tabs, each a name and a component in `TABS` (`web/site/pools/page.tsx`): **Orchestrator**,
+  **Tasks**, **Control center**, **Activity**, **Leaderboard**, **Members**, **Invites** (owner and admins) and
+  **Settings**. The notes come as one more tab.
+- **Orchestrator** (`web/site/pools/orchestrator.tsx`) comes first, for the admin ([pool-autopilot.md](pool-autopilot.md)):
+  the orchestrator session's conversation, with the box to write to it. It is one of the admin's own sessions, sealed
+  with the admin's account key, so only the admin reads it and writes to it; the other members see who runs it. Beside
+  it: the dispatch, on or off (owner and admins switch it), the board at a glance, and what the control loop did (its
+  events, posted as the orchestrator machine).
 - **Tasks** is the board: one column per state (to do, assigned, in progress, in review, done, blocked), live. A task
   opens with its goal, criteria, area, assignee, dependencies, branch, summary and history (the `task_*` events each
   change leaves). Members create, edit and move tasks; viewers read. A change over a revision someone else changed
   meanwhile is refused by the relay: the board shows their version, marked "changed meanwhile".
-- **Control center** (`web/control.ts`) shows every member with its machines and pool sessions: tool and model (from the
+- **Control center** (`web/site/pools/control.tsx`) shows every member with its machines and pool sessions: tool and model (from the
   session's `session` event), area, whether it is the orchestrator, online or not, its status, its current task, when it
   last wrote to the pool, and its usage. A count per status (working, needs its owner, idle, offline) sits on top, and
-  the filters by role, member and status in the panel. Below, a graph of who talks to whom, drawn in SVG from the
-  messages: a line from each writer to the session, the area or everyone it wrote to, thicker with more messages.
+  the filters by role, member and status above. A graph (React Flow) shows every session as a node, with an animated
+  arrow from each writer to the session, the area or everyone it wrote to, thicker with more messages, and a dashed one
+  from each session to the task it works on.
 - The **status** comes from the relay, which knows it anyway: each pool session in the snapshot carries `status`, and the
   members get a new `pool_session` when it changes, never with every entry. Older relays send none: the page then says
   online or offline only.
@@ -295,22 +301,24 @@ The relay serves a website at `/`, built on the client core like the web app: si
   the same numbers the budgets count, so the control center and the leaderboard never disagree with them. The agent posts it when it
   would show differently (thousands of tokens, whole percents), at most once a minute (`agent/src/channel/
   pool-usage.ts`), for Claude Code and OpenCode alike.
-- **Activity** (`web/activity.ts`) lists everything in order: joins of members and sessions, messages, task changes,
+- **Activity** (`web/site/pools/activity.tsx`) lists everything in order: joins of members and sessions, messages, task changes,
   blockers, merges, key changes and the other audit events, newest first. It searches what was said and done, filters
   by member, session and kind, and downloads what it shows as JSON or Markdown, from the page itself (a blob link), or
   copies it as Markdown. `usage` and `spend` events stay out of it.
-- **Leaderboard** (`web/leaderboard.ts`) ranks sessions and members by tasks done, then time, for today, this run (since
+- **Leaderboard** (`web/site/pools/leaderboard.tsx`) ranks sessions and members by tasks done, then time, for today, this run (since
   the last `resumed` or `started` event, else since the pool was made) or all time. A task counts once, for the session it
   was assigned to when it was done last; its time runs from its first move to in progress to that moment. Spending is
   the period's share of each session's running total. Lines changed are not counted: no event carries them yet.
 - The three tabs work out what they show in `shared/pool-stats.ts`, from the pool's state alone, so any client computes
   the same.
-- **Members** lists the members and the pool's sessions (tool, machine, online or not). Roles change from a menu, by the
-  rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and says who could
-  not get the new one.
+- **Members** lists the members, the pool's sessions (tool, machine, online or not) and its machines. Roles change from a
+  menu, by the rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and
+  says who could not get the new one. Owners and admins make a session the orchestrator, or one of their own machines
+  the orchestrator machine.
 - **Invites** makes an invite (uses, how long, which role) and shows its link and a QR code, drawn in the page
   (`shared/qr.ts`, no dependency). Open invites are listed with **Revoke**.
-- Forms sit in a panel above the tab: live changes redraw the tab, never what is being typed.
+- Forms sit in dialogs (Radix, under the page's nonce) or keep their own state: live changes redraw the tab, never what is
+  being typed.
 - What each role is offered comes from `shared/pool-board.ts`, and the page follows the pool through
   `shared/pool-watch.ts`: the member's copy of the key, the wraps of later versions, a new snapshot after a rotation,
   and its public key published again under the new version.

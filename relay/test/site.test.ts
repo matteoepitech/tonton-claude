@@ -34,6 +34,12 @@ test('the relay serves the web app, its script and style from its own address', 
     expect(file.headers.get('cache-control')).toContain('immutable')
     expect(file.headers.get('content-security-policy')).toBe(policy(`127.0.0.1:${relay.server.port}`))
     if (asset.endsWith('.js')) expect(await file.text()).toContain('tonton/v1')
+    // Compressed for a browser that takes it, as it is for one that does not.
+    const zipped = await fetch(`${base}${asset}`, { headers: { 'accept-encoding': 'gzip' }, decompress: false } as RequestInit)
+    expect(zipped.headers.get('content-encoding')).toBe('gzip')
+    const raw = await fetch(`${base}${asset}`, { headers: { 'accept-encoding': 'identity' } })
+    expect(raw.headers.get('content-encoding')).toBeNull()
+    expect(Bun.gunzipSync(new Uint8Array(await zipped.arrayBuffer())).length).toBe((await raw.arrayBuffer()).byteLength)
   }
   expect((await fetch(`${base}/index.html`)).status).toBe(200)
 })
@@ -44,7 +50,13 @@ test('every file comes with a policy that allows its own script, style and socke
   const host = `127.0.0.1:${relay.server.port}`
   expect(csp).toContain("default-src 'none'")
   expect(csp).toContain("script-src 'self';")
-  expect(csp).toContain("style-src 'self';")
+  // The page's components add a few <style> tags while it runs (Radix locking the scroll under a dialog): only with the
+  // nonce of this visit, which the page reads from its meta tag. Each visit gets another one.
+  const nonce = /style-src 'self' 'nonce-([A-Za-z0-9+/=]{24})';/.exec(csp)?.[1]
+  expect(nonce).toBeDefined()
+  expect(await page.text()).toContain(`<meta name="csp-nonce" content="${nonce}">`)
+  const again = (await fetch(`${base}/`)).headers.get('content-security-policy') ?? ''
+  expect(again).not.toContain(`'nonce-${nonce}'`)
   expect(csp).toContain(`connect-src 'self' wss://${host} ws://${host};`)
   expect(csp).toContain("frame-ancestors 'none'")
   expect(csp).not.toContain('unsafe')
