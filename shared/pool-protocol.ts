@@ -64,6 +64,8 @@ export interface PoolSessionProfile {
 
 /** `simple`: tests, docs, small fixes, boilerplate, a page that follows an existing pattern. `large`: a feature, an area. */
 export type PoolTaskSize = 'simple' | 'large'
+/** How capable a model a task needs (shared/pool-model.ts): the owner of each machine says which model each tier is. */
+export type ModelTier = 'light' | 'balanced' | 'strong'
 
 export type PoolTaskState = 'todo' | 'assigned' | 'in_progress' | 'review' | 'done' | 'blocked'
 
@@ -102,6 +104,30 @@ export interface PoolTask {
   attempts?: number
   /** What became of its branch when the orchestrator merged it into main (docs/pool-orchestrator.md, Merging). */
   merge?: PoolTaskMerge
+  /** The tier the orchestrator or an admin set for it, over the assessment. A machine owner's lock still wins. */
+  model?: ModelTier
+  /**
+   * How many times a session failed the task itself: it ended before the task was done, stalled, or the branch it
+   * finished fails main's checks. Not a machine going offline or a session that could not start. Missing: none.
+   */
+  setbacks?: number
+  /** The model its machine started its session on, and why (shared/pool-model.ts). */
+  route?: PoolTaskRoute
+}
+
+/** What a pool machine chose for a task's session. Every field is optional for the apps, which only show it. */
+export interface PoolTaskRoute {
+  tier?: ModelTier
+  /** What the session was started or switched with: `sonnet`, `claude-sonnet-4-5`, `anthropic/claude-haiku-4-5`. */
+  model?: string
+  reason?: string
+  /** Tiers it climbed after sessions failed the task. */
+  escalated?: number
+  /** The model the session reported running on, once it did. */
+  confirmed?: string
+  /** Why the model could not be applied or confirmed: the session runs on what its tool chose. */
+  problem?: string
+  at?: string
 }
 
 /**
@@ -244,6 +270,20 @@ export interface PoolMachineProfile {
   takes?: PoolTaskSize
   /** The areas it prefers (front, back…). */
   areas?: string[]
+  /** Which models its sessions run on (shared/pool-model.ts). Missing: each task gets the tier it needs. */
+  models?: PoolModelPolicy
+}
+
+/** The machine owner's choice of models for the pool's tasks. */
+export interface PoolModelPolicy {
+  /** Every task runs on this tier, whatever it is: nothing overrides it. */
+  lock?: ModelTier
+  /** The tiers its sessions may use. Missing: all three. */
+  allowed?: ModelTier[]
+  /** The model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`. Missing: haiku, sonnet, opus. */
+  tiers?: Partial<Record<ModelTier, string>>
+  /** How many tiers a task may climb after sessions failed it, 0 to 2. Missing: 1. */
+  escalations?: number
 }
 
 /** Whether the control loop hands out the pool's tasks (`dispatch_start`, `dispatch_stop`, or the website). */

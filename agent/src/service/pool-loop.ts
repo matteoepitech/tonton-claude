@@ -8,9 +8,9 @@
 // orchestrator's agent turns into notices. When every task is done, it says so and stops.
 
 import { overBudget, type PoolMachine, type PoolState, type PoolTaskItem } from '../../../shared/pool'
-import type { PoolLimits, PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
+import type { PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
 import { dispatching, machineName } from '../channel/pool-dispatch'
-import { expectedHours, shortOfTime } from '../channel/pool-limits'
+import { accountLimits, expectedHours, shortOfTime } from '../channel/pool-limits'
 import { mergeQueue } from '../channel/pool-merge'
 import { STALL_MS, waitingFor } from '../channel/pool-orchestrator'
 import { log } from '../log'
@@ -30,6 +30,12 @@ const LEFT_GRACE_MS = 2 * 60_000
 /** Changes made in one look at the pool at most: the next look goes on. */
 const MAX_CHANGES = 20
 
+/** Why a task goes back to the board, and whether its session failed it (shared/pool-model.ts). */
+interface Trouble {
+  why: string
+  setback?: boolean
+}
+
 /** Tasks a machine holds: they take its slots. */
 const ACTIVE = new Set(['assigned', 'in_progress', 'blocked'])
 
@@ -45,15 +51,6 @@ const kindOf = (machine: PoolMachine): PoolTaskSize => machine.profile?.takes ??
 const held = (state: PoolState, machine: string) =>
   state.tasks.filter(item => item.task?.machine?.machine === machine && ACTIVE.has(item.task.state)).length
 
-/** The latest plan an account's Claude Code sessions shared: what its machines have left. */
-function limitsOf(state: PoolState, account: string): PoolLimits | undefined {
-  for (let i = state.events.length - 1; i >= 0; i--) {
-    const event = state.events[i]
-    if (event.account === account && event.session && event.body?.kind === 'limits' && event.body.limits) return event.body.limits
-  }
-  return undefined
-}
-
 /**
  * The machines that may take the task, best first: online, their service ready, a free slot, within their member's and
  * the pool's budgets, with time left on their account's plan for it (Claude Code), and of the kind the task needs. A
@@ -68,7 +65,7 @@ export function machineCandidates(state: PoolState, task: Pick<PoolTask, 'area' 
     .filter(machine => !overBudget(state, machine.account))
     .map(machine => ({ machine, kind: kindOf(machine), free: (machine.profile?.capacity ?? 0) - held(state, machine.machine) }))
     .filter(c => c.free > 0 && rank(c.kind) < 9)
-    .filter(c => c.machine.profile?.tool === 'opencode' || !shortOfTime(limitsOf(state, c.machine.account), expectedHours(task), now))
+    .filter(c => c.machine.profile?.tool === 'opencode' || !shortOfTime(accountLimits(state, c.machine.account), expectedHours(task), now))
     .sort((a, b) => {
       const byKind = rank(a.kind) - rank(b.kind)
       if (byKind) return byKind
@@ -169,9 +166,9 @@ export class DispatchLoop {
       const held = item.task?.machine && ACTIVE.has(item.task.state) ? item.task.machine.machine : null
       const machine = held ? state.machines?.find(m => m.machine === held) : undefined
       // Its machine was stopped: the task goes elsewhere as it was, uncounted, when the machine cannot give it back.
-      if (machine?.stopped) return this.retry(poolId, item, `${machineName(state, machine)} was stopped`, false)
-      const why = held ? this.trouble(state, item, now) : null
-      if (why) return this.retry(poolId, item, why)
+      if (machine?.stopped) return this.retry(poolId, item, { why: `${machineName(state, machine)} was stopped` }, false)
+      const trouble = held ? this.trouble(state, item, now) : null
+      if (trouble) return this.retry(poolId, item, trouble)
     }
     const tasks = state.tasks.filter(item => item.task)
     if (tasks.length && tasks.every(item => item.task?.state === 'done')) return this.finish(poolId, state)
@@ -188,26 +185,31 @@ export class DispatchLoop {
     return false
   }
 
-  /** Why a task held by a machine should go back to the board now, or null. */
-  private trouble(state: PoolState, item: PoolTaskItem, now: number): string | null {
+  /**
+   * Why a task held by a machine should go back to the board now, or null. A setback when its session failed it: it
+   * ended or stalled, which a stronger model may not; not when the machine did.
+   */
+  private trouble(state: PoolState, item: PoolTaskItem, now: number): Trouble | null {
     const task = item.task as PoolTask
     const machine = state.machines?.find(m => m.machine === task.machine?.machine)
-    if (!machine) return 'its machine left the pool'
+    if (!machine) return { why: 'its machine left the pool' }
     const name = machineName(state, machine)
     if (!machine.online) {
       const since = this.offlineSince.get(machine.machine) ?? now
       this.offlineSince.set(machine.machine, since)
-      if (now - since > OFFLINE_GRACE_MS) return `${name} went offline`
+      if (now - since > OFFLINE_GRACE_MS) return { why: `${name} went offline` }
     } else this.offlineSince.delete(machine.machine)
     const age = now - Date.parse(item.updatedAt)
     if (task.state === 'assigned' && !task.assignee && age > START_GRACE_MS) {
-      return machine.ready ? `${name} did not start it` : `${name} runs an agent too old for pool machines`
+      return { why: machine.ready ? `${name} did not start it` : `${name} runs an agent too old for pool machines` }
     }
     const session = task.assignee?.session
-    if (session && !state.sessions.some(s => s.session === session) && age > LEFT_GRACE_MS) return `its session on ${name} ended`
+    if (session && !state.sessions.some(s => s.session === session) && age > LEFT_GRACE_MS) {
+      return { why: `its session on ${name} ended`, setback: true }
+    }
     // A session can work for hours without touching its task: stalled is no change to the task and no work either.
     if (task.state === 'in_progress' && age > this.stallMs && this.quiet(state, session, now) > this.stallMs) {
-      return `it has not moved for ${Math.round(this.stallMs / 60_000)} minutes on ${name}`
+      return { why: `it has not moved for ${Math.round(this.stallMs / 60_000)} minutes on ${name}`, setback: true }
     }
     return null
   }
@@ -226,10 +228,10 @@ export class DispatchLoop {
   }
 
   /** Puts the task back on the board, counted in its attempts unless nothing failed. */
-  private async retry(poolId: string, item: PoolTaskItem, why: string, counted = true): Promise<boolean> {
+  private async retry(poolId: string, item: PoolTaskItem, { why, setback }: Trouble, counted = true): Promise<boolean> {
     const task = item.task as PoolTask
     const because = `${why[0].toUpperCase()}${why.slice(1)}.`
-    const next = counted ? failedTask(task, because) : freedTask(task, because)
+    const next = counted ? failedTask(task, because, setback) : freedTask(task, because)
     if (await this.pools.putTask(poolId, item, next)) return false
     const about = `${item.id} (${task.title})`
     if (!counted) {

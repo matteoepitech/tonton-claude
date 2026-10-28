@@ -213,6 +213,8 @@ describe('task_merge', () => {
       merge: { state: 'failed', command: 'test ! -e BROKEN' },
     })
     expect(fix.task.assignee).toBeUndefined()
+    // Work that fails main's checks is a setback: the fix may run on a stronger model.
+    expect(fix.task.setbacks).toBe(1)
     expect(original).toMatchObject({ id: 'a', rev: 3, task: { state: 'done', merge: { state: 'failed', fix: fix.id } } })
     expect(events.map(e => e.kind)).toEqual(['task_created', 'merge_failed'])
     // The task waits for its fix, which is not finished: nothing is ready.

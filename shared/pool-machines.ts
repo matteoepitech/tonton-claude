@@ -4,7 +4,16 @@
 // dropped, never trusted. Mirrors app/Sources/TontonCore/PoolMachine.swift.
 
 import { type AccountKey, open, seal } from './crypto'
-import type { PoolDispatch, PoolMachineMode, PoolMachineOrder, PoolMachineProfile, PoolMachineRef, PoolTaskSize } from './pool-protocol'
+import { decodeModelPolicy } from './pool-model'
+import type {
+  PoolDispatch,
+  PoolMachineMode,
+  PoolMachineOrder,
+  PoolMachineProfile,
+  PoolMachineRef,
+  PoolModelPolicy,
+  PoolTaskSize,
+} from './pool-protocol'
 import type { Sealed } from './protocol'
 
 export const POOL_MACHINE_MODES: readonly PoolMachineMode[] = ['ask', 'edits', 'full']
@@ -56,6 +65,7 @@ export function decodePoolMachineProfile(value: unknown): PoolMachineProfile | n
     mode: f.mode,
     takes: isSize(f.takes) ? f.takes : undefined,
     areas: areas?.length ? areas : undefined,
+    models: decodeModelPolicy(f.models),
   })
 }
 
@@ -68,6 +78,8 @@ export function poolMachineProfile(input: {
   mode: string
   takes?: string
   areas?: string[]
+  /** Kept as it is, checked like a sealed one. */
+  models?: PoolModelPolicy
 }): PoolMachineProfile | string {
   const workdir = input.workdir.trim()
   if (!isTool(input.tool)) return 'Choose Claude Code or OpenCode.'
@@ -83,6 +95,7 @@ export function poolMachineProfile(input: {
     mode: input.mode,
     takes: isSize(input.takes) ? input.takes : undefined,
     areas: areas.length ? [...new Set(areas)].slice(0, MAX_AREAS) : undefined,
+    models: decodeModelPolicy(input.models),
   })
 }
 

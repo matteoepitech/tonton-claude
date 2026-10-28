@@ -103,6 +103,25 @@ describe('OpenCode 2', () => {
     expect(tracker.familyModel(sessionId, 'sonnet')).toMatchObject({ providerID: 'openrouter' })
   })
 
+  test("a pool machine's model is a family or a provider's model OpenCode has, once it said which it has", () => {
+    const { tracker } = replay(events)
+    expect(tracker.knowsModels).toBe(false)
+    tracker.handle({
+      type: 'tonton.models',
+      data: {
+        models: [
+          { providerID: 'anthropic', modelID: 'claude-sonnet-5-5', released: 1_790_000_000_000 },
+          { providerID: 'ollama', modelID: 'qwen3:32b' },
+        ],
+      },
+    })
+    expect(tracker.knowsModels).toBe(true)
+    expect(tracker.namedModel(sessionId, 'sonnet')).toMatchObject({ providerID: 'anthropic', modelID: 'claude-sonnet-5-5' })
+    expect(tracker.namedModel(sessionId, 'ollama/qwen3:32b')).toMatchObject({ providerID: 'ollama', modelID: 'qwen3:32b' })
+    expect(tracker.namedModel(sessionId, 'ollama/llama3')).toBeUndefined()
+    expect(tracker.namedModel(sessionId, 'opus')).toBeUndefined()
+  })
+
   test('the permission it asked for becomes a request card, closed once answered', () => {
     const { updates } = replay(events)
     expect(updates.flatMap(update => (update.permission ? [update.permission] : []))).toEqual([

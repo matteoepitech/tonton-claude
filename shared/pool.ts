@@ -6,6 +6,7 @@ import { bytesToBase64Url } from './base64'
 import { type AccountKey, newAccountKey, open, seal } from './crypto'
 import { PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
 import { decodePoolDispatch, decodePoolMachineProfile, decodePoolMachineRef, isPoolMachineMode } from './pool-machines'
+import { decodeTaskRoute, isModelTier } from './pool-model'
 import type {
   PoolArea,
   PoolAuditWire,
@@ -217,6 +218,10 @@ export function decodePoolTask(value: unknown): PoolTask | null {
     attempts:
       typeof f.attempts === 'number' && Number.isInteger(f.attempts) && f.attempts >= 0 && f.attempts <= 1000 ? f.attempts : undefined,
     merge: decodePoolTaskMerge(f.merge),
+    model: isModelTier(f.model) ? f.model : undefined,
+    setbacks:
+      typeof f.setbacks === 'number' && Number.isInteger(f.setbacks) && f.setbacks >= 0 && f.setbacks <= 1000 ? f.setbacks : undefined,
+    route: decodeTaskRoute(f.route),
   })
 }
 

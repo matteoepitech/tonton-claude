@@ -228,6 +228,12 @@ public struct PoolTask: Codable, Equatable, Sendable {
     /// What became of its branch when the orchestrator merged it into main. Kept so that a task the app writes back
     /// still says so.
     public var merge: PoolTaskMerge?
+    /// `light`, `balanced` or `strong`: the tier the orchestrator or an admin set for it (shared/pool-model.ts).
+    public var model: String?
+    /// How many times a session failed the task itself, which can move it to a stronger model.
+    public var setbacks: Int?
+    /// The model its machine started its session on, and why. Kept, like the merge, when the app writes the task back.
+    public var route: PoolTaskRoute?
 
     public init(
         title: String, goal: String? = nil, criteria: [String]? = nil, area: String? = nil, state: PoolTaskState,
@@ -254,6 +260,23 @@ public struct PoolTaskMerge: Codable, Equatable, Sendable {
     public var output: String?
     /// The task made to fix it.
     public var fix: String?
+}
+
+/// What a pool machine chose for a task's session. Every field is optional, so a route from a newer agent never stops the
+/// task from opening.
+public struct PoolTaskRoute: Codable, Equatable, Sendable {
+    /// `light`, `balanced` or `strong`.
+    public var tier: String?
+    /// What the session was started or switched with.
+    public var model: String?
+    public var reason: String?
+    /// Tiers it climbed after sessions failed the task.
+    public var escalated: Int?
+    /// The model the session reported running on.
+    public var confirmed: String?
+    /// Why the model could not be applied or confirmed.
+    public var problem: String?
+    public var at: String?
 }
 
 /// An area of the code and the paths it owns.

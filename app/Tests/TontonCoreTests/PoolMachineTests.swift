@@ -123,6 +123,24 @@ final class PoolMachineTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(PoolSessionWire.self, from: Data(session.utf8)).machine, "m1")
     }
 
+    func testTheModelsOfAMachineAndATaskAreKeptWhenWrittenBack() throws {
+        let read = { (json: String) in try JSONDecoder().decode(PoolMachineProfile.self, from: Data(json.utf8)) }
+        let base = #""tool":"claude","capacity":1,"workdir":"~/pool","mode":"edits""#
+        let profile = try read("{\(base),\"models\":{\"allowed\":[\"light\",\"balanced\"],\"escalations\":1}}")
+        XCTAssertEqual(profile.models, PoolModelPolicy(allowed: ["light", "balanced"], escalations: 1))
+        XCTAssertEqual(try JSONDecoder().decode(PoolMachineProfile.self, from: JSONEncoder().encode(profile)), profile)
+        // A policy the app cannot read leaves the profile as it is, without one.
+        XCTAssertNil(try read("{\(base),\"models\":\"opus\"}").models)
+
+        let json =
+            #"{"title":"API","state":"in_progress","model":"strong","setbacks":1,"route":{"tier":"strong","model":"opus","escalated":1}}"#
+        let task = try JSONDecoder().decode(PoolTask.self, from: Data(json.utf8))
+        XCTAssertEqual(task.model, "strong")
+        XCTAssertEqual(task.setbacks, 1)
+        XCTAssertEqual(task.route?.escalated, 1)
+        XCTAssertEqual(try JSONDecoder().decode(PoolTask.self, from: JSONEncoder().encode(task)), task)
+    }
+
     func testOnlyAgentsThatRunPoolMachinesAreOffered() {
         let machine = { (version: String?) in
             MachineInfo(

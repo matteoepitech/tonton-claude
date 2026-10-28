@@ -196,6 +196,8 @@ describe('the control loop', () => {
     now += 2 * 60_000
     await look(fake, loop)
     expect(fake.get().tasks[0].task).toMatchObject({ state: 'todo', attempts: 1, summary: 'Linux went offline.' })
+    // The machine failed it, not its session: no setback for the model it runs on next (shared/pool-model.ts).
+    expect(fake.get().tasks[0].task?.setbacks).toBeUndefined()
     expect(fake.events.find(e => e.kind === 'retried')?.text).toBe(
       'task0001api (API) went back to the board: Linux went offline. Attempt 2 of 3 next.',
     )
@@ -251,21 +253,24 @@ describe('the control loop', () => {
   test('gives back a task its machine never started, whose session ended, or that stopped moving', async () => {
     const now = T0 + 40 * 60_000
     const on = { account: 'memberacct01', machine: 'machinework1' }
-    const cases: [PoolTask, string][] = [
-      [big('A', { state: 'assigned', machine: on }), 'Linux did not start it.'],
+    // A session that ended or stalled failed the task itself: a setback, which can move its next session up a tier.
+    const cases: [PoolTask, string, number | undefined][] = [
+      [big('A', { state: 'assigned', machine: on }), 'Linux did not start it.', undefined],
       [
         big('B', { state: 'in_progress', machine: on, assignee: { account: 'memberacct01', session: 'ses_gone' } }),
         'Its session on Linux ended.',
+        1,
       ],
-      [big('C', { state: 'in_progress', machine: on }), 'It has not moved for 30 minutes on Linux.'],
+      [big('C', { state: 'in_progress', machine: on, setbacks: 1 }), 'It has not moved for 30 minutes on Linux.', 2],
     ]
-    for (const [task, why] of cases) {
+    for (const [task, why, setbacks] of cases) {
       const fake = fakePools(
         pool([{ ...worker, profile: { ...(worker.profile as PoolMachineProfile), capacity: 5 } }], [item('task0001xyz', task)]),
         () => now,
       )
       await look(fake, new DispatchLoop(fake.pools, { now: () => now }))
       expect(fake.get().tasks[0].task?.summary).toBe(why)
+      expect(fake.get().tasks[0].task?.setbacks).toBe(setbacks)
     }
     // A task that just moved is left alone.
     const fresh = fakePools(pool([worker], [item('task0001xyz', cases[0][0], new Date(now - 60_000).toISOString())]), () => now)

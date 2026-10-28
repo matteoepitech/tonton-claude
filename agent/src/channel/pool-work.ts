@@ -5,6 +5,7 @@
 // user. Planning and assigning (`plan_create`, `task_create`, `task_assign`…) are the orchestrator's: pool-orchestrator.ts.
 
 import { newPoolItemId, POOL_NOTES_SECTIONS, type PoolSession, type PoolState, type PoolTaskItem, poolTaskSize } from '../../../shared/pool'
+import { routeView } from '../../../shared/pool-model'
 import type {
   PoolDispatch,
   PoolLimits,
@@ -905,6 +906,7 @@ export class PoolWork {
       branch: task.branch,
       // merged, pr, conflict or failed: what the orchestrator's merge made of it.
       merge: task.merge?.state,
+      model: task.route ? routeView(task.route) : undefined,
       ...(full ? { goal: task.goal, criteria: task.criteria, summary: task.summary } : {}),
     }
   }

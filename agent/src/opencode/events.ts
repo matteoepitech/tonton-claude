@@ -244,6 +244,23 @@ export class OpenCodeTracker {
     )
   }
 
+  /** Whether OpenCode said which models it has yet: it does once the bridge asks, a moment after it starts. */
+  get knowsModels(): boolean {
+    return this.catalog.length > 0
+  }
+
+  /**
+   * A model a pool machine named for a session: `provider/model` as OpenCode's catalog has it, or a family (`sonnet`) as
+   * the notch's menu offers them.
+   */
+  namedModel(sessionId: string, name: string): CatalogModel | undefined {
+    const slash = name.indexOf('/')
+    if (slash < 0) return this.familyModel(sessionId, name)
+    const providerID = name.slice(0, slash)
+    const modelID = name.slice(slash + 1)
+    return this.catalog.find(model => model.providerID === providerID && model.modelID === modelID)
+  }
+
   /** The session now answers with this model, as the notch asked. */
   switched(sessionId: string, model: { providerID: string; modelID: string }): SessionUpdate[] {
     const session = this.session(sessionId)

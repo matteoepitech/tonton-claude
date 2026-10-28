@@ -7,11 +7,13 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'n
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { open, seal } from '../../shared/crypto'
+import { isModelId } from '../../shared/pool-model'
 import type { StartAnswer, StartDetail, StartOrder, StartState } from '../../shared/protocol'
 import type { RelayConnection } from './channel/relay-connection'
 import { type AgentConfig, paths } from './config'
 import { log } from './log'
 import { claimOnce } from './once'
+import { usageFile } from './usage'
 
 /** Older orders are refused so the relay cannot replay one later. */
 const ORDER_TTL_MS = 10 * 60_000
@@ -117,6 +119,12 @@ export async function handleStartOrder(
   }
 }
 
+/** How a pool task's session starts: with the model its machine chose for it (shared/pool-model.ts). */
+export interface PoolLaunchOptions extends LaunchOptions {
+  /** A Claude Code alias or id, an OpenCode `provider/model` or family. Checked with isModelId: it reaches a command line. */
+  model?: string
+}
+
 /** A session started for a pool machine's task: its id, and the tmux session that runs it. */
 export interface PoolLaunch {
   sessionId: string
@@ -138,9 +146,10 @@ export async function launchForPool(
   taskId: string,
   cwd: string,
   tool: 'claude' | 'opencode',
-  options: LaunchOptions = {},
+  options: PoolLaunchOptions = {},
 ): Promise<PoolLaunch | string> {
   if (!POOL_TASK_ID.test(taskId)) return 'The task has no id this machine can use.'
+  if (options.model !== undefined && !isModelId(options.model)) return 'The model chosen for the task is not one this machine can pass on.'
   if (process.platform === 'win32') return 'Pool sessions run in tmux, which Windows does not have.'
   if (!tmux(['-V']).ok) return 'Install tmux on this machine to run pool sessions.'
   if (running >= MAX_RUNNING) return 'Too many sessions are starting on this machine.'
@@ -158,8 +167,16 @@ export async function launchForPool(
   try {
     const sessionId =
       tool === 'opencode'
-        ? await runOpenCodeLaunch(`pool-${taskId}`, cwd, report, options, name)
-        : await runLaunch(`pool-${taskId}`, cwd, report, async () => true, { ...options, run: options.run ?? paths.run }, name)
+        ? await runOpenCodeLaunch(`pool-${taskId}`, cwd, report, options, name, options.model)
+        : await runLaunch(
+            `pool-${taskId}`,
+            cwd,
+            report,
+            async () => true,
+            { ...options, run: options.run ?? paths.run },
+            name,
+            options.model,
+          )
     if (sessionId) return { sessionId, tmux: name }
     tmux(['kill-session', '-t', `=${name}`])
     return failure
@@ -199,6 +216,7 @@ async function runLaunch(
   confirmed: Confirm,
   options: LaunchOptions & { run: string },
   name = `tonton-${launchId}`,
+  model?: string,
 ): Promise<string | null> {
   // `=name` matches that session only, not one whose name starts the same.
   const session = `=${name}`
@@ -206,8 +224,9 @@ async function runLaunch(
   const startedAt = Date.now()
   const shell = options.shell ?? (process.env.SHELL || '/bin/sh')
   // A login and interactive shell sets the user's PATH and the claude launcher, so the session gets the channel. tmux
-  // reads `#` in the folder as a format.
-  const created = tmux(['new-session', '-d', '-s', name, '-c', cwd.replaceAll('#', '##'), '-x', '200', '-y', '50', shell, '-lic', 'claude'])
+  // reads `#` in the folder as a format. A pool task's model is set before its first prompt, as `/model` would.
+  const command = model ? `claude --model ${model}` : 'claude'
+  const created = tmux(['new-session', '-d', '-s', name, '-c', cwd.replaceAll('#', '##'), '-x', '200', '-y', '50', shell, '-lic', command])
   if (!created.ok) return failed(report, `tmux could not start: ${created.output}`)
   const belongs = paneProcess(tmux(['display-message', '-p', '-t', pane, '#{pane_pid}']).output)
   report('starting')
@@ -263,6 +282,7 @@ async function runOpenCodeLaunch(
   report: Report,
   options: LaunchOptions,
   name = `tonton-${launchId}`,
+  model?: string,
 ): Promise<string | null> {
   const access = options.openCode ?? installedOpenCode
   const shell = options.shell ?? (process.env.SHELL || '/bin/sh')
@@ -279,7 +299,8 @@ async function runOpenCodeLaunch(
   if (!tmux(['has-session', '-t', `=${name}`]).ok) return failed(report, 'opencode stopped before it was ready.')
   if (sessionId) {
     // OpenCode says nothing about a session until it is written to: the bridge learns it from this file.
-    announceOpenCodeSession(options.run ?? paths.run, sessionId, cwd)
+    // The bridge switches it to the model, as the notch's `/model` does, before the task's first message.
+    announceOpenCodeSession(options.run ?? paths.run, sessionId, cwd, model)
     report('started', { text: `Running in tmux session ${name}.`, sessionId })
     return sessionId
   }
@@ -290,10 +311,35 @@ async function runOpenCodeLaunch(
 /** Where the launcher leaves the OpenCode sessions it made, for the bridge of the OpenCode service to follow. */
 export const openCodeStarts = (run: string) => join(run, 'opencode')
 
-function announceOpenCodeSession(run: string, sessionId: string, cwd: string) {
+/** Where the bridge says which model it switched a launched session to, or why it could not. */
+export const openCodeModelFile = (run: string, sessionId: string) => join(openCodeStarts(run), `${sessionId}.model`)
+
+/** What a pool session reported running on: from Claude Code's status line, or from the OpenCode bridge. */
+export interface EffectiveModel {
+  model?: string
+  problem?: string
+}
+
+/** The model the session runs on as far as it said, or null while it said nothing. */
+export function effectiveModel(tool: 'claude' | 'opencode', sessionId: string, run = paths.run): EffectiveModel | null {
+  try {
+    if (tool === 'claude') {
+      const model = (JSON.parse(readFileSync(usageFile(sessionId), 'utf8')) as { model?: unknown }).model
+      return typeof model === 'string' ? { model } : null
+    }
+    const said = JSON.parse(readFileSync(openCodeModelFile(run, sessionId), 'utf8')) as { model?: unknown; problem?: unknown }
+    if (typeof said.model === 'string') return { model: said.model }
+    return typeof said.problem === 'string' ? { problem: said.problem } : null
+  } catch {
+    return null
+  }
+}
+
+function announceOpenCodeSession(run: string, sessionId: string, cwd: string, model?: string) {
   try {
     mkdirSync(openCodeStarts(run), { recursive: true, mode: 0o700 })
-    writeFileSync(join(openCodeStarts(run), `${sessionId}.json`), JSON.stringify({ sessionId, cwd }), { mode: 0o600 })
+    const start = { sessionId, cwd, ...(model ? { model } : {}) }
+    writeFileSync(join(openCodeStarts(run), `${sessionId}.json`), JSON.stringify(start), { mode: 0o600 })
   } catch (error) {
     log('opencode: could not hand the session to the bridge', String(error))
   }

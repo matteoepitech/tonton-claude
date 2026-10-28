@@ -25,7 +25,8 @@ const hasTmux = process.platform !== 'win32' && Bun.spawnSync(['tmux', '-V']).ex
 
 writeFileSync(join(dir, 'gitconfig'), '[user]\n\tname = Stand-in\n\temail = stand-in@example.com\n[init]\n\tdefaultBranch = main\n')
 const shell = join(dir, 'shell')
-writeFileSync(shell, `#!/bin/sh\nexec "${process.execPath}" "${STAND_IN}"\n`)
+// The shell's arguments (`-lic 'claude --model sonnet'`) go to the stand-in, which takes its model from them.
+writeFileSync(shell, `#!/bin/sh\nexec "${process.execPath}" "${STAND_IN}" "$@"\n`)
 chmodSync(shell, 0o755)
 
 interface Machine {

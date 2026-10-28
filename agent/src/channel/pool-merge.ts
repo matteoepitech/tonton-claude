@@ -285,6 +285,9 @@ export class PoolMerger {
         : `Merged with main, ${task.branch} fails \`${outcome.command}\`, which passes on main: nothing was merged.`
     const output = `\n${outcome.output}`
     const kind = outcome.kind === 'conflict' ? 'merge_conflict' : 'merge_failed'
+    // A branch that fails main's checks is work its session got wrong, which a stronger model may not (shared/pool-model.ts).
+    // A conflict is two tasks meeting, not a setback.
+    const setbacks = outcome.kind === 'failed' ? { setbacks: (task.setbacks ?? 0) + 1 } : {}
     const said = outcome.kind === 'conflict' ? outcome.files.join(', ') : `${outcome.command} fails`
     const author = task.assignee
       ? state.sessions.find(s => s.account === task.assignee?.account && s.session === task.assignee.session)
@@ -304,7 +307,7 @@ export class PoolMerger {
     if (author && !why) {
       // The review it passed says nothing about what to fix now: an older agent would hand it over as the reason.
       const { review: _passed, ...back } = task
-      const refused = await this.ops.putTask(poolId, item.id, item.rev, { ...back, state: 'assigned', merge: problem })
+      const refused = await this.ops.putTask(poolId, item.id, item.rev, { ...back, ...setbacks, state: 'assigned', merge: problem })
       if (refused) return `${what} It could not go back to its author: ${refused}${output}`
       await this.ops.event(poolId, kind, item.id, said)
       // Its agent hands it the details with the task; an older agent only shows this.
@@ -321,6 +324,7 @@ export class PoolMerger {
       state: 'todo',
       branch: task.branch,
       merge: problem,
+      ...setbacks,
       ...(task.size ? { size: task.size } : {}),
       ...(task.area ? { area: task.area } : {}),
       ...(task.paths?.length ? { paths: task.paths } : {}),

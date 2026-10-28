@@ -7,6 +7,7 @@
 
 import { newPoolItemId, overBudget, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
 import { countdown, FINAL_CHECKLIST, type TimeMark, timeMarks, timeNotice } from '../../../shared/pool-hackathon'
+import { isModelTier, routeView } from '../../../shared/pool-model'
 import type { PoolArea, PoolDispatch, PoolNotes, PoolNotesSection, PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
 import { DISPATCH_TOOLS, dispatching, LOOP_EVENTS, machinesView, nextDispatch } from './pool-dispatch'
 import { expectedHours, limitsView, nearLimit, shortOfTime } from './pool-limits'
@@ -60,6 +61,11 @@ export const ORCHESTRATOR_TOOLS: PoolToolSpec[] = [
       },
       depends_on: { type: 'array', description: 'Ids of the tasks it waits for.' },
       paths: { type: 'array', description: "The files and folders it works in. Default: its area's paths." },
+      model: {
+        type: 'string',
+        description:
+          "light, balanced or strong: the model it needs, only when you know better than its machine's assessment (a short change that is subtle, a big one that is mechanical). A machine owner's lock still wins.",
+      },
       assign: { type: 'string', description: 'auto, to hand it out at once, or a session id. Missing: it stays to do.' },
     },
   },
@@ -344,6 +350,8 @@ export class PoolOrchestrator {
       state: t.task?.state,
       size: t.task?.size ?? 'large',
       hours: t.task ? expectedHours(t.task) : undefined,
+      // What its machine started its session on, and why: the orchestrator sees escalations and failed switches.
+      ...(t.task?.route ? { model: routeView(t.task.route) } : t.task?.model ? { model: t.task.model } : {}),
     })
     const live = state.tasks.filter(t => t.task)
     return JSON.stringify(
@@ -406,6 +414,8 @@ export class PoolOrchestrator {
     if (hours !== undefined && (typeof hours !== 'number' || !Number.isFinite(hours) || hours <= 0 || hours > 100)) {
       return 'hours is a number of hours, more than 0 and at most 100.'
     }
+    const model = args.model
+    if (model !== undefined && !isModelTier(model)) return 'model is light, balanced or strong.'
     const area = str(args.area)
     const paths = strings(args.paths) ?? state.notes?.areas?.find(a => a.name === area)?.paths ?? []
     const id = newPoolItemId()
@@ -420,6 +430,7 @@ export class PoolOrchestrator {
       ...(paths.length ? { paths } : {}),
       ...(typeof hours === 'number' ? { hours } : {}),
       ...(strings(args.depends_on)?.length ? { dependsOn: strings(args.depends_on) } : {}),
+      ...(model ? { model } : {}),
     }
     const small = tooSmall(task)
     if (small) return small

@@ -7,14 +7,19 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PoolState, PoolTaskItem } from '../../../shared/pool'
-import type { PoolMachineOrder, PoolSessionProfile, PoolTask } from '../../../shared/pool-protocol'
+import { choiceText, chooseModel, modelMatches } from '../../../shared/pool-model'
+import type { PoolMachineOrder, PoolSessionProfile, PoolTask, PoolTaskRoute } from '../../../shared/pool-protocol'
+import { accountLimits, nearLimit } from '../channel/pool-limits'
 import { paths } from '../config'
-import { endPoolSession, launchForPool, poolSessionRuns } from '../launch'
+import { effectiveModel, endPoolSession, launchForPool, poolSessionRuns } from '../launch'
 import { log } from '../log'
 import { claimOnce } from '../once'
 import { CHANGED, type MachinePools } from './pool-machines'
 import { prepareTaskTree, repositoryName, TASK_ID, taskBranch } from './pool-worktree'
 
+/** How long a new session has to say which model it runs on before it gets its task all the same. */
+const CONFIRM_MS = 20_000
+const CONFIRM_POLL_MS = 250
 /** A task that failed on machines this many times is blocked, for the orchestrator to look at. */
 export const MAX_ATTEMPTS = 3
 /** How often the service looks at its sessions: one can end without the pool hearing of it. */
@@ -44,13 +49,26 @@ export interface PoolWorkerOptions {
   runs?: (tmux: string) => boolean
   end?: (tmux: string) => void
   prepare?: typeof prepareTaskTree
+  /** What a session says it runs on, and how long to wait for it: the real files, or what a test says. */
+  effectiveModel?: typeof effectiveModel
+  confirmMs?: number
 }
 
-/** The task put back on the board after its machine or its session failed it: blocked once it failed too often. */
-export function failedTask(task: PoolTask, why: string): PoolTask {
+/**
+ * The task put back on the board after its machine or its session failed it: blocked once it failed too often. A
+ * `setback` is the session failing the task itself (it ended or stalled before it was done), which can move its next
+ * session to a stronger model (shared/pool-model.ts); a machine going away or a session that could not start is not.
+ */
+export function failedTask(task: PoolTask, why: string, setback = false): PoolTask {
   const { machine: _machine, assignee: _assignee, ...rest } = task
   const attempts = (task.attempts ?? 0) + 1
-  return { ...rest, attempts, summary: why, state: attempts >= MAX_ATTEMPTS ? 'blocked' : 'todo' }
+  return {
+    ...rest,
+    attempts,
+    ...(setback ? { setbacks: (task.setbacks ?? 0) + 1 } : {}),
+    summary: why,
+    state: attempts >= MAX_ATTEMPTS ? 'blocked' : 'todo',
+  }
 }
 
 /** Back on the board as it was, for another machine: nothing failed. */
@@ -165,7 +183,7 @@ export class PoolWorker {
     const runs = this.options.runs ?? poolSessionRuns
     if (!slot.tmux || !runs(slot.tmux)) {
       this.end(slot)
-      await this.fail(slot.poolId, item.id, `The session on ${this.options.machineName} ended before the task was done.`)
+      await this.fail(slot.poolId, item.id, `The session on ${this.options.machineName} ended before the task was done.`, true)
       return
     }
     // Stopped by the pool's owner or an admin: the relay took the session out.
@@ -208,7 +226,12 @@ export class PoolWorker {
     const prepare = this.options.prepare ?? prepareTaskTree
     const tree = await prepare(order.profile.workdir, repo, taskId, taskBranch(taskId, task.title, task.branch))
     if (typeof tree === 'string') return tree
-    const launched = await (this.options.launch ?? launchForPool)(taskId, tree.cwd, order.profile.tool)
+    // The model is chosen for this task alone, from its owner's policy in the order: an escalation stays with the task
+    // that earned it. Its plan is spared while it runs low.
+    const state = this.pools.state(poolId)
+    const spare = order.profile.tool === 'claude' && state ? nearLimit(accountLimits(state, account)) : null
+    const choice = chooseModel({ task, tool: order.profile.tool, policy: order.profile.models, spare })
+    const launched = await (this.options.launch ?? launchForPool)(taskId, tree.cwd, order.profile.tool, { model: choice.model })
     if (typeof launched === 'string') return launched
     slot.sessionId = launched.sessionId
     slot.tmux = launched.tmux
@@ -223,21 +246,60 @@ export class PoolWorker {
     if (!(await this.pools.joinSession(poolId, launched.sessionId, profile))) return 'its session did not reach the relay.'
     slot.joined = true
     this.saveSlot(slot)
+    const effective = await this.confirm(launched.sessionId, order.profile.tool, choice.model)
     // The task is the session's from now on: its agent hands it over as its first message. Another change to the task
     // meanwhile (an event, a note) is read again; one that took it elsewhere ends the session at the next look.
     for (let tries = 0; tries < 3; tries++) {
       const latest = this.latest(poolId, taskId)
       if (!latest?.task || !this.isOurs(latest.task, account) || latest.task.state !== 'assigned') return null
-      const assigned: PoolTask = { ...latest.task, assignee: { account, session: launched.sessionId }, branch: tree.branch }
+      const route: PoolTaskRoute = {
+        tier: choice.tier,
+        model: choice.model,
+        reason: choice.reason,
+        ...(choice.escalated ? { escalated: choice.escalated } : {}),
+        ...effective,
+        at: new Date().toISOString(),
+      }
+      const assigned: PoolTask = { ...latest.task, assignee: { account, session: launched.sessionId }, branch: tree.branch, route }
       const refused = await this.pools.putTask(poolId, latest, assigned)
       if (!refused) {
         await this.pools.event(poolId, 'task_moved', taskId, `started on ${this.options.machineName}`)
+        const outcome = effective.problem ? ` ${effective.problem[0].toUpperCase()}${effective.problem.slice(1)}.` : ''
+        await this.pools.event(
+          poolId,
+          effective.problem ? 'model_problem' : 'model',
+          taskId,
+          `${task.title}: ${choiceText(choice)}.${outcome}`,
+        )
         return null
       }
       if (refused !== CHANGED) return refused
       await this.pools.settled()
     }
     return 'the task kept changing while its session started.'
+  }
+
+  /**
+   * Waits a moment for the session to say which model it runs on (Claude Code's status line, the OpenCode bridge's
+   * switch), before it gets the task: the model asked for, another one, or that it could not tell. The session runs
+   * either way; the pool sees which.
+   */
+  private async confirm(
+    sessionId: string,
+    tool: 'claude' | 'opencode',
+    asked: string,
+  ): Promise<Pick<PoolTaskRoute, 'confirmed' | 'problem'>> {
+    const read = this.options.effectiveModel ?? effectiveModel
+    const until = Date.now() + (this.options.confirmMs ?? CONFIRM_MS)
+    let said = read(tool, sessionId)
+    while (!this.stopped && !said && Date.now() < until) {
+      await Bun.sleep(CONFIRM_POLL_MS)
+      said = read(tool, sessionId)
+    }
+    const runs = said?.model
+    if (runs && modelMatches(asked, runs)) return { confirmed: runs }
+    if (runs) return { confirmed: runs, problem: `asked for ${asked}, it runs on ${runs}` }
+    return { problem: said?.problem ?? `${tool === 'claude' ? 'Claude Code' : 'OpenCode'} did not say which model it runs on` }
   }
 
   /** Ends the slot: its session's tmux goes, it leaves the pool, and the slot is free. */
@@ -260,12 +322,12 @@ export class PoolWorker {
   }
 
   /** The task back on the board, or blocked once it failed too often, unless it moved on meanwhile. */
-  private async fail(poolId: string, taskId: string, why: string) {
+  private async fail(poolId: string, taskId: string, why: string, setback = false) {
     const latest = this.latest(poolId, taskId)
     const account = this.pools.account(poolId)
     if (!latest?.task || !account || !this.isOurs(latest.task, account)) return
     if (latest.task.state === 'done' || latest.task.state === 'review') return
-    const next = failedTask(latest.task, why)
+    const next = failedTask(latest.task, why, setback)
     if (!(await this.pools.putTask(poolId, latest, next))) {
       await this.pools.event(poolId, next.state === 'blocked' ? 'blocked' : 'task_moved', taskId, why)
     }

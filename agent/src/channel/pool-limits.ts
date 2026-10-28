@@ -5,6 +5,7 @@
 // they still get the simpler tasks first.
 
 import { LimitForecast } from '../../../shared/limit-forecast'
+import type { PoolState } from '../../../shared/pool'
 import type { PoolLimits, PoolLimitWindow, PoolTask } from '../../../shared/pool-protocol'
 import type { UsageLimit } from '../../../shared/protocol'
 
@@ -85,6 +86,15 @@ export function shortOfTime(limits: PoolLimits | undefined, hours: number, now =
 }
 
 /** When a session should hand its task over: its window runs out soon, or is nearly used up. Null otherwise. */
+/** The latest plan an account's Claude Code sessions shared: what its machines have left. */
+export function accountLimits(state: PoolState, account: string): PoolLimits | undefined {
+  for (let i = state.events.length - 1; i >= 0; i--) {
+    const event = state.events[i]
+    if (event.account === account && event.session && event.body?.kind === 'limits' && event.body.limits) return event.body.limits
+  }
+  return undefined
+}
+
 export function nearLimit(limits: PoolLimits | undefined, now = Date.now()): string | null {
   const five = limits?.fiveHour
   if (!limits || !five || !(Date.parse(five.resetsAt) > now)) return null

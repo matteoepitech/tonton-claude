@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync, rmSync } from 'node:fs'
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { open, seal } from '../../../shared/crypto'
+import { isModelId } from '../../../shared/pool-model'
 import type {
   Entry,
   PermissionRule,
@@ -24,7 +25,7 @@ import { claimCommand, whyInvalid } from '../channel/terminal'
 import { type AgentConfig, loadConfig, paths } from '../config'
 import { receiveDiagnoseRequest } from '../diagnose'
 import { postHook } from '../hook'
-import { openCodeStarts } from '../launch'
+import { openCodeModelFile, openCodeStarts } from '../launch'
 import { log } from '../log'
 import { handleLogRequest } from '../logs'
 import { AgentRPG } from '../rpg'
@@ -34,6 +35,8 @@ import { OPENCODE_COMMANDS, type OpenCodePermission, OpenCodeTracker, type Sessi
 const BACKLOG_SIZE = 400
 /** How often the bridge looks for sessions started from the notch. */
 const STARTS_POLL_MS = 1000
+/** How many polls a pool session's model waits for OpenCode's list of models before it is left to OpenCode. */
+const MODEL_TRIES = 30
 /** The relay takes request ids of 32 characters at most. */
 const MAX_REQUEST_ID = 32
 
@@ -286,7 +289,30 @@ class Link {
       this.add([{ id: `notice-${crypto.randomUUID()}`, ts: new Date().toISOString(), kind: 'system', text: why }])
       return
     }
-    const { providerID, modelID } = model
+    this.select(model)
+  }
+
+  /**
+   * The model its pool machine chose for the task (shared/pool-model.ts), switched to before the task's first message:
+   * the same switch as `/model`, and with OpenCode 1 the next message carries it. What came of it goes in a file the
+   * machine's service reads, and says to the pool. False while OpenCode has not said which models it has.
+   */
+  applyPoolModel(name: string, run: string): boolean {
+    if (!this.tracker.knowsModels) return false
+    const model = this.tracker.namedModel(this.sessionId, name)
+    const said = model
+      ? { model: `${model.providerID}/${model.modelID}` }
+      : { problem: `OpenCode has no ${name} model: the session runs on its own` }
+    if (model) this.select(model)
+    try {
+      writeFileSync(openCodeModelFile(run, this.sessionId), JSON.stringify(said), { mode: 0o600 })
+    } catch (error) {
+      log('opencode: could not say which model the session runs on', String(error))
+    }
+    return true
+  }
+
+  private select({ providerID, modelID }: { providerID: string; modelID: string }) {
     this.chosenModel = { providerID, modelID }
     this.send({ op: 'model', sessionID: this.sessionId, directory: this.cwd(), providerID, modelID })
     // OpenCode 1 has nothing to switch: the next message carries the model. Either way the notch shows it now.
@@ -362,12 +388,19 @@ export async function runOpenCode() {
   }
 
   // Sessions started from the notch: made in OpenCode's service, which says nothing about them until they are written to.
+  // A pool task's session comes with its model, switched to once OpenCode said which models it has.
+  const models = new Map<string, { name: string; tries: number }>()
   const starts = setInterval(() => {
     for (const start of takeStarts(paths.run)) {
       const event = { type: 'session.created', data: { sessionID: start.sessionId, location: { directory: start.cwd } } }
       for (const update of tracker.handle(event)) apply(update)
       // The tracker says nothing new about a session it knows: it gets a link all the same.
       if (!links.has(start.sessionId)) apply({ sessionId: start.sessionId, entries: [], metaChanged: true })
+      if (start.model) models.set(start.sessionId, { name: start.model, tries: 0 })
+    }
+    for (const [sessionId, wanted] of models) {
+      const link = links.get(sessionId)
+      if (!link || link.applyPoolModel(wanted.name, paths.run) || ++wanted.tries >= MODEL_TRIES) models.delete(sessionId)
     }
   }, STARTS_POLL_MS)
 
@@ -413,8 +446,8 @@ export function poolToolCall(event: unknown): { callID: string; sessionID: strin
   return { callID, sessionID, name, args: plain }
 }
 
-/** The sessions the launcher left for a bridge, each taken once. */
-export function takeStarts(run: string): { sessionId: string; cwd: string }[] {
+/** The sessions the launcher left for a bridge, each taken once, with the model of a pool task's session. */
+export function takeStarts(run: string): { sessionId: string; cwd: string; model?: string }[] {
   const folder = openCodeStarts(run)
   let files: string[]
   try {
@@ -425,9 +458,10 @@ export function takeStarts(run: string): { sessionId: string; cwd: string }[] {
   return files.flatMap(file => {
     const path = join(folder, file)
     try {
-      const start = JSON.parse(readFileSync(path, 'utf8')) as { sessionId?: unknown; cwd?: unknown }
+      const start = JSON.parse(readFileSync(path, 'utf8')) as { sessionId?: unknown; cwd?: unknown; model?: unknown }
       rmSync(path, { force: true })
-      return typeof start.sessionId === 'string' && typeof start.cwd === 'string' ? [{ sessionId: start.sessionId, cwd: start.cwd }] : []
+      if (typeof start.sessionId !== 'string' || typeof start.cwd !== 'string') return []
+      return [{ sessionId: start.sessionId, cwd: start.cwd, ...(isModelId(start.model) ? { model: start.model } : {}) }]
     } catch {
       return []
     }

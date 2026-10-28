@@ -246,6 +246,8 @@ const EVENT_LABELS: Record<string, string> = {
   stopped: 'Stopped work',
   budget: 'Changed a budget',
   rules: 'Proposed rules',
+  model: 'Chose a model',
+  model_problem: 'Model not applied',
 }
 
 /** Kinds kept out of the activity: they say how a session is doing, not what happened. */
