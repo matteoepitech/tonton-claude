@@ -4,6 +4,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildWeb } from './build-web'
+import { SITE_DEFINE, SITE_PLUGINS } from './site-build'
 
 const targets = [
   ['agent/src/main.ts', 'bun-darwin-arm64', 'tonton-darwin-arm64'],
@@ -26,6 +27,18 @@ const out = join(root, 'dist')
 mkdirSync(out, { recursive: true })
 for (const [entry, target, name] of targets) {
   if (only && !name.includes(only)) continue
+  // The relay carries its website, which needs Tailwind's plugin: the build API, not the command line.
+  if (entry.startsWith('relay/')) {
+    const built = await Bun.build({
+      entrypoints: [join(root, entry)],
+      compile: { target, outfile: join(out, name) },
+      minify: true,
+      define: { ...SITE_DEFINE, 'process.env.TONTON_VERSION': JSON.stringify(version) },
+      plugins: SITE_PLUGINS,
+    })
+    if (!built.success) throw new Error(built.logs.map(String).join('\n'))
+    continue
+  }
   const define = `--define=process.env.TONTON_VERSION=${JSON.stringify(version)}`
   const build = Bun.spawnSync(
     ['bun', 'build', '--compile', '--minify', `--target=${target}`, define, entry, '--outfile', join(out, name)],

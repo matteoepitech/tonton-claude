@@ -22,7 +22,7 @@ opencode ─ Tonton plugin ──────▶ agent
 | `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown) and also builds for iOS, `TontonMac` what reads this Mac's own files (local Claude Code and OpenCode sessions, the local agent), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
 | `ios/` | The iPhone app (`TontonClaude.xcodeproj`, Xcode 16 or later), its Live Activity (`TontonWidgets`) and the extension that opens permission alerts (`TontonNotifications`), on `TontonCore`. | Swift 5, iOS 17+ |
 | `raycast/` | A Raycast extension that lists the sessions and messages them through the app's AppleScript dictionary (`app/Resources/TontonClaude.sdef`). | TypeScript (React) |
-| `web/` | The web app: one HTML file (`bun run web`, released as `tonton-web.html`) built on the client core in `shared/`, which decrypts in the browser. | TypeScript |
+| `web/` | The website (`web/site/`, React with shadcn/ui, Tailwind and React Flow): served by the relay at its address, and released as one HTML file (`bun run web`, `tonton-web.html`). Built on the client core in `shared/`, which decrypts in the browser. `views.ts` and `markdown.ts` are the island's. | TypeScript (React) |
 | `desktop/` | The island for Windows and Linux: an Electron window at the top of the screen with the web app's views (`web/views.ts`), a tray icon, and the account in the system's keyring. Its own `package.json`. | TypeScript (Electron) |
 | `scripts/` | Release builds and the install scripts published with each release (`install.sh`, `install.ps1`, `install-relay.sh`). | TS, sh, PowerShell |
 | `test/` | Tests that run a real relay with a real agent. Unit tests live next to each part (`agent/test`, `relay/test`, `app/Tests`). | TypeScript |
@@ -128,8 +128,9 @@ repository's secrets.
   `app/Resources/Localizable.xcstrings`. Run `app/scripts/sync-strings.sh`, then give each new string its French in the
   catalog (Xcode's editor, or the JSON): `LocalizationTests` fails for a string without French, with other values than
   the English, or without French punctuation, and CI fails when the catalog is behind the code.
-- No new dependency without a reason in the PR. The agent has two runtime dependencies and the web app bundles one, jsQR,
-  its QR scanner. The app has one, Sparkle, for its own updates, and `TontonCore` has none. The island in `desktop/` has
+- No new dependency without a reason in the PR. The agent has two runtime dependencies. The website bundles React,
+  shadcn/ui's Radix primitives, Tailwind and React Flow (#254), and jsQR, its QR scanner, all pinned; none of them goes
+  into the agent. The app has one, Sparkle, for its own updates, and `TontonCore` has none. The island in `desktop/` has
   Electron, and electron-builder to package it, in its own `package.json`.
 
 ## Tests

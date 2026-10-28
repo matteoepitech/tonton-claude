@@ -43,7 +43,31 @@
         "noNonNullAssertion": "error",
         "useConst": "error"
       }
+    },
+    "domains": {
+      "react": "none"
     }
   },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["web/site/**"],
+      "linter": {
+        "domains": {
+          "react": "recommended"
+        }
+      }
+    }
+  ]
 }

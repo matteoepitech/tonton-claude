@@ -4,7 +4,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildPage } from '../../scripts/build-web'
+import { buildPage } from '../../scripts/build-page'
 
 const desktop = join(import.meta.dir, '..')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-island-page-'))
