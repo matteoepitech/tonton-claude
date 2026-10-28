@@ -90,6 +90,36 @@ The pool page (#254) puts the orchestrator chat first, for the admin: the conver
 write, and what the loop did. Next to it: machines with their slots and what each runs, the task board (read only for
 everyone but the orchestrator and the admin), the control center graph.
 
+## Try it on one computer
+
+The autopilot needs several machines and accounts. `scripts/pool-demo.ts` runs the whole of it on one computer, in a
+temporary folder, without touching your own Tonton or Claude Code setup:
+
+```sh
+bun scripts/pool-demo.ts          # the relay on :7777; another port: bun scripts/pool-demo.ts 7788
+```
+
+It starts:
+
+- a relay, and an account on it;
+- three machines, each with its real background service, its own `TONTON_HOME` and a tmux server of its own: **Lead**,
+  the orchestrator machine, which also takes the simple tasks; **Studio** (two sessions at once) and **Laptop**, which
+  take the features;
+- a sample project, a small shop on `main` of a local git repository;
+- a pool on that repository, with the three machines in it and Lead chosen as the orchestrator machine.
+
+From there, nobody moves a card. The orchestrator session writes the plan (the goal, the contracts, the areas) and four
+tasks, one of which waits for another, then starts the dispatch. The control loop hands each task to the machine that
+fits it; each machine starts a session per task in its own worktree, which claims it, commits on its branch, pushes it
+and finishes it. When every task is done, the loop says so and stops. The terminal shows the board as it moves.
+
+The sessions are stand-ins for Claude Code (`test/stand-in-claude.ts`) that run the real channel and the real pool
+tools, so the demo spends no tokens: what you watch is the autopilot itself, not what Claude writes. To see it on the
+website, open the relay's address and sign in with the account token the script prints. It needs tmux, on macOS or
+Linux. Ctrl+C stops everything and deletes the folder.
+
+`test/pool-demo.test.ts` runs the demo to the end in `bun test`.
+
 ## Versions
 
 Pool machines need a relay with `pool_machines`, and agents of this version on every machine. Older agents ignore the

@@ -1,9 +1,9 @@
-// A stand-in for Claude Code, for test/pool-workers.test.ts: the tmux pane of a pool machine's session runs it instead
-// of claude. It asks the two questions Claude Code asks on starting, links its session the way the hooks do, and spawns
-// the real Tonton channel over MCP, as Claude Code would. When a pool task arrives through the channel, it does what
-// Claude would: claims it, commits a file on the task's branch in its worktree, pushes it, and calls task_done. A task
-// whose title says "crash" makes it exit instead, like a session that ends before its task is done.
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+// A stand-in for Claude Code, for the pool tests and scripts/pool-demo.ts: the tmux pane of a pool machine's session runs
+// it instead of claude. It asks the two questions Claude Code asks on starting, links its session the way the hooks do,
+// and spawns the real Tonton channel over MCP, as Claude Code would. When a pool task arrives through the channel, it does
+// what Claude would: claims it, commits a file on the task's branch in its worktree, pushes it, and calls task_done. A
+// task whose title says "crash" makes it exit instead, like a session that ends before its task is done.
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -50,14 +50,45 @@ await claude.connect(
 )
 const call = async (name: string, args: Record<string, unknown>) => {
   const result = (await claude.callTool({ name, arguments: args })) as { content: { text: string }[] }
-  note(`${name}: ${result.content[0]?.text.split('\n')[0]}`)
+  const text = result.content[0]?.text ?? ''
+  note(`${name}: ${text.split('\n')[0]}`)
+  return text
+}
+
+/** The plan of scripts/pool-demo.ts: what the orchestrator writes in the notes, and its tasks in order. */
+interface StandInPlan {
+  goal: string
+  contracts: string
+  stack?: string
+  areas?: string[]
+  tasks: { title: string; goal: string; criteria: string[]; size: 'simple' | 'large'; area?: string; after?: number[] }[]
+}
+
+/** Writes the plan, then each task with the ids of those it waits for, then starts the dispatch. */
+async function planFrom(file: string) {
+  const plan = JSON.parse(readFileSync(file, 'utf8')) as StandInPlan
+  await call('plan_create', { goal: plan.goal, contracts: plan.contracts, stack: plan.stack, areas: plan.areas })
+  const ids: string[] = []
+  for (const { after, ...task } of plan.tasks) {
+    const depends_on = (after ?? []).map(index => ids[index]).filter(Boolean)
+    // The task it waits for may not be in this session's view of the pool yet.
+    let id = ''
+    for (let tries = 0; tries < 50 && !id; tries++) {
+      id = /^Created (\S+) on/.exec(await call('task_create', { ...task, depends_on }))?.[1] ?? ''
+      if (!id) await Bun.sleep(200)
+    }
+    ids.push(id)
+  }
+  await call('dispatch_start', { note: 'Go' })
 }
 
 claude.fallbackNotificationHandler = async notification => {
   const content = String((notification.params as { content?: unknown } | undefined)?.content ?? '')
   note(`delivered: ${content}`)
-  // Made the orchestrator of a pool on autopilot: it plans one task and starts the dispatch, as the user asked.
+  // Made the orchestrator of a pool on autopilot: it plans and starts the dispatch, as the user asked. The demo gives it
+  // a plan; the tests, one task.
   if (/<pool kind="role"/.test(content) && content.includes('runs on autopilot')) {
+    if (process.env.TONTON_STAND_IN_PLAN) return planFrom(process.env.TONTON_STAND_IN_PLAN)
     await call('task_create', {
       title: 'SECRET landing page',
       goal: 'A landing page that says what the shop sells, with a form to sign up for the launch.',
