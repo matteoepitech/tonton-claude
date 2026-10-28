@@ -3,7 +3,7 @@
 // Usage: bun scripts/build.ts
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { buildPage } from '../../scripts/build-web'
+import { buildPage } from '../../scripts/build-page'
 
 const desktop = join(import.meta.dir, '..')
 const root = join(desktop, '..')

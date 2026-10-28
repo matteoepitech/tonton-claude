@@ -2,8 +2,9 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": []
+    "types": [],
+    "jsx": "react-jsx"
   },
-  "include": [],
-  "files": ["app.ts"]
+  "include": ["site/**/*.ts", "site/**/*.tsx"],
+  "files": ["views.ts", "scanner.ts", "markdown.ts"]
 }

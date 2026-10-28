@@ -19,7 +19,7 @@ the app, the agents and the relay. The relay only relays: updating the app and t
 | `relay/` | The relay. Accounts, machines and the sealed history of sessions in SQLite, live sessions in memory with a memory budget, WebSocket routing. |
 | `app/` | The macOS app living in the notch (SwiftUI), plus its settings window. |
 | `shared/` | The client core shared by the agent, the relay and the clients: wire protocol, AES-256-GCM sealing with WebCrypto, account token, session models. It runs in browsers. |
-| `web/` | The web app, one HTML file, also served by the relay at its address. Its views (`web/views.ts`) also make up the island. |
+| `web/` | The website (`web/site/`, React), served by the relay at its address and released as one HTML file. The island's views are in `web/views.ts`. |
 | `desktop/` | The island for Windows and Linux: an Electron window at the top of the screen, a tray icon, the account in the system's keyring. |
 | `scripts/` | Builds, and the install scripts published with each release. |
 
@@ -130,8 +130,10 @@ The Mac app connects with the system settings of the Mac (System Settings › Ne
 
 ## The web app
 
-`tonton-web.html` is the whole web app in one file, published with each release (`bun run web` builds it in `dist/`).
-Open it from disk, or put it on any static host: it has no server side.
+The web app is React, with [shadcn/ui](https://ui.shadcn.com)'s components on Radix, Tailwind, and
+[React Flow](https://reactflow.dev) for the pools' graph (`web/site/`). Bun bundles it with Tailwind's plugin
+(`scripts/site-build.ts`). `tonton-web.html` is the whole web app in one file, published with each release (`bun run web`
+builds it in `dist/`). Open it from disk, or put it on any static host: it has no server side.
 
 - It signs in with the account's recovery key (Settings › Relay in the Mac app). Its JSON holds the relay, the app's
   token and the end-to-end key. **Remember on this device** keeps the key in IndexedDB as a `CryptoKey` that cannot be
@@ -146,16 +148,20 @@ Open it from disk, or put it on any static host: it has no server side.
 - Browsers cannot set the `Authorization` header of a WebSocket. The page opens `/ws/app` with the subprotocols
   `tonton` and `bearer.<token>`, and the relay answers with `tonton` only. Relays before 0.8.0 refuse it.
 - Its Content-Security-Policy allows its own inline script and style, and WebSocket connections, nothing else. It never
-  puts what a session says into the page as HTML.
+  puts what a session says into the page as HTML: React renders text, and Claude's Markdown is built as DOM nodes
+  (`web/markdown.ts`).
 
 ### At the relay's address
 
 From 0.8.0 the relay also serves the web app at its own address, `https://<relay>/`: a browser needs nothing else.
-`bun build --compile` bundles `web/site.html`, with its script and style, into the relay's executable; `bun run relay`
+`scripts/build.ts` bundles `web/site.html`, with its script and style, into the relay's executable; `bun run relay`
 builds them at the first visit.
 
 - Every file goes out with a Content-Security-Policy that runs the page's own script and style only, from the relay,
   with nothing inline. The page opens sockets to that relay only, and no other site can show it in a frame.
+- The page gets a nonce of its own at each visit, in its policy (`style-src 'self' 'nonce-…'`) and in a meta tag: the
+  `<style>` tags its components add while it runs (Radix locking the page's scroll under a dialog) carry it. It allows
+  styles only, never a script.
 - The script and style have a hash in their names and are cached for good; the page itself is asked for again at each
   visit, so an updated relay serves its new version.
 - Here the page also has a **Pools** tab ([pools.md](pools.md)): pools take the relay's routes, which only a page from
