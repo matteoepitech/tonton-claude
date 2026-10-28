@@ -1,5 +1,5 @@
-// Who is in the pool: members with their roles (changed, handed over, removed by those who may), the sessions working
-// for it, and the machines members added for the autopilot, with the choice of the orchestrator.
+// Who is in the pool: members with their roles (changed, handed over, removed by those who may), and the sessions working
+// for it, with the choice of the orchestrator. The machines members added for the autopilot have their own tab.
 import { CrownIcon, UserRoundXIcon } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import {
@@ -17,7 +17,7 @@ import { Empty, Problem, Toolbar } from '../common'
 import { plural } from '../format'
 import { useStore } from '../store'
 import { Button } from '../ui/button'
-import { Badge, Card } from '../ui/card'
+import { Badge } from '../ui/card'
 import { Confirm, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTrigger } from '../ui/dialog'
 import { Field, Input } from '../ui/fields'
 import { NativeSelect } from '../ui/select'
@@ -103,7 +103,6 @@ export function Members({ pool, state }: TabProps) {
         })}
       </div>
       <Sessions poolId={pool.id} state={state} choose={choose} />
-      <Machines poolId={pool.id} state={state} choose={choose} />
     </div>
   )
 }
@@ -163,67 +162,6 @@ function Sessions({ poolId, state, choose }: { poolId: string; state: PoolState;
         </div>
       ) : (
         <Empty className="py-2 text-left">No session works for the pool yet. Members put theirs in from the notch.</Empty>
-      )}
-    </section>
-  )
-}
-
-/** The machines members added for the autopilot. The orchestrator machine is one of the admin's own. */
-function Machines({ poolId, state, choose }: { poolId: string; state: PoolState; choose: boolean }) {
-  const store = useStore()
-  const machines = state.machines
-  // Older relays have no pool machines at all.
-  if (!machines) return null
-  const lead = state.orchestratorMachine
-  const names = new Map(store.state?.machines.map(machine => [machine.id, machine.name]))
-  return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">Machines</h3>
-      {machines.length ? (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {machines.map(machine => {
-            const profile = machine.profile
-            const mine = machine.account === store.account
-            const leads = lead?.account === machine.account && lead.machine === machine.machine
-            const name = profile?.name ?? names.get(machine.machine) ?? 'A machine'
-            return (
-              <Card key={`${machine.account}/${machine.machine}`} className="flex flex-col gap-1.5 p-3">
-                <div className="flex items-center gap-2">
-                  <strong className="truncate">{name}</strong>
-                  {leads && <Badge>orchestrator</Badge>}
-                  <Badge className="ms-auto" variant={!machine.online ? 'secondary' : machine.ready ? 'success' : 'warning'}>
-                    {!machine.online ? 'offline' : machine.ready ? 'ready' : 'update the agent'}
-                  </Badge>
-                </div>
-                <small className="text-xs text-muted-foreground">
-                  {[
-                    memberName(state, machine.account) + (mine ? ' (you)' : ''),
-                    profile ? (profile.tool === 'opencode' ? 'OpenCode' : 'Claude Code') : null,
-                    profile ? `${plural(profile.capacity, 'session')} at once` : null,
-                    profile ? `mode ${profile.mode}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </small>
-                {choose && mine && (
-                  <div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        store.pools?.setOrchestratorMachine(poolId, leads ? null : { account: machine.account, machine: machine.machine })
-                      }
-                    >
-                      {leads ? 'Not the orchestrator machine' : 'Make it the orchestrator machine'}
-                    </Button>
-                  </div>
-                )}
-              </Card>
-            )
-          })}
-        </div>
-      ) : (
-        <Empty className="py-2 text-left">No machine in the pool yet. Members add theirs from Settings › Machines in the Mac app.</Empty>
       )}
     </section>
   )
