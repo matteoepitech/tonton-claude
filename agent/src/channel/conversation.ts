@@ -127,7 +127,7 @@ export class Conversation {
     )
     this.work.useSafety(this.safety)
     this.work.useRepository(() => this.cwd())
-    this.work.useRewards((id, state) => this.rpg?.pool(id, state, this.link.sessionId))
+    this.work.useRewards((id, state) => this.rpg?.pool(id, state, this.link.sessionId, this.pools.vault(id)?.keyring))
     this.tailer = link.transcriptPath
       ? new Tailer(link.transcriptPath, {
           lines: (lines, initial) => this.onLines(lines, initial),

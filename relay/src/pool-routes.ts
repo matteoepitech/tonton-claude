@@ -6,6 +6,7 @@ import type { RelayContext } from './context'
 import { fail, json, readJson } from './http'
 import { MAX_POOL_INFO_BYTES, MAX_POOL_INVITE_HOURS, MAX_POOL_INVITE_USES, MAX_POOL_KEY_BYTES, MAX_POOL_MEMBERS } from './limits'
 import type { MemberKeys } from './pools'
+import { poolRPGRoute } from './rpg'
 import { isAccountId, isPoolId, isPoolRole, isSealed, isText } from './validate'
 
 const POOL_PATH =
@@ -13,6 +14,8 @@ const POOL_PATH =
 
 /** The response to a pool route, or null when the path is not one. */
 export async function poolRoute(ctx: RelayContext, req: Request, path: string, accountId: string, ip: string): Promise<Response | null> {
+  const rpg = /^\/api\/pools\/([A-Za-z0-9_-]{12})\/rpg$/.exec(path)
+  if (rpg) return poolRPGRoute(ctx, req, accountId, rpg[1])
   if (path === '/api/pools' && req.method === 'POST') return createPool(ctx, req, accountId)
   if (path === '/api/pools' && req.method === 'GET') return json(ctx.pools.summaries(accountId))
   if (path === '/api/pools/join' && req.method === 'POST') return joinPool(ctx, req, accountId, ip)

@@ -49,7 +49,7 @@ export class Store {
   signInProblem: string | null = null
   /** Still reading what this browser remembers. */
   starting = true
-  mode: 'sessions' | 'pools' = 'sessions'
+  mode: 'sessions' | 'pools' | 'hero' = 'sessions'
   /** On phones, the list or one conversation. */
   showingChat = false
   folded: ReadonlySet<string> = loadFolded()

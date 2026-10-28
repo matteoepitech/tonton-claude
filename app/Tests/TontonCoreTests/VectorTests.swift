@@ -67,6 +67,12 @@ final class VectorTests: XCTestCase {
         let vault = SessionVault(key: key)
         func sealed<T: Encodable>(_ value: T) throws -> String { try E2E.seal(value, with: key) }
 
+        var rpgPool = RPGPoolLedger()
+        rpgPool.completions["task"] = PoolCompletion(
+            at: "2026-10-28T10:00:00.000Z", assignee: PoolSessionRef(account: "alice", session: "claude"),
+            reviewer: PoolSessionRef(account: "bob", session: "opencode"))
+        rpgPool.profiles["alice"] = RPGPoolLedger.Profile(name: "Alice", level: 3, equipped: ["hat": "hat-legendary"])
+        rpgPool.goals["team-v1-demo-3"] = RPGPoolLedger.Goal(eligible: ["alice", "bob"], at: "2026-10-28T10:00:00.000Z")
         let health = MachineHealth(
             cpu: 0.23, memoryUsed: 12_025_908_428, memoryTotal: 17_179_869_184, battery: nil,
             wake: [WakeOnLAN.Target(mac: "a4:83:e7:12:34:56", broadcast: "192.168.1.255")], at: "2026-10-25T10:04:00.000Z")
@@ -135,6 +141,7 @@ final class VectorTests: XCTestCase {
         try hero.award(RPG.Reward(kind: .poolTask, source: "pool/task", at: "2026-10-28"))
         let blobs = [
             ("rpg", try sealed(hero)),
+            ("rpgPool", try sealed(rpgPool)),
             (
                 "prompt",
                 try vault.sealPrompt(

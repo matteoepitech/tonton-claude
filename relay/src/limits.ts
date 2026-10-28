@@ -107,3 +107,6 @@ export const RATE_LIMITS = {
   claims: { limit: 20, windowMs: 10 * 60_000 },
   failedAuth: { limit: 30, windowMs: 10 * 60_000 },
 }
+
+/** One encrypted contribution ledger per pool. */
+export const MAX_POOL_RPG_BYTES = 4 * 1024 * 1024

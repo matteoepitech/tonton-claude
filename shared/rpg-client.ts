@@ -8,7 +8,7 @@ export class RPGClient {
     private readonly url: string,
     private readonly token: string,
     private readonly key: AccountKey,
-    private readonly request: typeof fetch = fetch,
+    private readonly request: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> = (input, init) => fetch(input, init),
   ) {}
 
   async read(): Promise<{ document: RPGDocument; state: RPGState }> {

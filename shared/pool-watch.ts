@@ -33,6 +33,7 @@ import type {
   PoolTaskWire,
   PoolUpdate,
 } from './pool-protocol'
+import { RPGPoolClient } from './rpg-pool'
 
 /** The part of a relay client pools need: `RelayClient` fits it. */
 export interface PoolLink {
@@ -188,6 +189,11 @@ export class PoolWatch {
       await this.refresh()
       return true
     })
+  }
+
+  rpgClient(poolId: string, token: string): RPGPoolClient | null {
+    const keys = this.opened.get(poolId)?.keyring
+    return keys ? new RPGPoolClient(`${this.options.relay}/api/pools/${poolId}/rpg`, token, keys) : null
   }
 
   /** Owner and admins: a new name and goal, sealed with the latest key. */

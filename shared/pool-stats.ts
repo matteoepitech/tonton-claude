@@ -392,6 +392,7 @@ export function periodStart(state: PoolState, period: LeaderPeriod, now: Date): 
     midnight.setHours(0, 0, 0, 0)
     return midnight.toISOString()
   }
+  if (state.info?.startedAt) return state.info.startedAt
   let start = state.createdAt
   for (const event of state.events) if (event.body && RUN_STARTS.has(event.body.kind) && event.ts > start) start = event.ts
   return start

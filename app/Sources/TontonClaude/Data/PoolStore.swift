@@ -95,6 +95,20 @@ final class PoolStore: ObservableObject {
         account.flatMap { PoolLinks.website(relay: $0.relay, pool: poolId) }
     }
 
+    func rpgLedger(_ board: PoolBoard, hero: RPG.State) async throws -> RPGPoolLedger {
+        guard let account, let state = board.state else { throw RPG.Failure.invalidState }
+        let client = RPGPoolClient(account: account, pool: board.id, keys: board.keyring)
+        if board.summary.role == .viewer { return try await client.read().1 }
+        return try await client.sync(state, hero: hero)
+    }
+
+    func beginRPGRun(_ board: PoolBoard) {
+        guard board.summary.role == .owner || board.summary.role == .admin, var info = board.state?.info else { return }
+        info.startedAt = ISO8601DateFormatter().string(from: Date())
+        guard let blob = try? board.poolVault.seal(info) else { return }
+        send?(["t": "pool_info", "poolId": board.id, "info": blob])
+    }
+
     // MARK: Changing
 
     /// Puts the session in the pool: its agent takes the order, sealed with the account key, and works for the pool.

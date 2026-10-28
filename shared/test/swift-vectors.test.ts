@@ -9,6 +9,7 @@ import { openPoolGrant, openPoolSessionOrder } from '../pool'
 import { parsePoolInvite } from '../pool-link'
 import { openPoolMachineOrder } from '../pool-machines'
 import { parseRPGState } from '../rpg'
+import { parseRPGPool } from '../rpg-pool'
 import { acceptsCommands, displayStatusText, type Session } from '../session'
 import { parseShareLink } from '../share-link'
 import { Vault } from '../vault'
@@ -40,6 +41,14 @@ async function read() {
 }
 
 describe('vectors from the Swift implementation', () => {
+  test('Swift pool contributions decode without exposing private inventory', async () => {
+    const blob = vectors.blobs.find(b => b.name === 'rpgPool')
+    expect(blob).toBeDefined()
+    const ledger = parseRPGPool(await open(vectors.key, blob?.blob ?? ''))
+    expect(ledger.completions.task.reviewer?.account).toBe('bob')
+    expect(ledger.profiles.alice.level).toBe(3)
+    expect(ledger.goals['team-v1-demo-3'].eligible).toEqual(['alice', 'bob'])
+  })
   test('the Swift hero opens as a validated TypeScript character', async () => {
     const blob = vectors.blobs.find(b => b.name === 'rpg')
     expect(blob).toBeDefined()

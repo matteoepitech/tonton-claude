@@ -6,6 +6,7 @@ struct MascotView: View {
     let status: SessionStatus
     var size: CGFloat = 18
     var hero = RPG.State()
+    var animated = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let frameDuration: TimeInterval = 0.45
@@ -13,33 +14,42 @@ struct MascotView: View {
     var body: some View {
         let pose = Mascot.pose(for: status)
         let frames = Mascot.frames(pose)
-        TimelineView(.periodic(from: .now, by: Self.frameDuration)) { context in
-            let tick = Int(context.date.timeIntervalSinceReferenceDate / Self.frameDuration)
-            let frame = frames[reduceMotion ? 0 : tick % frames.count]
-            let shift = Mascot.centering(pose)
-            Canvas { graphics, canvas in
-                let pixel = canvas.width / CGFloat(Mascot.size)
-                for (y, row) in frame.enumerated() {
-                    for (x, character) in row.enumerated() {
-                        guard
-                            let color = character == "#"
-                                ? hero.item(.skin).map({ Color(hex: $0.color) }) ?? Self.color(character) : Self.color(character)
-                        else { continue }
-                        let square = CGRect(
-                            x: CGFloat(x + shift.x) * pixel, y: CGFloat(y + shift.y) * pixel, width: pixel, height: pixel)
-                        graphics.fill(Path(square), with: .color(color))
-                    }
+        Group {
+            if animated && !reduceMotion {
+                TimelineView(.periodic(from: .now, by: Self.frameDuration)) { context in
+                    let tick = Int(context.date.timeIntervalSinceReferenceDate / Self.frameDuration)
+                    pixels(frame: frames[tick % frames.count], pose: pose, tick: tick)
                 }
-                for pixel in RPG.pixels(hero: hero, frame: reduceMotion ? 0 : tick % 2) {
-                    let square = CGRect(
-                        x: CGFloat(pixel.x) * pixelSize(canvas), y: CGFloat(pixel.y) * pixelSize(canvas), width: pixelSize(canvas),
-                        height: pixelSize(canvas))
-                    graphics.fill(Path(square), with: .color(Color(hex: pixel.color)))
-                }
+            } else {
+                pixels(frame: frames[0], pose: pose, tick: 0)
             }
         }
         .frame(width: size, height: size)
         .accessibilityLabel(Self.label(pose))
+    }
+
+    private func pixels(frame: [String], pose: Mascot.Pose, tick: Int) -> some View {
+        let shift = Mascot.centering(pose)
+        return Canvas { graphics, canvas in
+            let pixel = canvas.width / CGFloat(Mascot.size)
+            for (y, row) in frame.enumerated() {
+                for (x, character) in row.enumerated() {
+                    guard
+                        let color = character == "#"
+                            ? hero.item(.skin).map({ Color(hex: $0.color) }) ?? Self.color(character) : Self.color(character)
+                    else { continue }
+                    let square = CGRect(
+                        x: CGFloat(x + shift.x) * pixel, y: CGFloat(y + shift.y) * pixel, width: pixel, height: pixel)
+                    graphics.fill(Path(square), with: .color(color))
+                }
+            }
+            for pixel in RPG.pixels(hero: hero, frame: tick % 2) {
+                let square = CGRect(
+                    x: CGFloat(pixel.x) * pixelSize(canvas), y: CGFloat(pixel.y) * pixelSize(canvas), width: pixelSize(canvas),
+                    height: pixelSize(canvas))
+                graphics.fill(Path(square), with: .color(Color(hex: pixel.color)))
+            }
+        }
     }
 
     private func pixelSize(_ size: CGSize) -> CGFloat { size.width / CGFloat(Mascot.size) }

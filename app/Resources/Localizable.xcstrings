@@ -14,6 +14,26 @@
         }
       }
     },
+    "!" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "!"
+          }
+        }
+      }
+    },
+    "#%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "n° %lld"
+          }
+        }
+      }
+    },
     "$" : {
       "localizations" : {
         "fr" : {
@@ -647,6 +667,16 @@
         }
       }
     },
+    "%lld contribution XP" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld XP de contribution"
+          }
+        }
+      }
+    },
     "%lld d" : {
       "localizations" : {
         "fr" : {
@@ -1117,6 +1147,16 @@
         }
       }
     },
+    "%lld sparks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld étincelles"
+          }
+        }
+      }
+    },
     "%lld sparks · %lld boosters" : {
       "localizations" : {
         "en" : {
@@ -1193,6 +1233,22 @@
         }
       }
     },
+    "%lld → %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld → %2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld → %lld"
+          }
+        }
+      }
+    },
     "%lld%% context" : {
       "localizations" : {
         "fr" : {
@@ -1225,6 +1281,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "%lld/%lld completed tasks · one booster" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld completed tasks · one booster"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld/%lld tâches terminées · un booster"
           }
         }
       }
@@ -1305,6 +1377,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "+%lld XP"
+          }
+        }
+      }
+    },
+    "+%lld sparks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld étincelles"
           }
         }
       }
@@ -2065,6 +2147,16 @@
         }
       }
     },
+    "All time" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Depuis le début"
+          }
+        }
+      }
+    },
     "Allow" : {
       "localizations" : {
         "fr" : {
@@ -2265,6 +2357,16 @@
         }
       }
     },
+    "Arrows / WASD: move · Space: attack · E: pulse · Esc: pause" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flèches / WASD : déplacement · Espace : attaque · E : onde · Échap : pause"
+          }
+        }
+      }
+    },
     "Ask for everything" : {
       "localizations" : {
         "fr" : {
@@ -2311,6 +2413,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Joindre des fichiers, jusqu’à %@ par message"
+          }
+        }
+      }
+    },
+    "Attack" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attaque"
           }
         }
       }
@@ -2392,6 +2504,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Comportement"
+          }
+        }
+      }
+    },
+    "Boosters" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Boosters"
+          }
+        }
+      }
+    },
+    "Boss slayer" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chasseur de boss"
           }
         }
       }
@@ -2563,6 +2695,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisissez les alertes coupées pendant ce mode de concentration. L’encoche montre toujours les sessions qui vous attendent."
+          }
+        }
+      }
+    },
+    "Claim achievement boosters" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupérer les boosters de succès"
+          }
+        }
+      }
+    },
+    "Claim team boosters" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupérer les boosters d’équipe"
+          }
+        }
+      }
+    },
+    "Claim victory rewards" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupérer les récompenses de victoire"
           }
         }
       }
@@ -2866,6 +3028,16 @@
         }
       }
     },
+    "Combat arena. Move with arrows or WASD, attack with Space, pulse with E, pause with Escape." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arène de combat. Déplacement avec les flèches ou WASD, attaque avec Espace, onde avec E, pause avec Échap."
+          }
+        }
+      }
+    },
     "Command palette" : {
       "localizations" : {
         "fr" : {
@@ -2937,6 +3109,16 @@
         }
       }
     },
+    "Complete 10 work rewards. Earn a booster." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obtenez 10 récompenses de travail pour gagner un booster."
+          }
+        }
+      }
+    },
     "Computers running Claude Code with the Tonton Claude agent." : {
       "localizations" : {
         "fr" : {
@@ -2963,6 +3145,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirmer"
+          }
+        }
+      }
+    },
+    "Connect an account and start a run from Tonton's panel." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez un compte et lancez une partie depuis le panneau de Tonton."
           }
         }
       }
@@ -3079,6 +3271,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Continuer quand la limite se réinitialise"
+          }
+        }
+      }
+    },
+    "Contribute before a goal is reached to earn its booster. Rewards stay claimable after reconnecting." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contribuez avant qu’un objectif soit atteint pour gagner son booster. Les récompenses restent disponibles après reconnexion."
           }
         }
       }
@@ -3239,16 +3441,6 @@
         }
       }
     },
-    "Could not equip this item. Try again." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible d’équiper cet objet. Réessayez."
-          }
-        }
-      }
-    },
     "Could not make the image." : {
       "localizations" : {
         "fr" : {
@@ -3295,6 +3487,16 @@
         }
       }
     },
+    "Could not save this reward or purchase. Reconnect and try again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’enregistrer cette récompense ou cet achat. Reconnectez-vous et réessayez."
+          }
+        }
+      }
+    },
     "Could not sync Tonton." : {
       "localizations" : {
         "fr" : {
@@ -3311,6 +3513,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Impossible de synchroniser Tonton. Nouvelle tentative…"
+          }
+        }
+      }
+    },
+    "Could not sync team progression. Check the connection and relay version." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de synchroniser la progression d’équipe. Vérifiez la connexion et la version du relais."
           }
         }
       }
@@ -3447,6 +3659,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "App par défaut"
+          }
+        }
+      }
+    },
+    "Defeat your first boss. Earn a booster." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Battez votre premier boss pour gagner un booster."
+          }
+        }
+      }
+    },
+    "Defeated" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Défaite"
           }
         }
       }
@@ -3641,6 +3873,16 @@
         }
       }
     },
+    "Duplicate converted to %lld sparks." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doublon converti en %lld étincelles."
+          }
+        }
+      }
+    },
     "During a Focus" : {
       "localizations" : {
         "fr" : {
@@ -3667,6 +3909,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les lignes plus anciennes sont omises."
+          }
+        }
+      }
+    },
+    "Earn 1,000 XP. Earn a booster." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gagnez 1 000 XP pour obtenir un booster."
+          }
+        }
+      }
+    },
+    "Earned booster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Booster gagné"
           }
         }
       }
@@ -4194,6 +4456,32 @@
         }
       }
     },
+    "Health" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Santé"
+          }
+        }
+      }
+    },
+    "Health %lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health %1$lld/%2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Santé %lld/%lld"
+          }
+        }
+      }
+    },
     "Hello, Tonton" : {
       "localizations" : {
         "fr" : {
@@ -4211,6 +4499,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Héroïne"
+          }
+        }
+      }
+    },
+    "Hero upgrades" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Améliorations du héros"
           }
         }
       }
@@ -4679,6 +4977,16 @@
         }
       }
     },
+    "Join a pool to share Tonton's level and equipped look with your team." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoignez une pool pour partager le niveau et l’apparence équipée de Tonton avec votre équipe."
+          }
+        }
+      }
+    },
     "Join as" : {
       "localizations" : {
         "fr" : {
@@ -4890,6 +5198,16 @@
         }
       }
     },
+    "Left the pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A quitté la pool"
+          }
+        }
+      }
+    },
     "Legendary" : {
       "localizations" : {
         "fr" : {
@@ -4936,12 +5254,12 @@
         }
       }
     },
-    "Levels 2–6 unlock starter cosmetics. Boosters are saved; opening and combat are coming later." : {
+    "Levels 2–6 unlock starter cosmetics. Open boosters and play the arena to grow Tonton." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les niveaux 2 à 6 débloquent les premiers cosmétiques. Les boosters sont conservés ; leur ouverture et les combats arriveront plus tard."
+            "value" : "Les niveaux 2 à 6 débloquent les premiers cosmétiques. Ouvrez des boosters et jouez dans l’arène pour améliorer Tonton."
           }
         }
       }
@@ -5136,6 +5454,16 @@
         }
       }
     },
+    "Maximum rank" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rang maximal"
+          }
+        }
+      }
+    },
     "Menu bar icon" : {
       "localizations" : {
         "fr" : {
@@ -5237,6 +5565,26 @@
         }
       }
     },
+    "Move: arrows or WASD. Attack: Space. Pulse: E. Pause: Escape. Click the arena to focus it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacement : flèches ou WASD. Attaque : Espace. Onde : E. Pause : Échap. Cliquez dans l’arène pour l’activer."
+          }
+        }
+      }
+    },
+    "Movement" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vitesse"
+          }
+        }
+      }
+    },
     "Mute alerts at night" : {
       "localizations" : {
         "fr" : {
@@ -5313,6 +5661,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nouvelle ligne"
+          }
+        }
+      }
+    },
+    "New run" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle partie"
           }
         }
       }
@@ -5413,6 +5771,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun rapport depuis quelques minutes"
+          }
+        }
+      }
+    },
+    "No rewards lost. Try another route or upgrade Tonton." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune récompense perdue. Essayez une autre trajectoire ou améliorez Tonton."
           }
         }
       }
@@ -5563,6 +5931,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pas encore de tâche"
+          }
+        }
+      }
+    },
+    "No unopened boosters. Earn levels, beat a boss or complete a team goal." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun booster à ouvrir. Gagnez des niveaux, battez un boss ou terminez un objectif d’équipe."
           }
         }
       }
@@ -5778,6 +6156,16 @@
         }
       }
     },
+    "One cosmetic per booster. Common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un cosmétique par booster. Commun 60 %, peu commun 25 %, rare 10 %, épique 4 %, légendaire 1 %."
+          }
+        }
+      }
+    },
     "Online" : {
       "localizations" : {
         "fr" : {
@@ -5894,6 +6282,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ouvrir sur le site"
+          }
+        }
+      }
+    },
+    "Open pool leaderboard" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir le classement de la pool"
           }
         }
       }
@@ -6059,6 +6457,16 @@
         }
       }
     },
+    "Pause" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
+          }
+        }
+      }
+    },
     "Pause the connection" : {
       "localizations" : {
         "fr" : {
@@ -6075,6 +6483,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En pause"
+          }
+        }
+      }
+    },
+    "Period" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Période"
           }
         }
       }
@@ -6166,6 +6584,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sonar"
+          }
+        }
+      }
+    },
+    "Play arena" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jouer dans l’arène"
           }
         }
       }
@@ -6271,6 +6699,16 @@
         }
       }
     },
+    "Previous openings" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvertures précédentes"
+          }
+        }
+      }
+    },
     "Project names show on the image: check it before you share it." : {
       "localizations" : {
         "fr" : {
@@ -6297,6 +6735,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Message, avec des {champs}"
+          }
+        }
+      }
+    },
+    "Pulse: %lld s" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onde : %lld s"
           }
         }
       }
@@ -6428,6 +6876,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RÉCENTS"
+          }
+        }
+      }
+    },
+    "Rank %lld/10" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rang %lld/10"
           }
         }
       }
@@ -6802,12 +7260,32 @@
         }
       }
     },
+    "Resume" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre"
+          }
+        }
+      }
+    },
     "Resume the connection" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reprendre la connexion"
+          }
+        }
+      }
+    },
+    "Revealing your cosmetic…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Révélation de votre cosmétique…"
           }
         }
       }
@@ -6858,6 +7336,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Révoquer l’accès…"
+          }
+        }
+      }
+    },
+    "Rewards saved. Upgrade Tonton for the next run." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récompenses enregistrées. Améliorez Tonton pour la prochaine partie."
           }
         }
       }
@@ -7590,6 +8078,16 @@
         }
       }
     },
+    "Skip animation" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passer l’animation"
+          }
+        }
+      }
+    },
     "Slides out under the camera when a session needs you." : {
       "localizations" : {
         "fr" : {
@@ -7764,6 +8262,26 @@
         }
       }
     },
+    "Start a new competition run" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lancer une nouvelle compétition"
+          }
+        }
+      }
+    },
+    "Start a new run? Permanent heroes and previous rewards are kept." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lancer une nouvelle compétition ? Les héros permanents et les récompenses précédentes sont conservés."
+          }
+        }
+      }
+    },
     "Start a session on %@" : {
       "localizations" : {
         "fr" : {
@@ -7840,6 +8358,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Relancer la machine"
+          }
+        }
+      }
+    },
+    "Start new run" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lancer la compétition"
           }
         }
       }
@@ -8178,6 +8706,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tâches, toutes faites"
+          }
+        }
+      }
+    },
+    "Team" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Équipe"
+          }
+        }
+      }
+    },
+    "Team goals" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objectifs d’équipe"
+          }
+        }
+      }
+    },
+    "Team player" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esprit d’équipe"
+          }
+        }
+      }
+    },
+    "Team progression" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progression d’équipe"
           }
         }
       }
@@ -8659,6 +9227,16 @@
         }
       }
     },
+    "This run" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette compétition"
+          }
+        }
+      }
+    },
     "Time" : {
       "localizations" : {
         "fr" : {
@@ -8712,6 +9290,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aujourd’hui %1$@ sur %2$@"
+          }
+        }
+      }
+    },
+    "Today (UTC)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aujourd’hui (UTC)"
           }
         }
       }
@@ -8822,6 +9410,16 @@
         }
       }
     },
+    "Tonton's arena" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’arène de Tonton"
+          }
+        }
+      }
+    },
     "Tonton's progression and wardrobe" : {
       "localizations" : {
         "fr" : {
@@ -8878,6 +9476,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Opérateur de confiance"
+          }
+        }
+      }
+    },
+    "Two waves and a boss: up to 105 XP, 14 sparks and a boss booster. Daily caps apply." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deux vagues et un boss : jusqu’à 105 XP, 14 étincelles et un booster de boss. Les plafonds quotidiens s’appliquent."
           }
         }
       }
@@ -9062,6 +9670,16 @@
         }
       }
     },
+    "Upgrade for %lld sparks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Améliorer pour %lld étincelles"
+          }
+        }
+      }
+    },
     "Usage" : {
       "localizations" : {
         "fr" : {
@@ -9118,6 +9736,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Elle permet de vous connecter sur un autre Mac. Quiconque la possède peut lire et piloter vos sessions : gardez-la dans votre gestionnaire de mots de passe."
+          }
+        }
+      }
+    },
+    "Veteran Tonton" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton vétéran"
+          }
+        }
+      }
+    },
+    "Victory!" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Victoire !"
           }
         }
       }
@@ -9228,6 +9866,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Garde-robe"
+          }
+        }
+      }
+    },
+    "Wave %lld/3" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vague %lld/3"
           }
         }
       }

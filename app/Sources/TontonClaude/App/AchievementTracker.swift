@@ -13,6 +13,7 @@ final class AchievementTracker {
     init(store: SessionStore, notch: NotchState, settings: AppSettings) {
         self.notch = notch
         self.settings = settings
+        RPGStore.shared.$hero.sink { [weak self] hero in self?.update { $0.heroChanged(hero) } }.store(in: &subscriptions)
         store.sessionsPublisher.sink { [weak self] sessions in self?.update { $0.sessionsChanged(sessions) } }.store(in: &subscriptions)
         store.approved.sink { [weak self] in self?.update { $0.approved() } }.store(in: &subscriptions)
         store.sent.sink { [weak self] in self?.update { $0.sentFromNotch() } }.store(in: &subscriptions)
