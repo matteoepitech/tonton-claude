@@ -35,6 +35,21 @@ export const QUESTIONS = [
   { marker: 'Quick safety check', text: 'Claude Code asks whether you trust the files in this folder.' },
 ]
 
+/** Between moving the cursor of a question and Enter, for its screen to follow. */
+const KEY_SETTLE_MS = 200
+
+/**
+ * The arrow keys that move the cursor (`❯`) of a question on screen to its yes (`Yes, I trust this folder`, `1. Yes`),
+ * none when it is there already or the screen shows no such menu. One option per line, as Claude Code draws them.
+ */
+export function keysToYes(screen: string): string[] {
+  const lines = screen.split('\n')
+  const cursor = lines.findIndex(line => /^\s*❯/.test(line))
+  const yes = lines.findIndex(line => /^\s*(❯\s*)?(\d+[.)]\s*)?Yes\b/i.test(line))
+  if (cursor < 0 || yes < 0 || yes === cursor) return []
+  return Array.from({ length: Math.abs(yes - cursor) }, () => (yes > cursor ? 'Down' : 'Up'))
+}
+
 /** The question each start waits on. */
 const answers = new Map<string, { question: string; resolve: (confirm: boolean) => void }>()
 let running = 0
@@ -257,7 +272,12 @@ async function runLaunch(
     // The answer can come minutes later: Enter only goes to the screen the user saw. If it changed, they are asked again.
     if (lastLines(tmux(['capture-pane', '-p', '-t', pane]).output) !== shown) continue
     answered.add(question.marker)
-    // Both questions have their yes selected first.
+    // Claude Code selects its no first on some questions ("No, exit"): the cursor goes to the yes, then Enter.
+    const moves = keysToYes(shown)
+    if (moves.length) {
+      tmux(['send-keys', '-t', pane, ...moves])
+      await Bun.sleep(KEY_SETTLE_MS)
+    }
     tmux(['send-keys', '-t', pane, 'Enter'])
     deadline = Date.now() + START_TIMEOUT_MS
   }

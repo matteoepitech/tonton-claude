@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { withoutConsole } from '../src/install/system'
 import { launchAgentPlist, systemdUnit } from '../src/service/control'
-import { searchPath, usualFolders } from '../src/service/search-path'
+import { loginShell, searchPath, usualFolders } from '../src/service/search-path'
 
 test('the windowless Windows copy only differs by its subsystem', () => {
   // A minimal PE: "MZ", the header offset at 0x3c, "PE\0\0", then the optional header.
@@ -40,6 +40,17 @@ test("the service finds tmux and the coding tools where they are installed, not 
     '<key>PATH</key><string>/usr/bin:/opt/homebrew/bin</string>',
   )
   expect(systemdUnit('/b', '/h', [], '/usr/bin:/snap/bin')).toContain('Environment="PATH=/usr/bin:/snap/bin"')
+})
+
+test("sessions start in the user's login shell, which launchd does not give the service", () => {
+  expect(loginShell(() => ({ shell: '/bin/zsh' }))).toBe('/bin/zsh')
+  expect(loginShell(() => ({ shell: '/usr/sbin/nologin' }))).toBeNull()
+  expect(loginShell(() => ({ shell: null }))).toBeNull()
+  expect(
+    loginShell(() => {
+      throw new Error('no passwd entry')
+    }),
+  ).toBeNull()
 })
 
 test('Linux runs it as a user unit', () => {

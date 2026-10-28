@@ -14,6 +14,7 @@ import {
   fromHome,
   handleStartAnswer,
   handleStartOrder,
+  keysToYes,
   launchForPool,
   newSession,
   openCodeMajor,
@@ -313,5 +314,24 @@ describe("a pool task's model", () => {
     expect(effectiveModel('opencode', 'ses_b', run)).toEqual({ problem: 'OpenCode has no opus model: the session runs on its own' })
     expect(effectiveModel('opencode', 'ses_c', run)).toBeNull()
     expect(paths.run).not.toBe(run)
+  })
+})
+
+describe("answering Claude Code's questions", () => {
+  // As Claude Code 2 draws its trust question, with "No, exit" selected first.
+  const trust = [
+    ' Quick safety check: Is this a project you created or one you trust?',
+    " Claude Code'll be able to read, edit, and execute files here.",
+    ' ❯ No, exit',
+    '   Yes, I trust this folder',
+    ' Enter to confirm · Esc to cancel',
+  ].join('\n')
+
+  test('the cursor goes to the yes before Enter', () => {
+    expect(keysToYes(trust)).toEqual(['Down'])
+    expect(keysToYes(' ❯ 1. Yes, I trust this folder\n   2. No, exit')).toEqual([])
+    expect(keysToYes('   1. Yes, continue\n   2. Maybe\n ❯ 3. No')).toEqual(['Up', 'Up'])
+    // No menu on screen, as older versions asked: Enter alone.
+    expect(keysToYes('Quick safety check: Is this a project you created or one you trust?')).toEqual([])
   })
 })

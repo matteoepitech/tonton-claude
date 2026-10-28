@@ -14,7 +14,7 @@ import { PoolLead } from './pool-lead'
 import { DispatchLoop } from './pool-loop'
 import { MachinePools } from './pool-machines'
 import { PoolWorker } from './pool-worker'
-import { searchPath } from './search-path'
+import { loginShell, searchPath } from './search-path'
 import { writeStatus } from './status'
 import { runTray } from './tray'
 
@@ -35,6 +35,9 @@ export async function runService(args: string[]) {
   }
   // launchd and systemd start it with a short PATH: tmux and the coding tools are found where they are usually installed.
   process.env.PATH = searchPath()
+  // Nor a SHELL: sessions start in the user's login shell, whose profile finds claude.
+  const shell = process.env.SHELL || loginShell()
+  if (shell) process.env.SHELL = shell
   log('service started', { version: VERSION })
   const stop = () => {
     releaseLock()
