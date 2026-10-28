@@ -114,7 +114,10 @@ When a machine starts a task's session, its agent chooses the tier:
 4. The nearest tier the owner **allows**: up first, since a weaker model would fail the task, else down.
 
 The owner's choices are the machine profile's `models`, sealed in its order: `lock`, `allowed` (tiers), `tiers` (the
-model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`), `escalations` (0 to 2).
+model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`), `escalations` (0 to 2). The owner
+sets them in the Mac app when adding the machine (Settings › Machines › Add to pool…, Models), and changes them later on
+the website: **Models** on the machine's card in the Machines tab seals a new order for its agent. What is left as the
+default is not sealed, so a machine its owner never changed follows the defaults as they change.
 
 The model is applied before the task starts: Claude Code is started with `--model`, as `/model` would switch it; OpenCode
 is switched by its bridge, the same switch as the notch's model menu (OpenCode 1 takes it with the next message, which is

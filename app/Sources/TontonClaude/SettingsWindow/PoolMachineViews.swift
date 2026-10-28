@@ -2,7 +2,8 @@ import SwiftUI
 import TontonCore
 
 /// Puts one of the account's machines in a pool for the autopilot (docs/pool-autopilot.md): the pool, what its sessions
-/// run, how many at once, where the work goes, and what they may do without asking. `full` says plainly what it means.
+/// run, how many at once, where the work goes, what they may do without asking, and the models they run on (#283).
+/// `full` says plainly what it means.
 struct AddToPoolView: View {
     let machine: MachineInfo
     let close: () -> Void
@@ -44,6 +45,7 @@ struct AddToPoolView: View {
                         .font(.system(size: 11.5))
                         .foregroundStyle(form.mode == .full ? Theme.danger : Theme.textDim)
                         .fixedSize(horizontal: false, vertical: true)
+                    models
                 }
                 .formStyle(.grouped)
             }
@@ -59,6 +61,52 @@ struct AddToPoolView: View {
         .padding(20)
         .frame(width: 460)
         .task { await pools.refresh() }
+    }
+
+    /// Each task runs on the least costly tier that can do it: the owner allows tiers, names their models, or locks one.
+    private var models: some View {
+        Section {
+            Picker("Every task runs on", selection: $form.lock) {
+                Text("The tier it needs").tag(PoolModelTier?.none)
+                ForEach(PoolModelTier.allCases) { tier in Text(tier.label).tag(Optional(tier)) }
+            }
+            ForEach(PoolModelTier.allCases) { tier in
+                HStack {
+                    Toggle(tier.label, isOn: allows(tier)).disabled(form.lock != nil)
+                    TextField("Model", text: model(of: tier), prompt: Text(verbatim: tier.defaultModel))
+                        .labelsHidden()
+                        .frame(width: 150)
+                }
+            }
+            Picker("After a session fails a task", selection: $form.escalations) {
+                Text("Stay on the same tier").tag(0)
+                Text("Climb one tier").tag(1)
+                Text("Climb up to two tiers").tag(2)
+            }
+            .disabled(form.lock != nil)
+            Group {
+                switch form.problem {
+                case .tiers: Text("Allow at least one tier.").foregroundStyle(Theme.danger)
+                case .model: Text("Not a model name: use an alias, a model id or provider/model.").foregroundStyle(Theme.danger)
+                default: Text("A Claude Code alias or model id, or an OpenCode provider/model. Empty: its default model.")
+                }
+            }
+            .font(.system(size: 11.5))
+            .foregroundStyle(Theme.textDim)
+            .fixedSize(horizontal: false, vertical: true)
+        } header: {
+            Text("Models")
+        }
+    }
+
+    private func allows(_ tier: PoolModelTier) -> Binding<Bool> {
+        Binding(
+            get: { form.allowed.contains(tier) },
+            set: { form.allowed = $0 ? form.allowed.union([tier]) : form.allowed.subtracting([tier]) })
+    }
+
+    private func model(of tier: PoolModelTier) -> Binding<String> {
+        Binding(get: { form.models[tier] ?? "" }, set: { form.models[tier] = $0 })
     }
 
     private func add() {

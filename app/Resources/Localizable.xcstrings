@@ -1495,6 +1495,16 @@
         }
       }
     },
+    "A Claude Code alias or model id, or an OpenCode provider/model. Empty: its default model." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un alias ou un identifiant de modèle Claude Code, ou un fournisseur/modèle OpenCode. Vide : son modèle par défaut."
+          }
+        }
+      }
+    },
     "A Claude session finished." : {
       "localizations" : {
         "fr" : {
@@ -1945,6 +1955,16 @@
         }
       }
     },
+    "After a session fails a task" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quand une session échoue sur une tâche"
+          }
+        }
+      }
+    },
     "Agent" : {
       "localizations" : {
         "fr" : {
@@ -2071,6 +2091,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Autorisez Tonton Claude à utiliser le micro et la reconnaissance vocale dans Réglages Système › Confidentialité et sécurité."
+          }
+        }
+      }
+    },
+    "Allow at least one tier." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autorisez au moins un niveau."
           }
         }
       }
@@ -2331,6 +2361,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tâche de fond terminée"
+          }
+        }
+      }
+    },
+    "Balanced: ordinary features" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Équilibré : fonctionnalités courantes"
           }
         }
       }
@@ -2712,6 +2752,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cliquez pour voir la mise à jour."
+          }
+        }
+      }
+    },
+    "Climb one tier" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monter d’un niveau"
+          }
+        }
+      }
+    },
+    "Climb up to two tiers" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monter jusqu’à deux niveaux"
           }
         }
       }
@@ -3737,6 +3797,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chaque demande d’autorisation de ses sessions du pool vous arrive, comme pour toute session."
+          }
+        }
+      }
+    },
+    "Every task runs on" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaque tâche tourne sur"
           }
         }
       }
@@ -4876,6 +4946,16 @@
         }
       }
     },
+    "Light: routine work" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Léger : travail de routine"
+          }
+        }
+      }
+    },
     "Listening…" : {
       "localizations" : {
         "fr" : {
@@ -5103,6 +5183,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Modèle"
+          }
+        }
+      }
+    },
+    "Models" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modèles"
           }
         }
       }
@@ -5483,6 +5573,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun"
+          }
+        }
+      }
+    },
+    "Not a model name: use an alias, a model id or provider/model." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce n’est pas un nom de modèle : utilisez un alias, un identifiant de modèle ou fournisseur/modèle."
           }
         }
       }
@@ -7814,6 +7914,16 @@
         }
       }
     },
+    "Stay on the same tier" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rester au même niveau"
+          }
+        }
+      }
+    },
     "Stop" : {
       "localizations" : {
         "fr" : {
@@ -7880,6 +7990,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêtée : elle ne prend plus de tâche jusqu’à ce que vous la relanciez."
+          }
+        }
+      }
+    },
+    "Strong: demanding work" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puissant : travail exigeant"
           }
         }
       }
@@ -8349,6 +8469,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La session vous demande avant de commencer une tâche du pool. Refuser la remet sur le tableau du pool."
+          }
+        }
+      }
+    },
+    "The tier it needs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le niveau qu’il lui faut"
           }
         }
       }

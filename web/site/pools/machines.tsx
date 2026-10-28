@@ -2,9 +2,17 @@
 // and what they may do without asking, and its slots: the task dispatched to each and the session working on it. A
 // member opens its own sessions from here; the owner and admins, or the session's owner, stop one, and its machine puts
 // the task back on the board. A machine's owner, the owner and admins stop a whole machine; the owner and admins every
-// machine at once, with the dispatch.
-import { BotIcon, CpuIcon, MessageSquareIcon, PowerIcon, PowerOffIcon, SquareIcon } from 'lucide-react'
+// machine at once, with the dispatch. A machine's owner chooses the models its sessions run on (#283).
+import { BotIcon, CpuIcon, MessageSquareIcon, PowerIcon, PowerOffIcon, SparklesIcon, SquareIcon } from 'lucide-react'
+import { useState } from 'react'
 import {
+  DEFAULT_TIER_MODELS,
+  MODEL_TIERS,
+  type ModelPolicyForm,
+  type ModelTier,
+  modelPolicyForm,
+  modelPolicyFromForm,
+  modelPolicyView,
   type OpenPool,
   type PoolMachineMode,
   type PoolState,
@@ -20,9 +28,18 @@ import { useStore } from '../store'
 import { Button } from '../ui/button'
 import { Badge, Card } from '../ui/card'
 import { cn } from '../ui/cn'
-import { Confirm } from '../ui/dialog'
+import { Confirm, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTrigger } from '../ui/dialog'
+import { Field, Input } from '../ui/fields'
+import { Checkbox } from '../ui/menu'
+import { NativeSelect } from '../ui/select'
 import { type MachineCard, type MachineSlot, machineCards, type SlotPhase } from './machines-model'
 import type { TabProps } from './page'
+
+const TIER_TEXTS: Record<ModelTier, string> = {
+  light: 'Light: routine work',
+  balanced: 'Balanced: ordinary features',
+  strong: 'Strong: demanding work',
+}
 
 const MODE_LABELS: Record<PoolMachineMode, string> = { ask: 'Asks for everything', edits: 'File edits pass', full: 'Everything passes' }
 
@@ -131,6 +148,7 @@ function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenP
           <span>{plural(profile.capacity, 'session')} at once</span>
           {profile.takes && <span>takes {profile.takes} tasks</span>}
           {profile.areas?.length ? <span>{profile.areas.join(', ')}</span> : null}
+          {profile.models && <span>{modelPolicyView(profile.models)}</span>}
           <Badge variant={profile.mode === 'full' ? 'destructive' : 'outline'}>{MODE_LABELS[profile.mode]}</Badge>
         </div>
       ) : (
@@ -173,6 +191,7 @@ function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenP
               onConfirm={() => store.pools?.stopMachine(pool.id, machine.machine, true)}
             />
           )}
+          {card.mine && profile && <ModelsDialog card={card} pool={pool} />}
           {card.mine && can.chooseOrchestrator && (
             <Button
               variant="outline"
@@ -201,6 +220,119 @@ function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenP
         </div>
       )}
     </Card>
+  )
+}
+
+/**
+ * The models one of this account's machines runs its tasks on. Saving seals a new order for its agent with the account
+ * key, as the Mac app does when it adds the machine: only its owner can, and the pool sees the new profile.
+ */
+function ModelsDialog({ card, pool }: { card: MachineCard; pool: OpenPool }) {
+  const store = useStore()
+  const profile = card.machine.profile
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState<ModelPolicyForm>(() => modelPolicyForm(profile?.models))
+  const [problem, setProblem] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (!profile) return null
+
+  const reopen = (next: boolean) => {
+    if (next) {
+      setForm(modelPolicyForm(profile.models))
+      setProblem(null)
+    }
+    setOpen(next)
+  }
+  const allow = (tier: ModelTier, on: boolean) =>
+    setForm(form => ({ ...form, allowed: on ? [...form.allowed, tier] : form.allowed.filter(other => other !== tier) }))
+  const save = async () => {
+    const models = modelPolicyFromForm(form)
+    if (typeof models === 'string') return setProblem(models)
+    const { models: _, ...rest } = profile
+    setBusy(true)
+    const sent = await store.pools?.addMachine(pool.id, card.machine.machine, models ? { ...rest, models } : rest)
+    setBusy(false)
+    if (!sent) return setProblem('Not connected to the relay: try again in a moment.')
+    setOpen(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={reopen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <SparklesIcon />
+          Models
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader
+          title={`Models on ${card.name}`}
+          description="Each task runs on the least costly tier that can do it. Choose the tiers this machine may use and the model each one stands for."
+        />
+        <div className="flex flex-col gap-4">
+          <Field label="Tier">
+            <NativeSelect
+              className="h-9"
+              value={form.lock}
+              onChange={event => setForm({ ...form, lock: event.target.value as ModelPolicyForm['lock'] })}
+            >
+              <option value="auto">By task: the tier each task needs</option>
+              {MODEL_TIERS.map(tier => (
+                <option key={tier} value={tier}>
+                  Always {tier}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <div className="flex flex-col gap-2">
+            {MODEL_TIERS.map(tier => (
+              <div key={tier} className="grid grid-cols-[1fr_minmax(0,12rem)] items-center gap-3">
+                <span className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id={`models-${tier}`}
+                    checked={form.allowed.includes(tier)}
+                    disabled={form.lock !== 'auto'}
+                    onCheckedChange={checked => allow(tier, checked === true)}
+                  />
+                  <label htmlFor={`models-${tier}`}>{TIER_TEXTS[tier]}</label>
+                </span>
+                <Input
+                  aria-label={`The model for ${tier}`}
+                  className="font-mono"
+                  value={form.tiers[tier]}
+                  placeholder={DEFAULT_TIER_MODELS[tier]}
+                  onChange={event => setForm({ ...form, tiers: { ...form.tiers, [tier]: event.target.value } })}
+                />
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              A Claude Code alias or model id, or an OpenCode provider/model. Empty: {Object.values(DEFAULT_TIER_MODELS).join(', ')}.
+            </p>
+          </div>
+          <Field label="After a session fails a task">
+            <NativeSelect
+              className="h-9"
+              value={form.escalations}
+              disabled={form.lock !== 'auto'}
+              onChange={event => setForm({ ...form, escalations: Number(event.target.value) })}
+            >
+              <option value={0}>Stay on the same tier</option>
+              <option value={1}>Climb one tier</option>
+              <option value={2}>Climb up to two tiers</option>
+            </NativeSelect>
+          </Field>
+          {problem && <p className="text-sm text-destructive">{problem}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button disabled={busy} onClick={() => void save()}>
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

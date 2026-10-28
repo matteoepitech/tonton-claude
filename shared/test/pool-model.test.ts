@@ -4,7 +4,17 @@
 import { describe, expect, test } from 'bun:test'
 import { decodePoolTask } from '../pool'
 import { decodePoolMachineProfile } from '../pool-machines'
-import { assessTask, chooseModel, decodeModelPolicy, decodeTaskRoute, isModelId, type ModelChoice } from '../pool-model'
+import {
+  assessTask,
+  chooseModel,
+  decodeModelPolicy,
+  decodeTaskRoute,
+  isModelId,
+  type ModelChoice,
+  modelPolicyForm,
+  modelPolicyFromForm,
+  modelPolicyView,
+} from '../pool-model'
 import type { PoolModelPolicy, PoolTask } from '../pool-protocol'
 
 const docs: PoolTask = {
@@ -164,5 +174,62 @@ describe('what other members sealed', () => {
     expect(task?.route).toEqual({ tier: 'strong', model: 'opus', reason: 'a feature', escalated: 1, confirmed: 'claude-opus-4-5' })
     expect(decodePoolTask({ ...feature, model: 'giant', setbacks: -1, route: 'opus' })).toEqual(feature)
     expect(decodeTaskRoute({ model: '$(id)' })).toBeUndefined()
+  })
+})
+
+describe("the owner's form", () => {
+  test('a machine left as it is seals no policy', () => {
+    const form = modelPolicyForm(undefined)
+    expect(form).toEqual({
+      lock: 'auto',
+      allowed: ['light', 'balanced', 'strong'],
+      tiers: { light: '', balanced: '', strong: '' },
+      escalations: 1,
+    })
+    expect(modelPolicyFromForm(form)).toBeUndefined()
+    // The default models typed out are still the defaults.
+    expect(modelPolicyFromForm({ ...form, tiers: { light: ' haiku ', balanced: 'sonnet', strong: '' } })).toBeUndefined()
+    expect(modelPolicyView(undefined)).toBeUndefined()
+  })
+
+  test('what the owner changes comes back as the policy the agent applies', () => {
+    const policy: PoolModelPolicy = {
+      lock: 'balanced',
+      allowed: ['light', 'balanced'],
+      tiers: { balanced: 'anthropic/claude-sonnet-4-5' },
+      escalations: 0,
+    }
+    const form = modelPolicyForm(policy)
+    expect(form).toEqual({
+      lock: 'balanced',
+      allowed: ['light', 'balanced'],
+      tiers: { light: '', balanced: 'anthropic/claude-sonnet-4-5', strong: '' },
+      escalations: 0,
+    })
+    expect(modelPolicyFromForm(form)).toEqual(policy)
+    expect(decodeModelPolicy(modelPolicyFromForm(form))).toEqual(policy)
+    // Tiers come back in their order, whatever order they were ticked in.
+    expect(modelPolicyFromForm({ ...form, lock: 'auto', allowed: ['strong', 'light'], escalations: 2 })).toEqual({
+      allowed: ['light', 'strong'],
+      tiers: { balanced: 'anthropic/claude-sonnet-4-5' },
+      escalations: 2,
+    })
+  })
+
+  test('what an agent could not apply is refused, not sealed', () => {
+    const form = modelPolicyForm(undefined)
+    expect(modelPolicyFromForm({ ...form, allowed: [] })).toBe('Allow at least one tier.')
+    expect(modelPolicyFromForm({ ...form, tiers: { ...form.tiers, strong: 'opus --dangerously-skip-permissions' } })).toContain(
+      'is not a model name',
+    )
+    expect(modelPolicyFromForm({ ...form, escalations: 3 })).toBe('A task climbs 0 to 2 tiers.')
+    // A malformed policy someone else sealed opens on what the agent would do with it.
+    expect(modelPolicyForm({ lock: 'giant' as never, tiers: { light: '$(id)' }, escalations: 9 })).toEqual(modelPolicyForm(undefined))
+  })
+
+  test("a machine's card says the policy in a few words", () => {
+    expect(modelPolicyView({ lock: 'strong', tiers: { strong: 'claude-opus-4-5' } })).toBe('always claude-opus-4-5')
+    expect(modelPolicyView({ allowed: ['light', 'balanced'], escalations: 0 })).toBe('haiku, sonnet · no escalation')
+    expect(modelPolicyView({ escalations: 2 })).toBe('models by task · up to 2 tiers up')
   })
 })

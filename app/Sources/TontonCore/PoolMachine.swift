@@ -99,11 +99,44 @@ public struct PoolModelPolicy: Codable, Equatable, Sendable {
     }
 }
 
+/// The tier of models a pool task runs on (shared/pool-model.ts): the least costly one that can reliably do it.
+public enum PoolModelTier: String, CaseIterable, Sendable, Identifiable {
+    case light, balanced, strong
+
+    public var id: String { rawValue }
+
+    /// What the tier stands for when the owner says nothing: Claude Code's aliases, and the families OpenCode resolves.
+    public var defaultModel: String {
+        switch self {
+        case .light: "haiku"
+        case .balanced: "sonnet"
+        case .strong: "opus"
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .light: String(core: "Light: routine work")
+        case .balanced: String(core: "Balanced: ordinary features")
+        case .strong: String(core: "Strong: demanding work")
+        }
+    }
+
+    /// A Claude Code alias or model id, or an OpenCode `provider/model`: anything else could carry a flag into a command line.
+    public static func isModel(_ name: String) -> Bool {
+        name.count <= 100 && name.wholeMatch(of: #/[A-Za-z0-9_.:@\[\]-]+(\/[A-Za-z0-9_.:@\[\]-]+)?/#) != nil
+    }
+}
+
 /// What the owner fills in to put one of its machines in a pool (Settings › Machines › Add to pool…).
 public struct PoolMachineForm: Equatable, Sendable {
     public enum Problem: Equatable, Sendable {
-        case capacity, workdir
+        case capacity, workdir, tiers, model
     }
+
+    /// Tiers a task climbs after its sessions failed it, unless the owner says otherwise.
+    public static let defaultEscalations = 1
+    public static let escalationRange = 0...2
 
     public var tool: CodingTool
     public var capacity: Int
@@ -112,6 +145,14 @@ public struct PoolMachineForm: Equatable, Sendable {
     public var takes: PoolTaskSize
     /// Typed by the owner, comma separated or one per entry.
     public var areas: [String]
+    /// Every task runs on this tier. Nil: each task gets the tier it needs.
+    public var lock: PoolModelTier?
+    /// The tiers its sessions may use.
+    public var allowed: Set<PoolModelTier>
+    /// The model each tier stands for. Empty or missing: the tier's default model.
+    public var models: [PoolModelTier: String]
+    /// How many tiers a task may climb after sessions failed it.
+    public var escalations: Int
 
     /// One session at a time, asking for everything: what a machine runs until its owner says otherwise.
     public init(tool: CodingTool = .claudeCode, workdir: String = "~/tonton-pool") {
@@ -121,13 +162,34 @@ public struct PoolMachineForm: Equatable, Sendable {
         mode = .ask
         takes = .default(for: tool)
         areas = []
+        allowed = Set(PoolModelTier.allCases)
+        models = [:]
+        escalations = Self.defaultEscalations
     }
 
     /// Why it can't be sent yet, or nil.
     public var problem: Problem? {
         if !PoolMachineProfile.capacities.contains(capacity) { return .capacity }
         if !PoolMachineProfile.isWorkdir(workdir.trimmingCharacters(in: .whitespacesAndNewlines)) { return .workdir }
+        if allowed.isEmpty { return .tiers }
+        if !models.values.allSatisfy({ $0.trimmed.isEmpty || PoolModelTier.isModel($0.trimmed) }) { return .model }
         return nil
+    }
+
+    /// The policy the form stands for, without what is already the default, as the website seals it: nil when the owner
+    /// changed nothing.
+    public var modelPolicy: PoolModelPolicy? {
+        let allowed = PoolModelTier.allCases.filter(allowed.contains)
+        var tiers: [String: String] = [:]
+        for tier in PoolModelTier.allCases {
+            let model = (models[tier] ?? "").trimmed
+            if !model.isEmpty && model != tier.defaultModel { tiers[tier.rawValue] = model }
+        }
+        let escalations = Self.escalationRange.contains(escalations) ? escalations : Self.defaultEscalations
+        let policy = PoolModelPolicy(
+            lock: lock?.rawValue, allowed: allowed.count < PoolModelTier.allCases.count ? allowed.map(\.rawValue) : nil,
+            tiers: tiers.isEmpty ? nil : tiers, escalations: escalations == Self.defaultEscalations ? nil : escalations)
+        return policy == PoolModelPolicy() ? nil : policy
     }
 
     /// The profile, named after the machine, or nil while there is a problem.
@@ -139,8 +201,12 @@ public struct PoolMachineForm: Equatable, Sendable {
         return PoolMachineProfile(
             name: name, tool: tool == .openCode ? "opencode" : "claude", capacity: capacity,
             workdir: workdir.trimmingCharacters(in: .whitespacesAndNewlines), mode: mode, takes: takes.rawValue,
-            areas: unique.isEmpty ? nil : Array(unique.prefix(20)))
+            areas: unique.isEmpty ? nil : Array(unique.prefix(20)), models: modelPolicy)
     }
+}
+
+extension String {
+    fileprivate var trimmed: String { trimmingCharacters(in: .whitespaces) }
 }
 
 /// From the machine owner's app to that machine's agent service: work for this pool, with its key, this way.

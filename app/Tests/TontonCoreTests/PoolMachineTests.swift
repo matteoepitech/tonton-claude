@@ -29,6 +29,34 @@ final class PoolMachineTests: XCTestCase {
         for good in ["/srv/pool", "~/pool", #"C:\pool"#, "D:/work"] { XCTAssertTrue(PoolMachineProfile.isWorkdir(good), good) }
     }
 
+    /// As the website's form (shared/pool-model.ts, modelPolicyFromForm): what is left as the default is not sealed.
+    func testTheFormSealsTheModelsTheOwnerChose() throws {
+        var form = PoolMachineForm()
+        XCTAssertEqual(form.allowed, Set(PoolModelTier.allCases))
+        XCTAssertEqual(form.escalations, 1)
+        form.models = [.light: " haiku ", .balanced: ""]
+        XCTAssertNil(form.modelPolicy)
+        XCTAssertNil(form.profile(name: nil)?.models)
+        form.lock = .balanced
+        form.allowed = [.strong, .light]
+        form.models[.balanced] = "anthropic/claude-sonnet-4-5"
+        form.escalations = 0
+        let policy = PoolModelPolicy(
+            lock: "balanced", allowed: ["light", "strong"], tiers: ["balanced": "anthropic/claude-sonnet-4-5"], escalations: 0)
+        XCTAssertEqual(form.modelPolicy, policy)
+        XCTAssertEqual(form.profile(name: nil)?.models, policy)
+        let json = try XCTUnwrap(String(data: try JSONEncoder().encode(policy), encoding: .utf8))
+        XCTAssertTrue(json.contains(#""allowed":["light","strong"]"#), json)
+        form.allowed = []
+        XCTAssertEqual(form.problem, .tiers)
+        form.allowed = [.light]
+        form.models[.strong] = "opus --dangerously-skip-permissions"
+        XCTAssertEqual(form.problem, .model)
+        XCTAssertNil(form.profile(name: nil))
+        for ok in ["sonnet", "claude-opus-4-5[1m]", "ollama/qwen3:32b"] { XCTAssertTrue(PoolModelTier.isModel(ok), ok) }
+        for bad in ["", "a/b/c", "$(id)", String(repeating: "x", count: 101)] { XCTAssertFalse(PoolModelTier.isModel(bad), bad) }
+    }
+
     func testAProfileAnotherMemberSealedReadsAsTheClientCoreReadsIt() throws {
         let pool = try PoolVault(key: E2E.newKey())
         let profile = PoolMachineProfile(name: "Studio", tool: "claude", capacity: 2, workdir: "~/pool", mode: .full, areas: ["back"])
