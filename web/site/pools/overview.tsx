@@ -98,8 +98,13 @@ function GetStarted({ pool, state }: TabProps) {
     pick => pick.machine.online,
   )
   const leadMachine = machines.find(m => m.machine === state.orchestratorMachine?.machine)
+  // Its machine says why it could not start the orchestrator session: tmux missing, the repository not cloned…
+  const failed =
+    leadMachine && !state.orchestrator
+      ? state.events.findLast(e => e.body?.kind === 'orchestrator_failed' && e.machine === leadMachine.machine)
+      : undefined
   const myBest = bestOrchestrator(machines.filter(m => m.account === store.account))
-  const steps: { done: boolean; optional?: boolean; title: string; detail: string; action?: ReactNode }[] = [
+  const steps: { done: boolean; optional?: boolean; problem?: boolean; title: string; detail: string; action?: ReactNode }[] = [
     {
       done: machines.length > 0,
       title: machines.length ? `${plural(machines.length, 'machine')}, ${plural(sessions, 'session')} at once` : 'Machines',
@@ -122,11 +127,16 @@ function GetStarted({ pool, state }: TabProps) {
     },
     {
       done: Boolean(state.orchestrator && leadMachine),
+      problem: Boolean(failed),
       title: leadMachine ? `The orchestrator runs on ${leadMachine.profile?.name ?? 'a machine'}` : 'The orchestrator',
       detail: leadMachine
         ? state.orchestrator
           ? 'It plans, hands out the work and merges. Its machine takes tasks too.'
-          : 'Its session is starting…'
+          : failed?.body?.text
+            ? `It could not start: ${failed.body.text.replace(/^.*?could not start the orchestrator: /, '')} It tries again on its own.`
+            : leadMachine.online
+              ? 'Its session is starting…'
+              : `${leadMachine.profile?.name ?? 'Its machine'} is offline: it starts once the machine is back.`
         : can.chooseOrchestrator
           ? 'One of your machines runs it: it plans, hands out the work and merges.'
           : 'The owner or an admin runs it on one of their machines.',
@@ -177,7 +187,9 @@ function GetStarted({ pool, state }: TabProps) {
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
             <span className={cn('text-sm', step.done ? 'text-muted-foreground' : 'font-medium')}>{step.title}</span>
-            {(index === next || !step.done) && <span className="truncate text-xs text-muted-foreground">{step.detail}</span>}
+            {(index === next || !step.done) && (
+              <span className={cn('text-xs', step.problem ? 'text-destructive' : 'truncate text-muted-foreground')}>{step.detail}</span>
+            )}
           </span>
           {!step.done && step.action}
         </li>

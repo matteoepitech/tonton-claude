@@ -1,5 +1,5 @@
-// A pool's page: its name, goal and countdown, the invite, then three tabs (the overview with the orchestrator, the
-// tasks, the team) and the rest under More. Live: every change of the pool draws the page again, and forms keep what is
+// A pool's page: its name, goal and countdown, the invite, then four tabs (the overview with the orchestrator, the
+// tasks, the team, the control center) and the rest under More. Live: every change of the pool draws the page again, and forms keep what is
 // being typed.
 import { ArrowLeftIcon, ChevronDownIcon } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
@@ -32,16 +32,16 @@ interface Tab {
   render(props: TabProps): ReactNode
 }
 
-/** What everyone needs: the orchestrator and its plan, the tasks, the team. */
+/** What everyone needs: the orchestrator and its plan, the tasks, the team, and every session live on a graph. */
 const TABS: Tab[] = [
   { id: 'overview', label: 'Overview', render: props => <Overview {...props} /> },
   { id: 'tasks', label: 'Tasks', render: props => <Board {...props} /> },
   { id: 'team', label: 'Team', render: props => <Team {...props} /> },
+  { id: 'control', label: 'Control center', render: props => <ControlCenter {...props} /> },
 ]
 /** The rest, a click further. */
 const MORE: Tab[] = [
   { id: 'activity', label: 'Activity', render: props => <Activity {...props} /> },
-  { id: 'control', label: 'Sessions graph', render: props => <ControlCenter {...props} /> },
   { id: 'leaderboard', label: 'Leaderboard', render: props => <Leaderboard {...props} /> },
   { id: 'settings', label: 'Settings', render: props => <Settings {...props} /> },
 ]

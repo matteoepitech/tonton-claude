@@ -298,9 +298,10 @@ The relay serves a website at `/`, built on the client core like the web app: si
   for this relay only), or takes one pasted. Either way the account's machines come along, each with a profile worked
   out from what its agent reports, and the best of a leader's runs the orchestrator ([pool-autopilot.md](pool-autopilot.md),
   Joining). Nothing else is asked but whether their sessions may run commands without asking.
-- A pool's page has three tabs, each a name and a component in `TABS` (`web/site/pools/page.tsx`): **Overview**,
-  **Tasks** and **Team**; **More** holds **Activity**, **Sessions graph** (the control center), **Leaderboard** and
-  **Settings**. The owner and admins have **Invite** in the header: one click makes a link and its QR code, for up to 20
+- A pool's page has four tabs, each a name and a component in `TABS` (`web/site/pools/page.tsx`): **Overview**,
+  **Tasks**, **Team** and **Control center**; **More** holds **Activity**, **Leaderboard** and **Settings**. A right-click
+  on a pool of the list opens it on a tab, copies its link, and leaves or deletes it, each asked first; on a machine,
+  it holds what the machine's menu does (`web/site/ui/context-menu.tsx`). The owner and admins have **Invite** in the header: one click makes a link and its QR code, for up to 20
   people over a week (or until a hackathon's deadline), as members; another kind of invite is a step further.
 - **Overview** (`web/site/pools/overview.tsx`) comes first. Until the work starts, a few steps, each ticked as it is
   done: the machines, the team (optional), the orchestrator (with a button to run it on one of the admin's machines),
@@ -321,7 +322,7 @@ The relay serves a website at `/`, built on the client core like the web app: si
   account's machines not in the pool yet come with **Add them**. Roles change from a menu, by the rules the relay
   enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key. Sessions put in by hand from the
   notch come last, and the open invites, with **Revoke**.
-- **Sessions graph** (`web/site/pools/control.tsx`, the control center) shows every member with its machines and pool sessions: tool and model (from the
+- **Control center** (`web/site/pools/control.tsx`) shows every member with its machines and pool sessions: tool and model (from the
   session's `session` event), area, whether it is the orchestrator, online or not, its status, its current task, when it
   last wrote to the pool, and its usage. A count per status (working, needs its owner, idle, offline) sits on top, and
   the filters by role, member and status above. A graph (React Flow) shows every session as a node, with an animated
@@ -343,7 +344,7 @@ The relay serves a website at `/`, built on the client core like the web app: si
   the last `resumed` or `started` event, else since the pool was made) or all time. A task counts once, for the session it
   was assigned to when it was done last; its time runs from its first move to in progress to that moment. Spending is
   the period's share of each session's running total. Lines changed are not counted: no event carries them yet.
-- Activity, the sessions graph and the leaderboard work out what they show in `shared/pool-stats.ts`, from the pool's state alone, so any client computes
+- Activity, the control center and the leaderboard work out what they show in `shared/pool-stats.ts`, from the pool's state alone, so any client computes
   the same.
 - Forms sit in dialogs (Radix, under the page's nonce) or keep their own state: live changes redraw the tab, never what is
   being typed.
