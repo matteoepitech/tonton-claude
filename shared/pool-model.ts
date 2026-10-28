@@ -219,3 +219,63 @@ export function routeView(route: PoolTaskRoute): string {
   const after = route.confirmed ? `; runs on ${route.confirmed}` : route.problem ? `; ${route.problem}` : ''
   return `${head}${route.reason ? `: ${route.reason}` : ''}${after}`
 }
+
+// MARK: The owner's form
+
+/** What the owner sees and changes of a machine's policy: every tier spelled out, the defaults shown as they apply. */
+export interface ModelPolicyForm {
+  /** `auto`: each task gets the tier it needs; a tier: every task runs on it. */
+  lock: 'auto' | ModelTier
+  allowed: ModelTier[]
+  /** Empty: the tier's default model. */
+  tiers: Record<ModelTier, string>
+  escalations: number
+}
+
+export function modelPolicyForm(policy: PoolModelPolicy | undefined): ModelPolicyForm {
+  return {
+    lock: isModelTier(policy?.lock) ? policy.lock : 'auto',
+    allowed: allowedTiers(policy),
+    tiers: {
+      light: isModelId(policy?.tiers?.light) ? policy.tiers.light : '',
+      balanced: isModelId(policy?.tiers?.balanced) ? policy.tiers.balanced : '',
+      strong: isModelId(policy?.tiers?.strong) ? policy.tiers.strong : '',
+    },
+    escalations: count(policy?.escalations, MAX_ESCALATIONS) ?? DEFAULT_ESCALATIONS,
+  }
+}
+
+/**
+ * The policy the form stands for, without what is already the default, so a machine the owner left as it was seals
+ * none: undefined. Or why it can't be sealed.
+ */
+export function modelPolicyFromForm(form: ModelPolicyForm): PoolModelPolicy | undefined | string {
+  const allowed = MODEL_TIERS.filter(tier => form.allowed.includes(tier))
+  if (!allowed.length) return 'Allow at least one tier.'
+  const tiers: Partial<Record<ModelTier, string>> = {}
+  for (const tier of MODEL_TIERS) {
+    const model = form.tiers[tier].trim()
+    if (!model || model === DEFAULT_TIER_MODELS[tier]) continue
+    if (!isModelId(model)) return `${model} is not a model name: use an alias, a model id or provider/model.`
+    tiers[tier] = model
+  }
+  if (count(form.escalations, MAX_ESCALATIONS) === undefined) return `A task climbs 0 to ${MAX_ESCALATIONS} tiers.`
+  const policy = defined({
+    lock: form.lock === 'auto' ? undefined : form.lock,
+    allowed: allowed.length < MODEL_TIERS.length ? allowed : undefined,
+    tiers: Object.keys(tiers).length ? tiers : undefined,
+    escalations: form.escalations === DEFAULT_ESCALATIONS ? undefined : form.escalations,
+  })
+  return Object.keys(policy).length ? policy : undefined
+}
+
+/** The policy in a few words, for a machine's card: undefined for the default one. */
+export function modelPolicyView(policy: PoolModelPolicy | undefined): string | undefined {
+  if (!policy) return undefined
+  if (isModelTier(policy.lock)) return `always ${tierModel(policy, policy.lock)}`
+  const allowed = allowedTiers(policy)
+  const parts = [allowed.length < MODEL_TIERS.length ? allowed.map(tier => tierModel(policy, tier)).join(', ') : 'models by task']
+  const escalations = policy.escalations ?? DEFAULT_ESCALATIONS
+  if (escalations !== DEFAULT_ESCALATIONS) parts.push(escalations ? `up to ${escalations} tiers up` : 'no escalation')
+  return parts.join(' · ')
+}
