@@ -120,7 +120,7 @@ top of its guide, in the same `<pool kind="role">` (`AUTOPILOT_GUIDE` in `agent/
 
 ```
 This pool runs on autopilot: members put whole machines in it, and the control loop of your machine hands the tasks out.
-1. pool_overview lists the machines: their tool, how many sessions each runs, its mode, its areas and what it runs now.
+1. pool_overview lists the machines: their tool and their account's plan (Claude Max 20x, Max 5x, Pro, OpenCode), how many sessions each runs, its mode, its areas and what it runs now. Their owners said nothing more: size the work by what each one brings.
 2. Plan with plan_create and create the tasks with task_create, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines.
 3. When the user says go, call dispatch_start; when they say pause, dispatch_stop. The loop hands each task whose dependencies are done to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most.
 4. Notices tell you what the loop did. Answer the blocked tasks, merge the finished branches with task_merge, and re-plan when tasks fail.
@@ -132,7 +132,8 @@ This pool runs on autopilot: members put whole machines in it, and the control l
   or no orchestrator machine, and while it is paused; stopping always works.
 - **The loop's rules.** The same as the tools', for machines instead of sessions: a machine takes as many tasks as its
   capacity; by its tool or its owner's `takes`, simple tasks go to OpenCode machines first and large ones never to a
-  machine that takes simple ones only; the task's area first; a task waits for its `depends_on`; a Claude Code machine
+  machine that takes simple ones only; the task's area first; then by the account's plan, a large task to the largest
+  (Max 20x, then Max 5x, Team, Enterprise and API keys, then Pro) and a simple one to the smallest; a task waits for its `depends_on`; a Claude Code machine
   whose account's plan runs out before the task would be done does not get it; nothing goes past a member's or the
   pool's budget; a stopped machine gets nothing, and what it held goes back as it was, uncounted. One change at a time,
   over the task's revision.

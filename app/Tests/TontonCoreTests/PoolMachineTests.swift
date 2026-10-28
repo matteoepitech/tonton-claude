@@ -179,4 +179,63 @@ final class PoolMachineTests: XCTestCase {
         XCTAssertTrue(machine("0.9.0").runsPoolMachines)
         XCTAssertTrue(machine("0.0.0").runsPoolMachines)
     }
+
+    private struct AutoTable: Decodable {
+        struct Health: Decodable {
+            let tools: [String]
+            let plan: String?
+            let memoryTotal: Double
+        }
+        struct Machine: Decodable {
+            let name: String
+            let health: Health?
+        }
+        struct Pool: Decodable {
+            let id: String
+            let name: String?
+        }
+        struct Case: Decodable {
+            let name: String
+            let machine: Machine
+            let pool: Pool
+            let mode: PoolMachineMode
+            let profile: PoolMachineProfile?
+        }
+        let cases: [Case]
+    }
+
+    /// The same table as shared/test/pool-auto-profile.test.ts: a machine joins with what its agent reports, from the
+    /// Mac app as from the website.
+    func testAMachineJoinsAPoolOnItsOwn() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../shared/test/pool-auto-profile.json")
+        let table = try JSONDecoder().decode(AutoTable.self, from: Data(contentsOf: url))
+        XCTAssertGreaterThan(table.cases.count, 5)
+        for item in table.cases {
+            let health = item.machine.health.map {
+                MachineHealth(
+                    cpu: 0, memoryUsed: 0, memoryTotal: $0.memoryTotal, battery: nil, wake: nil, tools: $0.tools, plan: $0.plan, at: "x")
+            }
+            let profile = PoolMachineProfile.automatic(
+                name: item.machine.name, health: health, poolId: item.pool.id, poolName: item.pool.name, mode: item.mode)
+            XCTAssertEqual(profile, item.profile, item.name)
+            if let profile {
+                XCTAssertEqual(try JSONDecoder().decode(PoolMachineProfile.self, from: JSONEncoder().encode(profile)), profile, item.name)
+            }
+        }
+    }
+
+    func testWhatEachMachineBrings() {
+        let profile = { (tool: String, plan: String?) in
+            PoolMachineProfile(tool: tool, capacity: 1, workdir: "~/p", mode: .edits, plan: plan)
+        }
+        XCTAssertEqual(profile("claude", "max_20x").planLabel, "Claude Max 20x")
+        XCTAssertEqual(profile("claude", "pro").planLabel, "Claude Pro")
+        XCTAssertEqual(profile("claude", nil).planLabel, "Claude Code")
+        XCTAssertEqual(profile("claude", "max_50x").planLabel, "Claude Code")
+        XCTAssertEqual(profile("opencode", nil).planLabel, "OpenCode")
+        // A plan that is not a plan's name is dropped when read.
+        let sealed = #"{"tool":"claude","capacity":1,"workdir":"~/p","mode":"edits","plan":"<b>max</b>"}"#
+        XCTAssertNil(try JSONDecoder().decode(PoolMachineProfile.self, from: Data(sealed.utf8)).plan)
+    }
 }

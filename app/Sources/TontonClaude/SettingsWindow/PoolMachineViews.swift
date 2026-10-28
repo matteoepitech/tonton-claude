@@ -1,91 +1,160 @@
 import SwiftUI
 import TontonCore
 
-/// Puts one of the account's machines in a pool for the autopilot (docs/pool-autopilot.md): the pool, what its sessions
-/// run, how many at once, where the work goes, what they may do without asking, and the models they run on (#283).
-/// `full` says plainly what it means.
+/// Puts one of the account's machines in a pool for the autopilot (docs/pool-autopilot.md), in one click: how it works
+/// there comes from what its agent reports (its Claude plan, its tools, its memory). The owner only says whether its
+/// sessions may run commands without asking, and can still change the rest under Customize.
 struct AddToPoolView: View {
     let machine: MachineInfo
     let close: () -> Void
     @ObservedObject private var pools = PoolStore.shared
     @State private var poolId: String?
-    @State private var form = PoolMachineForm()
+    @State private var full = false
+    /// Set once the owner opens Customize: the form, filled in with the automatic profile.
+    @State private var custom: PoolMachineForm?
     @State private var areas = ""
     @State private var error: String?
 
+    private var pool: String? { poolId ?? pools.joinable.first?.id }
+    private var automatic: PoolMachineProfile? {
+        pool.flatMap { pools.automaticProfile(of: machine, pool: $0, mode: full ? .full : .edits) }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add \(machine.name) to a pool").font(.system(size: 15, weight: .semibold))
-            Text("Its agent starts a session for each task the pool gives it, in a folder of its own, and ends it when the task is done.")
-                .font(.system(size: 12)).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                IconTile(systemName: "cpu", tint: Theme.accent, size: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Add \(machine.name) to a pool").font(.system(size: 15, weight: .semibold))
+                    Text("It starts a session for each task the pool gives it, and ends it when the task is done.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+                }
+            }
             if pools.joinable.isEmpty {
                 Text(pools.problem ?? String(localized: "This account is in no pool yet. Make one or join one on the relay's website."))
                     .font(.system(size: 12)).foregroundStyle(Theme.textDim)
             } else {
-                Form {
-                    Picker("Pool", selection: Binding(get: { poolId ?? pools.joinable.first?.id }, set: { poolId = $0 })) {
+                if pools.joinable.count > 1 {
+                    Picker(
+                        "Pool",
+                        selection: Binding(
+                            get: { pool },
+                            set: {
+                                poolId = $0; custom = nil
+                            })
+                    ) {
                         ForEach(pools.joinable, id: \.id) { board in Text(board.name).tag(Optional(board.id)) }
                     }
-                    Picker("Runs", selection: $form.tool) {
-                        ForEach(CodingTool.allCases, id: \.self) { tool in Text(tool.label).tag(tool) }
-                    }
-                    .onChange(of: form.tool) { _, tool in form.takes = .default(for: tool) }
-                    Stepper(value: $form.capacity, in: PoolMachineProfile.capacities) {
-                        Text("\(form.capacity) sessions at once")
-                    }
-                    TextField("Work folder", text: $form.workdir, prompt: Text(verbatim: "~/tonton-pool"))
-                    Picker("Takes", selection: $form.takes) {
-                        ForEach(PoolTaskSize.allCases) { size in Text(size.label).tag(size) }
-                    }
-                    TextField("Areas", text: $areas, prompt: Text("front, back… (optional)"))
-                    Picker("Without asking", selection: $form.mode) {
-                        ForEach(PoolMachineMode.allCases) { mode in Text(mode.label).tag(mode) }
-                    }
-                    Text(form.mode.detail)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(form.mode == .full ? Theme.danger : Theme.textDim)
-                        .fixedSize(horizontal: false, vertical: true)
-                    models
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                } else if let board = pools.joinable.first {
+                    Label(board.name, systemImage: "person.3.fill").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.text)
                 }
-                .formStyle(.grouped)
+                if let custom {
+                    customize(custom)
+                } else if let profile = automatic {
+                    summary(profile)
+                } else {
+                    Text("No coding tool on this machine: install Claude Code or OpenCode there first.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.danger)
+                }
+                Toggle(isOn: $full) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Run commands without asking").font(.system(size: 12.5, weight: .medium))
+                        Text(full ? PoolMachineMode.full.detail : PoolMachineMode.edits.detail)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(full ? Theme.danger : Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(AccentToggleStyle())
+                .onChange(of: full) { _, full in custom?.mode = full ? .full : .edits }
             }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger) }
             HStack {
+                if custom == nil, let profile = automatic {
+                    Button("Customize…") {
+                        custom = PoolMachineForm(profile)
+                        areas = profile.areas?.joined(separator: ", ") ?? ""
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textDim)
+                }
                 Spacer()
-                Button("Cancel", action: close).keyboardShortcut(.cancelAction)
+                Button("Cancel", action: close).keyboardShortcut(.cancelAction).buttonStyle(ThemeButtonStyle())
                 Button("Add to pool", action: add)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(pools.joinable.isEmpty || form.problem != nil)
+                    .buttonStyle(ThemeButtonStyle(primary: true))
+                    .disabled(pools.joinable.isEmpty || (custom.map { $0.problem != nil } ?? (automatic == nil)))
             }
         }
         .padding(20)
         .frame(width: 460)
+        .background(Theme.bg)
         .task { await pools.refresh() }
     }
 
+    /// What the machine brings, worked out from its agent's report.
+    private func summary(_ profile: PoolMachineProfile) -> some View {
+        Card(padding: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(verbatim: profile.planLabel).font(.system(size: 13, weight: .semibold))
+                    Text("\(profile.capacity) sessions at once").font(.system(size: 12)).foregroundStyle(Theme.textDim)
+                }
+                Text(verbatim: profile.workdir).font(Theme.mono).foregroundStyle(Theme.textDim).lineLimit(1).truncationMode(.middle)
+                Text("Found on the machine: nothing to fill in.").font(.system(size: 11)).foregroundStyle(Theme.textFaint)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Everything the profile says, for an owner who wants another folder, more sessions or other models.
+    private func customize(_ form: PoolMachineForm) -> some View {
+        let binding = Binding(get: { custom ?? form }, set: { custom = $0 })
+        return Form {
+            Picker("Runs", selection: binding.tool) {
+                ForEach(CodingTool.allCases, id: \.self) { tool in Text(tool.label).tag(tool) }
+            }
+            .onChange(of: binding.wrappedValue.tool) { _, tool in custom?.takes = .default(for: tool) }
+            Stepper(value: binding.capacity, in: PoolMachineProfile.capacities) {
+                Text("\(binding.wrappedValue.capacity) sessions at once")
+            }
+            TextField("Work folder", text: binding.workdir, prompt: Text(verbatim: "~/tonton-pools/…"))
+            Picker("Takes", selection: binding.takes) {
+                ForEach(PoolTaskSize.allCases) { size in Text(size.label).tag(size) }
+            }
+            TextField("Areas", text: $areas, prompt: Text("front, back… (optional)"))
+            models(binding)
+        }
+        .formStyle(.grouped)
+        .frame(maxHeight: 360)
+    }
+
     /// Each task runs on the least costly tier that can do it: the owner allows tiers, names their models, or locks one.
-    private var models: some View {
+    private func models(_ form: Binding<PoolMachineForm>) -> some View {
         Section {
-            Picker("Every task runs on", selection: $form.lock) {
+            Picker("Every task runs on", selection: form.lock) {
                 Text("The tier it needs").tag(PoolModelTier?.none)
                 ForEach(PoolModelTier.allCases) { tier in Text(tier.label).tag(Optional(tier)) }
             }
             ForEach(PoolModelTier.allCases) { tier in
                 HStack {
-                    Toggle(tier.label, isOn: allows(tier)).disabled(form.lock != nil)
-                    TextField("Model", text: model(of: tier), prompt: Text(verbatim: tier.defaultModel))
+                    Toggle(tier.label, isOn: allows(tier, in: form)).disabled(form.wrappedValue.lock != nil)
+                    TextField("Model", text: model(of: tier, in: form), prompt: Text(verbatim: tier.defaultModel))
                         .labelsHidden()
                         .frame(width: 150)
                 }
             }
-            Picker("After a session fails a task", selection: $form.escalations) {
+            Picker("After a session fails a task", selection: form.escalations) {
                 Text("Stay on the same tier").tag(0)
                 Text("Climb one tier").tag(1)
                 Text("Climb up to two tiers").tag(2)
             }
-            .disabled(form.lock != nil)
+            .disabled(form.wrappedValue.lock != nil)
             Group {
-                switch form.problem {
+                switch form.wrappedValue.problem {
                 case .tiers: Text("Allow at least one tier.").foregroundStyle(Theme.danger)
                 case .model: Text("Not a model name: use an alias, a model id or provider/model.").foregroundStyle(Theme.danger)
                 default: Text("A Claude Code alias or model id, or an OpenCode provider/model. Empty: its default model.")
@@ -99,22 +168,27 @@ struct AddToPoolView: View {
         }
     }
 
-    private func allows(_ tier: PoolModelTier) -> Binding<Bool> {
+    private func allows(_ tier: PoolModelTier, in form: Binding<PoolMachineForm>) -> Binding<Bool> {
         Binding(
-            get: { form.allowed.contains(tier) },
-            set: { form.allowed = $0 ? form.allowed.union([tier]) : form.allowed.subtracting([tier]) })
+            get: { form.wrappedValue.allowed.contains(tier) },
+            set: {
+                form.wrappedValue.allowed = $0 ? form.wrappedValue.allowed.union([tier]) : form.wrappedValue.allowed.subtracting([tier])
+            })
     }
 
-    private func model(of tier: PoolModelTier) -> Binding<String> {
-        Binding(get: { form.models[tier] ?? "" }, set: { form.models[tier] = $0 })
+    private func model(of tier: PoolModelTier, in form: Binding<PoolMachineForm>) -> Binding<String> {
+        Binding(get: { form.wrappedValue.models[tier] ?? "" }, set: { form.wrappedValue.models[tier] = $0 })
     }
 
     private func add() {
-        guard let pool = poolId ?? pools.joinable.first?.id else { return }
-        var filled = form
-        filled.areas = [areas]
+        guard let pool else { return }
         do {
-            try pools.addMachine(machine, pool: pool, form: filled)
+            if var filled = custom {
+                filled.areas = [areas]
+                try pools.addMachine(machine, pool: pool, form: filled)
+            } else if let profile = automatic {
+                try pools.addMachine(machine, pool: pool, profile: profile)
+            }
             close()
         } catch {
             self.error = error.localizedDescription
@@ -177,7 +251,8 @@ struct MachinePools: View {
 
     private func summary(_ entry: PoolState.Machine) -> String {
         guard let profile = entry.profile else { return "" }
-        let tool = profile.tool == "opencode" ? CodingTool.openCode.label : CodingTool.claudeCode.label
+        // `Claude Max 20x`, `OpenCode`: what it brings, as its agent reported it.
+        let tool = profile.planLabel
         return String(localized: "\(tool) · \(profile.capacity) at once · \(profile.mode.label)")
     }
 }

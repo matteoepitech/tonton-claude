@@ -3593,6 +3593,16 @@
         }
       }
     },
+    "Customize…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personnaliser…"
+          }
+        }
+      }
+    },
     "Cut" : {
       "localizations" : {
         "fr" : {
@@ -4293,6 +4303,16 @@
         }
       }
     },
+    "Found on the machine: nothing to fill in." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trouvé sur la machine : rien à remplir."
+          }
+        }
+      }
+    },
     "Frog" : {
       "comment" : "A macOS alert sound",
       "localizations" : {
@@ -4857,6 +4877,16 @@
         }
       }
     },
+    "It starts a session for each task the pool gives it, and ends it when the task is done." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elle démarre une session pour chaque tâche que la pool lui confie, et la termine quand la tâche est finie."
+          }
+        }
+      }
+    },
     "It takes the pool's tasks again." : {
       "localizations" : {
         "fr" : {
@@ -4883,16 +4913,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Son agent est hors ligne."
-          }
-        }
-      }
-    },
-    "Its agent starts a session for each task the pool gives it, in a folder of its own, and ends it when the task is done." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Son agent lance une session pour chaque tâche que le pool lui donne, dans un dossier à elle, et la termine quand la tâche est faite."
           }
         }
       }
@@ -5731,6 +5751,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pas de réponse de %@. Son agent est peut-être trop ancien pour démarrer des sessions : mettez-le à jour."
+          }
+        }
+      }
+    },
+    "No coding tool on this machine: install Claude Code or OpenCode there first." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun outil de code sur cette machine : installez-y d’abord Claude Code ou OpenCode."
           }
         }
       }
@@ -7386,6 +7416,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exécuter une commande dans la session"
+          }
+        }
+      }
+    },
+    "Run commands without asking" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lancer les commandes sans demander"
           }
         }
       }
@@ -10026,16 +10066,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Élargit l’encoche pour montrer ce que fait une session au travail, comme la Dynamic Island."
-          }
-        }
-      }
-    },
-    "Without asking" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sans demander"
           }
         }
       }

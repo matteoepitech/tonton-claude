@@ -27,9 +27,15 @@ export function formatPoolInvite(invite: PoolInvite): string {
   return PREFIX + utf8ToBase64Url(JSON.stringify({ relay, pool, token, key, v: version }))
 }
 
-/** The invite in a pasted text or after the `#` of an address, null for anything else. */
+/**
+ * The invite as a link to the relay's website, which opens on joining the pool: the invite stays after the `#`, which
+ * browsers never send.
+ */
+export const poolInviteLink = (invite: PoolInvite): string => `${invite.relay}/#${formatPoolInvite(invite)}`
+
+/** The invite in a pasted text, a link to the website or after the `#` of an address, null for anything else. */
 export function parsePoolInvite(text: string): PoolInvite | null {
-  const trimmed = text.trim().replace(/^#/, '')
+  const trimmed = text.trim().slice(text.trim().lastIndexOf('#') + 1)
   if (!trimmed.startsWith(PREFIX)) return null
   try {
     const fields = JSON.parse(base64UrlToUtf8(trimmed.slice(PREFIX.length))) as Record<string, unknown>

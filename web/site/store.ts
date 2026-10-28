@@ -5,15 +5,18 @@
 
 import { useSyncExternalStore } from 'react'
 import {
+  bestOrchestrator,
   browserSocket,
   type ClientState,
   importAccountKey,
+  type MachinePick,
   PoolApi,
   PoolWatch,
   parseAccountToken,
   parsePoolInvite,
   parseRecoveryKey,
   parseShareLink,
+  poolAbilities,
   RelayClient,
   type SharedView,
   ShareViewer,
@@ -233,6 +236,26 @@ export class Store {
       this.poolTab = tab ?? 'orchestrator'
     }
     this.changed()
+  }
+
+  /**
+   * Puts the picked machines of the account in the pool once it is open, each with its automatic profile, and, in a
+   * pool this account leads without an orchestrator machine yet, makes the best of them run it: nothing else is asked
+   * of whoever joins or makes a pool (docs/pool-autopilot.md, Joining).
+   */
+  async bringMachines(poolId: string, picks: MachinePick[]) {
+    const watch = this.pools
+    if (!watch || !picks.length) return
+    for (let tries = 0; tries < 100 && !watch.pool(poolId)?.state; tries++) await new Promise(done => setTimeout(done, 100))
+    const pool = watch.pool(poolId)
+    if (!pool?.state) return
+    const added = []
+    for (const pick of picks) if (await watch.addMachine(poolId, pick.machine.id, pick.profile)) added.push(pick)
+    const lead = bestOrchestrator(added.map(pick => ({ ...pick, online: pick.machine.online })))
+    // The relay takes the messages of one socket in order: the machine is in the pool by then.
+    if (this.account && lead && poolAbilities(pool.role).chooseOrchestrator && !pool.state.orchestratorMachine) {
+      watch.setOrchestratorMachine(poolId, { account: this.account, machine: lead.machine.id })
+    }
   }
 
   setPoolTab(tab: string) {

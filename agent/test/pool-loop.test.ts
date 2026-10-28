@@ -112,6 +112,18 @@ describe('which machine takes a task', () => {
     expect(machineCandidates(state, { size: 'large', area: 'front' })[0].machine).toBe('machinefron1')
   })
 
+  test("by the account's plan: a large task to the largest, a simple one to the smallest", () => {
+    const max = machine('machinemax01', { tool: 'claude', plan: 'max_20x' })
+    const pro = machine('machinepro01', { tool: 'claude', plan: 'pro' })
+    const unknown = machine('machineunk01', { tool: 'claude' })
+    const state = pool([], [], { machines: [pro, unknown, max] })
+    expect(machineCandidates(state, { size: 'large' }).map(m => m.machine)).toEqual(['machinemax01', 'machineunk01', 'machinepro01'])
+    expect(machineCandidates(state, { size: 'simple' }).map(m => m.machine)).toEqual(['machinepro01', 'machineunk01', 'machinemax01'])
+    // The task's area still comes first.
+    const front = { ...pro, profile: { ...pro.profile, areas: ['front'] } } as PoolMachine
+    expect(machineCandidates(pool([], [], { machines: [front, max] }), { size: 'large', area: 'front' })[0].machine).toBe('machinepro01')
+  })
+
   test('only machines online, ready, with a free slot, within budget and with time left on their plan', () => {
     const busy = item('task0001busy', big('Busy', { state: 'in_progress', machine: { account: 'memberacct01', machine: 'machinefron1' } }))
     const state = pool([machine('machineoffl1', {}, { online: false }), machine('machineold01', {}, { ready: false }), front], [busy])

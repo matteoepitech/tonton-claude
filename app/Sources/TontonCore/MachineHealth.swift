@@ -16,6 +16,9 @@ public struct MachineHealth: Codable, Equatable, Sendable {
     public let wake: [WakeOnLAN.Target]?
     /// The coding agents installed (`claude`, `opencode`). Missing from older agents, which only start claude.
     public var tools: [String]? = nil
+    /// The Claude plan Claude Code is signed in with there (`max_20x`, `max_5x`, `pro`, `team`, `enterprise`, `api`).
+    /// Missing when it is not signed in, and from older agents.
+    public var plan: String? = nil
     public let at: String
 
     /// A report older than this means the service stopped sending: it is shown dimmed.

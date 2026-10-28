@@ -1,6 +1,11 @@
 import { describe, expect, spyOn, test } from 'bun:test'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   broadcastAddress,
+  claudePlan,
+  claudePlanOf,
   cpuLoad,
   installedTools,
   parsePmset,
@@ -52,6 +57,34 @@ describe('machine health', () => {
       utun3: [entry({ mac: '00:00:00:00:00:00', address: '10.8.0.2' })],
     } as never)
     expect(targets).toEqual([{ mac: 'a4:83:e7:01:02:03', broadcast: '192.168.1.255' }])
+  })
+
+  test('the Claude plan, from what Claude Code keeps of the signed-in account', () => {
+    const account = (organizationType: string, organizationRateLimitTier?: string) => ({
+      oauthAccount: { emailAddress: 'ana@example.com', organizationType, organizationRateLimitTier },
+    })
+    expect(claudePlanOf(account('claude_max', 'default_claude_max_20x'))).toBe('max_20x')
+    expect(claudePlanOf(account('claude_max', 'default_claude_max_5x'))).toBe('max_5x')
+    expect(claudePlanOf(account('claude_max'))).toBe('max_5x')
+    expect(claudePlanOf(account('claude_pro', 'default_claude_ai'))).toBe('pro')
+    expect(claudePlanOf(account('claude_team'))).toBe('team')
+    expect(claudePlanOf(account('claude_enterprise'))).toBe('enterprise')
+    expect(claudePlanOf({ primaryApiKey: 'sk-ant-…' })).toBe('api')
+    // Not signed in, or a plan this agent does not know: nothing, never a guess.
+    expect(claudePlanOf(account('claude_galaxy'))).toBeUndefined()
+    expect(claudePlanOf({})).toBeUndefined()
+    expect(claudePlanOf(null)).toBeUndefined()
+  })
+
+  test('the plan is read from the file, and nothing when it is missing or broken', () => {
+    const folder = mkdtempSync(join(tmpdir(), 'tonton-plan-'))
+    const file = join(folder, '.claude.json')
+    expect(claudePlan(file)).toBeUndefined()
+    writeFileSync(file, '{ not json')
+    expect(claudePlan(file)).toBeUndefined()
+    writeFileSync(file, JSON.stringify({ oauthAccount: { organizationType: 'claude_pro' } }))
+    expect(claudePlan(file)).toBe('pro')
+    rmSync(folder, { recursive: true, force: true })
   })
 
   test('a real report on this machine', () => {
