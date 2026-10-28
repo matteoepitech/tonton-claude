@@ -133,9 +133,10 @@ export async function startPoolDemo(options: PoolDemoOptions = {}): Promise<Pool
     const origin = sampleProject(dir, gitEnv)
     const plan = join(dir, 'plan.json')
     writeFileSync(plan, JSON.stringify(DEMO_PLAN))
-    // Pool machines start `$SHELL -lic claude`: this shell starts the stand-in instead.
+    // Pool machines start `$SHELL -lic 'claude --model sonnet'`: this shell starts the stand-in instead, which takes its
+    // model from those arguments and says it runs on it, as Claude Code's status line would.
     const shell = join(dir, 'shell')
-    writeFileSync(shell, `#!/bin/sh\nexec "${process.execPath}" "${STAND_IN}"\n`)
+    writeFileSync(shell, `#!/bin/sh\nexec "${process.execPath}" "${STAND_IN}" "$@"\n`)
     chmodSync(shell, 0o755)
 
     const created = await post(relay, '/api/accounts', {})

@@ -38,6 +38,9 @@ describe.skipIf(!canRunDemo())('the demo pool', () => {
     // The simple task goes to the machine that takes simple tasks; the features never do.
     expect(machineOf(done, 'README and setup')).toBe('Lead')
     for (const title of ['Product catalog API', 'Cart and checkout', 'Landing page']) expect(machineOf(done, title)).not.toBe('Lead')
+    // Each session started on the model its task needs, and said so before it got the task (shared/pool-model.ts).
+    expect(task(done, 'README and setup')?.task?.route).toMatchObject({ tier: 'light', model: 'haiku', confirmed: 'claude-haiku-stand-in' })
+    expect(task(done, 'Cart and checkout')?.task?.route).toMatchObject({ tier: 'balanced', confirmed: 'claude-sonnet-stand-in' })
   }, 200_000)
 
   test('the cart waits for the catalog it is built on', () => {
