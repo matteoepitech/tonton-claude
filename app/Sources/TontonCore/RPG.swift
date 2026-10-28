@@ -114,7 +114,10 @@ public enum RPG {
                 [owned, boosters].allSatisfy({ $0.count <= RPG.receiptLimit && $0.allSatisfy { $0.count <= 200 } }),
                 equipped.allSatisfy({ Slot(rawValue: $0.key) != nil && $0.value.count <= 200 }),
                 openings.count <= RPG.receiptLimit,
-                openings.allSatisfy({ $0.key.count <= 200 && $0.value.item.count <= 200 && (0...50).contains($0.value.duplicateSparks) }),
+                openings.allSatisfy({
+                    $0.key.count <= 200 && $0.value.item.count <= 200 && (0...50).contains($0.value.duplicateSparks)
+                        && ($0.value.tableVersion == nil || $0.value.tableVersion == 1)
+                }),
                 upgrades.values.allSatisfy({ (0...10).contains($0) })
             else { throw Failure.invalidState }
         }
@@ -133,6 +136,7 @@ public enum RPG {
             xp += gain
             sparks += resource
             receipts.append(Receipt(id: reward.id, kind: reward.kind, day: reward.day, xp: gain, sparks: resource))
+            if reward.kind == .boss && gain > 0 { boosters.append("boss-v1-\(reward.id)") }
             if level > before {
                 for reached in (before + 1)...level {
                     boosters.append("level-\(reached)")
@@ -176,6 +180,7 @@ public enum RPG {
     public struct Opening: Codable, Equatable, Sendable {
         public let item: String
         public let duplicateSparks: Int
+        public var tableVersion: Int? = 1
     }
     public static func level(_ xp: Int) -> Int {
         let discriminant: Double = 1.0 + 4.0 * Double(max(0, xp)) / 50.0

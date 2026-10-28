@@ -245,3 +245,12 @@ test('the leaderboard counts tasks done, time and spending per session and per m
   expect(leaderboard(state, 'run', now).members.find(row => row.name === 'Ana')?.tasksDone).toBe(0)
   expect(periodStart(pool(), 'run', now)).toBe('2026-10-26T09:00:00.000Z')
 })
+
+test('an explicit competition run survives resumed events and pruning', () => {
+  const state = pool()
+  state.info = { name: 'Hack', startedAt: '2026-10-27T09:00:00Z' }
+  state.events = [event('2026-10-28T10:00:00Z', ANA, null, { kind: 'resumed' })]
+  expect(periodStart(state, 'run', new Date())).toBe('2026-10-27T09:00:00Z')
+  state.events = []
+  expect(periodStart(state, 'run', new Date())).toBe('2026-10-27T09:00:00Z')
+})

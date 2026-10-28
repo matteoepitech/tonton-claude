@@ -68,6 +68,7 @@ public struct PoolState: Equatable, Sendable {
     }
 
     public let id: String
+    public let createdAt: String
     public var paused: Bool
     public var keyVersion: Int
     public var info: PoolInfo?
@@ -99,6 +100,7 @@ public struct PoolState: Equatable, Sendable {
 
     public init(snapshot: PoolSnapshot, vault: PoolVault) {
         id = snapshot.id
+        createdAt = snapshot.createdAt
         paused = snapshot.paused
         keyVersion = snapshot.keyVersion
         info = vault.open(snapshot.info, as: PoolInfo.self)

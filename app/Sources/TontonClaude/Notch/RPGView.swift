@@ -35,8 +35,13 @@ struct RPGButton: View {
         .buttonStyle(.plain)
         .help("Tonton's progression and wardrobe")
         .popover(isPresented: $showing) {
-            RPGPanel(hero: rpg.hero, ready: rpg.ready, busy: rpg.busy, error: rpg.error, equip: rpg.equip)
-                .frame(width: 460, height: 480)
+            TabView {
+                RPGPanel(hero: rpg.hero, ready: rpg.ready, busy: rpg.busy, error: rpg.error, equip: rpg.equip)
+                    .tabItem { Text("Wardrobe") }
+                RPGRewardsView().tabItem { Text("Boosters") }
+                RPGUpgradesView().tabItem { Text("Hero") }
+                RPGPoolView().tabItem { Text("Team") }
+            }.frame(width: 500, height: 560)
         }
     }
 }
@@ -108,7 +113,7 @@ struct RPGPanel: View {
                     }
                 }
             }
-            Text("Levels 2–6 unlock starter cosmetics. Boosters are saved; opening and combat are coming later.")
+            Text("Levels 2–6 unlock starter cosmetics. Open boosters and play the arena to grow Tonton.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(18)

@@ -4,9 +4,13 @@ import Foundation
 public enum Achievement: String, CaseIterable, Codable, Sendable {
     case firstSession, approved10, approved100, threeMachines, fiveAtOnce, marathon, deepWork, nightOwl, remoteControl
     case weekStreak, toolCalls1000, everyPlatform
+    case rpgWorker, rpgVeteran, rpgBoss
 
     public var title: String {
         switch self {
+        case .rpgWorker: String(core: "Team player")
+        case .rpgVeteran: String(core: "Veteran Tonton")
+        case .rpgBoss: String(core: "Boss slayer")
         case .firstSession: String(core: "Hello, Tonton")
         case .approved10: String(core: "Rubber stamp")
         case .approved100: String(core: "Trusted operator")
@@ -24,6 +28,9 @@ public enum Achievement: String, CaseIterable, Codable, Sendable {
 
     public var detail: String {
         switch self {
+        case .rpgWorker: String(core: "Complete 10 work rewards. Earn a booster.")
+        case .rpgVeteran: String(core: "Earn 1,000 XP. Earn a booster.")
+        case .rpgBoss: String(core: "Defeat your first boss. Earn a booster.")
         case .firstSession: String(core: "A first session showed up in the notch.")
         case .approved10: String(core: "10 permissions approved.")
         case .approved100: String(core: "100 permissions approved.")
@@ -42,6 +49,9 @@ public enum Achievement: String, CaseIterable, Codable, Sendable {
     /// An SF Symbol.
     public var symbol: String {
         switch self {
+        case .rpgWorker: "person.2.fill"
+        case .rpgVeteran: "shield.fill"
+        case .rpgBoss: "bolt.shield.fill"
         case .firstSession: "sparkles"
         case .approved10: "checkmark.seal"
         case .approved100: "checkmark.seal.fill"
@@ -195,6 +205,10 @@ public struct AchievementProgress: Codable, Equatable, Sendable {
     public mutating func sentFromNotch() -> [Achievement] {
         notchMessages += 1
         return unlock(notchMessages >= 50 ? [.remoteControl] : [])
+    }
+
+    public mutating func heroChanged(_ hero: RPG.State) -> [Achievement] {
+        unlock(Set(RPG.milestones(hero).filter { $0.done >= $0.target }.map(\.achievement)))
     }
 
     private mutating func unlock(_ earned: Set<Achievement>) -> [Achievement] {

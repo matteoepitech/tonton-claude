@@ -2,7 +2,7 @@
 import type { RPGDocument } from '../../shared/rpg'
 import type { RelayContext } from './context'
 import { fail, json, readJson } from './http'
-import { MAX_RPG_BYTES } from './limits'
+import { MAX_POOL_RPG_BYTES, MAX_RPG_BYTES } from './limits'
 import { isRPGWrite } from './validate'
 
 export async function rpgRoute(ctx: RelayContext, req: Request, account: string): Promise<Response> {
@@ -21,4 +21,25 @@ export async function rpgRoute(ctx: RelayContext, req: Request, account: string)
     return true
   })()
   return result ? json({ rev: body.rev + 1 }) : fail(409, 'Hero changed; read and retry.')
+}
+
+/** Membership is checked on every request, including after a kick or key rotation. */
+export async function poolRPGRoute(ctx: RelayContext, req: Request, account: string, pool: string): Promise<Response> {
+  const role = ctx.pools.role(pool, account)
+  if (!role) return fail(404, 'No such pool.')
+  const db = ctx.registry.db
+  const read = (): RPGDocument =>
+    (db.query('SELECT rev, blob FROM pool_rpg WHERE pool_id = ?').get(pool) as RPGDocument | null) ?? { rev: 0, blob: null }
+  if (req.method === 'GET') return json(read())
+  if (req.method !== 'PUT') return fail(405, 'Method not allowed.')
+  if (role === 'viewer') return fail(403, 'Viewers cannot publish progression.')
+  const body = await readJson<unknown>(req, MAX_POOL_RPG_BYTES + 1024)
+  if (!isRPGWrite(body) || body.blob.length > MAX_POOL_RPG_BYTES) return fail(400, 'Invalid pool progression.')
+  const result = db.transaction(() => {
+    if (read().rev !== body.rev) return false
+    db.query(`INSERT INTO pool_rpg (pool_id, rev, blob) VALUES (?, ?, ?)
+      ON CONFLICT(pool_id) DO UPDATE SET rev = excluded.rev, blob = excluded.blob`).run(pool, body.rev + 1, body.blob)
+    return true
+  })()
+  return result ? json({ rev: body.rev + 1 }) : fail(409, 'Pool progression changed; retry.')
 }

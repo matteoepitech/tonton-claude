@@ -9,6 +9,7 @@ import { compact, duration } from '../format'
 import { cn } from '../ui/cn'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import type { TabProps } from './page'
+import { RPGStandings } from './rpg'
 
 const PERIODS: [LeaderPeriod, string][] = [
   ['today', 'Today'],
@@ -20,7 +21,7 @@ const periods = new Map<string, LeaderPeriod>()
 
 export function Leaderboard({ pool, state }: TabProps) {
   const [period, setPeriod] = useState<LeaderPeriod>(() => periods.get(pool.id) ?? 'run')
-  const { sessions, members } = leaderboard(state, period)
+  const { sessions } = leaderboard(state, period)
   return (
     <div className="flex flex-col gap-4">
       <Toolbar title="Leaderboard">
@@ -40,12 +41,12 @@ export function Leaderboard({ pool, state }: TabProps) {
           </TabsList>
         </Tabs>
       </Toolbar>
-      <h3 className="text-sm font-medium">Sessions</h3>
+      <RPGStandings key={pool.id} pool={pool} state={state} period={period} />
+      <h3 className="text-sm font-medium">Session activity</h3>
       <Table rows={sessions} withTool />
-      <h3 className="text-sm font-medium">Members</h3>
-      <Table rows={members} withTool={false} />
       <p className="text-xs text-muted-foreground">
-        Time is from when a task started to when it was done. Spending is what each session’s agent shared with the pool.
+        Session activity uses retained events; older details may be incomplete. Time is from when a task started to when it was done.
+        Spending is what each session’s agent shared with the pool.
       </p>
     </div>
   )

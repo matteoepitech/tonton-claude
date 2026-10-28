@@ -24,7 +24,7 @@ export interface RPGState {
   owned: string[]
   equipped: Partial<Record<RPGSlot, string>>
   boosters: string[]
-  openings: Record<string, { item: string; duplicateSparks: number }>
+  openings: Record<string, { item: string; duplicateSparks: number; tableVersion?: 1 }>
   upgrades: Record<string, number>
 }
 export interface RPGDocument {
@@ -94,7 +94,8 @@ export function parseRPGState(v: unknown): RPGState {
         typeof opening.item === 'string' &&
         opening.item.length <= 200 &&
         integer(opening.duplicateSparks) &&
-        opening.duplicateSparks <= 50,
+        opening.duplicateSparks <= 50 &&
+        (opening.tableVersion === undefined || opening.tableVersion === 1),
     ) ||
     !Array.isArray(v.receipts) ||
     v.receipts.length > RPG_RECEIPT_LIMIT ||
@@ -136,6 +137,8 @@ export function awardRPG(state: RPGState, reward: RPGReward): RPGState {
     const slot = RPG_SLOTS[level - 2]
     if (slot && !next.owned.includes(`${slot}-common`)) next.owned.push(`${slot}-common`)
   }
+  // At most four rewarded bosses per UTC day; capped fights never mint extra boosters.
+  if (reward.kind === 'boss' && xp > 0) next.boosters.push(`boss-v1-${reward.id}`)
   return next
 }
 
@@ -159,7 +162,7 @@ export function upgradeRPG(state: RPGState, stat: 'health' | 'attack' | 'movemen
   return { ...state, sparks: state.sparks - rank * 10, upgrades: { ...state.upgrades, [stat]: rank } }
 }
 
-/** Commit a selected item before revealing it. Loot-table selection and animations live in #274 and #275. */
+/** Commit a selected item before revealing it. A competing or retried opening keeps the original result. */
 export function openRPGBooster(state: RPGState, booster: string, itemId: string): RPGState {
   if (Object.hasOwn(state.openings, booster)) return state
   const item = RPG_CATALOG.find(item => item.id === itemId)
@@ -171,7 +174,7 @@ export function openRPGBooster(state: RPGState, booster: string, itemId: string)
     sparks: state.sparks + duplicateSparks,
     owned: state.owned.includes(itemId) ? state.owned : [...state.owned, itemId],
     boosters: state.boosters.filter(id => id !== booster),
-    openings: { ...state.openings, [booster]: { item: itemId, duplicateSparks } },
+    openings: { ...state.openings, [booster]: { item: itemId, duplicateSparks, tableVersion: 1 } },
   }
 }
 

@@ -7,7 +7,7 @@ import type { SocketData } from './hub'
 import { MAX_SHARE_HOURS } from './limits'
 import { renderMetrics } from './metrics'
 import { poolRoute } from './pool-routes'
-import { rpgRoute } from './rpg'
+import { poolRPGRoute, rpgRoute } from './rpg'
 import { siteResponse } from './site'
 import { safeEqual, sha256 } from './tokens'
 import { isDeviceId, isPushToken, isSealed, isSessionId, isText, isVersion } from './validate'
@@ -36,7 +36,13 @@ export function createFetchHandler(ctx: RelayContext) {
 
     if (path === '/api/accounts' && req.method === 'POST') return createAccount(ctx, req, ip)
     if (path === '/api/machines/join' && req.method === 'POST') return joinMachine(ctx, req, ip)
-    if (path === '/api/hook' || path === '/api/agent/ping' || path === '/api/agent/rpg' || path === '/ws/agent')
+    if (
+      path === '/api/hook' ||
+      path === '/api/agent/ping' ||
+      path === '/api/agent/rpg' ||
+      /^\/api\/agent\/pools\/[A-Za-z0-9_-]{12}\/rpg$/.test(path) ||
+      path === '/ws/agent'
+    )
       return agentRoute(ctx, req, server, path, ip)
     if (path === '/ws/share') return viewerRoute(ctx, req, server, ip)
     return appRoute(ctx, req, server, path, ip)
@@ -104,6 +110,8 @@ async function agentRoute(ctx: RelayContext, req: Request, server: RelayServer, 
   }
   if (path === '/api/agent/ping') return json({ ok: true, machineId: machine.id })
   if (path === '/api/agent/rpg') return rpgRoute(ctx, req, machine.accountId)
+  const poolRPG = /^\/api\/agent\/pools\/([A-Za-z0-9_-]{12})\/rpg$/.exec(path)
+  if (poolRPG) return poolRPGRoute(ctx, req, machine.accountId, poolRPG[1])
   if (path === '/ws/agent') {
     const version = req.headers.get('x-tonton-agent')
     const data: SocketData = {

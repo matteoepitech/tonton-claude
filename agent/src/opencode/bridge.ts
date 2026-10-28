@@ -130,7 +130,7 @@ class Link {
     )
     this.work.useSafety(this.safety)
     this.work.useRepository(() => this.cwd())
-    this.work.useRewards((id, state) => this.rpg.pool(id, state, this.sessionId))
+    this.work.useRewards((id, state) => this.rpg.pool(id, state, this.sessionId, this.pools.vault(id)?.keyring))
     this.relay.connect()
   }
 

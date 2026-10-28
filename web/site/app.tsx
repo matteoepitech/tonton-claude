@@ -3,6 +3,7 @@
 import { LogOutIcon } from 'lucide-react'
 import { Empty, Loading } from './common'
 import { Pools } from './pools/pools'
+import { HeroPage } from './rpg'
 import { Chat } from './sessions/chat'
 import { SessionList } from './sessions/list'
 import { Connection, SharedSession } from './sessions/shared'
@@ -33,6 +34,7 @@ function Shell() {
           <TabsList className="h-8">
             <TabsTrigger value="sessions">Sessions</TabsTrigger>
             <TabsTrigger value="pools">Pools</TabsTrigger>
+            <TabsTrigger value="hero">Tonton</TabsTrigger>
           </TabsList>
         </Tabs>
         <Connection state={state.connection === 'connected' ? 'connected' : state.connection === 'connecting' ? 'connecting' : 'offline'} />
@@ -42,7 +44,7 @@ function Shell() {
           Sign out
         </Button>
       </header>
-      {store.mode === 'pools' ? <Pools /> : <Sessions />}
+      {store.mode === 'pools' ? <Pools /> : store.mode === 'hero' ? <HeroPage key={saved.accountId ?? saved.relay} /> : <Sessions />}
     </div>
   )
 }

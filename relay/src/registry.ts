@@ -254,6 +254,12 @@ const MIGRATIONS = [
      rev INTEGER NOT NULL,
      blob TEXT NOT NULL
    );`,
+  // Durable pool contributions and shared heroes, sealed with the rotating pool key.
+  `CREATE TABLE pool_rpg (
+     pool_id TEXT PRIMARY KEY REFERENCES pools(id) ON DELETE CASCADE,
+     rev INTEGER NOT NULL,
+     blob TEXT NOT NULL
+   );`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */
