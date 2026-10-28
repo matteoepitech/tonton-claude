@@ -223,6 +223,24 @@ The relay serves a website at `/`, built on the client core like the web app: si
   `shared/pool-watch.ts`: the member's copy of the key, the wraps of later versions, a new snapshot after a rotation,
   and its public key published again under the new version.
 
+## Hackathon mode
+
+A pool against a deadline (`shared/pool-hackathon.ts`, `TontonCore/PoolHackathon.swift`, both checking
+`shared/test/pool-countdown.json`):
+
+- **New pool › Hackathon** on the website takes the repository and the deadline, and starts the notes with one area per
+  role (front, back, infra, QA) and a decision: main stays demo-ready. The deadline, the repository and when the
+  countdown started are in the pool's info, sealed like the rest.
+- The **countdown** shows in the pool's header on the website and in the notch's pool panel.
+- Every machine joins with the invite's QR code; in the notch, **Join the pool as** an area puts a session in it in one
+  step.
+- The **orchestrator** is chosen by an owner or an admin: **Make orchestrator** on a session, on the website or in the
+  notch, and **Not the orchestrator** to take it back.
+- The orchestrator's agent tells it how much time is left at half time, one hour and fifteen minutes before the end, each
+  once; marks already past when it first sees the deadline are not told late. At the one-hour mark it puts the final
+  checklist on the board (the build passes, a demo script, the README). Its guide has a hackathon section:
+  [pool-orchestrator.md](pool-orchestrator.md).
+
 ## Threats
 
 | Threat | Answer |

@@ -3,11 +3,21 @@ import { readFileSync } from 'node:fs'
 import { join as joinPath } from 'node:path'
 import { newAccountKey } from '../../shared/crypto'
 import { newPoolKey, type PoolSession, type PoolState, PoolVault, sealPoolSessionOrder } from '../../shared/pool'
-import type { PoolNotes, PoolPostWire, PoolSessionRef, PoolSnapshot, PoolTask, PoolTaskWire, PoolUpdate } from '../../shared/pool-protocol'
+import type {
+  PoolInfo,
+  PoolNotes,
+  PoolPostWire,
+  PoolSessionRef,
+  PoolSnapshot,
+  PoolTask,
+  PoolTaskWire,
+  PoolUpdate,
+} from '../../shared/pool-protocol'
 import type { AgentMessage } from '../../shared/protocol'
 import {
   branchFor,
   candidates,
+  HACKATHON_GUIDE,
   ORCHESTRATOR_GUIDE,
   ORCHESTRATOR_TOOLS,
   overlapping,
@@ -112,14 +122,18 @@ let work: PoolWork
 let delivered: string[]
 let toolsChanged: number
 
-async function join(orchestrator: PoolSessionRef | null = { account: 'acc_me', session: ME }, notes?: PoolNotes) {
+async function join(
+  orchestrator: PoolSessionRef | null = { account: 'acc_me', session: ME },
+  notes?: PoolNotes,
+  info: PoolInfo = { name: 'Hackathon', goal: 'Ship the app' },
+) {
   if (notes) relay.notesRev = 1
   relay.snapshot = {
     id: POOL,
     createdAt: 'then',
     paused: false,
     keyVersion: 1,
-    info: await vault.seal({ name: 'Hackathon', goal: 'Ship the app' }),
+    info: await vault.seal(info),
     members: await Promise.all(
       [
         ['acc_me', 'owner', 'Me'],
@@ -298,6 +312,7 @@ describe('the orchestrator', () => {
   test('the guide in the docs is the one the agent sends', () => {
     const doc = readFileSync(joinPath(import.meta.dir, '../../docs/pool-orchestrator.md'), 'utf8')
     expect(doc).toContain(ORCHESTRATOR_GUIDE)
+    expect(doc).toContain(HACKATHON_GUIDE)
   })
 
   test('plan_create writes the contracts and the areas in the notes', async () => {
@@ -490,5 +505,87 @@ describe('a worker', () => {
     expect(notes).toMatchObject({ rev: 3, goal: 'A shop', contracts: 'GET /v2/items', decisions: 'Postgres' })
     expect(notes.areas).toEqual([{ name: 'front', paths: ['web/'] }])
     expect(await call('pool_notes_write', { section: 'nope', text: 'x', rev: 3 })).toContain('section is')
+  })
+})
+
+describe('a hackathon', () => {
+  const T0 = Date.now()
+  const MIN = 60_000
+  // Half time ten minutes from now, one hour left in an hour, fifteen minutes left an hour and 45 minutes from now.
+  const hackathon = (deadline = new Date(T0 + 120 * MIN)): PoolInfo => ({
+    name: 'Basel Hack',
+    goal: 'Ship the app',
+    template: 'hackathon',
+    deadline: deadline.toISOString(),
+    startedAt: new Date(T0 - 100 * MIN).toISOString(),
+  })
+  const notices = () => delivered.filter(d => d.startsWith('<pool kind="notice"'))
+  const look = async (minutes: number) => {
+    work.lookForStalls(T0 + minutes * MIN)
+    await settle()
+  }
+
+  test('its orchestrator gets the hackathon guide with its own', async () => {
+    await join(undefined, undefined, hackathon())
+    const role = delivered.filter(d => d.startsWith('<pool kind="role"'))
+    expect(role).toHaveLength(1)
+    expect(role[0]).toContain('Never single steps')
+    expect(role[0]).toContain(HACKATHON_GUIDE)
+    expect(JSON.parse(await call('pool_overview'))).toMatchObject({
+      deadline: hackathon().deadline,
+      timeLeft: expect.stringContaining('left'),
+    })
+  })
+
+  test('a deadline given later brings the hackathon guide on its own, once', async () => {
+    await join()
+    pools.apply({ t: 'pool_info', poolId: POOL, info: await vault.seal(hackathon()), paused: false, keyVersion: 1 })
+    await settle()
+    pools.apply({ t: 'pool_info', poolId: POOL, info: await vault.seal(hackathon()), paused: false, keyVersion: 1 })
+    await settle()
+    const role = delivered.filter(d => d.startsWith('<pool kind="role"'))
+    expect(role).toHaveLength(2)
+    expect(role[1]).toStartWith('<pool kind="role" from="Tonton" pool="Basel Hack">\nThis pool is a hackathon')
+  })
+
+  test('time notices come once each, and the final checklist once, near the end', async () => {
+    await join(undefined, undefined, hackathon())
+    expect(notices()).toEqual([])
+    await look(11)
+    await look(12)
+    expect(notices()).toHaveLength(1)
+    expect(notices()[0]).toContain('Half the time is gone')
+    await look(61)
+    expect(notices()[1]).toContain('Start no new feature')
+    expect(relay.tasks.size).toBe(1)
+    const checklist = [...relay.tasks.keys()][0]
+    expect(await relay.read(checklist)).toMatchObject({ title: 'Final checklist', state: 'todo', size: 'simple' })
+    expect(notices()[2]).toContain(`The final checklist is on the board as ${checklist}`)
+    await look(106)
+    expect(notices()[3]).toContain('freeze main')
+    await look(107)
+    expect(notices()).toHaveLength(4)
+    // One checklist, though the quarter mark came after the hour.
+    expect(relay.tasks.size).toBe(1)
+  })
+
+  test('marks already past when the agent first sees the deadline are not told late', async () => {
+    // Half time and one hour left are both behind: only fifteen minutes left is still to come.
+    await join(undefined, undefined, hackathon(new Date(T0 + 30 * MIN)))
+    await look(1)
+    expect(notices()).toEqual([])
+    await look(16)
+    expect(notices()[0]).toContain('freeze main')
+    // The checklist comes at the first of the last two marks that is told.
+    expect(notices()[1]).toContain('The final checklist is on the board')
+    expect(notices()).toHaveLength(2)
+    expect(relay.tasks.size).toBe(1)
+  })
+
+  test('a session that is not the orchestrator gets no time notice', async () => {
+    await join({ account: 'acc_ana', session: 'ses_cc' }, undefined, hackathon())
+    await look(61)
+    expect(notices()).toEqual([])
+    expect(relay.tasks.size).toBe(0)
   })
 })

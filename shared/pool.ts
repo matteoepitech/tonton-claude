@@ -103,7 +103,16 @@ const defined = <T extends object>(value: T): T => Object.fromEntries(Object.ent
 export function decodePoolInfo(value: unknown): PoolInfo | null {
   const f = fields(value)
   const name = text(f?.name)
-  return f && name !== undefined ? defined({ name, goal: text(f.goal) }) : null
+  if (!f || name === undefined) return null
+  const date = (value: unknown) => (typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : undefined)
+  return defined({
+    name,
+    goal: text(f.goal),
+    template: f.template === 'hackathon' ? ('hackathon' as const) : undefined,
+    repo: text(f.repo),
+    deadline: date(f.deadline),
+    startedAt: date(f.startedAt),
+  })
 }
 
 export function decodePoolMemberProfile(value: unknown): PoolMemberProfile | null {

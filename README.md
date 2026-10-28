@@ -89,7 +89,8 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
   ends: a command's first words (`npm test`, never what is chained after it), a site for web pages, any call of the other
   tools. The agent keeps the rule and drops it when the session ends.
 - **Working as a team.** A pool puts the sessions of several people on one project: on the relay's website
-  (`https://<relay>/`), **Pools** makes one, invites with a link or a QR code, and shows its task board, live.
+  (`https://<relay>/`), **Pools** makes one, invites with a link or a QR code, and shows its task board, live. For a
+  hackathon, give it the repository and the deadline: the orchestrator plans for the time left.
 - **Showing a teammate.** In a conversation, the share menu › **Share read-only** copies a key for one session, valid for
   an hour, a day or a week. Your teammate pastes it in `tonton-web.html` and follows that session live, without being
   able to write to it. It has its own key: your account key stays with you. **Settings › Relay** lists the shares and

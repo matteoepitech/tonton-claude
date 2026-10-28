@@ -8,7 +8,15 @@ import { newPoolItemId, POOL_NOTES_SECTIONS, type PoolSession, type PoolState, t
 import type { PoolMessageBody, PoolNotes, PoolNotesSection, PoolTask, PoolTaskState, PoolUpdate } from '../../../shared/pool-protocol'
 import type { AgentMessage } from '../../../shared/protocol'
 import { log } from '../log'
-import { isOrchestrator, ORCHESTRATOR_GUIDE, ORCHESTRATOR_TOOLS, PoolOrchestrator, parseArea, STALL_MS } from './pool-orchestrator'
+import {
+  HACKATHON_GUIDE,
+  isOrchestrator,
+  ORCHESTRATOR_GUIDE,
+  ORCHESTRATOR_TOOLS,
+  PoolOrchestrator,
+  parseArea,
+  STALL_MS,
+} from './pool-orchestrator'
 import type { SessionPools } from './pools'
 
 type Post = (build: () => Promise<AgentMessage | null>) => void
@@ -135,8 +143,9 @@ export class PoolWork {
   private active = false
   /** Whether the session is the orchestrator of one of its pools: it gets the orchestrator's tools then. */
   private leading = false
-  /** Pools where it was given the orchestrator's guide. */
+  /** Pools where it was given the orchestrator's guide, and the hackathon's on top. */
   private readonly guided = new Set<string>()
+  private readonly hackGuided = new Set<string>()
   /** The notes as last told, per pool: their revision, and what they hold. */
   private readonly notesSeen = new Map<string, { rev: number; mark: string }>()
   private readonly orchestrator: PoolOrchestrator
@@ -534,21 +543,29 @@ export class PoolWork {
   private lead(poolId: string, state: PoolState, me: PoolSession) {
     if (!isOrchestrator(state, me)) {
       this.guided.delete(poolId)
+      this.hackGuided.delete(poolId)
       return
     }
+    const attributes = { pool: state.info?.name ?? poolId }
+    // A pool made from the hackathon template, or one given a deadline later.
+    const hackathon = state.info?.template === 'hackathon' || Boolean(state.info?.deadline)
     if (!this.guided.has(poolId)) {
       this.guided.add(poolId)
-      this.deliver(envelope('role', 'Tonton', { pool: state.info?.name ?? poolId }, ORCHESTRATOR_GUIDE))
+      if (hackathon) this.hackGuided.add(poolId)
+      this.deliver(envelope('role', 'Tonton', attributes, hackathon ? `${ORCHESTRATOR_GUIDE}\n\n${HACKATHON_GUIDE}` : ORCHESTRATOR_GUIDE))
+    } else if (hackathon && !this.hackGuided.has(poolId)) {
+      this.hackGuided.add(poolId)
+      this.deliver(envelope('role', 'Tonton', attributes, HACKATHON_GUIDE))
     }
     this.orchestrator.watch(poolId, state, me)
   }
 
-  /** Looks again at every pool, as the timer does each minute. */
-  lookForStalls() {
+  /** Looks again at every pool, as the timer does each minute: stalled tasks, and a hackathon's time. */
+  lookForStalls(now = Date.now()) {
     for (const poolId of this.pools.ids()) {
       const state = this.pools.state(poolId)
       const me = state?.sessions.find(session => session.session === this.sessionId())
-      if (state && me) this.orchestrator.watch(poolId, state, me)
+      if (state && me) this.orchestrator.watch(poolId, state, me, now)
     }
   }
 

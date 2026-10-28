@@ -110,6 +110,17 @@ final class PoolStore: ObservableObject {
         send(["t": "pool_join_session", "poolId": poolId, "sessionId": session.id, "order": order, "profile": profile])
     }
 
+    /// Owner and admins: the pool session that plans and hands out the work, or none.
+    func setOrchestrator(_ ref: PoolSessionRef?, pool poolId: String) {
+        let orchestrator: Any = ref.map { ["account": $0.account, "session": $0.session] } ?? NSNull()
+        send?(["t": "pool_orchestrator", "poolId": poolId, "orchestrator": orchestrator])
+    }
+
+    /// The account's own pool session, as the relay names it.
+    func ref(of sessionId: String) -> PoolSessionRef? {
+        account.map { PoolSessionRef(account: $0.accountId, session: sessionId) }
+    }
+
     func leave(_ sessionId: String, pool poolId: String) {
         send?(["t": "pool_leave_session", "poolId": poolId, "sessionId": sessionId])
     }

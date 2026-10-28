@@ -22,6 +22,14 @@ export interface PoolInfo {
   name: string
   /** What the pool builds, for the orchestrator and every member. */
   goal?: string
+  /** `hackathon`: a pool against a deadline (docs/pools.md, Hackathon mode). Missing: an ordinary pool. */
+  template?: 'hackathon'
+  /** The repository the pool works on, as a URL or a path. */
+  repo?: string
+  /** ISO date and time the work must be done by. */
+  deadline?: string
+  /** ISO date and time the countdown started: when the pool was made. */
+  startedAt?: string
 }
 
 /** How a member shows in the pool. */

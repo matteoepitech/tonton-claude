@@ -57,6 +57,8 @@ public struct PoolState: Equatable, Sendable {
     public var sessions: [Session]
     public var tasks: [Task]
     public var notes: String?
+    /// The areas of the notes, with the paths each owns: a hackathon's roles.
+    public var areas: [PoolArea] = []
     public var messages: [Post<PoolMessageBody>]
     public var events: [Post<PoolEventBody>]
     /// The session owners and admins chose to plan and hand out the work; nil: none yet.
@@ -72,7 +74,9 @@ public struct PoolState: Equatable, Sendable {
         members = snapshot.members.map { Self.member($0, vault) }
         sessions = snapshot.sessions.map { Self.session($0, vault) }
         tasks = snapshot.tasks.compactMap { Self.task($0, vault) }
-        notes = snapshot.notes.flatMap { vault.open($0.blob, as: PoolNotes.self)?.text }
+        let opened = snapshot.notes.flatMap { vault.open($0.blob, as: PoolNotes.self) }
+        notes = opened?.text
+        areas = opened?.areas ?? []
         messages = snapshot.messages.compactMap { Self.post($0, vault) }
         events = snapshot.events.compactMap { Self.post($0, vault) }
         own = snapshot.own ?? PoolOwnKeys(secret: nil, wraps: [])
@@ -88,7 +92,9 @@ public struct PoolState: Equatable, Sendable {
             guard let item = Self.task(wire, vault) else { break }
             if let index = tasks.firstIndex(where: { $0.id == item.id }) { tasks[index] = item } else { tasks.append(item) }
         case .notes(_, let wire):
-            notes = vault.open(wire.blob, as: PoolNotes.self)?.text
+            let opened = vault.open(wire.blob, as: PoolNotes.self)
+            notes = opened?.text
+            areas = opened?.areas ?? []
         case .message(_, let wire):
             if let post: Post<PoolMessageBody> = Self.post(wire, vault) { messages = Array((messages + [post]).suffix(keptPoolPosts)) }
         case .event(_, let wire):
