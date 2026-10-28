@@ -21,7 +21,17 @@ test('the page stands alone, and nothing a session says can become HTML in it', 
   expect(page).not.toMatch(/<link[^>]+stylesheet/)
   // Text from Claude, tools and the relay goes in as text only.
   // A pool's tasks, names and invites too: other members wrote them.
-  for (const source of ['web/app.ts', 'web/views.ts', 'web/markdown.ts', 'web/scanner.ts', 'web/pools.ts', 'web/tasks.ts']) {
+  for (const source of [
+    'web/app.ts',
+    'web/views.ts',
+    'web/markdown.ts',
+    'web/scanner.ts',
+    'web/pools.ts',
+    'web/tasks.ts',
+    'web/control.ts',
+    'web/activity.ts',
+    'web/leaderboard.ts',
+  ]) {
     const code = readFileSync(join(import.meta.dir, '..', source), 'utf8')
     expect(code).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/)
   }

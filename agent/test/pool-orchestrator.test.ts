@@ -219,6 +219,7 @@ describe('the rules', () => {
     profile: { area: s.area, tool: s.tool as 'claude', ...(s.takes ? { takes: s.takes } : {}) },
     online: true,
     ready: true,
+    status: null,
     accepted: 0,
   })
   const state = (tasks: PoolState['tasks'] = []): PoolState => ({
@@ -403,7 +404,7 @@ describe('the orchestrator', () => {
     pools.apply({
       t: 'pool_session',
       poolId: POOL,
-      session: { ...bob, profile: await vault.seal({ area: 'front', tool: 'opencode', takes: 'large' }) },
+      session: { ...bob, status: bob.status ?? undefined, profile: await vault.seal({ area: 'front', tool: 'opencode', takes: 'large' }) },
     })
     await settle()
     expect(await call('task_reassign', { task: id, reason: 'Ana is out of time' })).toBe('Assigned to Bob · front (ses_oc).')

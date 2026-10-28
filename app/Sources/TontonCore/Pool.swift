@@ -242,6 +242,8 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
     /// `session` events: `claude` or `opencode`, and the model, as the session's agent last posted them.
     public var tool: String?
     public var model: String?
+    /// `usage` events: its tokens and how much of its account's windows is left.
+    public var usage: PoolUsage?
     /// `spend` events: what the session spent since it joined the pool.
     public var costUSD: Double?
     public var seconds: Double?
@@ -305,6 +307,23 @@ public struct PoolLimits: Codable, Equatable, Sendable {
     public var sevenDay: PoolLimitWindow?
     /// When the 5-hour window runs out at the current pace; nil: not before it resets.
     public var runsOutAt: String?
+}
+
+/// A pool session's tokens and its account's windows, as its agent shares them with the pool (`usage` events). What it
+/// spent comes in `spend` events, the ones the budgets count.
+public struct PoolUsage: Codable, Equatable, Sendable {
+    public struct Tokens: Codable, Equatable, Sendable {
+        public var input: Double
+        public var output: Double
+    }
+    public struct Window: Codable, Equatable, Sendable {
+        public var usedPercent: Double
+        public var resetsAt: String?
+    }
+    public var tokens: Tokens?
+    /// Claude Code only: OpenCode has no plan limits.
+    public var fiveHour: Window?
+    public var sevenDay: Window?
 }
 
 /// Seals with the latest pool key it holds and opens with whichever version sealed a blob. What another member sealed
@@ -397,6 +416,8 @@ public struct PoolSessionWire: Codable, Equatable, Sendable {
     public let profile: String?
     public let online: Bool
     public let ready: Bool
+    /// The session's status, which the relay sees anyway. Nil from older relays.
+    public var status: String? = nil
     /// The revision of the pool rules its owner accepted for it, 0 for none. Nil from older relays.
     public let accepted: Int?
 }

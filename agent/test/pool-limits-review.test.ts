@@ -68,6 +68,7 @@ describe('the rules', () => {
     profile: { tool, ...(area ? { area } : {}) },
     online: true,
     ready: true,
+    status: null,
     accepted: 0,
   })
   const state = (sessions: PoolSession[], tasks: PoolState['tasks'] = []): PoolState => ({
@@ -209,7 +210,7 @@ let relay: FakeRelay
 let pools: SessionPools
 let work: PoolWork
 let delivered: string[]
-let usage: SessionDescription['usage']
+let plan: SessionDescription['plan']
 
 async function start(me: string, tool: 'claude' | 'opencode', peers: Peer[], orchestrator: PoolSessionRef | null) {
   relay = new FakeRelay(me)
@@ -228,7 +229,7 @@ async function start(me: string, tool: 'claude' | 'opencode', peers: Peer[], orc
     () => me,
     post,
     text => delivered.push(text),
-    () => ({ tool, model: tool === 'claude' ? 'claude-opus-5-5' : 'gpt-5', usage }),
+    () => ({ tool, model: tool === 'claude' ? 'claude-opus-5-5' : 'gpt-5', plan }),
     () => {},
     60_000,
   )
@@ -306,12 +307,12 @@ const soon = new Date(Date.now() + 30 * 60_000).toISOString()
 const later = new Date(Date.now() + 4 * 3_600_000).toISOString()
 
 beforeEach(() => {
-  usage = undefined
+  plan = undefined
 })
 
 describe('limits in the pool', () => {
   test('a Claude Code session shares its plan as a sealed limits event, an OpenCode one shares nothing', async () => {
-    usage = { fiveHour: { usedPercent: 42, resetsAt: later }, sevenDay: { usedPercent: 10, resetsAt: later } }
+    plan = { fiveHour: { usedPercent: 42, resetsAt: later }, sevenDay: { usedPercent: 10, resetsAt: later } }
     await start('cc', 'claude', [], null)
     work.reportLimits()
     await settle()
@@ -324,7 +325,7 @@ describe('limits in the pool', () => {
     expect(await relay.events('limits')).toHaveLength(1)
 
     await start('oc', 'opencode', [], null)
-    usage = { fiveHour: { usedPercent: 42, resetsAt: later } }
+    plan = { fiveHour: { usedPercent: 42, resetsAt: later } }
     work.reportLimits()
     await settle()
     expect(await relay.events('limits')).toEqual([])
@@ -355,7 +356,7 @@ describe('limits in the pool', () => {
   })
 
   test('near its limit, a session holding a task is told once to hand it over, and the orchestrator hears of it', async () => {
-    usage = { fiveHour: { usedPercent: 97, resetsAt: later } }
+    plan = { fiveHour: { usedPercent: 97, resetsAt: later } }
     await start('cc', 'claude', [{ account: 'acc_lead', session: 'lead', tool: 'claude' }], { account: 'acc_lead', session: 'lead' })
     await relay.otherTask(
       't1',

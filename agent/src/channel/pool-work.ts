@@ -13,12 +13,14 @@ import type {
   PoolTask,
   PoolTaskState,
   PoolUpdate,
+  PoolUsage,
 } from '../../../shared/pool-protocol'
 import type { AgentMessage, UsageLimit } from '../../../shared/protocol'
 import { log } from '../log'
 import { LimitsReporter, limitsMark, limitsView, nearLimit, shouldPost } from './pool-limits'
 import { isOrchestrator, ORCHESTRATOR_GUIDE, ORCHESTRATOR_TOOLS, PoolOrchestrator, parseArea, STALL_MS } from './pool-orchestrator'
 import { REVIEW_TOOLS, reviewBrief, reviewers } from './pool-review'
+import { UsageSharing } from './pool-usage'
 import type { SessionPools } from './pools'
 
 type Post = (build: () => Promise<AgentMessage | null>) => void
@@ -133,8 +135,10 @@ const INBOX_SIZE = 20
 export interface SessionDescription {
   tool: 'claude' | 'opencode'
   model?: string
-  /** This session's own plan windows, from its status line (Claude Code only): what it shares with its pools. */
-  usage?: { fiveHour?: UsageLimit; sevenDay?: UsageLimit }
+  /** Its tokens and its account's windows, shared with the pool as `usage` events (pool-usage.ts). What it spent goes in `spend` events (pool-safety.ts). */
+  usage?: PoolUsage
+  /** This session's own plan windows, from its status line (Claude Code only): what it shares as `limits` events (pool-limits.ts). */
+  plan?: { fiveHour?: UsageLimit; sevenDay?: UsageLimit }
   /** Another session's plan, as its latest `limits` event shared it. */
   limits?: PoolLimits
 }
@@ -148,6 +152,17 @@ export class PoolWork {
   private readonly described = new Map<string, string>()
   private sent: number[] = []
   private active = false
+  private readonly usage = new UsageSharing((poolId, usage) => {
+    const vault = this.pools.vault(poolId)
+    if (!vault) return
+    this.post(async () => ({
+      t: 'pool_event',
+      sessionId: this.sessionId(),
+      poolId,
+      id: newPoolItemId(),
+      blob: await vault.seal({ kind: 'usage', usage }),
+    }))
+  })
   /** Budgets and spending (agent/src/channel/pool-safety.ts): past a budget, the session takes no more tasks. */
   private safety: { blocked(poolId: string): string | null; status(poolId: string): Record<string, unknown> | undefined } | null = null
   /** Whether the session is the orchestrator of one of its pools: it gets the orchestrator's tools then. */
@@ -212,7 +227,7 @@ export class PoolWork {
     clearInterval(this.stallTimer)
   }
 
-  /** The model or the plan's figures may have changed: the pool sees them with the next `session` and `limits` events. */
+  /** The model, the usage or the plan may have changed: the pool sees them with the next `session`, `usage` or `limits` event. */
   descriptionChanged() {
     for (const poolId of this.pools.ids()) this.announce(poolId)
     this.reportLimits()
@@ -225,7 +240,7 @@ export class PoolWork {
   reportLimits(now = Date.now()) {
     const description = this.describe()
     if (description.tool !== 'claude') return
-    const limits = this.limits.current(description.usage, now)
+    const limits = this.limits.current(description.plan, now)
     if (!limits) return
     const mark = limitsMark(limits)
     for (const poolId of this.pools.ids()) {
@@ -588,6 +603,7 @@ export class PoolWork {
       if (!this.pools.ids().includes(poolId)) {
         this.seen.delete(poolId)
         this.described.delete(poolId)
+        this.usage.forget(poolId)
         this.notesSeen.delete(poolId)
         this.limitsPosted.delete(poolId)
         this.guided.delete(poolId)
@@ -715,11 +731,12 @@ export class PoolWork {
     )
   }
 
-  /** Posts what the session runs on when it joins, and again when its model changes. */
+  /** Posts what the session runs on when it joins, and again when its model changes; its tokens and windows when they change. */
   private announce(poolId: string) {
     const vault = this.pools.vault(poolId)
     if (!vault || !this.pools.state(poolId)) return
     const description = this.describe()
+    this.usage.share(poolId, description.usage)
     const mark = `${description.tool}/${description.model ?? ''}`
     if (this.described.get(poolId) === mark) return
     this.described.set(poolId, mark)

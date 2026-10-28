@@ -1,6 +1,7 @@
 // The pools of the account on the relay's website: the list, a new pool, joining with an invite, and a pool's page with
-// its tabs (tasks, members, invites, settings). Everything a pool says is opened in this page with keys the relay never
-// gets (shared/pool-watch.ts). A tab is a name and a function that fills the page's body: more go in `POOL_TABS`.
+// its tabs (tasks, control center, activity, leaderboard, members, invites, settings). Everything a pool says is opened
+// in this page with keys the relay never gets (shared/pool-watch.ts). A tab is a name and a function that fills the
+// page's body: more go in `POOL_TABS`.
 
 import {
   assignableRoles,
@@ -18,6 +19,9 @@ import {
   sessionName,
   sortedMembers,
 } from '../shared'
+import { renderActivity } from './activity'
+import { renderControl } from './control'
+import { renderLeaderboard } from './leaderboard'
 import { element } from './markdown'
 import { renderBoard } from './tasks'
 
@@ -58,6 +62,9 @@ export const POOL_TABS: PoolTab[] = [
         save: async (id, task) => (await context.watch.saveTask(pool.id, id, task)) !== null,
       }),
   },
+  { id: 'control', label: 'Control center', render: renderControl },
+  { id: 'activity', label: 'Activity', render: renderActivity },
+  { id: 'leaderboard', label: 'Leaderboard', render: renderLeaderboard },
   { id: 'members', label: 'Members', render: renderMembers },
   { id: 'invites', label: 'Invites', roles: ['owner', 'admin'], render: renderInvites },
   { id: 'settings', label: 'Settings', render: renderSettings },

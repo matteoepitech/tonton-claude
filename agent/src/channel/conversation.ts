@@ -10,6 +10,7 @@ import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import { PoolSafety } from './pool-safety'
+import { poolUsage } from './pool-usage'
 import { PoolWork } from './pool-work'
 import { SessionPools } from './pools'
 import type { SessionLink } from './session-link'
@@ -86,8 +87,13 @@ export class Conversation {
       () => link.sessionId,
       post,
       text => pool.deliver(text),
-      // The plan's windows from the status line: the pool plans around them (agent/src/channel/pool-limits.ts).
-      () => ({ tool: 'claude', model: this.model, usage: { fiveHour: this.usage.fiveHourLimit, sevenDay: this.usage.sevenDayLimit } }),
+      () => ({
+        tool: 'claude',
+        model: this.model,
+        usage: poolUsage({ tokens: this.tokens, ...this.usage }),
+        // The plan's windows from the status line: the pool plans around them (agent/src/channel/pool-limits.ts).
+        plan: { fiveHour: this.usage.fiveHourLimit, sevenDay: this.usage.sevenDayLimit },
+      }),
       () => pool.toolsChanged(),
     )
     this.safety = new PoolSafety(
