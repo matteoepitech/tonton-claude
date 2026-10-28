@@ -87,7 +87,13 @@ export class Conversation {
       () => link.sessionId,
       post,
       text => pool.deliver(text),
-      () => ({ tool: 'claude', model: this.model, usage: poolUsage({ tokens: this.tokens, ...this.usage }) }),
+      () => ({
+        tool: 'claude',
+        model: this.model,
+        usage: poolUsage({ tokens: this.tokens, ...this.usage }),
+        // The plan's windows from the status line: the pool plans around them (agent/src/channel/pool-limits.ts).
+        plan: { fiveHour: this.usage.fiveHourLimit, sevenDay: this.usage.sevenDayLimit },
+      }),
       () => pool.toolsChanged(),
     )
     this.safety = new PoolSafety(

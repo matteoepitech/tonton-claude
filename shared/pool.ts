@@ -14,6 +14,8 @@ import type {
   PoolEventBody,
   PoolInfo,
   PoolKeyGrant,
+  PoolLimits,
+  PoolLimitWindow,
   PoolMemberProfile,
   PoolMessageBody,
   PoolNotes,
@@ -190,6 +192,9 @@ export function decodePoolTask(value: unknown): PoolTask | null {
     summary: text(f.summary),
     size: isSize(f.size) ? f.size : undefined,
     paths: texts(f.paths),
+    hours: typeof f.hours === 'number' && Number.isFinite(f.hours) && f.hours > 0 && f.hours <= 1000 ? f.hours : undefined,
+    reviewer: sessionRef(f.reviewer),
+    review: text(f.review),
   })
 }
 
@@ -234,6 +239,7 @@ export function decodePoolEventBody(value: unknown): PoolEventBody | null {
     model: text(f.model),
     costUSD: amount(f.costUSD),
     seconds: amount(f.seconds),
+    limits: decodePoolLimits(f.limits),
     usage: decodePoolUsage(f.usage),
   })
 }
@@ -270,6 +276,28 @@ export function decodePoolBudgets(value: unknown): PoolBudgets | null {
     member: decodeBudget(f.member),
     members: members && Object.keys(members).length ? members : undefined,
   })
+}
+
+function decodeLimitWindow(value: unknown): PoolLimitWindow | undefined {
+  const f = fields(value)
+  const used = f?.usedPercent
+  const resets = text(f?.resetsAt)
+  if (typeof used !== 'number' || !Number.isFinite(used) || used < 0 || used > 100 || !resets || Number.isNaN(Date.parse(resets))) {
+    return undefined
+  }
+  return { usedPercent: used, resetsAt: resets }
+}
+
+export function decodePoolLimits(value: unknown): PoolLimits | undefined {
+  const f = fields(value)
+  if (!f) return undefined
+  const runsOut = text(f.runsOutAt)
+  const limits = defined({
+    fiveHour: decodeLimitWindow(f.fiveHour),
+    sevenDay: decodeLimitWindow(f.sevenDay),
+    runsOutAt: runsOut && !Number.isNaN(Date.parse(runsOut)) ? runsOut : undefined,
+  })
+  return Object.keys(limits).length ? limits : undefined
 }
 
 function decodeWindow(value: unknown): { usedPercent: number; resetsAt?: string } | undefined {

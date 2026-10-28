@@ -293,3 +293,23 @@ describe('the orchestrator and the structured notes', () => {
     expect(decodePoolSessionProfile({ takes: 'all' })).toEqual({})
   })
 })
+
+test('limits events and review fields read as sealed, anything out of shape is left out', () => {
+  const resetsAt = '2026-10-27T14:00:00Z'
+  expect(
+    decodePoolEventBody({
+      kind: 'limits',
+      limits: { fiveHour: { usedPercent: 42.5, resetsAt }, sevenDay: { usedPercent: 140, resetsAt }, runsOutAt: 'soon' },
+    }),
+  ).toEqual({ kind: 'limits', limits: { fiveHour: { usedPercent: 42.5, resetsAt } } })
+  expect(decodePoolEventBody({ kind: 'limits', limits: { fiveHour: { usedPercent: '42', resetsAt } } })).toEqual({ kind: 'limits' })
+  const reviewer = { account: 'acc_rev', session: 'rev' }
+  expect(decodePoolTask({ title: 'Checkout', state: 'review', hours: 2, reviewer, review: 'Fix the total' })).toEqual({
+    title: 'Checkout',
+    state: 'review',
+    hours: 2,
+    reviewer,
+    review: 'Fix the total',
+  })
+  expect(decodePoolTask({ title: 'Checkout', state: 'todo', hours: -3, reviewer: 'rev' })).toEqual({ title: 'Checkout', state: 'todo' })
+})
