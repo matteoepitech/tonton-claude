@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
-import { encodeAccountToken } from '../shared/account-token'
 import { RelayClient, type SocketLike } from '../shared/client'
 import { newAccountKey, seal } from '../shared/crypto'
 import type { PoolState } from '../shared/pool'
@@ -20,6 +19,7 @@ import { PoolApi } from '../shared/pool-api'
 import { pendingPlan } from '../shared/pool-plan'
 import type { PoolMachineProfile } from '../shared/pool-protocol'
 import { PoolWatch } from '../shared/pool-watch'
+import { encodeRecoveryKey } from '../shared/recovery-key'
 import { Vault } from '../shared/vault'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
@@ -218,7 +218,8 @@ export async function startPoolDemo(options: PoolDemoOptions = {}): Promise<Pool
     if (!watch.setOrchestratorMachine(poolId, { account, machine: machines[0].id })) throw new Error('No orchestrator machine')
     await eventually(() => state()?.orchestrator, 'the orchestrator session')
 
-    const token = encodeAccountToken({ relay, account, secret, key })
+    // What the website signs in with: the recovery key, as the Mac app shows it in Settings › Relay.
+    const token = encodeRecoveryKey({ relay, accountId: account, token: created.token, key, joinSecret: secret })
     return { relay, token, dir, origin, account, poolId, machines, watch, state, stop }
   } catch (error) {
     stop()
@@ -292,7 +293,7 @@ if (import.meta.main) {
   console.log(`
 The pool runs on autopilot at ${running.relay}
 
-Open it in a browser and sign in with this account token:
+Open it in a browser and sign in with this recovery key:
 
   ${running.token}
 

@@ -284,33 +284,35 @@ The relay serves a website at `/`, built on the client core like the web app: si
 
 - Pools are on the relay's own website only: they take the relay's routes (`/api/pools…`) as well as its socket, and the
   policy of `tonton-web.html` allows sockets only. Opened from disk, the page says where to go.
-- The list shows each pool's name, opened with the member's keys. **New pool** makes the pool and its key in the
-  browser; **Join** takes an invite pasted from a teammate (`tontonpool1.…`, for this relay only).
-- A pool's page has tabs, each a name and a component in `TABS` (`web/site/pools/page.tsx`): **Orchestrator**,
-  **Tasks**, **Machines**, **Control center**, **Activity**, **Leaderboard**, **Members**, **Invites** (owner and
-  admins) and **Settings**. The notes come as one more tab.
-- **Orchestrator** (`web/site/pools/orchestrator.tsx`) comes first, for the admin ([pool-autopilot.md](pool-autopilot.md)):
-  the orchestrator session's conversation, with the box to write to it. It is one of the admin's own sessions, sealed
-  with the admin's account key, so only the admin reads it and writes to it; the other members see who runs it. Beside
-  it: the dispatch, on or off (owner and admins switch it), the board at a glance, and what the control loop did (its
-  events, posted as the orchestrator machine).
+- The list shows each pool's name, opened with the member's keys. **New pool** asks for a name and the repository, and
+  makes the pool and its key in the browser; **Join** opens on its own from an invite link (`<relay>/#tontonpool1.…`,
+  for this relay only), or takes one pasted. Either way the account's machines come along, each with a profile worked
+  out from what its agent reports, and the best of a leader's runs the orchestrator ([pool-autopilot.md](pool-autopilot.md),
+  Joining). Nothing else is asked but whether their sessions may run commands without asking.
+- A pool's page has three tabs, each a name and a component in `TABS` (`web/site/pools/page.tsx`): **Overview**,
+  **Tasks** and **Team**; **More** holds **Activity**, **Sessions graph** (the control center), **Leaderboard** and
+  **Settings**. The owner and admins have **Invite** in the header: one click makes a link and its QR code, for up to 20
+  people over a week (or until a hackathon's deadline), as members; another kind of invite is a step further.
+- **Overview** (`web/site/pools/overview.tsx`) comes first. Until the work starts, a few steps, each ticked as it is
+  done: the machines, the team (optional), the orchestrator (with a button to run it on one of the admin's machines),
+  telling it what to build, accepting its plan. Then the plan's card with **Accept and start** (`plan.tsx`), how far the
+  work is with **Pause**, and the orchestrator's conversation, with the box to write to it. It is one of the admin's own
+  sessions, sealed with the admin's account key, so only the admin reads it and writes to it; the other members see who
+  runs it. Beside it: each machine with its plan and how busy it is, and what the control loop did.
 - **Tasks** is the board: one column per state (to do, assigned, in progress, in review, done, blocked), live. A task
   opens with its goal, criteria, area, assignee, dependencies, branch, summary and history (the `task_*` events each
   change leaves). Members create, edit and move tasks; viewers read. A change over a revision someone else changed
   meanwhile is refused by the relay: the board shows their version, marked "changed meanwhile".
-- **Machines** (`web/site/pools/machines.tsx`) shows each machine members put in the pool, theirs first: whose it is,
-  online, ready or with an agent to update, the orchestrator machine, what it runs, how many sessions at once, what its
-  sessions may do without asking ("everything passes" is flagged), the tasks it takes and its areas. Below come its
-  slots: each task dispatched to it (assigned, in progress or blocked), its state and failed attempts, and the session
-  working on it, or why there is none yet (its machine is starting one, the machine is offline, stopped or the pool
-  paused, or the session left), then the free slots of a machine that takes tasks (`web/site/pools/machines-model.ts`).
-  A member opens its own sessions from there; the owner and admins, or the session's owner, **Stop** one (`pool_stop`):
-  it ends, and its machine puts the task back on the board. The machine's owner, the pool's owner and admins **Stop
-  machine** (it ends its pool sessions and takes nothing until **Start machine**) and **Remove** it: its sessions end,
-  and the control loop gives back the tasks it held while the dispatch is on. The owner and admins **Stop every
-  machine** at once, which turns the dispatch off first, and **Start every machine**, which leaves the dispatch off.
-  Owners and admins make one of their own machines the orchestrator machine.
-- **Control center** (`web/site/pools/control.tsx`) shows every member with its machines and pool sessions: tool and model (from the
+- **Team** (`web/site/pools/team.tsx`) lists each member with its role and its machines (`machines.tsx`), one row each:
+  its plan, how many of its sessions are busy, the orchestrator, and each task it works on with its state and model. A
+  member opens its own sessions from there; the owner and admins, or the session's owner, **Stop** one (`pool_stop`): it
+  ends, and its machine puts the task back on the board. Its menu holds the rest: **Models…** for its owner, **Run the
+  orchestrator here** for an admin's own machine, **Stop it** and **Remove from the pool** for its owner and the pool's
+  owner and admins. The owner and admins **Stop everything** (the dispatch first) or start every machine again. This
+  account's machines not in the pool yet come with **Add them**. Roles change from a menu, by the rules the relay
+  enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key. Sessions put in by hand from the
+  notch come last, and the open invites, with **Revoke**.
+- **Sessions graph** (`web/site/pools/control.tsx`, the control center) shows every member with its machines and pool sessions: tool and model (from the
   session's `session` event), area, whether it is the orchestrator, online or not, its status, its current task, when it
   last wrote to the pool, and its usage. A count per status (working, needs its owner, idle, offline) sits on top, and
   the filters by role, member and status above. A graph (React Flow) shows every session as a node, with an animated
@@ -332,13 +334,8 @@ The relay serves a website at `/`, built on the client core like the web app: si
   the last `resumed` or `started` event, else since the pool was made) or all time. A task counts once, for the session it
   was assigned to when it was done last; its time runs from its first move to in progress to that moment. Spending is
   the period's share of each session's running total. Lines changed are not counted: no event carries them yet.
-- The three tabs work out what they show in `shared/pool-stats.ts`, from the pool's state alone, so any client computes
+- Activity, the sessions graph and the leaderboard work out what they show in `shared/pool-stats.ts`, from the pool's state alone, so any client computes
   the same.
-- **Members** lists the members and the pool's sessions (tool, machine, online or not). Roles change from a menu, by
-  the rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and says who
-  could not get the new one. Owners and admins make a session the orchestrator.
-- **Invites** makes an invite (uses, how long, which role) and shows its link and a QR code, drawn in the page
-  (`shared/qr.ts`, no dependency). Open invites are listed with **Revoke**.
 - Forms sit in dialogs (Radix, under the page's nonce) or keep their own state: live changes redraw the tab, never what is
   being typed.
 - What each role is offered comes from `shared/pool-board.ts`, and the page follows the pool through
@@ -354,10 +351,10 @@ A pool against a deadline (`shared/pool-hackathon.ts`, `TontonCore/PoolHackathon
   role (front, back, infra, QA) and a decision: main stays demo-ready. The deadline, the repository and when the
   countdown started are in the pool's info, sealed like the rest.
 - The **countdown** shows in the pool's header on the website and in the notch's pool panel.
-- Every machine joins with the invite's QR code; in the notch, **Join the pool as** an area puts a session in it in one
-  step.
-- The **orchestrator** is chosen by an owner or an admin: **Make orchestrator** on a session, on the website or in the
-  notch, and **Not the orchestrator** to take it back.
+- The team joins with the invite's link or QR code, and their machines with them; in the notch, **Join the pool as**
+  an area puts a single session in it in one step.
+- The **orchestrator** runs on the best of the owner's machines, or the one an admin picks (**Run the orchestrator
+  here**); a session put in by hand can be made it too, on the website or in the notch.
 - The orchestrator's agent tells it how much time is left at half time, one hour and fifteen minutes before the end, each
   once; marks already past when it first sees the deadline are not told late. At the one-hour mark it puts the final
   checklist on the board (the build passes, a demo script, the README). Its guide has a hackathon section:

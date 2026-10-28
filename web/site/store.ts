@@ -61,7 +61,7 @@ export class Store {
   /** This account's id, for the pools. */
   account: string | null = null
   poolView: PoolView = null
-  poolTab = 'orchestrator'
+  poolTab = 'overview'
   /** A hackathon just made: its Invites tab opens on the team's QR code, once. */
   teamQrFor: string | null = null
   /** A pool to open once the list has it, from the notch's link. */
@@ -233,7 +233,7 @@ export class Store {
     this.poolView = view
     if (view?.kind === 'pool') {
       if (current?.kind !== 'pool' || current.id !== view.id) this.pools?.open(view.id)
-      this.poolTab = tab ?? 'orchestrator'
+      this.poolTab = tab ?? 'overview'
     }
     this.changed()
   }

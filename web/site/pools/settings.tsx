@@ -1,4 +1,4 @@
-// A pool's settings: its name and goal (and a hackathon's deadline and repository), what the relay sees of it, leaving it
+// A pool's settings: its name, goal and repository (and a hackathon's deadline), what the relay sees of it, leaving it
 // and deleting it.
 import { type FormEvent, useState } from 'react'
 import { type PoolInfo, poolAbilities } from '../../../shared'
@@ -68,10 +68,11 @@ function InfoDialog({ poolId, info }: { poolId: string; info: PoolInfo | null })
     if (!name.trim()) return
     // The rest of the info, such as a hackathon's, stays as it was.
     const next: PoolInfo = { ...info, name: name.trim(), goal: goal.trim() || undefined }
+    // The repository the machines clone: every pool has one.
+    next.repo = repo.trim() || undefined
     if (hackathon) {
       const end = new Date(deadline)
       if (!Number.isNaN(end.getTime())) next.deadline = end.toISOString()
-      next.repo = repo.trim() || undefined
     }
     if (await store.pools?.updateInfo(poolId, JSON.parse(JSON.stringify(next)))) setOpen(false)
   }
@@ -85,7 +86,7 @@ function InfoDialog({ poolId, info }: { poolId: string; info: PoolInfo | null })
     >
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          Change the name and goal
+          Change the name and repository
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -97,15 +98,13 @@ function InfoDialog({ poolId, info }: { poolId: string; info: PoolInfo | null })
           <Field label="Goal">
             <Textarea rows={3} value={goal} onChange={event => setGoal(event.target.value)} />
           </Field>
+          <Field label="Repository">
+            <Input value={repo} onChange={event => setRepo(event.target.value)} placeholder="https://github.com/team/app or git@…" />
+          </Field>
           {hackathon && (
-            <>
-              <Field label="Deadline">
-                <Input type="datetime-local" value={deadline} onChange={event => setDeadline(event.target.value)} />
-              </Field>
-              <Field label="Repository">
-                <Input value={repo} onChange={event => setRepo(event.target.value)} />
-              </Field>
-            </>
+            <Field label="Deadline">
+              <Input type="datetime-local" value={deadline} onChange={event => setDeadline(event.target.value)} />
+            </Field>
           )}
           <DialogFooter>
             <Button type="submit" disabled={!name.trim()}>

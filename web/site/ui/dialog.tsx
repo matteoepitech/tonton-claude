@@ -47,20 +47,25 @@ export function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
 /** Asks before something that can't be undone: the action runs only after the second button. */
 export function Confirm({
   trigger,
+  open,
+  onOpenChange,
   title,
   description,
   action,
   onConfirm,
 }: {
-  trigger: ReactNode
+  /** What opens it; or none, with `open`, for one opened from a menu. */
+  trigger?: ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   title: string
   description: string
   action: string
   onConfirm: () => void
 }) {
   return (
-    <AlertPrimitive.Root>
-      <AlertPrimitive.Trigger asChild>{trigger}</AlertPrimitive.Trigger>
+    <AlertPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      {trigger && <AlertPrimitive.Trigger asChild>{trigger}</AlertPrimitive.Trigger>}
       <AlertPrimitive.Portal>
         <AlertPrimitive.Overlay className={overlay} />
         <AlertPrimitive.Content className={panel}>

@@ -1,19 +1,20 @@
-// Who is in the pool: members with their roles (changed, handed over, removed by those who may), and the sessions working
-// for it, with the choice of the orchestrator. The machines members added for the autopilot have their own tab.
+// Who is in the pool: members with their roles (changed, handed over, removed by those who may), each with its machines,
+// and the sessions put in by hand, with the choice of the orchestrator.
 import { CrownIcon, UserRoundXIcon } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, type ReactNode, useState } from 'react'
 import {
   assignableRoles,
   canKick,
   hackathonRoleLabel,
   memberName,
   type PoolRole,
+  type PoolSession,
   type PoolState,
   poolAbilities,
   sessionName,
   sortedMembers,
 } from '../../../shared'
-import { Empty, Problem, Toolbar } from '../common'
+import { Empty, Problem } from '../common'
 import { plural } from '../format'
 import { useStore } from '../store'
 import { Button } from '../ui/button'
@@ -24,37 +25,36 @@ import { NativeSelect } from '../ui/select'
 import type { TabProps } from './page'
 import { roleLabel } from './roles'
 
-export function Members({ pool, state }: TabProps) {
+/**
+ * Who is in the pool, each member with what the viewer may change of them: its role, the pool handed over, removed. Each
+ * one's machines come under it (`machines`), the sessions put in by hand after them.
+ */
+export function Members({ pool, state, machines }: TabProps & { machines: (account: string) => ReactNode }) {
   const store = useStore()
   const watch = store.pools
-  const me = state.members.find(member => member.account === store.account)
   const choose = poolAbilities(pool.role).chooseOrchestrator
   const [skipped, setSkipped] = useState<number | null>(null)
+  const byHand = state.sessions.filter(session => !session.machine)
   return (
     <div className="flex flex-col gap-4">
-      <Toolbar title="Members">
-        <NameDialog poolId={pool.id} current={me?.profile?.name ?? ''} />
-      </Toolbar>
       {skipped ? (
         <Problem onDismiss={() => setSkipped(null)}>{plural(skipped, 'member')} could not get the new key: send them a new invite.</Problem>
       ) : null}
-      <div className="flex flex-col divide-y rounded-lg border">
-        {sortedMembers(state).map(member => {
-          const self = member.account === store.account
-          const name = memberName(state, member.account)
-          const roles = assignableRoles(pool.role, member.role, self)
-          return (
-            <div key={member.account} className="flex flex-wrap items-center gap-2 p-3">
-              <span className="flex min-w-0 flex-1 flex-col">
-                <strong className="font-medium">
-                  {name}
-                  {self ? ' (you)' : ''}
-                </strong>
-                <small className="text-xs text-muted-foreground">Joined {new Date(member.joinedAt).toLocaleDateString()}</small>
-              </span>
+      {sortedMembers(state).map(member => {
+        const self = member.account === store.account
+        const name = memberName(state, member.account)
+        const roles = assignableRoles(pool.role, member.role, self)
+        return (
+          <section key={member.account} className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <strong className="font-medium">
+                {name}
+                {self ? ' (you)' : ''}
+              </strong>
               {roles.length ? (
                 <NativeSelect
                   aria-label={`Role of ${name}`}
+                  className="h-7 text-xs"
                   value={member.role}
                   onChange={event => void watch?.setRole(pool.id, member.account, event.target.value as Exclude<PoolRole, 'owner'>)}
                 >
@@ -67,54 +67,56 @@ export function Members({ pool, state }: TabProps) {
               ) : (
                 <Badge variant="secondary">{roleLabel(member.role)}</Badge>
               )}
-              {pool.role === 'owner' && !self && (
-                <Confirm
-                  trigger={
-                    <Button variant="outline" size="sm">
-                      <CrownIcon />
-                      Make owner
-                    </Button>
-                  }
-                  title={`Hand the pool to ${name}?`}
-                  description="You stay as an admin."
-                  action="Make owner"
-                  onConfirm={() => void watch?.transferOwnership(pool.id, member.account)}
-                />
-              )}
-              {canKick(pool.role, member.role, self) && (
-                <Confirm
-                  trigger={
-                    <Button variant="outline" size="sm" className="text-destructive">
-                      <UserRoundXIcon />
-                      Remove
-                    </Button>
-                  }
-                  title={`Remove ${name}?`}
-                  description="The pool gets a new key, which they never receive. Every open invite is revoked."
-                  action="Remove"
-                  onConfirm={async () => {
-                    const left = await watch?.kick(pool.id, member.account)
-                    setSkipped(left?.length ?? null)
-                  }}
-                />
-              )}
+              <span className="ms-auto flex gap-1">
+                {pool.role === 'owner' && !self && (
+                  <Confirm
+                    trigger={
+                      <Button variant="ghost" size="sm" title="Make owner">
+                        <CrownIcon />
+                      </Button>
+                    }
+                    title={`Hand the pool to ${name}?`}
+                    description="You stay as an admin."
+                    action="Make owner"
+                    onConfirm={() => void watch?.transferOwnership(pool.id, member.account)}
+                  />
+                )}
+                {canKick(pool.role, member.role, self) && (
+                  <Confirm
+                    trigger={
+                      <Button variant="ghost" size="sm" className="text-destructive" title="Remove from the pool">
+                        <UserRoundXIcon />
+                      </Button>
+                    }
+                    title={`Remove ${name}?`}
+                    description="The pool gets a new key, which they never receive. Every open invite is revoked."
+                    action="Remove"
+                    onConfirm={async () => {
+                      const left = await watch?.kick(pool.id, member.account)
+                      setSkipped(left?.length ?? null)
+                    }}
+                  />
+                )}
+              </span>
             </div>
-          )
-        })}
-      </div>
-      <Sessions poolId={pool.id} state={state} choose={choose} />
+            {machines(member.account)}
+          </section>
+        )
+      })}
+      {byHand.length > 0 && <Sessions poolId={pool.id} state={state} sessions={byHand} choose={choose} />}
     </div>
   )
 }
 
-function Sessions({ poolId, state, choose }: { poolId: string; state: PoolState; choose: boolean }) {
+/** Sessions their owners put in the pool from the notch, one by one, rather than with a whole machine. */
+function Sessions({ poolId, state, sessions, choose }: { poolId: string; state: PoolState; sessions: PoolSession[]; choose: boolean }) {
   const watch = useStore().pools
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">Sessions</h3>
-      {state.sessions.length ? (
+      <h3 className="text-sm font-medium">Sessions put in by hand</h3>
+      {sessions.length ? (
         <div className="flex flex-col divide-y rounded-lg border">
-          {state.sessions.map(session => {
+          {sessions.map(session => {
             const profile = session.profile
             const what = [
               profile?.tool === 'opencode' ? 'OpenCode' : profile?.tool === 'claude' ? 'Claude Code' : null,
@@ -167,7 +169,7 @@ function Sessions({ poolId, state, choose }: { poolId: string; state: PoolState;
   )
 }
 
-function NameDialog({ poolId, current }: { poolId: string; current: string }) {
+export function NameDialog({ poolId, current }: { poolId: string; current: string }) {
   const store = useStore()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(current)
