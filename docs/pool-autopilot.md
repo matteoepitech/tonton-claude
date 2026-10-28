@@ -205,7 +205,7 @@ which claims it, commits on its branch, pushes it and finishes it. When every ta
 
 The sessions are stand-ins for Claude Code (`test/stand-in-claude.ts`) that run the real channel and the real pool
 tools, so the demo spends no tokens: what you watch is the autopilot itself, not what Claude writes. To see it on the
-website, open the relay's address and sign in with the account token the script prints. It needs tmux, on macOS or
+website, open the relay's address and sign in with the recovery key the script prints. It needs tmux, on macOS or
 Linux. Ctrl+C stops everything and deletes the folder.
 
 `test/pool-demo.test.ts` runs the demo to the end in `bun test`.
