@@ -4,6 +4,7 @@ import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, 
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { paths } from '../config'
 import { gitBranch } from '../git'
+import type { AgentRPG } from '../rpg'
 import { setPoolMode, setPoolRules } from '../rules'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
@@ -76,6 +77,7 @@ export class Conversation {
     pool: { deliver(text: string): void; toolsChanged(): void } = { deliver: () => {}, toolsChanged: () => {} },
     /** This machine: a pool machine's mode applies to the sessions it started here only. */
     private readonly machineId = '',
+    private readonly rpg?: AgentRPG,
   ) {
     this.shares = new SessionShares(
       () => link.sessionId,
@@ -125,6 +127,7 @@ export class Conversation {
     )
     this.work.useSafety(this.safety)
     this.work.useRepository(() => this.cwd())
+    this.work.useRewards((id, state) => this.rpg?.pool(id, state, this.link.sessionId))
     this.tailer = link.transcriptPath
       ? new Tailer(link.transcriptPath, {
           lines: (lines, initial) => this.onLines(lines, initial),
@@ -232,6 +235,7 @@ export class Conversation {
       }
     }
     this.entries = [...this.entries, ...fresh].slice(-BACKLOG_SIZE)
+    if (!initial) this.rpg?.observe(this.link.sessionId, this.entries, this.pools.ids().length > 0, fresh)
     if (initial) return this.announce()
 
     const { sessionId } = this.link

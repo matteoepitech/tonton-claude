@@ -270,6 +270,7 @@ final class SessionStore: ObservableObject {
         diagnoses = [:]
         repairing = [:]
         PoolStore.shared.reset()
+        RPGStore.shared.use(settings.connectionEnabled ? settings.account : nil)
         guard settings.connectionEnabled else {
             socket.disconnect(to: .paused)
             return

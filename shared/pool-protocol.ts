@@ -68,6 +68,8 @@ export type PoolTaskSize = 'simple' | 'large'
 export type PoolTaskState = 'todo' | 'assigned' | 'in_progress' | 'review' | 'done' | 'blocked'
 
 export interface PoolTask {
+  /** First completion, preserved on reopen/reassignment so rewards keep their original attribution. */
+  completion?: { at: string; assignee: { account: string; session: string }; reviewer?: { account: string; session: string } }
   title: string
   goal?: string
   /** What "done" means. */

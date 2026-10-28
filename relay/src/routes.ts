@@ -7,6 +7,7 @@ import type { SocketData } from './hub'
 import { MAX_SHARE_HOURS } from './limits'
 import { renderMetrics } from './metrics'
 import { poolRoute } from './pool-routes'
+import { rpgRoute } from './rpg'
 import { siteResponse } from './site'
 import { safeEqual, sha256 } from './tokens'
 import { isDeviceId, isPushToken, isSealed, isSessionId, isText, isVersion } from './validate'
@@ -35,7 +36,8 @@ export function createFetchHandler(ctx: RelayContext) {
 
     if (path === '/api/accounts' && req.method === 'POST') return createAccount(ctx, req, ip)
     if (path === '/api/machines/join' && req.method === 'POST') return joinMachine(ctx, req, ip)
-    if (path === '/api/hook' || path === '/api/agent/ping' || path === '/ws/agent') return agentRoute(ctx, req, server, path, ip)
+    if (path === '/api/hook' || path === '/api/agent/ping' || path === '/api/agent/rpg' || path === '/ws/agent')
+      return agentRoute(ctx, req, server, path, ip)
     if (path === '/ws/share') return viewerRoute(ctx, req, server, ip)
     return appRoute(ctx, req, server, path, ip)
   }
@@ -101,6 +103,7 @@ async function agentRoute(ctx: RelayContext, req: Request, server: RelayServer, 
     return fail(401, 'unauthorized')
   }
   if (path === '/api/agent/ping') return json({ ok: true, machineId: machine.id })
+  if (path === '/api/agent/rpg') return rpgRoute(ctx, req, machine.accountId)
   if (path === '/ws/agent') {
     const version = req.headers.get('x-tonton-agent')
     const data: SocketData = {
@@ -187,6 +190,7 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
     return server.upgrade(req, { data, headers }) ? undefined : fail(400, 'WebSocket expected.')
   }
   if (path === '/api/ping') return json({ ok: true, accountId })
+  if (path === '/api/rpg') return rpgRoute(ctx, req, accountId)
   if (path === '/api/account/token' && req.method === 'POST') return accountToken(ctx, req, accountId)
   if (path === '/api/machines' && req.method === 'GET') return json(ctx.machineList(accountId))
   if (path === '/api/shares' && req.method === 'POST') return createShare(ctx, req, accountId)

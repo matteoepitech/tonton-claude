@@ -1,0 +1,76 @@
+{
+  "key": "mFgEalQeXLvfegNdnlE39e1-c6p41oYgODBFopg49NQ",
+  "blob": "okJiGqDRQlHmTaw2M58rjMCS+yYjPNtHh8npKJqAtprDsWeILy/vXbQs3XF8ePFuJZKEIXcFhqetu3CALbd8bqntnSdFZ/aXcV1/Xp+0Z///e6XqjR8AoYgUVsx565C8vzxo2ovDLlmye5ntbjTDe1CYq0v7BIakZthfQcA6yWOmD+A6/5Qi3dMtxtdhVBlwohU9CWQmGqbroCeQEKS6gWGJuVVLB/29rgK/oLXclH9TWK6Wx1/TF3lnNcrQRIFzjf5nz+vFgdTcwOQS7MVrFMmm3lqQq+AppGrVPCu6ry+VThOCybghFaiJ9DcXUK/8DX0+ia5SGEebcZ7tEe0FpkBG1ZHrynBTNwZZO6r+cpgsd55oECnn6mQZISlGaDYMGVfUGozEX95vxR99zQsJvR/90DDHhTHh6d60Yp8bJJOVtt9BrSrlUBus4sV2qQ1iKrz7hzBC2GdkxN60f3z9bks57QfBsuwYvKDsxknwHvX86r4Ny1W9ckZ4LR8nKuTXqa7RxVIdiZnCkAd8QQh6C7/vyUUhtWZ8gzDhAp8WMXLOIFjoI2Ox6V6iAjqc35ULZt7OWhTsywI3kZUz8YDuZ9+L8Orz4KOlp9M4zPUfu2XTKOUJWYGxYUtNeopI+JUJwEsGjNBJD2V3taABUmdvHwDRSNODfc3YnZMj3IuMcKwjoF5xFr8rEvv/GWoFAOQ0u45UpPVzZfRbML5padBHHSqmkZiFW9bNhZl4Z7BdKx3KA2nm3VPvdiP4jxw/ctxa/qg1dZluXVVAdEdbGeOMad6GHDVBJ6Vj6IfS8dWpNYWS2LduI2bHQ5TKCgaJwx5gEF3aQEZWS702OyngjDfFV1QFTpzRJiex4xCw+EcodHzb8CTwt2vcma6WTPecV8DjDB/SQk3jadD95oy+j/nzzZ1A8tOlkGrhs4FGi+tjKzNYB2DAX603VmZPMxD0EQxpAuHLfhjSkCyz3FHnFI0BmPJYDBi4bLlLcB1UXvhEToPtQOvLCVjkyvmPgKxq06Fd8POg5AyOXcLt8eN3WtchsnO9EIk7+t8X2Nh2kn4MpsXrSClqg1Yb7ZI8mcbKbfL1WAHwGVfLBMyod2/rkjCJ2AVrZ2YypgxeBiSgqntDjeJWi6nyKjIgzaPUQyHcj17KE3utSDPS8G+D4bxr1coQLj1Eg5PNgz21WT6Zdk/F7VUVmifazxnl/bf7hmQdSN8dE3XdsvTm40JGw17kerZ8EBM0XsKS+4OEeUNP855LEkxZhNCjVRnsC/CVQmqzY21gyQ1nZ6RIeduWhEqNu1L0nQkuY/yWgUkifw==",
+  "state": {
+    "version": 1,
+    "xp": 300,
+    "sparks": 30,
+    "receipts": [
+      {
+        "id": "c4fa42039bb84bbacd59daa57dda641650ca3cf0e2915b9da6706a33b02fe24b",
+        "kind": "poolTask",
+        "day": "2026-10-28",
+        "xp": 50,
+        "sparks": 5
+      },
+      {
+        "id": "21c966a3ddc96de3a44cefb39cc0c2bdbe77c7869bf57dcc16adba7add1fe90d",
+        "kind": "poolTask",
+        "day": "2026-10-28",
+        "xp": 50,
+        "sparks": 5
+      },
+      {
+        "id": "57b962c0e758928ee774b31dd7bce657f867c5c7fbcb1879b93eb962d698795b",
+        "kind": "poolTask",
+        "day": "2026-10-28",
+        "xp": 50,
+        "sparks": 5
+      },
+      {
+        "id": "592670b29fa3eabbcf62a1238fcd1cd67562b406b6e29ccc268ade9b312f1c90",
+        "kind": "poolTask",
+        "day": "2026-10-28",
+        "xp": 50,
+        "sparks": 5
+      },
+      {
+        "id": "09efcec5c4770a7a6e1742386068f2d21d63817eb064be348e191d33b91d8f17",
+        "kind": "poolTask",
+        "day": "2026-10-28",
+        "xp": 50,
+        "sparks": 5
+      },
+      {
+        "id": "448705ba7eeafefd9727640fffc738cc9c7360b0694fe8c7ac7ad45952187461",
+        "kind": "poolTask",
+        "day": "2026-10-28",
+        "xp": 50,
+        "sparks": 5
+      }
+    ],
+    "owned": ["skin-common", "hat-common"],
+    "equipped": {
+      "hat": "hat-common"
+    },
+    "boosters": ["level-2", "level-3"],
+    "upgrades": {},
+    "openings": {}
+  },
+  "reward": {
+    "id": "58d9d2186cb6c08f002559c40fa3e7dcc91c22e0a115c53bc2fd3fa90e60e1b1",
+    "kind": "task",
+    "day": "2026-10-28"
+  },
+  "completion": {
+    "at": "2026-10-28T12:00:00Z",
+    "assignee": {
+      "account": "author",
+      "session": "a"
+    },
+    "reviewer": {
+      "account": "reviewer",
+      "session": "b"
+    }
+  }
+}

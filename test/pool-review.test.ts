@@ -17,6 +17,7 @@ import { PoolApi } from '../shared/pool-api'
 import { PoolKeyring } from '../shared/pool-keys'
 import { formatPoolInvite, parsePoolInvite } from '../shared/pool-link'
 import type { PoolSessionProfile, PoolUpdate } from '../shared/pool-protocol'
+import { RPGClient } from '../shared/rpg-client'
 import { Vault } from '../shared/vault'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
@@ -256,6 +257,16 @@ describe('limits and review end to end', () => {
       return item?.task?.state === 'done' && item.task
     }, 'the task done for everyone')
     expect(done.review).toBe('Checked the validation')
+    expect(done.completion?.assignee.session).toBe(OK)
+    expect(done.completion?.reviewer?.session).toBe(REV)
+    const author = apps.find(app => app.accountId === done.completion?.assignee.account)
+    const reviewer = apps.find(app => app.accountId === done.completion?.reviewer?.account)
+    if (!author || !reviewer) throw new Error('missing reward recipients')
+    await eventually(async () => (await new RPGClient(`${base}/api/rpg`, author.token, author.key).read()).state.xp === 50, 'author XP')
+    await eventually(
+      async () => (await new RPGClient(`${base}/api/rpg`, reviewer.token, reviewer.key).read()).state.xp === 20,
+      'reviewer XP',
+    )
     await eventually(() => pooled(lead, 'notice').find(n => n.params?.content?.includes('is done by')), 'the done notice')
   })
 

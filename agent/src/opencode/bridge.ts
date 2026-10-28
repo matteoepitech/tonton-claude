@@ -27,6 +27,7 @@ import { postHook } from '../hook'
 import { openCodeStarts } from '../launch'
 import { log } from '../log'
 import { handleLogRequest } from '../logs'
+import { AgentRPG } from '../rpg'
 import { matchingRule, modeAllows, openSessionRules, readRules, receiveRules } from '../rules'
 import { OPENCODE_COMMANDS, type OpenCodePermission, OpenCodeTracker, type SessionUpdate } from './events'
 
@@ -52,6 +53,7 @@ type Send = (command: PluginCommand) => void
 
 /** One OpenCode session as the relay sees it: its own connection, like the channel of a Claude Code session. */
 class Link {
+  private readonly rpg: AgentRPG
   private entries: Entry[] = []
   private readonly relay: RelayConnection
   private readonly pending = new Map<string, OpenCodePermission & { ts: string }>()
@@ -79,6 +81,7 @@ class Link {
     private readonly tracker: OpenCodeTracker,
     private readonly send: Send,
   ) {
+    this.rpg = new AgentRPG(config)
     this.relay = new RelayConnection(config, 'channel', {
       connected: () => this.announce(),
       message: message => this.onRelay(message),
@@ -124,12 +127,14 @@ class Link {
     )
     this.work.useSafety(this.safety)
     this.work.useRepository(() => this.cwd())
+    this.work.useRewards((id, state) => this.rpg.pool(id, state, this.sessionId))
     this.relay.connect()
   }
 
   add(entries: Entry[]) {
     const marked = entries.map(entry => this.markFromNotch(entry))
     this.entries = [...this.entries, ...marked].slice(-BACKLOG_SIZE)
+    this.rpg.observe(this.sessionId, this.entries, this.pools.ids().length > 0, marked)
     if (marked.length)
       this.relay.post(async () => ({ t: 'entries', sessionId: this.sessionId, entries: await this.seal(marked), reset: false }))
     this.shares.entries(marked)
@@ -193,6 +198,7 @@ class Link {
   }
 
   stop() {
+    this.rpg.stop()
     this.relay.stop()
     this.work.stop()
   }
