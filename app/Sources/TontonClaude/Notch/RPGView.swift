@@ -55,10 +55,14 @@ struct RPGPanel: View {
     @State private var pose: SessionStatus = .working
 
     private var previewHero: RPG.State {
+        previewHero(wearing: preview)
+    }
+
+    private func previewHero(wearing item: RPG.Item?) -> RPG.State {
         var state = hero
-        if let preview {
-            if !state.owned.contains(preview.id) { state.owned.append(preview.id) }
-            try? state.equip(preview.id, in: preview.slot)
+        if let item {
+            if !state.owned.contains(item.id) { state.owned.append(item.id) }
+            try? state.equip(item.id, in: item.slot)
         }
         return state
     }
@@ -116,10 +120,28 @@ struct RPGPanel: View {
     private func itemRow(_ item: RPG.Item) -> some View {
         let owned = hero.owned.contains(item.id)
         let equipped = hero.equipped[item.slot.rawValue] == item.id
-        return HStack {
-            Image(systemName: owned ? "sparkles" : "lock.fill").foregroundStyle(Color(hex: item.color))
-            Text(item.rarity.label).fontWeight(.medium)
-            Text(item.slot.label).foregroundStyle(.secondary)
+        return HStack(spacing: 10) {
+            Button {
+                preview = item
+            } label: {
+                MascotView(status: pose, size: 40, hero: previewHero(wearing: item))
+                    .accessibilityHidden(true)
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.bg))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Color(hex: item.color).opacity(preview?.id == item.id ? 1 : 0.35), lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(item.rarity.label))
+            .accessibilityValue(Text(item.slot.label))
+            .accessibilityHint("Preview")
+            .help("Preview")
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.rarity.label).fontWeight(.medium).foregroundStyle(Color(hex: item.color))
+                Text(item.slot.label).foregroundStyle(.secondary)
+            }
             Spacer()
             Button("Preview") { preview = item }
             Button(equipped ? "Equipped" : owned ? "Equip" : "Locked") { equip(item, item.slot) }
