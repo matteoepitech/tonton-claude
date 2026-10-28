@@ -110,6 +110,38 @@ final class PoolStore: ObservableObject {
         send(["t": "pool_join_session", "poolId": poolId, "sessionId": session.id, "order": order, "profile": profile])
     }
 
+    /// Puts one of the account's machines in the pool (docs/pool-autopilot.md): its agent service takes the order, sealed with
+    /// the account key and naming that machine, and starts sessions for the pool's tasks in the work folder.
+    func addMachine(_ machine: MachineInfo, pool poolId: String, form: PoolMachineForm) throws {
+        guard let board = boards[poolId], let vault, let send else {
+            throw RelayError(message: String(localized: "Connect to the relay to add a machine to a pool."))
+        }
+        let keyring = board.keyring
+        guard let key = keyring.key(keyring.version) else { throw RelayError(message: String(localized: "This pool's key is missing.")) }
+        guard let profile = form.profile(name: machine.name) else {
+            throw RelayError(message: String(localized: "Give it a work folder from the root or your home folder, such as ~/tonton-pool."))
+        }
+        let order = try vault.sealPoolMachineOrder(
+            poolId: poolId, machineId: machine.id, key: key, version: keyring.version, profile: profile)
+        let sealed = try board.poolVault.seal(profile)
+        send(["t": "pool_add_machine", "poolId": poolId, "machineId": machine.id, "order": order, "profile": sealed])
+    }
+
+    /// Takes the machine out of the pool: its pool sessions end, and their tasks go back to the board.
+    func removeMachine(_ machineId: String, pool poolId: String) {
+        send?(["t": "pool_remove_machine", "poolId": poolId, "machineId": machineId])
+    }
+
+    /// The pools one of the account's machines is in, with what it runs in each.
+    func memberships(of machineId: String) -> [(board: PoolBoard, machine: PoolState.Machine, slots: [PoolState.Task])] {
+        guard let account else { return [] }
+        return ordered.compactMap { board in
+            guard let state = board.state, let machine = state.machines(of: account.accountId).first(where: { $0.machine == machineId })
+            else { return nil }
+            return (board, machine, state.slots(of: PoolMachineRef(account: account.accountId, machine: machineId)))
+        }
+    }
+
     /// Owner and admins: the pool session that plans and hands out the work, or none.
     func setOrchestrator(_ ref: PoolSessionRef?, pool poolId: String) {
         let orchestrator: Any = ref.map { ["account": $0.account, "session": $0.session] } ?? NSNull()
