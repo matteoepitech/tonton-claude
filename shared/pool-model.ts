@@ -219,3 +219,38 @@ export function routeView(route: PoolTaskRoute): string {
   const after = route.confirmed ? `; runs on ${route.confirmed}` : route.problem ? `; ${route.problem}` : ''
   return `${head}${route.reason ? `: ${route.reason}` : ''}${after}`
 }
+
+// MARK: The owner's setting
+
+/**
+ * What a machine owner picks for its models, in one choice: each task on the tier it needs, the same without the strong
+ * tier (for an account that must not spend on it), or always one tier.
+ */
+export type ModelSetting = 'auto' | 'auto-no-strong' | ModelTier
+
+export const MODEL_SETTINGS: readonly { value: ModelSetting; label: string }[] = [
+  { value: 'auto', label: 'Each task on the model it needs' },
+  { value: 'auto-no-strong', label: 'Each task on the model it needs, never strong' },
+  { value: 'light', label: 'Always light' },
+  { value: 'balanced', label: 'Always balanced' },
+  { value: 'strong', label: 'Always strong' },
+]
+
+/** The setting a policy reads as: anything it does not cover (other tiers allowed) reads as automatic. */
+export function modelSetting(policy: PoolModelPolicy | undefined): ModelSetting {
+  const lock = policy?.lock
+  if (isModelTier(lock)) return lock
+  const allowed = allowedTiers(policy)
+  return allowed.length === 2 && !allowed.includes('strong') ? 'auto-no-strong' : 'auto'
+}
+
+/** The policy for a setting, keeping what the owner set besides it: the models its tiers stand for, its escalations. */
+export function withModelSetting(policy: PoolModelPolicy | undefined, setting: ModelSetting): PoolModelPolicy | undefined {
+  const { lock: _lock, allowed: _allowed, ...rest } = policy ?? {}
+  const next: PoolModelPolicy = {
+    ...rest,
+    ...(isModelTier(setting) ? { lock: setting } : {}),
+    ...(setting === 'auto-no-strong' ? { allowed: ['light', 'balanced'] } : {}),
+  }
+  return Object.keys(next).length ? next : undefined
+}

@@ -4,7 +4,16 @@
 import { describe, expect, test } from 'bun:test'
 import { decodePoolTask } from '../pool'
 import { decodePoolMachineProfile } from '../pool-machines'
-import { assessTask, chooseModel, decodeModelPolicy, decodeTaskRoute, isModelId, type ModelChoice } from '../pool-model'
+import {
+  assessTask,
+  chooseModel,
+  decodeModelPolicy,
+  decodeTaskRoute,
+  isModelId,
+  type ModelChoice,
+  modelSetting,
+  withModelSetting,
+} from '../pool-model'
 import type { PoolModelPolicy, PoolTask } from '../pool-protocol'
 
 const docs: PoolTask = {
@@ -164,5 +173,21 @@ describe('what other members sealed', () => {
     expect(task?.route).toEqual({ tier: 'strong', model: 'opus', reason: 'a feature', escalated: 1, confirmed: 'claude-opus-4-5' })
     expect(decodePoolTask({ ...feature, model: 'giant', setbacks: -1, route: 'opus' })).toEqual(feature)
     expect(decodeTaskRoute({ model: '$(id)' })).toBeUndefined()
+  })
+})
+
+describe("the owner's setting", () => {
+  test('reads from the policy and writes it back, keeping the models the tiers stand for', () => {
+    expect(modelSetting(undefined)).toBe('auto')
+    expect(modelSetting({ allowed: ['light', 'balanced'] })).toBe('auto-no-strong')
+    expect(modelSetting({ lock: 'balanced', allowed: ['light'] })).toBe('balanced')
+    // Another choice of tiers than the setting offers reads as automatic.
+    expect(modelSetting({ allowed: ['balanced', 'strong'] })).toBe('auto')
+    const tiers = { light: 'openrouter/qwen3-coder' }
+    expect(withModelSetting({ tiers, escalations: 2 }, 'strong')).toEqual({ tiers, escalations: 2, lock: 'strong' })
+    expect(withModelSetting({ tiers, lock: 'strong' }, 'auto-no-strong')).toEqual({ tiers, allowed: ['light', 'balanced'] })
+    expect(withModelSetting({ lock: 'light' }, 'auto')).toBeUndefined()
+    for (const setting of ['auto', 'auto-no-strong', 'light', 'balanced', 'strong'] as const)
+      expect(modelSetting(withModelSetting(undefined, setting))).toBe(setting)
   })
 })

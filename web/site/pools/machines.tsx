@@ -5,6 +5,9 @@
 // machine at once, with the dispatch.
 import { BotIcon, CpuIcon, MessageSquareIcon, PowerIcon, PowerOffIcon, SquareIcon } from 'lucide-react'
 import {
+  MODEL_SETTINGS,
+  type ModelSetting,
+  modelSetting,
   type OpenPool,
   type PoolMachineMode,
   type PoolState,
@@ -13,6 +16,7 @@ import {
   type SessionStatus,
   sessionName,
   TASK_STATE_LABELS,
+  withModelSetting,
 } from '../../../shared'
 import { Empty, StatusDot, Toolbar } from '../common'
 import { plural } from '../format'
@@ -21,6 +25,7 @@ import { Button } from '../ui/button'
 import { Badge, Card } from '../ui/card'
 import { cn } from '../ui/cn'
 import { Confirm } from '../ui/dialog'
+import { NativeSelect } from '../ui/select'
 import { type MachineCard, type MachineSlot, machineCards, type SlotPhase } from './machines-model'
 import type { TabProps } from './page'
 
@@ -132,6 +137,29 @@ function MachineCardView({ card, pool, state }: { card: MachineCard; pool: OpenP
           {profile.takes && <span>takes {profile.takes} tasks</span>}
           {profile.areas?.length ? <span>{profile.areas.join(', ')}</span> : null}
           <Badge variant={profile.mode === 'full' ? 'destructive' : 'outline'}>{MODE_LABELS[profile.mode]}</Badge>
+          {card.mine ? (
+            // Its owner's choice, sealed in the order only they make (docs/pool-autopilot.md, Models).
+            <NativeSelect
+              className="h-7 w-auto text-xs"
+              aria-label="Models"
+              title="Which models its sessions run on"
+              value={modelSetting(profile.models)}
+              onChange={event =>
+                void store.pools?.addMachine(pool.id, machine.machine, {
+                  ...profile,
+                  models: withModelSetting(profile.models, event.target.value as ModelSetting),
+                })
+              }
+            >
+              {MODEL_SETTINGS.map(setting => (
+                <option key={setting.value} value={setting.value}>
+                  {setting.label}
+                </option>
+              ))}
+            </NativeSelect>
+          ) : (
+            <span>{MODEL_SETTINGS.find(setting => setting.value === modelSetting(profile.models))?.label}</span>
+          )}
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">Its settings could not be read.</p>

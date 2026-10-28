@@ -114,7 +114,10 @@ When a machine starts a task's session, its agent chooses the tier:
 4. The nearest tier the owner **allows**: up first, since a weaker model would fail the task, else down.
 
 The owner's choices are the machine profile's `models`, sealed in its order: `lock`, `allowed` (tiers), `tiers` (the
-model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`), `escalations` (0 to 2).
+model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`), `escalations` (0 to 2). Its owner
+picks them on the website, in the pool's Machines tab, on the card of the machine: each task on the model it needs (the
+default), the same but never strong, or always light, balanced or strong. The others see the choice there. Changing it
+sends the machine a new order; the models the tiers stand for and the escalations stay as they were.
 
 The model is applied before the task starts: Claude Code is started with `--model`, as `/model` would switch it; OpenCode
 is switched by its bridge, the same switch as the notch's model menu (OpenCode 1 takes it with the next message, which is
