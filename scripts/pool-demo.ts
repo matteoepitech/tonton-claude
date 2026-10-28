@@ -76,7 +76,8 @@ export interface DemoMachine {
   /** Short: tmux's socket path must stay under 104 bytes on macOS. */
   tmux: string
   env: Record<string, string>
-  service: ReturnType<typeof Bun.spawn>
+  /** Its background service. */
+  service: { kill(): void }
 }
 
 export interface PoolDemo {
@@ -166,7 +167,7 @@ export async function startPoolDemo(options: PoolDemoOptions = {}): Promise<Pool
     const pool = await api.create(key, account, { name: 'Shop hackathon', repo: origin }, { name: 'Demo' })
     const poolId = pool.pool.id
     let watch: PoolWatch | undefined
-    const state = () => watch?.pool(poolId)?.state
+    const state = () => watch?.pool(poolId)?.state ?? undefined
     client = new RelayClient({
       vault: new Vault(key),
       connect: () => new WebSocket(`${relay.replace('http', 'ws')}/ws/app`, ['tonton', `bearer.${created.token}`]) as unknown as SocketLike,
