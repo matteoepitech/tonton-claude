@@ -33,6 +33,8 @@ import type {
   PoolSessionRef,
   PoolSnapshot,
   PoolTask,
+  PoolTaskMerge,
+  PoolTaskMergeState,
   PoolTaskSize,
   PoolTaskState,
   PoolUpdate,
@@ -213,6 +215,26 @@ export function decodePoolTask(value: unknown): PoolTask | null {
     machine: decodePoolMachineRef(f.machine),
     attempts:
       typeof f.attempts === 'number' && Number.isInteger(f.attempts) && f.attempts >= 0 && f.attempts <= 1000 ? f.attempts : undefined,
+    merge: decodePoolTaskMerge(f.merge),
+  })
+}
+
+const MERGE_STATES: readonly PoolTaskMergeState[] = ['merged', 'pr', 'conflict', 'failed']
+
+/** A task's merge record, as the orchestrator's agent wrote it: without a known state, there is none. */
+function decodePoolTaskMerge(value: unknown): PoolTaskMerge | undefined {
+  const f = fields(value)
+  const at = text(f?.at)
+  if (!f || !MERGE_STATES.includes(f.state as PoolTaskMergeState) || at === undefined) return undefined
+  return defined({
+    state: f.state as PoolTaskMergeState,
+    at,
+    commit: text(f.commit),
+    url: text(f.url),
+    files: texts(f.files),
+    command: text(f.command),
+    output: text(f.output),
+    fix: text(f.fix),
   })
 }
 

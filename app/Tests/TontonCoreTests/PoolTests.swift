@@ -144,4 +144,18 @@ final class PoolTests: XCTestCase {
         XCTAssertEqual(decoded.reviewer?.session, "rev")
         XCTAssertEqual(decoded.review, "Fix the total")
     }
+
+    func testMergeRecordReadsAsTheAgentSealsItAndIsKeptWhenWrittenBack() throws {
+        let task =
+            #"{"title":"Checkout","state":"assigned","merge":{"state":"conflict","at":"2026-10-28T12:00:00Z","files":["web/app.ts"],"output":"CONFLICT (content)","fix":"t2"}}"#
+        let decoded = try JSONDecoder().decode(PoolTask.self, from: Data(task.utf8))
+        XCTAssertEqual(decoded.merge?.state, "conflict")
+        XCTAssertEqual(decoded.merge?.files, ["web/app.ts"])
+        XCTAssertEqual(decoded.merge?.fix, "t2")
+        let again = try JSONDecoder().decode(PoolTask.self, from: JSONEncoder().encode(decoded))
+        XCTAssertEqual(again.merge, decoded.merge)
+        // A newer agent's state, or a record with fields missing, still opens.
+        let newer = try JSONDecoder().decode(PoolTask.self, from: Data(#"{"title":"T","state":"done","merge":{"state":"queued"}}"#.utf8))
+        XCTAssertEqual(newer.merge?.state, "queued")
+    }
 }
