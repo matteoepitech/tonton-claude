@@ -268,14 +268,23 @@ Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safe
 ## The notch
 
 The Mac app lists the account's pools when it connects and follows each one on its socket (`app/Sources/TontonClaude/Data/PoolStore.swift`,
-the logic in `TontonCore/PoolState.swift` and `PoolJoin.swift`). A session joins from its context menu or the pool
-button of its chat header: the pool, its area, what it knows, its repository folder, the kind of task it takes, and
-whether it starts pool tasks right away. Only sessions an agent serves join, from an agent of 0.8.0 or later. The row and
-the header show its role, and the pool button its task, its agent's state and the pool's latest messages for it, with a
-link to the pool on the website (`<relay>/#pool=<id>`) and a way to leave. For a session a pool machine started, the
-pool button also stops that machine; for the owner and admins, it stops every machine of the pool at once, the dispatch
-first, or starts them again (`pool_stop_machine`). Settings › Machines stops and starts each of the account's machines
-in each pool. Pools are made and joined on the website.
+the logic in `TontonCore/PoolState.swift`, `PoolJoin.swift` and `PoolPlan.swift`). Its pool views are drawn in the notch's
+own style (`Chat/PoolDesign.swift`: cards, chips and capsule buttons), not the system's controls.
+
+- A session joins from its context menu or the pool button of its chat header, in a click: the pool (one chip per pool
+  when there are several), an area if the owner wants one, and **Join the pool**. Its tool, model and folder go with it,
+  and it starts what the pool gives it unless its owner unticks **Start its pool tasks without asking me**; permission
+  prompts still come to them. What it knows and its folder are under **More…**. Only sessions an agent serves join, from
+  an agent of 0.8.0 or later.
+- The row and the header show its role, and the pool button opens the pool's panel: how far the pool is, the
+  session's role and task, the pool's latest messages for it, the machine that started it with its plan, **Open the
+  pool** on the website (`<relay>/#pool=<id>`) and **Leave**. For a session a pool machine started, the panel also stops
+  that machine; for the owner and admins, it stops every machine of the pool at once, the dispatch first, or starts them
+  again (`pool_stop_machine`).
+- Above the orchestrator's conversation, its plan shows as a card with **Accept and start** for the owner and admins
+  (pool-autopilot.md, The plan); a task waiting for its owner shows as a card with **Accept** and **Refuse**.
+- Settings › Machines adds one of the account's machines to a pool in one click (pool-autopilot.md, Joining), and stops,
+  starts or removes each machine in each pool. Pools are made and joined on the website.
 
 ## The website
 

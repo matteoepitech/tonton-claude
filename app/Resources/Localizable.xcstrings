@@ -2067,16 +2067,6 @@
         }
       }
     },
-    "Agent" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent"
-          }
-        }
-      }
-    },
     "Agent log" : {
       "localizations" : {
         "fr" : {
@@ -2307,6 +2297,16 @@
         }
       }
     },
+    "Any" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous"
+          }
+        }
+      }
+    },
     "AppleScript and Shortcuts (Run AppleScript) can always read the sessions. With this on, they can also message Claude, e.g. send message \"run the tests\" to \"api\"." : {
       "localizations" : {
         "fr" : {
@@ -2357,12 +2357,12 @@
         }
       }
     },
-    "Area: front, back, infra…" : {
+    "Area, if you want one" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Domaine : front, back, infra…"
+            "value" : "Domaine, si vous voulez"
           }
         }
       }
@@ -4083,6 +4083,16 @@
         }
       }
     },
+    "Every machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les machines"
+          }
+        }
+      }
+    },
     "Every permission request of its pool sessions comes to you, as for any session." : {
       "localizations" : {
         "fr" : {
@@ -4401,16 +4411,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Donnez-lui un dossier de travail depuis la racine ou votre dossier personnel, par exemple ~/tonton-pool."
-          }
-        }
-      }
-    },
-    "Gives it" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lui confier"
           }
         }
       }
@@ -4877,22 +4877,32 @@
         }
       }
     },
-    "It plans the project and hands the tasks to the other sessions, instead of taking tasks itself." : {
+    "It plans and hands out the work." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elle planifie le projet et donne les tâches aux autres sessions, au lieu d’en prendre elle-même."
+            "value" : "Il planifie et répartit le travail."
           }
         }
       }
     },
-    "It plans the project and hands the tasks to the other sessions." : {
+    "It plans the project and hands the tasks out." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elle planifie le projet et donne les tâches aux autres sessions."
+            "value" : "Il planifie le projet et répartit les tâches."
+          }
+        }
+      }
+    },
+    "It plans the project and hands the tasks to the others, instead of taking tasks itself." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il planifie le projet et confie les tâches aux autres, au lieu d’en prendre lui-même."
           }
         }
       }
@@ -4902,7 +4912,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elle démarre une session pour chaque tâche que la pool lui confie, et la termine quand la tâche est finie."
+            "value" : "Elle démarre une session pour chaque tâche que le pool lui confie, et la termine quand la tâche est finie."
           }
         }
       }
@@ -4957,6 +4967,16 @@
         }
       }
     },
+    "Its plan, its tasks and its team, on the relay's website." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son plan, ses tâches et son équipe, sur le site du relais."
+          }
+        }
+      }
+    },
     "Its pool sessions do anything without asking, commands included: only for a machine or a virtual machine you give to the work, never one with your own files on it." : {
       "localizations" : {
         "fr" : {
@@ -5007,32 +5027,12 @@
         }
       }
     },
-    "Join a pool" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rejoindre un pool"
-          }
-        }
-      }
-    },
     "Join a pool to share Tonton's level and equipped look with your team." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rejoignez une pool pour partager le niveau et l’apparence équipée de Tonton avec votre équipe."
-          }
-        }
-      }
-    },
-    "Join as" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rejoindre comme"
           }
         }
       }
@@ -5057,12 +5057,22 @@
         }
       }
     },
-    "Join the pool as %@" : {
+    "Join the pool" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rejoindre le pool comme %@"
+            "value" : "Rejoindre le pool"
+          }
+        }
+      }
+    },
+    "Joining…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrivée…"
           }
         }
       }
@@ -5238,12 +5248,12 @@
         }
       }
     },
-    "Leave pool" : {
+    "Leave" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quitter le pool"
+            "value" : "Quitter"
           }
         }
       }
@@ -5454,22 +5464,22 @@
         }
       }
     },
+    "Make it the orchestrator" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En faire l’orchestrateur"
+          }
+        }
+      }
+    },
     "Make it the pool's orchestrator" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "En faire l’orchestrateur du pool"
-          }
-        }
-      }
-    },
-    "Make this session the orchestrator" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Faire de cette session l’orchestrateur"
           }
         }
       }
@@ -5534,16 +5544,6 @@
         }
       }
     },
-    "Messages" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Messages"
-          }
-        }
-      }
-    },
     "Midnight" : {
       "comment" : "A theme",
       "localizations" : {
@@ -5581,6 +5581,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Budget mensuel"
+          }
+        }
+      }
+    },
+    "More…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus…"
           }
         }
       }
@@ -6166,12 +6176,12 @@
         }
       }
     },
-    "Off: the notch asks you before the session starts a task the pool gives it." : {
+    "Off: the notch asks you before the session starts a task the pool gives it. Permission prompts come to you either way." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Désactivé : l’encoche vous demande avant que la session commence une tâche que le pool lui donne."
+            "value" : "Désactivé : le notch vous demande avant que la session commence une tâche du pool. Les demandes de permission vous arrivent dans tous les cas."
           }
         }
       }
@@ -6336,16 +6346,6 @@
         }
       }
     },
-    "Open on the website" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ouvrir sur le site"
-          }
-        }
-      }
-    },
     "Open pool leaderboard" : {
       "localizations" : {
         "fr" : {
@@ -6386,6 +6386,16 @@
         }
       }
     },
+    "Open the pool" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir le pool"
+          }
+        }
+      }
+    },
     "Open the web app and scan this code to sign in there. It holds your recovery key: whoever scans it can read and drive your sessions, so show it to your own devices only." : {
       "localizations" : {
         "fr" : {
@@ -6412,16 +6422,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ou un emoji"
-          }
-        }
-      }
-    },
-    "Or fill in the rest below." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ou remplissez le reste ci-dessous."
           }
         }
       }
@@ -6593,16 +6593,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisissez une session"
-          }
-        }
-      }
-    },
-    "Pick an area" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisir un domaine"
           }
         }
       }
@@ -7426,16 +7416,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tout de suite"
-          }
-        }
-      }
-    },
-    "Role" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rôle"
           }
         }
       }
@@ -8382,6 +8362,16 @@
         }
       }
     },
+    "Start all" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout démarrer"
+          }
+        }
+      }
+    },
     "Start claude in a terminal on this Mac and it shows up here. For your other machines, set up an account." : {
       "localizations" : {
         "fr" : {
@@ -8412,16 +8402,6 @@
         }
       }
     },
-    "Start every machine" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relancer toutes les machines"
-          }
-        }
-      }
-    },
     "Start here" : {
       "localizations" : {
         "fr" : {
@@ -8432,12 +8412,12 @@
         }
       }
     },
-    "Start machine" : {
+    "Start its pool tasks without asking me" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Relancer la machine"
+            "value" : "Lancer ses tâches de pool sans me demander"
           }
         }
       }
@@ -8452,22 +8432,12 @@
         }
       }
     },
-    "Start pool tasks right away" : {
+    "Started by %@" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Commencer tout de suite les tâches du pool"
-          }
-        }
-      }
-    },
-    "Started by %@ for the pool" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lancée par %@ pour le pool"
+            "value" : "Lancée par %@"
           }
         }
       }
@@ -8548,6 +8518,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêter %@ ? Elle ne prend plus de tâche jusqu’à ce qu’on la relance."
+          }
+        }
+      }
+    },
+    "Stop all" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout arrêter"
           }
         }
       }
@@ -8730,16 +8710,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Prend"
-          }
-        }
-      }
-    },
-    "Task" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tâche"
           }
         }
       }
@@ -9071,12 +9041,12 @@
         }
       }
     },
-    "The pool then has no orchestrator until you make another session it." : {
+    "The pool then has no orchestrator until you choose another one." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le pool n’a alors plus d’orchestrateur, jusqu’à ce qu’une autre session le devienne."
+            "value" : "Le pool n’a alors plus d’orchestrateur jusqu’à ce que vous en choisissiez un autre."
           }
         }
       }
@@ -9337,12 +9307,12 @@
         }
       }
     },
-    "Time" : {
+    "This session leaves the pool. You stay a member." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Temps"
+            "value" : "Cette session quitte le pool. Vous restez membre."
           }
         }
       }

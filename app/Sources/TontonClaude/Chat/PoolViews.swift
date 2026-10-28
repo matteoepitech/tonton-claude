@@ -41,7 +41,7 @@ struct PoolButton: View {
     }
 }
 
-/// What the session does in its pool, the pool's latest messages for it, and the way out.
+/// What the session does in its pool: how far the pool is, its task, the latest messages for it, and the way out.
 struct PoolPanel: View {
     let session: SessionSummary
     let board: PoolBoard
@@ -51,86 +51,117 @@ struct PoolPanel: View {
     @EnvironmentObject var notch: NotchState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "person.3.fill").foregroundStyle(Theme.accent).accessibilityHidden(true)
-                Text(board.name).font(.notch(13, weight: .bold)).lineLimit(1).accessibilityAddTraits(.isHeader)
-                if state.paused { Text("Paused").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.warning) }
-                Spacer()
-            }
-            if let goal = state.info?.goal { Text(goal).font(.notch(11)).foregroundStyle(Theme.secondary).lineLimit(3) }
-            VStack(alignment: .leading, spacing: 3) {
+        let tasks = state.tasks.filter { $0.task != nil }
+        let done = tasks.filter { $0.task?.state == .done }.count
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                IconTile(systemName: "person.3.fill", tint: Theme.accent, size: 30).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(board.name).font(.notch(13, weight: .bold)).lineLimit(1).accessibilityAddTraits(.isHeader)
+                    if let goal = state.info?.goal {
+                        Text(goal).font(.notch(10.5)).foregroundStyle(Theme.secondary).lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 4)
+                if state.paused { PoolChip(text: String(localized: "Paused"), systemImage: "pause.fill", tint: Theme.warning) }
                 if let deadline = state.info?.deadline {
                     // A hackathon: the countdown moves while the panel is open.
                     TimelineView(.periodic(from: .now, by: 30)) { context in
-                        row("Time", PoolHackathon.countdown(deadline, now: context.date) ?? "")
-                            .foregroundStyle(PoolHackathon.isLate(deadline, now: context.date) ? Theme.danger : Theme.text)
+                        PoolChip(
+                            text: PoolHackathon.countdown(deadline, now: context.date) ?? "", systemImage: "timer",
+                            tint: PoolHackathon.isLate(deadline, now: context.date) ? Theme.danger : Theme.accent)
                     }
                 }
-                row("Role", PoolLabels.role(of: member, in: state))
-                row("Takes", PoolTaskSize.of(member.profile, tool: session.codingTool).label)
-                row("Task", PoolLabels.task(of: session.id, in: state))
-                row(
-                    "Agent",
-                    member.ready ? String(localized: "Working for the pool") : String(localized: "Waiting for its agent to take the order…")
-                )
             }
+            if !tasks.isEmpty {
+                HStack(spacing: 8) {
+                    PoolProgress(done: done, total: tasks.count)
+                    Text(verbatim: "\(done)/\(tasks.count)").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.tertiary)
+                        .monospacedDigit()
+                }
+            }
+            yourTask
             let messages = state.messages(of: session.id, limit: 8)
             if !messages.isEmpty {
-                Text("Messages").font(.notch(11, weight: .semibold)).padding(.top, 4)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: 6) {
                         ForEach(messages) { post in
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(state.who(account: post.account, session: post.session)).font(.notch(10, weight: .semibold))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(state.who(account: post.account, session: post.session)).font(.notch(9.5, weight: .semibold))
                                     .foregroundStyle(Theme.tertiary)
                                 Text(post.body?.text ?? "").font(.notch(11)).textSelection(.enabled)
                             }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 9).fill(Theme.raised))
                         }
                     }
                 }
-                .frame(maxHeight: 160)
-            }
-            if board.summary.role == .owner || board.summary.role == .admin {
-                let leads = state.orchestrator?.account == member.account && state.orchestrator?.session == member.session
-                HStack {
-                    if leads {
-                        Button("Not the orchestrator") { pools.setOrchestrator(nil, pool: board.id) }
-                            .help("The pool then has no orchestrator until you make another session it.")
-                    } else {
-                        Button("Make this session the orchestrator") {
-                            pools.setOrchestrator(PoolSessionRef(account: member.account, session: member.session), pool: board.id)
-                        }
-                        .help("It plans the project and hands the tasks to the other sessions.")
-                    }
-                    Spacer()
-                }
-                .font(.notch(11))
+                .frame(maxHeight: 170)
             }
             PoolMachineButtons(poolId: board.id, role: board.summary.role, state: state, member: member)
-            HStack {
+            HStack(spacing: 6) {
                 if let url = pools.websiteURL(of: board.id) {
-                    Button("Open on the website") { NSWorkspace.shared.open(url) }
+                    Button {
+                        NSWorkspace.shared.open(url)
+                    } label: {
+                        Label("Open the pool", systemImage: "safari")
+                    }
+                    .buttonStyle(NotchButtonStyle())
+                    .help("Its plan, its tasks and its team, on the relay's website.")
                 }
-                Spacer()
-                Button("Leave pool", role: .destructive) {
+                if state.machine(of: member) == nil && (board.summary.role == .owner || board.summary.role == .admin) {
+                    // A session put in by hand: an admin can still make it the orchestrator.
+                    let leads = PoolLabels.leads(member, in: state)
+                    Button(leads ? "Not the orchestrator" : "Make it the orchestrator") {
+                        pools.setOrchestrator(
+                            leads ? nil : PoolSessionRef(account: member.account, session: member.session), pool: board.id)
+                    }
+                    .buttonStyle(NotchButtonStyle())
+                    .help(
+                        leads
+                            ? "The pool then has no orchestrator until you choose another one."
+                            : "It plans the project and hands the tasks out.")
+                }
+                Spacer(minLength: 4)
+                Button("Leave", role: .destructive) {
                     pools.leave(session.id, pool: board.id)
                     notch.poolOf = nil
                 }
+                .buttonStyle(NotchButtonStyle(kind: .destructive))
+                .help("This session leaves the pool. You stay a member.")
             }
-            .font(.notch(11))
-            .padding(.top, 4)
         }
-        .padding(12)
-        .frame(width: 320)
+        .padding(14)
+        .frame(width: 340)
     }
 
-    private func row(_ title: LocalizedStringKey, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 44, alignment: .leading)
-            Text(value).font(.notch(11)).lineLimit(2)
+    /// What this session is to the pool, and the task it works on.
+    private var yourTask: some View {
+        let task = state.currentTask(of: session.id)
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                PoolChip(
+                    text: PoolLabels.role(of: member, in: state),
+                    systemImage: PoolLabels.leads(member, in: state) ? "sparkles" : "hammer.fill")
+                Spacer()
+                HStack(spacing: 4) {
+                    Circle().fill(member.ready ? Theme.success : Theme.warning).frame(width: 6, height: 6)
+                    Text(member.ready ? String(localized: "Working for the pool") : String(localized: "Joining…"))
+                        .font(.notch(10)).foregroundStyle(Theme.tertiary)
+                }
+                .help(member.ready ? "" : String(localized: "Waiting for its agent to take the order…"))
+            }
+            if let task = task?.task {
+                Text(task.title).font(.notch(12, weight: .semibold)).lineLimit(2)
+                Text(task.state.label).font(.notch(10)).foregroundStyle(Theme.tertiary)
+            } else {
+                Text(PoolLabels.leads(member, in: state) ? "It plans and hands out the work." : "No task yet")
+                    .font(.notch(11)).foregroundStyle(Theme.secondary)
+            }
         }
+        .poolCard()
     }
 }
 
@@ -150,78 +181,86 @@ struct PoolMachineButtons: View {
     var body: some View {
         let all = state.machines ?? []
         let manages = role == .owner || role == .admin
-        if let machine = state.machine(of: member), PoolState.mayStop(machine, account: member.account, role: role) {
-            let name = machine.profile?.name ?? String(localized: "This machine")
-            // The orchestrator session goes on when its machine stops: the admin still talks to it.
-            let leads = state.orchestrator?.account == member.account && state.orchestrator?.session == member.session
-            HStack {
-                Text(machine.stopped ? "\(name) is stopped" : "Started by \(name) for the pool")
-                    .font(.notch(10)).foregroundStyle(Theme.tertiary).lineLimit(1)
-                Spacer()
-                if machine.stopped {
-                    Button("Start machine") { pools.stopMachine(machine.machine, stopped: false, pool: poolId) }
-                        .help("It takes the pool's tasks again.")
-                } else if asking != .machine {
-                    Button("Stop machine", role: .destructive) { asking = .machine }
-                        .help(
-                            leads
-                                ? "Its other pool sessions end, and their tasks go back to the board. This orchestrator session goes on."
-                                : "Its pool sessions end, this one too, and their tasks go back to the board.")
-                }
-            }
-            .font(.notch(11))
-            if asking == .machine && !machine.stopped {
-                ask("Stop \(name)? It takes no tasks until it is started again.", action: "Stop machine") {
-                    pools.stopMachine(machine.machine, stopped: true, pool: poolId)
-                }
-            }
-        }
-        if manages && !all.isEmpty {
-            let stops = all.contains { !$0.stopped } && asking != .every
-            let starts = all.contains(where: \.stopped)
-            if stops || starts {
-                HStack {
-                    if stops {
-                        Button("Stop every machine", role: .destructive) { asking = .every }
-                            .help("The dispatch stops, and every machine ends its pool sessions.")
+        let machine = state.machine(of: member).flatMap { PoolState.mayStop($0, account: member.account, role: role) ? $0 : nil }
+        let stops = manages && all.contains { !$0.stopped }
+        let starts = manages && all.contains(where: \.stopped)
+        if machine != nil || stops || starts {
+            VStack(alignment: .leading, spacing: 6) {
+                if let machine {
+                    let name = machine.profile?.name ?? String(localized: "This machine")
+                    // The orchestrator session goes on when its machine stops: the admin still talks to it.
+                    let leads = PoolLabels.leads(member, in: state)
+                    HStack(spacing: 6) {
+                        Image(systemName: "desktopcomputer").font(.notch(10)).foregroundStyle(Theme.tertiary).accessibilityHidden(true)
+                        Text(machine.stopped ? "\(name) is stopped" : "Started by \(name)").font(.notch(10.5)).lineLimit(1)
+                        if let plan = machine.profile?.planLabel { PoolChip(text: plan, tint: Theme.textDim) }
+                        Spacer(minLength: 4)
+                        if machine.stopped {
+                            Button("Start") { pools.stopMachine(machine.machine, stopped: false, pool: poolId) }
+                                .buttonStyle(NotchButtonStyle())
+                                .help("It takes the pool's tasks again.")
+                        } else if asking != .machine {
+                            Button("Stop") { asking = .machine }
+                                .buttonStyle(NotchButtonStyle(kind: .destructive))
+                                .help(
+                                    leads
+                                        ? "Its other pool sessions end, and their tasks go back to the board. This orchestrator session goes on."
+                                        : "Its pool sessions end, this one too, and their tasks go back to the board.")
+                        }
                     }
-                    if starts {
-                        Button("Start every machine") { pools.stopEveryMachine(false, pool: poolId) }
-                            .help("The dispatch stays as it is: turn it on from the website, or ask the orchestrator.")
+                    if asking == .machine && !machine.stopped {
+                        ask("Stop \(name)? It takes no tasks until it is started again.", action: "Stop machine") {
+                            pools.stopMachine(machine.machine, stopped: true, pool: poolId)
+                        }
                     }
-                    Spacer()
                 }
-                .font(.notch(11))
+                if stops || starts {
+                    HStack(spacing: 6) {
+                        Text("Every machine").font(.notch(10.5)).foregroundStyle(Theme.secondary)
+                        Spacer(minLength: 4)
+                        if starts {
+                            Button("Start all") { pools.stopEveryMachine(false, pool: poolId) }
+                                .buttonStyle(NotchButtonStyle())
+                                .help("The dispatch stays as it is: turn it on from the website, or ask the orchestrator.")
+                        }
+                        if stops && asking != .every {
+                            Button("Stop all") { asking = .every }
+                                .buttonStyle(NotchButtonStyle(kind: .destructive))
+                                .help("The dispatch stops, and every machine ends its pool sessions.")
+                        }
+                    }
+                    if asking == .every {
+                        ask(
+                            "Stop every machine? The dispatch stops, and their pool sessions end. Nothing starts again until you start the machines and the dispatch.",
+                            action: "Stop every machine"
+                        ) { pools.stopEveryMachine(true, pool: poolId) }
+                    }
+                }
             }
-            if asking == .every {
-                ask(
-                    "Stop every machine? The dispatch stops, and their pool sessions end. Nothing starts again until you start the machines and the dispatch.",
-                    action: "Stop every machine"
-                ) { pools.stopEveryMachine(true, pool: poolId) }
-            }
+            .poolCard(padding: 9)
         }
     }
 
     private func ask(_ question: LocalizedStringKey, action: LocalizedStringKey, _ confirm: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(question).font(.notch(11)).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Spacer()
-                Button("Cancel") { asking = nil }
+                Button("Cancel") { asking = nil }.buttonStyle(NotchButtonStyle())
                 Button(action, role: .destructive) {
                     confirm()
                     asking = nil
                 }
-                .foregroundStyle(Theme.danger)
+                .buttonStyle(NotchButtonStyle(kind: .destructive))
             }
-            .font(.notch(11, weight: .medium))
         }
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.danger.opacity(0.1)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.danger.opacity(0.1)))
     }
 }
 
-/// Puts the session in one of the account's pools, with what the pool should know of it.
+/// Puts the session in one of the account's pools in a click: the pool, an area if the owner wants one, and Join. What
+/// it is (its tool, model and folder) goes with it; the rest is a click further.
 struct PoolJoinView: View {
     let session: SessionSummary
     @EnvironmentObject var store: SessionStore
@@ -229,6 +268,7 @@ struct PoolJoinView: View {
     @ObservedObject private var pools = PoolStore.shared
     @State private var form: PoolJoinForm
     @State private var poolId: String?
+    @State private var more = false
     @State private var error: String?
     /// Owner and admins: make the session the pool's orchestrator once it joins.
     @State private var lead = false
@@ -239,8 +279,21 @@ struct PoolJoinView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Join a pool").font(.notch(13, weight: .bold)).accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                IconTile(systemName: "person.3", tint: Theme.accent, size: 30).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Put this session in a pool").font(.notch(13, weight: .bold)).accessibilityAddTraits(.isHeader)
+                    // The pool it joins when the account has one, then what the session runs.
+                    Text(
+                        verbatim: ([
+                            pools.joinable.count == 1 ? pools.joinable.first?.name : nil, session.codingTool.label, session.modelName,
+                        ]
+                        .compactMap { $0 }).joined(separator: " · ")
+                    )
+                    .font(.notch(10.5)).foregroundStyle(Theme.tertiary).lineLimit(1)
+                }
+            }
             if let why = store.whyNotPool(session) {
                 Text(why).font(.notch(11)).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
             } else if pools.joinable.isEmpty {
@@ -250,8 +303,8 @@ struct PoolJoinView: View {
                 fields
             }
         }
-        .padding(12)
-        .frame(width: 320)
+        .padding(14)
+        .frame(width: 340)
         .task { await pools.refresh() }
     }
 
@@ -262,8 +315,14 @@ struct PoolJoinView: View {
 
     private var canLead: Bool { selected.map { $0.summary.role == .owner || $0.summary.role == .admin } ?? false }
 
+    /// The areas to pick from: a hackathon's roles, else the usual ones.
+    private var areas: [String] {
+        if let state = selected?.state, state.info?.isHackathon == true { return PoolHackathon.joinRoles(of: state) }
+        return PoolJoinForm.areas
+    }
+
     /// Puts the session in the pool, and makes it the orchestrator when asked.
-    private func join(_ form: PoolJoinForm) {
+    private func join() {
         guard let pool = selected?.id else { return }
         do {
             try pools.join(session, pool: pool, form: form)
@@ -276,55 +335,69 @@ struct PoolJoinView: View {
     }
 
     @ViewBuilder private var fields: some View {
-        Picker("Pool", selection: Binding(get: { poolId ?? pools.joinable.first?.id }, set: { poolId = $0 })) {
-            ForEach(pools.joinable, id: \.id) { board in Text(board.name).tag(Optional(board.id)) }
-        }
-        if let state = selected?.state, state.info?.isHackathon == true {
-            // A hackathon: one click puts the session in as one of the pool's roles.
-            VStack(alignment: .leading, spacing: 4) {
-                if let left = PoolHackathon.countdown(state.info?.deadline) {
-                    Text(verbatim: left).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.accent)
-                }
-                Text("Join as").font(.notch(10, weight: .semibold)).foregroundStyle(Theme.tertiary)
-                HStack(spacing: 4) {
-                    ForEach(PoolHackathon.joinRoles(of: state), id: \.self) { role in
-                        Button(PoolHackathon.roleLabel(role)) { join(.quick(session, area: role)) }
-                            .accessibilityLabel(String(localized: "Join the pool as \(PoolHackathon.roleLabel(role))"))
+        if pools.joinable.count > 1 {
+            section("Pool") {
+                FlowLayout {
+                    ForEach(pools.joinable, id: \.id) { board in
+                        PoolChoice(title: board.name, picked: board.id == selected?.id) { poolId = board.id }
                     }
                 }
-                Text("Or fill in the rest below.").font(.notch(10)).foregroundStyle(Theme.tertiary)
             }
         }
-        HStack(spacing: 4) {
-            TextField("Area: front, back, infra…", text: $form.area).textFieldStyle(.roundedBorder)
-            Menu {
-                ForEach(PoolJoinForm.areas, id: \.self) { area in Button(area) { form.area = area } }
-            } label: {
-                Image(systemName: "chevron.down")
+        if let left = selected?.state?.info?.deadline.flatMap({ PoolHackathon.countdown($0) }) {
+            PoolChip(text: left, systemImage: "timer")
+        }
+        section("Area, if you want one") {
+            FlowLayout {
+                PoolChoice(title: String(localized: "Any"), picked: form.area.isEmpty) { form.area = "" }
+                ForEach(areas, id: \.self) { area in
+                    PoolChoice(title: PoolHackathon.roleLabel(area), picked: form.area == area) { form.area = area }
+                }
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .accessibilityLabel("Pick an area")
         }
-        TextField("What it knows, in a few words", text: $form.skills).textFieldStyle(.roundedBorder)
-        TextField("Repository folder", text: $form.repo).textFieldStyle(.roundedBorder)
-        Text(verbatim: "\(session.codingTool.label)\(session.modelName.map { " · \($0)" } ?? "")").font(.notch(10)).foregroundStyle(
-            Theme.tertiary)
-        Picker("Gives it", selection: $form.takes) {
-            ForEach(PoolTaskSize.allCases) { size in Text(size.label).tag(size) }
+        VStack(spacing: 8) {
+            Toggle(isOn: $form.autoStart) {
+                Text("Start its pool tasks without asking me").font(.notch(11))
+            }
+            .toggleStyle(AccentToggleStyle())
+            .help("Off: the notch asks you before the session starts a task the pool gives it. Permission prompts come to you either way.")
+            if canLead {
+                Toggle(isOn: $lead) {
+                    Text("Make it the pool's orchestrator").font(.notch(11))
+                }
+                .toggleStyle(AccentToggleStyle())
+                .help("It plans the project and hands the tasks to the others, instead of taking tasks itself.")
+            }
         }
-        Toggle("Start pool tasks right away", isOn: $form.autoStart)
-            .help("Off: the notch asks you before the session starts a task the pool gives it.")
-        if canLead {
-            Toggle("Make it the pool's orchestrator", isOn: $lead)
-                .help("It plans the project and hands the tasks to the other sessions, instead of taking tasks itself.")
+        if more {
+            VStack(alignment: .leading, spacing: 6) {
+                ThemeField(placeholder: "What it knows, in a few words", text: $form.skills)
+                ThemeField(placeholder: "Repository folder", text: $form.repo)
+            }
         }
         if let error { Text(error).font(.notch(10)).foregroundStyle(Theme.danger) }
         HStack {
+            if !more {
+                Button("More…") { more = true }
+                    .buttonStyle(.plain)
+                    .font(.notch(10.5))
+                    .foregroundStyle(Theme.tertiary)
+            }
             Spacer()
-            Button("Join pool") { join(form) }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
+            Button {
+                join()
+            } label: {
+                Label("Join the pool", systemImage: "arrow.right")
+            }
+            .buttonStyle(NotchButtonStyle(kind: .primary))
+            .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private func section<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.notch(10, weight: .semibold)).foregroundStyle(Theme.tertiary)
+            content()
         }
     }
 }
@@ -403,16 +476,14 @@ struct PoolTaskCard: View {
                     }
                 }
             }
-            HStack {
+            HStack(spacing: 6) {
                 Spacer()
-                Button("Refuse", action: refuse)
-                Button("Accept", action: accept).buttonStyle(.borderedProminent).tint(Theme.accent)
+                Button("Refuse", action: refuse).buttonStyle(NotchButtonStyle())
+                Button(action: accept) { Label("Accept", systemImage: "checkmark") }
+                    .buttonStyle(NotchButtonStyle(kind: .primary))
             }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.accent.opacity(0.3)))
+        .poolCard(highlighted: true)
         .help("The session asks you first before it starts a pool task. Refuse puts it back on the pool's board.")
     }
 }

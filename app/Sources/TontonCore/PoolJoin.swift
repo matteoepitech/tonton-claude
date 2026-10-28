@@ -35,13 +35,14 @@ public struct PoolJoinForm: Equatable, Sendable {
     /// Start pool tasks as soon as they are assigned, or ask in the notch first.
     public var autoStart: Bool
 
-    /// For a session: its folder as the repo, its tool's kind of task, and asking first.
+    /// For a session: its folder as the repo, its tool's kind of task, and starting what the pool gives it, as a pool
+    /// machine's sessions do: its owner unticks it to be asked first. Permission prompts still come to the owner.
     public init(session: SessionSummary) {
         area = ""
         skills = ""
         repo = session.cwd
         takes = .default(for: session.codingTool)
-        autoStart = false
+        autoStart = true
     }
 
     /// What the pool sees of the session: what the owner typed, its project, machine and tool.

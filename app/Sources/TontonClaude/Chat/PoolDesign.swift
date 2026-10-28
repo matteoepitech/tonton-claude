@@ -163,3 +163,64 @@ struct PoolPlanCard: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.raised))
     }
 }
+
+/// Chips that wrap onto the next line when the row is full.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 5
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(subviews, width: proposal.width ?? .infinity)
+        return CGSize(width: proposal.width ?? rows.width, height: rows.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let rows = arrange(subviews, width: bounds.width)
+        for (index, point) in rows.points.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> (points: [CGPoint], width: CGFloat, height: CGFloat) {
+        var points: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var line: CGFloat = 0
+        var widest: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > width {
+                x = 0
+                y += line + spacing
+                line = 0
+            }
+            points.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            line = max(line, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return (points, widest, y + line)
+    }
+}
+
+/// A chip to pick among a few: filled with the accent when picked.
+struct PoolChoice: View {
+    let title: String
+    let picked: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(verbatim: title)
+                .font(.notch(10.5, weight: .semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .foregroundStyle(picked ? Theme.onAccent : Theme.text)
+                .background(Capsule().fill(picked ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.raised)))
+                .overlay(Capsule().stroke(picked ? Color.clear : Theme.border))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(picked ? .isSelected : [])
+    }
+}
