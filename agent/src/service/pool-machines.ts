@@ -6,10 +6,10 @@
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { type PoolState, PoolVault } from '../../../shared/pool'
+import { newPoolItemId, type PoolState, type PoolTaskItem, PoolVault, sealPoolSessionOrder } from '../../../shared/pool'
 import { needsRepublish, PoolKeyring, resolvePoolKeyring, sealPoolMemberKey } from '../../../shared/pool-keys'
 import { openPoolMachineOrder } from '../../../shared/pool-machines'
-import type { PoolMachineOrder, PoolUpdate } from '../../../shared/pool-protocol'
+import type { PoolDispatch, PoolMachineOrder, PoolSessionProfile, PoolTask, PoolUpdate } from '../../../shared/pool-protocol'
 import type { AgentMessage } from '../../../shared/protocol'
 import { paths } from '../config'
 import { log } from '../log'
@@ -22,6 +22,14 @@ interface Membership {
   /** Null until the snapshot that follows the acknowledgement. */
   state: PoolState | null
 }
+
+/** How long a change waits for the relay to confirm it. */
+const CONFIRM_MS = 10_000
+/** The relay takes a session in the pool once it has seen it: the service asks again until then. */
+const JOIN_RETRY_MS = 3000
+const JOIN_TIMEOUT_MS = 2 * 60_000
+/** The relay refused a change of the task over an older revision. */
+export const CHANGED = 'The task changed meanwhile.'
 
 /** The newest order taken per pool, kept on disk: an older one the relay brings back after a restart is refused. */
 type Taken = Record<string, { issuedAt: string; left?: boolean }>
@@ -163,6 +171,113 @@ export class MachinePools {
   /** Resolves once every update received so far was applied. */
   settled(): Promise<void> {
     return this.queue
+  }
+
+  // MARK: What the machine writes, as itself
+
+  /**
+   * Sends the task over the revision it was read at, and waits for the relay: null once it took it, otherwise why not.
+   * Either way the pool's state has the answer when it returns, so what is decided next reads it.
+   */
+  async putTask(poolId: string, item: Pick<PoolTaskItem, 'id' | 'rev'>, next: PoolTask): Promise<string | null> {
+    const vault = this.vault(poolId)
+    if (!vault) return 'The machine left the pool.'
+    const blob = await vault.seal(next)
+    const confirmed = this.waitFor(poolId, update => {
+      if (update.t === 'pool_task' && update.task.id === item.id && update.task.rev > item.rev) return null
+      if (update.t === 'pool_conflict' && update.kind === 'task' && update.id === item.id) return CHANGED
+      return update.t === 'pool_error' ? update.message : undefined
+    })
+    this.post(async () => ({ t: 'pool_task', machineId: this.machineId, poolId, id: item.id, rev: item.rev, blob }))
+    const result = await confirmed
+    await this.settled()
+    return result
+  }
+
+  /** Turns the control loop on or off over the dispatch the machine knows: null once the relay took it. */
+  async putDispatch(poolId: string, dispatch: PoolDispatch): Promise<string | null> {
+    const vault = this.vault(poolId)
+    const rev = this.state(poolId)?.dispatch?.rev ?? 0
+    if (!vault) return 'The machine left the pool.'
+    const blob = await vault.seal(dispatch)
+    const confirmed = this.waitFor(poolId, update => {
+      if (update.t === 'pool_dispatch' && update.dispatch.rev > rev) return null
+      if (update.t === 'pool_conflict' && update.kind === 'dispatch') return 'The dispatch changed meanwhile.'
+      return update.t === 'pool_error' ? update.message : undefined
+    })
+    this.post(async () => ({ t: 'pool_dispatch', machineId: this.machineId, poolId, rev, blob }))
+    const result = await confirmed
+    await this.settled()
+    return result
+  }
+
+  async event(poolId: string, kind: string, taskId: string | undefined, text: string) {
+    const vault = this.vault(poolId)
+    if (!vault) return
+    const blob = await vault.seal({ kind, ...(taskId ? { taskId } : {}), text: text.slice(0, 500) })
+    this.post(async () => ({ t: 'pool_event', machineId: this.machineId, poolId, id: newPoolItemId(), blob }))
+  }
+
+  /**
+   * Puts a session this machine started in the pool, with an order sealed with the account key that names the machine
+   * and carries the mode its owner chose, and asks again until the relay, which must have seen the session first, takes
+   * it. `orchestrator`: the orchestrator machine's session, which the relay makes the pool's orchestrator.
+   */
+  async joinSession(poolId: string, sessionId: string, profile: PoolSessionProfile, orchestrator = false): Promise<boolean> {
+    const vault = this.vault(poolId)
+    const order = this.order(poolId)
+    const key = vault?.keyring.key(vault.keyring.version)
+    if (!vault || !order || !key) return false
+    const sealedOrder = await sealPoolSessionOrder(this.accountKey, {
+      poolId,
+      sessionId,
+      key,
+      version: vault.keyring.version,
+      autoStart: true,
+      machine: this.machineId,
+      mode: order.profile.mode,
+    })
+    const sealedProfile = await vault.seal(profile)
+    const deadline = Date.now() + JOIN_TIMEOUT_MS
+    while (Date.now() < deadline && this.order(poolId)) {
+      this.post(async () => ({
+        t: 'pool_machine_session',
+        machineId: this.machineId,
+        poolId,
+        sessionId,
+        order: sealedOrder,
+        profile: sealedProfile,
+        ...(orchestrator ? { orchestrator: true } : {}),
+      }))
+      for (let waited = 0; waited < JOIN_RETRY_MS; waited += 250) {
+        await Bun.sleep(250)
+        if (this.state(poolId)?.sessions.some(session => session.session === sessionId)) return true
+      }
+    }
+    return false
+  }
+
+  /** Takes a session this machine started out of the pool. */
+  leaveSession(poolId: string, sessionId: string) {
+    if (!this.order(poolId)) return
+    this.post(async () => ({ t: 'pool_machine_session_left', machineId: this.machineId, poolId, sessionId }))
+  }
+
+  private waitFor(poolId: string, check: (update: PoolUpdate) => string | null | undefined): Promise<string | null> {
+    return new Promise(resolve => {
+      const timer = setTimeout(() => {
+        stop()
+        resolve('The relay has not confirmed it.')
+      }, CONFIRM_MS)
+      const stop = this.listen(update => {
+        if ((update.t === 'pool_snapshot' ? update.pool.id : update.poolId) !== poolId) return
+        const result = check(update)
+        if (result === undefined) return
+        clearTimeout(timer)
+        stop()
+        resolve(result)
+      })
+    })
   }
 
   private taken(): Taken {

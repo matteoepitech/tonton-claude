@@ -4,8 +4,8 @@
 // every argument is checked before it reaches git, and git never asks for a password: it fails and says why.
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
-import { isAbsolute, join, resolve, sep } from 'node:path'
-import { gitEnv } from '../channel/pool-git'
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
+import { gitEnv, isBranchName } from '../channel/pool-git'
 import { fromHome } from '../launch'
 
 /** Cloning a large repository takes a while; fetching and adding a worktree much less. */
@@ -13,7 +13,8 @@ const CLONE_TIMEOUT_MS = 10 * 60_000
 const GIT_TIMEOUT_MS = 2 * 60_000
 /** As the relay checks task ids: safe as a folder name, a branch part and a tmux name. */
 export const TASK_ID = /^[A-Za-z0-9_-]{8,40}$/
-const BRANCH = /^pool\/[A-Za-z0-9_-]{8,40}(-[a-z0-9]+)*$/
+/** Under `pool/`, and a name git takes that can never pass for an option (channel/pool-git.ts). */
+const isTaskBranch = (branch: string) => branch.startsWith('pool/') && isBranchName(branch)
 
 export interface TaskTree {
   /** `<workdir>/tasks/<task>`, where the session runs. */
@@ -32,9 +33,9 @@ export function isRepository(repo: unknown): repo is string {
   return isAbsolute(repo) && !repo.includes('::')
 }
 
-/** `pool/<task>-<slug>`: the task's own branch when it has a good one, else one made from its title. */
+/** The task's own branch when it has a good one, as the orchestrator names them, else `pool/<task>-<slug>` from its title. */
 export function taskBranch(taskId: string, title: string, branch?: string): string {
-  if (branch && BRANCH.test(branch) && branch.startsWith(`pool/${taskId}`)) return branch
+  if (branch && isTaskBranch(branch)) return branch
   const slug = title
     .toLowerCase()
     .normalize('NFKD')
@@ -60,16 +61,38 @@ export function workFolder(workdir: string, home?: string): string | null {
  * stopped, and its work stays.
  */
 export async function prepareTaskTree(workdir: string, repo: string, taskId: string, branch: string): Promise<TaskTree | string> {
-  if (!TASK_ID.test(taskId) || !BRANCH.test(branch)) return 'The task has no id or branch this machine can use.'
-  if (!isRepository(repo)) return 'The pool’s repository is not a URL or a path git can clone.'
-  const root = workFolder(workdir)
-  if (!root) return `${workdir} is not a full path on this machine.`
-  const clone = join(root, 'repo')
+  if (!TASK_ID.test(taskId) || !isTaskBranch(branch)) return 'The task has no id or branch this machine can use.'
+  const prepared = await prepareRepository(workdir, repo)
+  if (typeof prepared === 'string') return prepared
+  const { clone } = prepared
+  const root = dirname(clone)
   const cwd = join(root, 'tasks', taskId)
   // Inside the owner's folder, whatever the names hold.
   if (!cwd.startsWith(root + sep)) return 'The task’s folder would be outside the work folder.'
   try {
     mkdirSync(join(root, 'tasks'), { recursive: true, mode: 0o755 })
+  } catch (error) {
+    return `Could not make ${root}: ${String(error)}`
+  }
+  if (isDirectory(cwd) && existsSync(join(cwd, '.git'))) return { cwd: realpathSync(cwd), branch }
+  const start = remoteHas(clone, branch) ? `origin/${branch}` : 'origin/HEAD'
+  const added = await git(['worktree', 'add', cwd, '-B', branch, start], clone)
+  if (added !== null) return `git worktree add failed: ${added}`
+  // As Claude Code reports its folder, links resolved: the session is found by it (launch.ts, newSession).
+  return { cwd: realpathSync(cwd), branch }
+}
+
+/**
+ * Makes sure `<workdir>/repo` is a clone of the repository, and fetches it: where the orchestrator works, and what the
+ * tasks' worktrees come from. The clone's real path, or why not.
+ */
+export async function prepareRepository(workdir: string, repo: string): Promise<{ clone: string } | string> {
+  if (!isRepository(repo)) return 'The pool’s repository is not a URL or a path git can clone.'
+  const root = workFolder(workdir)
+  if (!root) return `${workdir} is not a full path on this machine.`
+  const clone = join(root, 'repo')
+  try {
+    mkdirSync(root, { recursive: true, mode: 0o755 })
   } catch (error) {
     return `Could not make ${root}: ${String(error)}`
   }
@@ -79,12 +102,7 @@ export async function prepareTaskTree(workdir: string, repo: string, taskId: str
   }
   const fetched = await git(['fetch', '--prune', 'origin'], clone)
   if (fetched !== null) return `git fetch failed: ${fetched}`
-  if (isDirectory(cwd) && existsSync(join(cwd, '.git'))) return { cwd: realpathSync(cwd), branch }
-  const start = remoteHas(clone, branch) ? `origin/${branch}` : 'origin/HEAD'
-  const added = await git(['worktree', 'add', cwd, '-B', branch, start], clone)
-  if (added !== null) return `git worktree add failed: ${added}`
-  // As Claude Code reports its folder, links resolved: the session is found by it (launch.ts, newSession).
-  return { cwd: realpathSync(cwd), branch }
+  return { clone: join(realpathSync(root), 'repo') }
 }
 
 /** Runs git in `cwd`: null once it worked, otherwise the end of what it said. */
@@ -104,6 +122,9 @@ async function git(args: string[], cwd: string, timeout = GIT_TIMEOUT_MS): Promi
     return String(error)
   }
 }
+
+/** `shop` for `git@github.com:ana/shop.git`: what the pool's sessions show as their project. */
+export const repositoryName = (repo: string): string => basename(repo.replace(/\.git$/, '').replace(/[/:]+$/, '')) || repo
 
 /** Whether the fetch brought the branch from the remote, read from the clone's refs rather than by running git. */
 function remoteHas(clone: string, branch: string): boolean {

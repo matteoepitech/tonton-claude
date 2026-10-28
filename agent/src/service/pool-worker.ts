@@ -5,32 +5,22 @@
 // sessions for a pool than its owner allowed, and takes work only from who may hand it out.
 
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
-import { newPoolItemId, type PoolState, type PoolTaskItem, sealPoolSessionOrder } from '../../../shared/pool'
-import type { PoolMachineOrder, PoolSessionProfile, PoolTask, PoolUpdate } from '../../../shared/pool-protocol'
-import type { AgentMessage } from '../../../shared/protocol'
+import { join } from 'node:path'
+import type { PoolState, PoolTaskItem } from '../../../shared/pool'
+import type { PoolMachineOrder, PoolSessionProfile, PoolTask } from '../../../shared/pool-protocol'
 import { paths } from '../config'
 import { endPoolSession, launchForPool, poolSessionRuns } from '../launch'
 import { log } from '../log'
 import { claimOnce } from '../once'
-import type { MachinePools } from './pool-machines'
-import { prepareTaskTree, TASK_ID, taskBranch } from './pool-worktree'
-
-type Post = (build: () => Promise<AgentMessage | null>) => void
+import { CHANGED, type MachinePools } from './pool-machines'
+import { prepareTaskTree, repositoryName, TASK_ID, taskBranch } from './pool-worktree'
 
 /** A task that failed on machines this many times is blocked, for the orchestrator to look at. */
 export const MAX_ATTEMPTS = 3
 /** How often the service looks at its sessions: one can end without the pool hearing of it. */
 const CHECK_MS = 5000
-/** The relay takes a session in the pool once it has seen it: the service asks again until then. */
-const JOIN_RETRY_MS = 3000
-const JOIN_TIMEOUT_MS = 2 * 60_000
-/** How long a change waits for the relay to confirm it. */
-const CONFIRM_MS = 10_000
 /** A dispatch is claimed once, and stays claimed while the relay could replay it. */
 const CLAIM_KEEP_MS = 30 * 24 * 60 * 60_000
-/** The relay refused a change of the task over an older revision. */
-const CHANGED = 'The task changed meanwhile.'
 
 /** A session this machine runs for a pool task, kept on disk so that a restarted service finds it again. */
 interface Slot {
@@ -80,11 +70,11 @@ export class PoolWorker {
   private readonly timer: ReturnType<typeof setInterval>
   private readonly folder: string
   private readonly claims: string
+  /** Once stopped, for another relay or account, it looks at nothing more: the next one finds the slots again. */
+  private stopped = false
 
   constructor(
     private readonly pools: MachinePools,
-    private readonly accountKey: string,
-    private readonly post: Post,
     private readonly options: PoolWorkerOptions,
   ) {
     this.folder = join(options.home ?? paths.home, 'pool-slots')
@@ -97,11 +87,13 @@ export class PoolWorker {
   }
 
   stop() {
+    this.stopped = true
     clearInterval(this.timer)
   }
 
   /** Something changed in a pool, or the machine joined or left one. */
   changed(poolId: string) {
+    if (this.stopped) return
     this.queue = this.queue.then(() => this.reconcile(poolId)).catch(error => log('pool worker failed', String(error)))
   }
 
@@ -147,8 +139,8 @@ export class PoolWorker {
       if (claimed !== 'claimed') continue
       if (this.running(poolId).length >= order.profile.capacity) {
         const why = `${this.options.machineName} already runs ${order.profile.capacity} sessions for the pool, as many as its owner allows.`
-        await this.putTask(poolId, item, freedTask(task, why))
-        await this.event(poolId, 'refused', item.id, why)
+        await this.pools.putTask(poolId, item, freedTask(task, why))
+        await this.pools.event(poolId, 'refused', item.id, why)
         continue
       }
       void this.start(poolId, item, order, account)
@@ -175,7 +167,7 @@ export class PoolWorker {
       this.end(slot)
       const latest = this.latest(slot.poolId, item.id)
       if (latest?.task && this.isOurs(latest.task, account)) {
-        await this.putTask(slot.poolId, latest, freedTask(latest.task, `Its session on ${this.options.machineName} was stopped.`))
+        await this.pools.putTask(slot.poolId, latest, freedTask(latest.task, `Its session on ${this.options.machineName} was stopped.`))
       }
     }
   }
@@ -215,7 +207,14 @@ export class PoolWorker {
     slot.sessionId = launched.sessionId
     slot.tmux = launched.tmux
     this.saveSlot(slot)
-    if (!(await this.join(poolId, launched.sessionId, order, task, repo))) return 'its session did not reach the relay.'
+    const profile: PoolSessionProfile = {
+      tool: order.profile.tool,
+      machine: this.options.machineName,
+      project: repositoryName(repo),
+      ...(task.area ? { area: task.area } : order.profile.areas?.[0] ? { area: order.profile.areas[0] } : {}),
+      ...(order.profile.takes ? { takes: order.profile.takes } : {}),
+    }
+    if (!(await this.pools.joinSession(poolId, launched.sessionId, profile))) return 'its session did not reach the relay.'
     slot.joined = true
     this.saveSlot(slot)
     // The task is the session's from now on: its agent hands it over as its first message. Another change to the task
@@ -224,9 +223,9 @@ export class PoolWorker {
       const latest = this.latest(poolId, taskId)
       if (!latest?.task || !this.isOurs(latest.task, account) || latest.task.state !== 'assigned') return null
       const assigned: PoolTask = { ...latest.task, assignee: { account, session: launched.sessionId }, branch: tree.branch }
-      const refused = await this.putTask(poolId, latest, assigned)
+      const refused = await this.pools.putTask(poolId, latest, assigned)
       if (!refused) {
-        await this.event(poolId, 'task_moved', taskId, `started on ${this.options.machineName}`)
+        await this.pools.event(poolId, 'task_moved', taskId, `started on ${this.options.machineName}`)
         return null
       }
       if (refused !== CHANGED) return refused
@@ -235,56 +234,10 @@ export class PoolWorker {
     return 'the task kept changing while its session started.'
   }
 
-  /**
-   * Puts the session in the pool as a worker of this machine, with an order sealed with the account key that says so
-   * and carries the machine's mode, and asks again until the relay, which must have seen the session first, takes it.
-   */
-  private async join(poolId: string, sessionId: string, order: PoolMachineOrder, task: PoolTask, repo: string): Promise<boolean> {
-    const vault = this.pools.vault(poolId)
-    const key = vault?.keyring.key(vault.keyring.version)
-    if (!vault || !key) return false
-    const sealedOrder = await sealPoolSessionOrder(this.accountKey, {
-      poolId,
-      sessionId,
-      key,
-      version: vault.keyring.version,
-      autoStart: true,
-      machine: this.pools.machineId,
-      mode: order.profile.mode,
-    })
-    const profile: PoolSessionProfile = {
-      tool: order.profile.tool,
-      machine: this.options.machineName,
-      project: basename(repo.replace(/\.git$/, '').replace(/[/:]+$/, '')),
-      ...(task.area ? { area: task.area } : order.profile.areas?.[0] ? { area: order.profile.areas[0] } : {}),
-      ...(order.profile.takes ? { takes: order.profile.takes } : {}),
-    }
-    const sealedProfile = await vault.seal(profile)
-    const deadline = Date.now() + JOIN_TIMEOUT_MS
-    while (Date.now() < deadline && this.pools.order(poolId)) {
-      this.post(async () => ({
-        t: 'pool_machine_session',
-        machineId: this.pools.machineId,
-        poolId,
-        sessionId,
-        order: sealedOrder,
-        profile: sealedProfile,
-      }))
-      for (let waited = 0; waited < JOIN_RETRY_MS; waited += 250) {
-        await Bun.sleep(250)
-        if (this.pools.state(poolId)?.sessions.some(session => session.session === sessionId)) return true
-      }
-    }
-    return false
-  }
-
   /** Ends the slot: its session's tmux goes, it leaves the pool, and the slot is free. */
   private end(slot: Slot) {
     if (slot.tmux) (this.options.end ?? endPoolSession)(slot.tmux)
-    if (slot.sessionId && this.pools.order(slot.poolId)) {
-      const { poolId, sessionId } = slot
-      this.post(async () => ({ t: 'pool_machine_session_left', machineId: this.pools.machineId, poolId, sessionId }))
-    }
+    if (slot.sessionId) this.pools.leaveSession(slot.poolId, slot.sessionId)
     this.slots.delete(key(slot.poolId, slot.taskId))
     rmSync(join(this.folder, `${slot.poolId}-${slot.taskId}.json`), { force: true })
     log('pool session ended', { pool: slot.poolId, task: slot.taskId })
@@ -297,8 +250,8 @@ export class PoolWorker {
     if (!latest?.task || !account || !this.isOurs(latest.task, account)) return
     if (latest.task.state === 'done' || latest.task.state === 'review') return
     const next = failedTask(latest.task, why)
-    if (!(await this.putTask(poolId, latest, next))) {
-      await this.event(poolId, next.state === 'blocked' ? 'blocked' : 'task_moved', taskId, why)
+    if (!(await this.pools.putTask(poolId, latest, next))) {
+      await this.pools.event(poolId, next.state === 'blocked' ? 'blocked' : 'task_moved', taskId, why)
     }
   }
 
@@ -322,49 +275,6 @@ export class PoolWorker {
 
   private latest(poolId: string, taskId: string): PoolTaskItem | undefined {
     return this.pools.state(poolId)?.tasks.find(task => task.id === taskId)
-  }
-
-  /**
-   * Sends the task over the revision it was read at, and waits for the relay: null once it took it, otherwise why not.
-   * Either way the pool's state has the answer when it returns, so what is decided next reads it.
-   */
-  private async putTask(poolId: string, item: Pick<PoolTaskItem, 'id' | 'rev'>, next: PoolTask): Promise<string | null> {
-    const vault = this.pools.vault(poolId)
-    if (!vault) return 'The machine left the pool.'
-    const blob = await vault.seal(next)
-    const confirmed = this.waitFor(poolId, update => {
-      if (update.t === 'pool_task' && update.task.id === item.id && update.task.rev > item.rev) return null
-      if (update.t === 'pool_conflict' && update.kind === 'task' && update.id === item.id) return CHANGED
-      return update.t === 'pool_error' ? update.message : undefined
-    })
-    this.post(async () => ({ t: 'pool_task', machineId: this.pools.machineId, poolId, id: item.id, rev: item.rev, blob }))
-    const result = await confirmed
-    await this.pools.settled()
-    return result
-  }
-
-  private async event(poolId: string, kind: string, taskId: string, text: string) {
-    const vault = this.pools.vault(poolId)
-    if (!vault) return
-    const blob = await vault.seal({ kind, taskId, text: text.slice(0, 500) })
-    this.post(async () => ({ t: 'pool_event', machineId: this.pools.machineId, poolId, id: newPoolItemId(), blob }))
-  }
-
-  private waitFor(poolId: string, check: (update: PoolUpdate) => string | null | undefined): Promise<string | null> {
-    return new Promise(resolve => {
-      const timer = setTimeout(() => {
-        stop()
-        resolve('The relay has not confirmed it.')
-      }, CONFIRM_MS)
-      const stop = this.pools.listen(update => {
-        if ((update.t === 'pool_snapshot' ? update.pool.id : update.poolId) !== poolId) return
-        const result = check(update)
-        if (result === undefined) return
-        clearTimeout(timer)
-        stop()
-        resolve(result)
-      })
-    })
   }
 
   private readSlots(): Slot[] {

@@ -71,6 +71,7 @@ export class SessionPools {
       const known = this.pools.get(poolId)
       const autoStart = opened.autoStart === true
       const worker = opened.machine && opened.mode ? { machine: opened.machine, mode: opened.mode } : null
+      const workerBefore = known?.worker ?? null
       if (known?.key !== opened.key) {
         const keyring = new PoolKeyring(opened.key, opened.version)
         const vault = new PoolVault(keyring)
@@ -80,6 +81,8 @@ export class SessionPools {
         known.worker = worker
       }
       log('session joined a pool', { pool: poolId })
+      // A pool machine's mode is applied like the rules its owner accepted.
+      if (JSON.stringify(worker) !== JSON.stringify(workerBefore)) this.safety.rulesChanged()
       if (acceptance) await this.openAcceptance(poolId, acceptance)
       this.changed(poolId)
       return { t: 'pool_ack', sessionId, poolId }
@@ -123,7 +126,7 @@ export class SessionPools {
     this.pools.delete(poolId)
     log('session left a pool', { pool: poolId })
     this.safety.left(poolId)
-    if (membership.acceptance) this.safety.rulesChanged()
+    if (membership.acceptance || membership.worker) this.safety.rulesChanged()
     this.changed(poolId)
   }
 
@@ -222,6 +225,17 @@ export class SessionPools {
   /** Set when a pool machine started this session for one of the pool's tasks. */
   worker(poolId: string): PoolWorkerSession | null {
     return this.pools.get(poolId)?.worker ?? null
+  }
+
+  /**
+   * The mode this session works in, when a pool machine started it on this very machine: a worker order the relay moved
+   * from another machine names that one, and counts for nothing here. In several pools, the narrowest mode wins.
+   */
+  workerMode(machineId: string): PoolMachineMode | null {
+    const modes = [...this.pools.values()].flatMap(membership =>
+      membership.worker && membership.worker.machine === machineId ? [membership.worker.mode] : [],
+    )
+    return (['ask', 'edits', 'full'] as const).find(mode => modes.includes(mode)) ?? null
   }
 
   /** Every update of the session's pools, as it arrives; returns how to stop listening. */

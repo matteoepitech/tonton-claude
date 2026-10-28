@@ -4,7 +4,7 @@ import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, 
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { paths } from '../config'
 import { gitBranch } from '../git'
-import { setPoolRules } from '../rules'
+import { setPoolMode, setPoolRules } from '../rules'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
@@ -74,6 +74,8 @@ export class Conversation {
     private readonly post: Post,
     /** Hands Claude what its pools send it, and tells Claude Code the pool tools changed. */
     pool: { deliver(text: string): void; toolsChanged(): void } = { deliver: () => {}, toolsChanged: () => {} },
+    /** This machine: a pool machine's mode applies to the sessions it started here only. */
+    private readonly machineId = '',
   ) {
     this.shares = new SessionShares(
       () => link.sessionId,
@@ -113,8 +115,12 @@ export class Conversation {
           return result.typed ? null : (result.why ?? 'it could not be typed in the terminal.')
         },
         notice: text => this.notice(text),
-        // The PermissionRequest hook runs in its own process: it reads them from the session's file.
-        rulesChanged: rules => setPoolRules(link.sessionId, rules),
+        // The PermissionRequest hook runs in its own process: it reads them, and the mode, from the session's files.
+        rulesChanged: rules => {
+          setPoolRules(link.sessionId, rules)
+          const mode = this.pools.workerMode(this.machineId)
+          setPoolMode(link.sessionId, mode ? { mode, root: this.cwd() } : null)
+        },
       },
     )
     this.work.useSafety(this.safety)

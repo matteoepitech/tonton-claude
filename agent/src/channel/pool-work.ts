@@ -6,6 +6,7 @@
 
 import { newPoolItemId, POOL_NOTES_SECTIONS, type PoolSession, type PoolState, type PoolTaskItem, poolTaskSize } from '../../../shared/pool'
 import type {
+  PoolDispatch,
   PoolLimits,
   PoolMessageBody,
   PoolNotes,
@@ -17,6 +18,7 @@ import type {
 } from '../../../shared/pool-protocol'
 import type { AgentMessage, UsageLimit } from '../../../shared/protocol'
 import { log } from '../log'
+import { AUTOPILOT_GUIDE } from './pool-dispatch'
 import { PoolGit } from './pool-git'
 import { LimitsReporter, limitsMark, limitsView, nearLimit, shouldPost } from './pool-limits'
 import { mergeBrief, PoolMerger } from './pool-merge'
@@ -181,6 +183,8 @@ export class PoolWork {
   /** Pools where it was given the orchestrator's guide, and the hackathon's on top. */
   private readonly guided = new Set<string>()
   private readonly hackGuided = new Set<string>()
+  /** Pools where it was told the pool runs on autopilot (agent/src/channel/pool-dispatch.ts). */
+  private readonly autoGuided = new Set<string>()
   /** The notes as last told, per pool: their revision, and what they hold. */
   private readonly notesSeen = new Map<string, { rev: number; mark: string }>()
   /** The plan figures this session shares, and what each pool was last told and when. */
@@ -208,6 +212,7 @@ export class PoolWork {
     this.ops = {
       putTask: (poolId, id, rev, next) => this.putTask(poolId, { id, rev }, next),
       putNotes: (poolId, rev, notes) => this.saveNotes(poolId, rev, notes),
+      putDispatch: (poolId, rev, dispatch) => this.saveDispatch(poolId, rev, dispatch),
       message: (poolId, to, text) => this.message(poolId, { text, to: { session: to } }),
       event: (poolId, kind, taskId, text) => this.event(poolId, kind, taskId, text),
       descriptions: state => this.descriptions(state),
@@ -552,6 +557,20 @@ export class PoolWork {
     return 'The notes are saved.'
   }
 
+  /** Starts or stops the control loop over revision `rev` and waits for the relay: null once it took it. */
+  private async saveDispatch(poolId: string, rev: number, dispatch: PoolDispatch): Promise<string | null> {
+    const vault = this.pools.vault(poolId)
+    if (!vault) return 'This session left the pool.'
+    const blob = await vault.seal(dispatch)
+    const confirmed = this.waitFor(poolId, update => {
+      if (update.t === 'pool_dispatch' && update.dispatch.rev > rev) return null
+      if (update.t === 'pool_conflict' && update.kind === 'dispatch') return 'The dispatch changed meanwhile: read pool_overview again.'
+      return update.t === 'pool_error' ? update.message : undefined
+    })
+    this.post(async () => ({ t: 'pool_dispatch', sessionId: this.sessionId(), poolId, rev, blob }))
+    return confirmed
+  }
+
   /** Writes the notes over revision `rev` and waits for the relay: null once it took them. */
   private async saveNotes(poolId: string, rev: number, notes: PoolNotes): Promise<string | null> {
     const vault = this.pools.vault(poolId)
@@ -630,6 +649,7 @@ export class PoolWork {
         this.notesSeen.delete(poolId)
         this.limitsPosted.delete(poolId)
         this.guided.delete(poolId)
+        this.autoGuided.delete(poolId)
         this.orchestrator.forget(poolId)
       }
       return
@@ -703,19 +723,28 @@ export class PoolWork {
     if (!isOrchestrator(state, me)) {
       this.guided.delete(poolId)
       this.hackGuided.delete(poolId)
+      this.autoGuided.delete(poolId)
       return
     }
     const attributes = { pool: state.info?.name ?? poolId }
-    // A pool made from the hackathon template, or one given a deadline later.
+    // A pool made from the hackathon template, or one given a deadline later; one whose orchestrator machine hands out
+    // the work runs on autopilot. Each part is told once, with the guide or on its own when it comes later.
     const hackathon = state.info?.template === 'hackathon' || Boolean(state.info?.deadline)
+    const autopilot = Boolean(state.orchestratorMachine)
+    const parts: string[] = []
     if (!this.guided.has(poolId)) {
       this.guided.add(poolId)
-      if (hackathon) this.hackGuided.add(poolId)
-      this.deliver(envelope('role', 'Tonton', attributes, hackathon ? `${ORCHESTRATOR_GUIDE}\n\n${HACKATHON_GUIDE}` : ORCHESTRATOR_GUIDE))
-    } else if (hackathon && !this.hackGuided.has(poolId)) {
-      this.hackGuided.add(poolId)
-      this.deliver(envelope('role', 'Tonton', attributes, HACKATHON_GUIDE))
+      parts.push(ORCHESTRATOR_GUIDE)
     }
+    if (hackathon && !this.hackGuided.has(poolId)) {
+      this.hackGuided.add(poolId)
+      parts.push(HACKATHON_GUIDE)
+    }
+    if (autopilot && !this.autoGuided.has(poolId)) {
+      this.autoGuided.add(poolId)
+      parts.push(AUTOPILOT_GUIDE)
+    }
+    if (parts.length) this.deliver(envelope('role', 'Tonton', attributes, parts.join('\n\n')))
     this.orchestrator.watch(poolId, state, me)
   }
 

@@ -1,9 +1,10 @@
 // Auto-approve rules: the app seals them per machine, the agent keeps them in rules.json, and the PermissionRequest hook
 // approves a matching tool call before the user is asked.
 
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { open } from '../../shared/crypto'
+import type { PoolMachineMode } from '../../shared/pool-protocol'
 import type { PermissionRule, RuleSet, SessionRules } from '../../shared/protocol'
 import { paths } from './config'
 import { log } from './log'
@@ -121,6 +122,7 @@ export function addSessionRules(sessionId: string, rules: PermissionRule[], fold
 export function clearSessionRules(sessionId: string, folder = paths.sessionRules) {
   rmSync(sessionRulesFile(sessionId, folder), { force: true })
   rmSync(poolRulesFile(sessionId, folder), { force: true })
+  rmSync(poolModeFile(sessionId, folder), { force: true })
 }
 
 // MARK: Accepted from a pool
@@ -149,6 +151,91 @@ export function setPoolRules(sessionId: string, rules: PermissionRule[], folder 
   mkdirSync(folder, { recursive: true, mode: 0o700 })
   const partial = `${file}.${process.pid}.tmp`
   writeFileSync(partial, JSON.stringify(rules.filter(isRule).slice(0, MAX_RULES)), { mode: 0o600 })
+  renameSync(partial, file)
+}
+
+// MARK: A pool machine's mode
+
+/**
+ * What a pool machine's sessions may do without asking (docs/pool-autopilot.md), from the order its service sealed
+ * with the account key, and the folder the session works in. Never what the pool or the relay says.
+ */
+export interface PoolMode {
+  mode: PoolMachineMode
+  /** The task's worktree, or the repository for the orchestrator: `edits` passes nothing outside it. */
+  root: string
+}
+
+/** File edits and read-only tools, as Claude Code names them (OpenCode's are mapped to these, opencode/events.ts). */
+const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
+const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'NotebookRead', 'TodoRead', 'TodoWrite'])
+/** The field of each that names a file or folder. A call without one works in the session's folder. */
+const PATH_FIELD: Record<string, string> = {
+  Edit: 'file_path',
+  MultiEdit: 'file_path',
+  Write: 'file_path',
+  Read: 'file_path',
+  NotebookEdit: 'notebook_path',
+  NotebookRead: 'notebook_path',
+  Glob: 'path',
+  Grep: 'path',
+  LS: 'path',
+}
+
+/**
+ * Whether the mode lets this call pass without asking. `full`: everything. `edits`: file edits and read-only tools, in
+ * the session's folder only. `ask`, or no mode: nothing, the machine owner is asked as for any session.
+ */
+export function modeAllows(mode: PoolMode | null, toolName: string, toolInput: unknown): boolean {
+  if (mode?.mode === 'full') return true
+  if (mode?.mode !== 'edits' || (!EDIT_TOOLS.has(toolName) && !READ_TOOLS.has(toolName))) return false
+  const field = PATH_FIELD[toolName]
+  const value = field && toolInput && typeof toolInput === 'object' ? (toolInput as Record<string, unknown>)[field] : undefined
+  if (value === undefined) return true
+  if (typeof value !== 'string' || !value.trim()) return false
+  // Links followed: a link in the repository that points out of it does not take an edit out with it.
+  const root = real(resolve(mode.root))
+  const target = real(resolve(root, value.trim()))
+  return target === root || target.startsWith(root.endsWith(sep) ? root : root + sep)
+}
+
+/** The path with its links resolved, as far as it exists: a file about to be written does not exist yet. */
+function real(path: string): string {
+  const missing: string[] = []
+  for (let current = path; ; current = dirname(current)) {
+    try {
+      return join(realpathSync(current), ...missing.reverse())
+    } catch {
+      if (dirname(current) === current) return path
+      missing.push(basename(current))
+    }
+  }
+}
+
+const poolModeFile = (sessionId: string, folder: string) => join(folder, `${sessionId.replace(/[^\w-]/g, '_')}.mode.json`)
+
+/** The mode of a pool machine's session, written by its channel, read by the PermissionRequest hook in its own process. */
+export function poolMode(sessionId: string, folder = paths.sessionRules): PoolMode | null {
+  try {
+    const mode = JSON.parse(readFileSync(poolModeFile(sessionId, folder), 'utf8')) as Partial<PoolMode>
+    return (mode.mode === 'ask' || mode.mode === 'edits' || mode.mode === 'full') && typeof mode.root === 'string' && isAbsolute(mode.root)
+      ? { mode: mode.mode, root: mode.root }
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** Replaced when the session joins or leaves a pool as a machine's worker; none for the others. */
+export function setPoolMode(sessionId: string, mode: PoolMode | null, folder = paths.sessionRules) {
+  const file = poolModeFile(sessionId, folder)
+  if (!mode || mode.mode === 'ask') {
+    rmSync(file, { force: true })
+    return
+  }
+  mkdirSync(folder, { recursive: true, mode: 0o700 })
+  const partial = `${file}.${process.pid}.tmp`
+  writeFileSync(partial, JSON.stringify(mode), { mode: 0o600 })
   renameSync(partial, file)
 }
 
