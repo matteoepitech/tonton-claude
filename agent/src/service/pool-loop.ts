@@ -8,6 +8,7 @@
 // orchestrator's agent turns into notices. When every task is done, it says so and stops.
 
 import { overBudget, type PoolMachine, type PoolState, type PoolTaskItem } from '../../../shared/pool'
+import { planRank } from '../../../shared/pool-machines'
 import type { PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
 import { dispatching, machineName } from '../channel/pool-dispatch'
 import { accountLimits, expectedHours, shortOfTime } from '../channel/pool-limits'
@@ -55,7 +56,8 @@ const held = (state: PoolState, machine: string) =>
  * The machines that may take the task, best first: online, their service ready, a free slot, within their member's and
  * the pool's budgets, with time left on their account's plan for it (Claude Code), and of the kind the task needs. A
  * simple task goes to the machines that take simple tasks first, OpenCode ones before the others; a large one never
- * goes to a machine that takes simple tasks only. Within that, a machine of the task's area, then the freest.
+ * goes to a machine that takes simple tasks only. Within that, a machine of the task's area, then by its account's plan
+ * (a large task to the largest, a simple one to the smallest), then the freest.
  */
 export function machineCandidates(state: PoolState, task: Pick<PoolTask, 'area' | 'size' | 'hours'>, now = Date.now()): PoolMachine[] {
   const size = task.size ?? 'large'
@@ -71,7 +73,11 @@ export function machineCandidates(state: PoolState, task: Pick<PoolTask, 'area' 
       if (byKind) return byKind
       const tool = (c: typeof a) => (size === 'simple' && c.machine.profile?.tool === 'opencode' ? 0 : 1)
       const area = (c: typeof a) => (task.area && c.machine.profile?.areas?.includes(task.area) ? 0 : 1)
-      return tool(a) - tool(b) || area(a) - area(b) || b.free - a.free || a.machine.addedAt.localeCompare(b.machine.addedAt)
+      // A large task to the largest plan, a simple one to the smallest, which keeps the large plans for large tasks.
+      const plan = (c: typeof a) => (size === 'simple' ? -planRank(c.machine.profile) : planRank(c.machine.profile))
+      return (
+        tool(a) - tool(b) || area(a) - area(b) || plan(a) - plan(b) || b.free - a.free || a.machine.addedAt.localeCompare(b.machine.addedAt)
+      )
     })
     .map(c => c.machine)
 }

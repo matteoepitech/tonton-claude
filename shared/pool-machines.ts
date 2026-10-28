@@ -4,6 +4,7 @@
 // dropped, never trusted. Mirrors app/Sources/TontonCore/PoolMachine.swift.
 
 import { type AccountKey, open, seal } from './crypto'
+import type { PoolMachine } from './pool'
 import { decodeModelPolicy } from './pool-model'
 import type {
   PoolDispatch,
@@ -14,7 +15,8 @@ import type {
   PoolModelPolicy,
   PoolTaskSize,
 } from './pool-protocol'
-import type { Sealed } from './protocol'
+import type { ClaudePlan, MachineHealth, Sealed } from './protocol'
+import type { Machine } from './session'
 
 export const POOL_MACHINE_MODES: readonly PoolMachineMode[] = ['ask', 'edits', 'full']
 /** How many sessions a machine runs at once for one pool, at most. */
@@ -36,6 +38,7 @@ const defined = <T extends object>(value: T): T => Object.fromEntries(Object.ent
 export const isPoolMachineMode = (value: unknown): value is PoolMachineMode => POOL_MACHINE_MODES.includes(value as PoolMachineMode)
 const isTool = (value: unknown): value is PoolMachineProfile['tool'] => value === 'claude' || value === 'opencode'
 const isSize = (value: unknown): value is PoolTaskSize => value === 'simple' || value === 'large'
+const PLAN = /^[a-z0-9_]{1,40}$/
 const isCapacity = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_POOL_MACHINE_CAPACITY
 
@@ -66,6 +69,7 @@ export function decodePoolMachineProfile(value: unknown): PoolMachineProfile | n
     takes: isSize(f.takes) ? f.takes : undefined,
     areas: areas?.length ? areas : undefined,
     models: decodeModelPolicy(f.models),
+    plan: typeof f.plan === 'string' && PLAN.test(f.plan) ? (f.plan as ClaudePlan) : undefined,
   })
 }
 
@@ -80,6 +84,7 @@ export function poolMachineProfile(input: {
   areas?: string[]
   /** Kept as it is, checked like a sealed one. */
   models?: PoolModelPolicy
+  plan?: ClaudePlan
 }): PoolMachineProfile | string {
   const workdir = input.workdir.trim()
   if (!isTool(input.tool)) return 'Choose Claude Code or OpenCode.'
@@ -96,7 +101,122 @@ export function poolMachineProfile(input: {
     takes: isSize(input.takes) ? input.takes : undefined,
     areas: areas.length ? [...new Set(areas)].slice(0, MAX_AREAS) : undefined,
     models: decodeModelPolicy(input.models),
+    plan: input.tool === 'claude' && input.plan && PLAN.test(input.plan) ? input.plan : undefined,
   })
+}
+
+/** How many sessions a Claude Code machine runs at once by its plan: what the plan's windows sustain. */
+const PLAN_SESSIONS: Record<ClaudePlan, number> = { max_20x: 3, max_5x: 2, team: 2, enterprise: 2, api: 2, pro: 1 }
+/** OpenCode has no plan windows: its provider's limits are its owner's business. */
+const OPENCODE_SESSIONS = 2
+/** Memory each session needs, with its worktree's build and tests. */
+const SESSION_MEMORY = 8 * 1024 ** 3
+
+/** `Basel Hack` → `basel-hack`: a folder name every system takes. */
+const slug = (text: string) =>
+  text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '')
+
+/**
+ * How one of the account's machines works for a pool when its owner says nothing (docs/pool-autopilot.md, Joining):
+ * everything comes from what its agent reports. Claude Code when it is there and signed in, else OpenCode; as many
+ * sessions at once as its plan sustains and its memory holds; a folder of its own per pool; the tier each task needs.
+ * Null when the machine has no coding tool to run. The mode stays its owner's choice. Mirrors
+ * `PoolMachineProfile.automatic` in app/Sources/TontonCore/PoolMachine.swift; both check shared/test/pool-auto-profile.json.
+ */
+export function autoPoolMachineProfile(
+  machine: { name?: string; health: Pick<MachineHealth, 'tools' | 'plan' | 'memoryTotal'> | null },
+  pool: { id: string; name?: string },
+  mode: PoolMachineMode = 'edits',
+): PoolMachineProfile | null {
+  const health = machine.health
+  // Older agents report no tools: they run Claude Code.
+  const tools = health?.tools ?? ['claude']
+  const plan = health?.plan && PLAN.test(health.plan) ? health.plan : undefined
+  const tool = tools.includes('claude') && (plan || !tools.includes('opencode')) ? 'claude' : tools.includes('opencode') ? 'opencode' : null
+  if (!tool) return null
+  const wanted = tool === 'opencode' ? OPENCODE_SESSIONS : ((plan && PLAN_SESSIONS[plan]) ?? 1)
+  const memory = health?.memoryTotal ? Math.max(1, Math.floor(health.memoryTotal / SESSION_MEMORY)) : MAX_POOL_MACHINE_CAPACITY
+  const folder = [slug(pool.name ?? ''), pool.id.slice(0, 6).toLowerCase()].filter(Boolean).join('-')
+  const profile = poolMachineProfile({
+    name: machine.name,
+    tool,
+    capacity: Math.min(MAX_POOL_MACHINE_CAPACITY, wanted, memory),
+    workdir: `~/tonton-pools/${folder}`,
+    mode,
+    plan: tool === 'claude' ? plan : undefined,
+  })
+  return typeof profile === 'string' ? null : profile
+}
+
+/** Its agent runs pool machines: from POOL_MACHINES_SINCE, or a development build (0.0.0), which runs the current code. */
+export function runsPoolMachines(machine: Pick<Machine, 'agentVersion'>): boolean {
+  const version = machine.agentVersion
+  if (!version) return false
+  if (version === '0.0.0') return true
+  const [have, need] = [version, POOL_MACHINES_SINCE].map(v => v.split('.').map(Number))
+  for (let i = 0; i < 3; i++) if ((have[i] ?? 0) !== (need[i] ?? 0)) return (have[i] ?? 0) > (need[i] ?? 0)
+  return true
+}
+
+/** One of the account's machines, and how it would work for the pool. */
+export interface MachinePick {
+  machine: Machine
+  profile: PoolMachineProfile
+}
+
+/**
+ * The account's machines that can work for the pool and are not in it yet, each with its automatic profile, online ones
+ * first: what joining or making a pool offers, every online one picked unless its owner unticks it.
+ */
+export function machinesToAdd(
+  machines: readonly Machine[],
+  pool: { id: string; name?: string; machines?: readonly Pick<PoolMachine, 'machine'>[] | null },
+  mode: PoolMachineMode = 'edits',
+): MachinePick[] {
+  const inPool = new Set((pool.machines ?? []).map(machine => machine.machine))
+  return machines
+    .filter(machine => !inPool.has(machine.id) && runsPoolMachines(machine))
+    .map(machine => ({ machine, profile: autoPoolMachineProfile(machine, pool, mode) }))
+    .filter((pick): pick is MachinePick => pick.profile !== null)
+    .sort((a, b) => Number(b.machine.online) - Number(a.machine.online))
+}
+
+/** Larger plans first, for the orchestrator as for large tasks. Not known: as a middle one. */
+const PLAN_RANK: Partial<Record<string, number>> = { max_20x: 0, max_5x: 1, team: 1, enterprise: 1, api: 1, pro: 2 }
+export const planRank = (profile: Pick<PoolMachineProfile, 'plan'> | null | undefined): number => PLAN_RANK[profile?.plan ?? ''] ?? 1
+
+/**
+ * Which of an admin's machines runs the orchestrator when nobody chose: Claude Code, which the orchestrator session
+ * runs on, online first, then the largest plan, since planning and merging run on its account all along.
+ */
+export function bestOrchestrator<T extends { online: boolean; profile: PoolMachineProfile | null }>(machines: readonly T[]): T | null {
+  return (
+    machines
+      .filter(machine => machine.profile?.tool === 'claude')
+      .sort((a, b) => Number(b.online) - Number(a.online) || planRank(a.profile) - planRank(b.profile))[0] ?? null
+  )
+}
+
+const PLAN_LABELS: Record<ClaudePlan, string> = {
+  max_20x: 'Claude Max 20x',
+  max_5x: 'Claude Max 5x',
+  pro: 'Claude Pro',
+  team: 'Claude Team',
+  enterprise: 'Claude Enterprise',
+  api: 'Claude API key',
+}
+
+/** `Claude Max 20x`, `OpenCode`, `Claude Code` when its plan is not known: what a machine brings to the pool. */
+export function machinePlanLabel(profile: Pick<PoolMachineProfile, 'tool' | 'plan'> | null | undefined): string {
+  if (profile?.tool === 'opencode') return 'OpenCode'
+  return (profile?.plan && PLAN_LABELS[profile.plan]) ?? 'Claude Code'
 }
 
 /** The order for the machine's agent service, sealed with the account key: only that machine's owner can make one. */

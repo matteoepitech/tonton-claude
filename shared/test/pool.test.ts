@@ -16,7 +16,7 @@ import {
   poolTaskSize,
   sealPoolSessionOrder,
 } from '../pool'
-import { formatPoolInvite, parsePoolInvite } from '../pool-link'
+import { formatPoolInvite, parsePoolInvite, poolInviteLink } from '../pool-link'
 import type { PoolSnapshot, PoolTaskWire, PoolUpdate } from '../pool-protocol'
 import { parsePoolToAgent, parsePoolUpdate } from '../pool-wire'
 import { Vault } from '../vault'
@@ -46,6 +46,9 @@ describe('pool keys and invites', () => {
     expect(text).toStartWith('tontonpool1.')
     expect(parsePoolInvite(`  ${text}\n`)).toEqual(invite)
     expect(parsePoolInvite(`#${text}`)).toEqual(invite)
+    // The link to the website opens on joining: the invite rides after its `#`.
+    expect(poolInviteLink(invite)).toBe(`${invite.relay}/#${text}`)
+    expect(parsePoolInvite(poolInviteLink(invite))).toEqual(invite)
     expect(parsePoolInvite(formatPoolInvite({ ...invite, token: 'ta_wrong' }))).toBeNull()
     expect(parsePoolInvite(formatPoolInvite({ ...invite, key: 'short' }))).toBeNull()
     expect(parsePoolInvite(formatPoolInvite({ ...invite, relay: 'javascript:alert(1)' }))).toBeNull()

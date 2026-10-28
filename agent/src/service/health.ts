@@ -1,8 +1,8 @@
 // What the background service reports about its machine: CPU, memory and battery, read with what each OS ships.
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { cpus, freemem, homedir, networkInterfaces, totalmem } from 'node:os'
 import { join } from 'node:path'
-import type { MachineHealth } from '../../../shared/protocol'
+import type { ClaudePlan, MachineHealth } from '../../../shared/protocol'
 import { hasOpenCode } from '../install/opencode'
 
 type Battery = MachineHealth['battery']
@@ -117,6 +117,44 @@ export function installedTools(
   return (['claude', 'opencode'] as const).filter(tool => has[tool]())
 }
 
+/** Where Claude Code keeps its state, the signed-in account among it. */
+const claudeStateFile = () =>
+  process.env.CLAUDE_CONFIG_DIR ? join(process.env.CLAUDE_CONFIG_DIR, '.claude.json') : join(homedir(), '.claude.json')
+
+/**
+ * The plan Claude Code is signed in with, from what it keeps of the account: `organizationType` and, for Max, its rate
+ * limit tier (`default_claude_max_20x`). An API key without an account is `api`. Undefined when it is not signed in or
+ * says something this agent does not know: the pool then takes the machine as it would a Pro one.
+ */
+export function claudePlanOf(state: unknown): ClaudePlan | undefined {
+  if (typeof state !== 'object' || state === null) return undefined
+  const { oauthAccount, primaryApiKey } = state as { oauthAccount?: unknown; primaryApiKey?: unknown }
+  const account = typeof oauthAccount === 'object' && oauthAccount !== null ? (oauthAccount as Record<string, unknown>) : null
+  const type = typeof account?.organizationType === 'string' ? account.organizationType : ''
+  const tier = typeof account?.organizationRateLimitTier === 'string' ? account.organizationRateLimitTier : ''
+  if (type === 'claude_max') return /20x/.test(tier) ? 'max_20x' : 'max_5x'
+  if (type === 'claude_pro') return 'pro'
+  if (type === 'claude_team') return 'team'
+  if (type === 'claude_enterprise') return 'enterprise'
+  if (!account && typeof primaryApiKey === 'string' && primaryApiKey) return 'api'
+  return undefined
+}
+
+/** The file is large (every project's history): read again only when it changed. */
+let planRead: { file: string; mtime: number; plan: ClaudePlan | undefined } | null = null
+
+export function claudePlan(file = claudeStateFile()): ClaudePlan | undefined {
+  try {
+    const mtime = statSync(file).mtimeMs
+    if (planRead?.file === file && planRead.mtime === mtime) return planRead.plan
+    const plan = claudePlanOf(JSON.parse(readFileSync(file, 'utf8')))
+    planRead = { file, mtime, plan }
+    return plan
+  } catch {
+    return undefined
+  }
+}
+
 /** One report; `since` is the CPU sample taken at the previous one. */
 export function readHealth(since: CpuTimes): { health: MachineHealth; sample: CpuTimes } {
   const sample = cpuTimes()
@@ -129,6 +167,7 @@ export function readHealth(since: CpuTimes): { health: MachineHealth; sample: Cp
       battery: battery(),
       wake: wakeTargets(),
       tools: installedTools(),
+      plan: claudePlan(),
       at: new Date().toISOString(),
     },
     sample,

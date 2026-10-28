@@ -127,14 +127,25 @@ final class PoolStore: ObservableObject {
     /// Puts one of the account's machines in the pool (docs/pool-autopilot.md): its agent service takes the order, sealed with
     /// the account key and naming that machine, and starts sessions for the pool's tasks in the work folder.
     func addMachine(_ machine: MachineInfo, pool poolId: String, form: PoolMachineForm) throws {
+        guard let profile = form.profile(name: machine.name) else {
+            throw RelayError(message: String(localized: "Give it a work folder from the root or your home folder, such as ~/tonton-pool."))
+        }
+        try addMachine(machine, pool: poolId, profile: profile)
+    }
+
+    /// How the machine works for the pool when its owner says nothing: from what its agent reports.
+    func automaticProfile(of machine: MachineInfo, pool poolId: String, mode: PoolMachineMode) -> PoolMachineProfile? {
+        let board = boards[poolId]
+        let name = board?.state?.info?.name ?? board.flatMap { $0.poolVault.open($0.summary.info, as: PoolInfo.self)?.name }
+        return PoolMachineProfile.automatic(name: machine.name, health: machine.health, poolId: poolId, poolName: name, mode: mode)
+    }
+
+    func addMachine(_ machine: MachineInfo, pool poolId: String, profile: PoolMachineProfile) throws {
         guard let board = boards[poolId], let vault, let send else {
             throw RelayError(message: String(localized: "Connect to the relay to add a machine to a pool."))
         }
         let keyring = board.keyring
         guard let key = keyring.key(keyring.version) else { throw RelayError(message: String(localized: "This pool's key is missing.")) }
-        guard let profile = form.profile(name: machine.name) else {
-            throw RelayError(message: String(localized: "Give it a work folder from the root or your home folder, such as ~/tonton-pool."))
-        }
         let order = try vault.sealPoolMachineOrder(
             poolId: poolId, machineId: machine.id, key: key, version: keyring.version, profile: profile)
         let sealed = try board.poolVault.seal(profile)

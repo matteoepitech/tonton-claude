@@ -121,6 +121,8 @@ describe('starting and stopping the dispatch', () => {
         machine: 'machinestud1',
         name: 'Studio',
         tool: 'claude',
+        // Its plan was not known when it joined.
+        plan: 'Claude Code',
         capacity: 2,
         mode: 'edits',
         areas: ['back'],

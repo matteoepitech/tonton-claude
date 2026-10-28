@@ -4,6 +4,7 @@
 // (agent/src/service/pool-loop.ts): Claude plans, merges and answers the admin, the loop hands out the work.
 
 import type { PoolMachine, PoolState } from '../../../shared/pool'
+import { machinePlanLabel } from '../../../shared/pool-machines'
 import type { PoolDispatch } from '../../../shared/pool-protocol'
 import type { PoolToolSpec } from './pool-work'
 
@@ -30,7 +31,7 @@ export const LOOP_EVENTS: ReadonlySet<string> = new Set(['dispatched', 'retried'
 /** Told to the orchestrator once, with its guide, when the pool runs on autopilot: its machine runs the control loop. */
 export const AUTOPILOT_GUIDE = [
   'This pool runs on autopilot: members put whole machines in it, and the control loop of your machine hands the tasks out.',
-  '1. pool_overview lists the machines: their tool, how many sessions each runs, its mode, its areas and what it runs now.',
+  "1. pool_overview lists the machines: their tool and their account's plan (Claude Max 20x, Max 5x, Pro, OpenCode), how many sessions each runs, its mode, its areas and what it runs now. Their owners said nothing more: size the work by what each one brings.",
   '2. Plan with plan_create and create the tasks with task_create, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines.',
   '3. When the user says go, call dispatch_start; when they say pause, dispatch_stop. The loop hands each task whose dependencies are done to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most.',
   '4. Notices tell you what the loop did. Answer the blocked tasks, merge the finished branches with task_merge, and re-plan when tasks fail.',
@@ -57,6 +58,8 @@ export function machinesView(state: PoolState) {
       machine: machine.machine,
       name: machineName(state, machine),
       tool: machine.profile?.tool,
+      // `Claude Max 20x`, `Claude Pro`, `OpenCode`: what its account sustains, as its agent reported it.
+      plan: machinePlanLabel(machine.profile),
       capacity: machine.profile?.capacity,
       mode: machine.profile?.mode,
       areas: machine.profile?.areas,

@@ -18,7 +18,7 @@ Sessions joined by hand (#219) keep working as they do.
 
 ## Pool machines
 
-A member adds one of its machines to a pool (website › pool › Machines › Add, or Settings › Machines in the app), with a
+A member's machines join a pool with it (Joining, below), or one at a time from Settings › Machines in the app, with a
 profile sealed with the pool key:
 
 | Field | Meaning |
@@ -28,11 +28,35 @@ profile sealed with the pool key:
 | `workdir` | Folder on the machine where the pool's work goes: the repository is cloned there once, and each task gets a git worktree under it |
 | `mode` | What its sessions may do without asking: `ask` (permission prompts go to the machine owner, as today), `edits` (file edits and read-only tools pass, the rest asks), `full` (everything passes: only for a machine or VM given to the hackathon) |
 | `takes`, `areas` | As for sessions: simple or large tasks, and the areas it prefers |
+| `plan` | The Claude plan its Claude Code is signed in with (`max_20x`, `max_5x`, `pro`, `team`, `enterprise`, `api`), as its agent reported it |
 
 The order that adds the machine is sealed with the owner's **account key** and names the machine: only its owner can put
 it in a pool, and the relay can't move it to another one (like the session order of #216). The relay keeps
 `pool_machines` (account, machine id, sealed profile, the order, added at) with a cap, and forwards pool traffic to the
 machine's **service** connection. A machine's online state is the relay's (as for Settings › Machines).
+
+### Joining
+
+Nobody fills that table in. When a member makes a pool or joins one on the website, the account's machines come with
+it, each with a profile worked out from what its agent reports every minute (`MachineHealth`): its coding tools, its
+memory, and the Claude plan Claude Code is signed in with, read from `~/.claude.json` (`oauthAccount.organizationType`
+and its rate limit tier; only the plan leaves the machine, never the account). `autoPoolMachineProfile` in
+`shared/pool-machines.ts` and `PoolMachineProfile.automatic` in `TontonCore` give the same answer, both checked with
+`shared/test/pool-auto-profile.json`:
+
+- `tool`: Claude Code when it is installed and signed in, else OpenCode; a machine with neither stays out.
+- `capacity`: by the plan, what its windows sustain: Max 20x three sessions, Max 5x, Team, Enterprise and API keys two,
+  Pro one, OpenCode two; never more than one per 8 GB of memory.
+- `workdir`: `~/tonton-pools/<pool name>-<id>`, one folder per pool.
+- `plan`: the plan, in the profile the members see, so the orchestrator and the control loop size the work by it.
+- `takes`, `areas`, `models`: left out, so they follow the tool and each task.
+- `mode`: `edits`, unless the member ticks **Let their sessions run commands without asking**, which is `full`. The
+  one thing asked, since it is the owner's to decide.
+
+The online machines are ticked, the others can be. When the member leads the pool and it has no orchestrator machine
+yet, the best of them becomes it: Claude Code, online, the largest plan. In the Mac app, Settings › Machines › **Add to
+pool…** does the same for one machine in one click, with **Customize…** for an owner who wants another folder, more
+sessions or other models.
 
 `mode` is the machine owner's choice, never the pool's: the agent's PermissionRequest hook (Claude Code) and the OpenCode
 bridge answer the requests of a pool worker session by it. `full` shows a warning when it is chosen.

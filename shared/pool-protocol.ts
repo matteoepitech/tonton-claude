@@ -3,7 +3,7 @@
 // key, which the members share and the relay never gets. Mirrors app/Sources/TontonCore/Pool.swift.
 
 import type { PoolKeyWrapWire } from './pool-keys'
-import type { PermissionRule, Sealed, SessionStatus } from './protocol'
+import type { ClaudePlan, PermissionRule, Sealed, SessionStatus } from './protocol'
 
 export type { PoolKeyWrapWire } from './pool-keys'
 
@@ -272,6 +272,11 @@ export interface PoolMachineProfile {
   areas?: string[]
   /** Which models its sessions run on (shared/pool-model.ts). Missing: each task gets the tier it needs. */
   models?: PoolModelPolicy
+  /**
+   * The Claude plan its Claude Code is signed in with, as its agent reported it when the machine joined, so that the
+   * orchestrator and the control loop know what it can take. Missing for OpenCode, and when it was not known.
+   */
+  plan?: ClaudePlan
 }
 
 /** The machine owner's choice of models for the pool's tasks. */

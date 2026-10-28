@@ -10,6 +10,8 @@ final class PoolTests: XCTestCase {
         XCTAssertTrue(invite.string.hasPrefix("tontonpool1."))
         XCTAssertEqual(PoolInvite(string: " \(invite.string)\n"), invite)
         XCTAssertEqual(PoolInvite(string: "#\(invite.string)"), invite)
+        // The website's link to it: the invite rides after its `#`.
+        XCTAssertEqual(PoolInvite(string: "https://relay.example.com/#\(invite.string)"), invite)
         let share = ShareLink(
             relay: "https://tonton.example.com", token: "ts_abcdefghijkl_" + String(repeating: "t", count: 43), key: E2E.newKey())
         XCTAssertNil(PoolInvite(string: share.string))

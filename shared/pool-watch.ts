@@ -15,7 +15,7 @@ import {
   sealPoolMemberKey,
   sealPoolMemberSecret,
 } from './pool-keys'
-import { formatPoolInvite, parsePoolInvite } from './pool-link'
+import { parsePoolInvite, poolInviteLink } from './pool-link'
 import { sealPoolMachineOrder } from './pool-machines'
 import type {
   PoolAppMessage,
@@ -263,7 +263,7 @@ export class PoolWatch {
 
   // MARK: Invites and members
 
-  /** A new invite, as the link to share, sealed with the pool key it holds now. */
+  /** A new invite, as the link to share, which opens the relay's website on joining, with the pool key it holds now. */
   invite(poolId: string, options: { uses: number; hours: number; role: Exclude<PoolRole, 'owner'> }) {
     return this.act(async () => {
       const opened = this.opened.get(poolId)
@@ -273,7 +273,7 @@ export class PoolWatch {
       const created = await this.options.api.createInvite(poolId, options)
       return {
         ...created,
-        link: formatPoolInvite({ relay: this.options.relay, pool: poolId, token: created.token, key, version: keyring.version }),
+        link: poolInviteLink({ relay: this.options.relay, pool: poolId, token: created.token, key, version: keyring.version }),
       }
     })
   }

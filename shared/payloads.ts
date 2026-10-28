@@ -176,6 +176,8 @@ export const decodeMachineHealth = decoder(
       ),
       // Names this client does not know are kept: a newer agent may start other tools.
       tools: optional(f.tools, value => list(value, text)) as MachineHealth['tools'],
+      // Kept as it is: a newer agent may know another plan, which reads as no known plan.
+      plan: optional(f.plan, text) as MachineHealth['plan'],
       at: text(f.at),
     }),
 )

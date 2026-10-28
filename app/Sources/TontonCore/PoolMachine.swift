@@ -35,16 +35,19 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
     public var areas: [String]?
     /// Which models its sessions run on. Nil: each task gets the tier it needs.
     public var models: PoolModelPolicy?
+    /// The Claude plan its Claude Code is signed in with, as its agent reported it when the machine joined
+    /// (`MachineHealth.plan`). Nil for OpenCode, and when it was not known.
+    public var plan: String?
 
     public init(
         name: String? = nil, tool: String, capacity: Int, workdir: String, mode: PoolMachineMode, takes: String? = nil,
-        areas: [String]? = nil, models: PoolModelPolicy? = nil
+        areas: [String]? = nil, models: PoolModelPolicy? = nil, plan: String? = nil
     ) {
         (self.name, self.tool, self.capacity, self.workdir, self.mode) = (name, tool, capacity, workdir, mode)
-        (self.takes, self.areas, self.models) = (takes, areas, models)
+        (self.takes, self.areas, self.models, self.plan) = (takes, areas, models, plan)
     }
 
-    private enum Keys: String, CodingKey { case name, tool, capacity, workdir, mode, takes, areas, models }
+    private enum Keys: String, CodingKey { case name, tool, capacity, workdir, mode, takes, areas, models, plan }
 
     /// What another member sealed is checked as the agent would: a profile it could not run reads as none.
     public init(from decoder: Decoder) throws {
@@ -60,6 +63,7 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
         takes = (try? c.decodeIfPresent(String.self, forKey: .takes)).flatMap { ["simple", "large"].contains($0) ? $0 : nil }
         areas = (try? c.decodeIfPresent([String].self, forKey: .areas)).map { $0.filter { !$0.isEmpty } }.flatMap { $0.isEmpty ? nil : $0 }
         models = try? c.decodeIfPresent(PoolModelPolicy.self, forKey: .models)
+        plan = (try? c.decodeIfPresent(String.self, forKey: .plan)).flatMap(Self.plan)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -72,6 +76,91 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
         try c.encodeIfPresent(takes, forKey: .takes)
         try c.encodeIfPresent(areas, forKey: .areas)
         try c.encodeIfPresent(models, forKey: .models)
+        try c.encodeIfPresent(plan, forKey: .plan)
+    }
+
+    /// A plan name as an agent writes it, or nil: a newer agent's plan is kept, anything else dropped.
+    static func plan(_ text: String?) -> String? {
+        text.flatMap { $0.wholeMatch(of: #/[a-z0-9_]{1,40}/#) != nil ? $0 : nil }
+    }
+
+    /// How many sessions a Claude Code machine runs at once by its plan: what the plan's windows sustain.
+    private static let planSessions = ["max_20x": 3, "max_5x": 2, "team": 2, "enterprise": 2, "api": 2, "pro": 1]
+    /// OpenCode has no plan windows.
+    private static let openCodeSessions = 2
+    /// Memory each session needs, with its worktree's build and tests.
+    private static let sessionMemory = 8.0 * 1_073_741_824
+
+    /// How one of the account's machines works for a pool when its owner says nothing (docs/pool-autopilot.md, Joining):
+    /// Claude Code when it is there and signed in, else OpenCode; as many sessions as its plan sustains and its memory
+    /// holds; a folder of its own per pool. Nil when it has no coding tool. Mirrors `autoPoolMachineProfile` in
+    /// shared/pool-machines.ts; both check shared/test/pool-auto-profile.json.
+    public static func automatic(
+        name: String?, health: MachineHealth?, poolId: String, poolName: String?, mode: PoolMachineMode = .edits
+    ) -> PoolMachineProfile? {
+        // Older agents report no tools: they run Claude Code.
+        let tools = health?.tools ?? ["claude"]
+        let plan = Self.plan(health?.plan)
+        let tool: String
+        if tools.contains("claude") && (plan != nil || !tools.contains("opencode")) {
+            tool = "claude"
+        } else if tools.contains("opencode") {
+            tool = "opencode"
+        } else {
+            return nil
+        }
+        let wanted = tool == "opencode" ? openCodeSessions : plan.flatMap { planSessions[$0] } ?? 1
+        let memory = health.map {
+            $0.memoryTotal > 0 ? max(1, Int(($0.memoryTotal / sessionMemory).rounded(.down))) : capacities.upperBound
+        }
+        let folder = [slug(poolName ?? ""), String(poolId.prefix(6)).lowercased()].filter { !$0.isEmpty }.joined(separator: "-")
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return PoolMachineProfile(
+            name: trimmed?.isEmpty == false ? String(trimmed?.prefix(200) ?? "") : nil, tool: tool,
+            capacity: min(capacities.upperBound, wanted, memory ?? capacities.upperBound), workdir: "~/tonton-pools/\(folder)",
+            mode: mode, plan: tool == "claude" ? plan : nil)
+    }
+
+    /// `Basel Hack` → `basel-hack`, `Été` → `ete`: a folder name every system takes.
+    private static func slug(_ text: String) -> String {
+        let plain = String(
+            String.UnicodeScalarView(
+                text.decomposedStringWithCompatibilityMapping.unicodeScalars.filter { !(0x300...0x36F).contains($0.value) }))
+        var slug = ""
+        for character in plain.lowercased() {
+            if character.isASCII && (character.isLetter || character.isNumber) {
+                slug.append(character)
+            } else if !slug.isEmpty && slug.last != "-" {
+                slug.append("-")
+            }
+        }
+        slug = String(slug.prefix(40))
+        while slug.last == "-" { slug.removeLast() }
+        return slug
+    }
+
+    /// `Claude Max 20x`, `OpenCode`, `Claude Code` when its plan is not known: what the machine brings. Product names,
+    /// the same in every language.
+    public var planLabel: String {
+        if tool == "opencode" { return "OpenCode" }
+        switch plan {
+        case "max_20x": return "Claude Max 20x"
+        case "max_5x": return "Claude Max 5x"
+        case "pro": return "Claude Pro"
+        case "team": return "Claude Team"
+        case "enterprise": return "Claude Enterprise"
+        case "api": return "Claude API key"
+        default: return "Claude Code"
+        }
+    }
+
+    /// Larger plans first, for the orchestrator. Not known: as a middle one.
+    public var planRank: Int {
+        switch plan {
+        case "max_20x": 0
+        case "pro": 2
+        default: 1
+        }
     }
 
     /// `/srv/pool`, `~/pool`, `C:\pool`: a folder from the root or the home folder, never relative, never climbing out.
@@ -153,6 +242,8 @@ public struct PoolMachineForm: Equatable, Sendable {
     public var models: [PoolModelTier: String]
     /// How many tiers a task may climb after sessions failed it.
     public var escalations: Int
+    /// The Claude plan its agent reported, carried as it is into the profile.
+    public var plan: String?
 
     /// One session at a time, asking for everything: what a machine runs until its owner says otherwise.
     public init(tool: CodingTool = .claudeCode, workdir: String = "~/tonton-pool") {
@@ -165,6 +256,20 @@ public struct PoolMachineForm: Equatable, Sendable {
         allowed = Set(PoolModelTier.allCases)
         models = [:]
         escalations = Self.defaultEscalations
+    }
+
+    /// The form filled in with a profile, the automatic one for instance, for its owner to change.
+    public init(_ profile: PoolMachineProfile) {
+        self.init(tool: profile.tool == "opencode" ? .openCode : .claudeCode, workdir: profile.workdir)
+        capacity = profile.capacity
+        mode = profile.mode
+        if let takes = profile.takes.flatMap(PoolTaskSize.init(rawValue:)) { self.takes = takes }
+        areas = profile.areas ?? []
+        lock = profile.models?.lock.flatMap(PoolModelTier.init(rawValue:))
+        if let allowed = profile.models?.allowed { self.allowed = Set(allowed.compactMap(PoolModelTier.init(rawValue:))) }
+        for (tier, model) in profile.models?.tiers ?? [:] { if let tier = PoolModelTier(rawValue: tier) { models[tier] = model } }
+        escalations = profile.models?.escalations ?? Self.defaultEscalations
+        plan = profile.plan
     }
 
     /// Why it can't be sent yet, or nil.
@@ -201,7 +306,7 @@ public struct PoolMachineForm: Equatable, Sendable {
         return PoolMachineProfile(
             name: name, tool: tool == .openCode ? "opencode" : "claude", capacity: capacity,
             workdir: workdir.trimmingCharacters(in: .whitespacesAndNewlines), mode: mode, takes: takes.rawValue,
-            areas: unique.isEmpty ? nil : Array(unique.prefix(20)), models: modelPolicy)
+            areas: unique.isEmpty ? nil : Array(unique.prefix(20)), models: modelPolicy, plan: tool == .claudeCode ? plan : nil)
     }
 }
 

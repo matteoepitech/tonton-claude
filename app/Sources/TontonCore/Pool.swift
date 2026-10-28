@@ -37,7 +37,8 @@ public struct PoolInvite: Equatable, Sendable {
 
     public init?(string: String) {
         var trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("#") { trimmed.removeFirst() }
+        // A link to the relay's website carries the invite after its `#`.
+        if let hash = trimmed.lastIndex(of: "#") { trimmed = String(trimmed[trimmed.index(after: hash)...]) }
         guard trimmed.hasPrefix(Self.prefix), let data = Data(base64URLEncoded: String(trimmed.dropFirst(Self.prefix.count))),
             let payload = try? JSONDecoder().decode(Payload.self, from: data),
             let relay = URL(string: payload.relay), ["https", "http"].contains(relay.scheme ?? ""),

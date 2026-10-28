@@ -1,0 +1,117 @@
+{
+  "about": "How a machine works for a pool when its owner says nothing (autoPoolMachineProfile in shared/pool-machines.ts, PoolMachineProfile.automatic in app/Sources/TontonCore/PoolMachine.swift). Memory in bytes; expected null when the machine has nothing to run.",
+  "cases": [
+    {
+      "name": "Claude Max 20x on 32 GB: three sessions",
+      "machine": { "name": "Studio", "health": { "tools": ["claude"], "plan": "max_20x", "memoryTotal": 34359738368 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Basel Hack" },
+      "mode": "edits",
+      "profile": {
+        "name": "Studio",
+        "tool": "claude",
+        "capacity": 3,
+        "workdir": "~/tonton-pools/basel-hack-abcdef",
+        "mode": "edits",
+        "plan": "max_20x"
+      }
+    },
+    {
+      "name": "Claude Max 20x on 16 GB: what the memory holds",
+      "machine": { "name": "Air", "health": { "tools": ["claude", "opencode"], "plan": "max_20x", "memoryTotal": 17179869184 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Basel Hack" },
+      "mode": "edits",
+      "profile": {
+        "name": "Air",
+        "tool": "claude",
+        "capacity": 2,
+        "workdir": "~/tonton-pools/basel-hack-abcdef",
+        "mode": "edits",
+        "plan": "max_20x"
+      }
+    },
+    {
+      "name": "Claude Max 5x",
+      "machine": { "name": "Laptop", "health": { "tools": ["claude"], "plan": "max_5x", "memoryTotal": 68719476736 } },
+      "pool": { "id": "Zz9_-xYwVuTs", "name": "Shop" },
+      "mode": "full",
+      "profile": {
+        "name": "Laptop",
+        "tool": "claude",
+        "capacity": 2,
+        "workdir": "~/tonton-pools/shop-zz9_-x",
+        "mode": "full",
+        "plan": "max_5x"
+      }
+    },
+    {
+      "name": "Claude Pro: one session",
+      "machine": { "name": "Desk", "health": { "tools": ["claude"], "plan": "pro", "memoryTotal": 68719476736 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Été 2026 !" },
+      "mode": "edits",
+      "profile": {
+        "name": "Desk",
+        "tool": "claude",
+        "capacity": 1,
+        "workdir": "~/tonton-pools/ete-2026-abcdef",
+        "mode": "edits",
+        "plan": "pro"
+      }
+    },
+    {
+      "name": "Claude Code not signed in, OpenCode installed: OpenCode",
+      "machine": { "name": "Linux box", "health": { "tools": ["claude", "opencode"], "memoryTotal": 68719476736 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Shop" },
+      "mode": "edits",
+      "profile": { "name": "Linux box", "tool": "opencode", "capacity": 2, "workdir": "~/tonton-pools/shop-abcdef", "mode": "edits" }
+    },
+    {
+      "name": "Claude Code alone, plan not known: one session",
+      "machine": { "name": "Old", "health": { "tools": ["claude"], "memoryTotal": 68719476736 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Shop" },
+      "mode": "ask",
+      "profile": { "name": "Old", "tool": "claude", "capacity": 1, "workdir": "~/tonton-pools/shop-abcdef", "mode": "ask" }
+    },
+    {
+      "name": "An agent too old to report health: Claude Code, one session",
+      "machine": { "name": "Ancient", "health": null },
+      "pool": { "id": "AbCdEfGhIjKl" },
+      "mode": "edits",
+      "profile": { "name": "Ancient", "tool": "claude", "capacity": 1, "workdir": "~/tonton-pools/abcdef", "mode": "edits" }
+    },
+    {
+      "name": "8 GB: one session whatever the plan",
+      "machine": { "name": "Tiny", "health": { "tools": ["claude"], "plan": "max_20x", "memoryTotal": 8589934592 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Shop" },
+      "mode": "edits",
+      "profile": {
+        "name": "Tiny",
+        "tool": "claude",
+        "capacity": 1,
+        "workdir": "~/tonton-pools/shop-abcdef",
+        "mode": "edits",
+        "plan": "max_20x"
+      }
+    },
+    {
+      "name": "A plan this client does not know: kept, one session",
+      "machine": { "name": "Future", "health": { "tools": ["claude"], "plan": "max_50x", "memoryTotal": 68719476736 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Shop" },
+      "mode": "edits",
+      "profile": {
+        "name": "Future",
+        "tool": "claude",
+        "capacity": 1,
+        "workdir": "~/tonton-pools/shop-abcdef",
+        "mode": "edits",
+        "plan": "max_50x"
+      }
+    },
+    {
+      "name": "No coding tool installed",
+      "machine": { "name": "Server", "health": { "tools": [], "memoryTotal": 68719476736 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Shop" },
+      "mode": "edits",
+      "profile": null
+    }
+  ]
+}

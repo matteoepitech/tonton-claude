@@ -151,8 +151,16 @@ export interface MachineHealth {
   wake?: { mac: string; broadcast: string }[]
   /** The coding agents installed, which the notch can start there. Missing from older agents, which only start claude. */
   tools?: ('claude' | 'opencode')[]
+  /**
+   * The Claude plan Claude Code is signed in with here, so a pool knows what the machine can take without asking its
+   * owner (docs/pool-autopilot.md). Only the plan, never the account. Missing when Claude Code is not signed in, and from
+   * older agents.
+   */
+  plan?: ClaudePlan
   at: string
 }
+/** `max_20x` and `max_5x`: Claude Max. `api`: Claude Code runs on an API key, without a plan's windows. */
+export type ClaudePlan = 'max_20x' | 'max_5x' | 'pro' | 'team' | 'enterprise' | 'api'
 /** A tool call the agent approves without asking: the tool, and a pattern for its command, path or URL. */
 export interface PermissionRule {
   tool: string
