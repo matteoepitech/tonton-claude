@@ -14,6 +14,7 @@ import { Board } from './board'
 import { ControlCenter } from './control'
 import { Invites } from './invites'
 import { Leaderboard } from './leaderboard'
+import { Machines } from './machines'
 import { Members } from './members'
 import { Orchestrator } from './orchestrator'
 import { roleLabel } from './roles'
@@ -27,6 +28,7 @@ export interface TabProps {
 const TABS: { id: string; label: string; leads?: boolean; render(props: TabProps): ReactNode }[] = [
   { id: 'orchestrator', label: 'Orchestrator', render: props => <Orchestrator {...props} /> },
   { id: 'tasks', label: 'Tasks', render: props => <Board {...props} /> },
+  { id: 'machines', label: 'Machines', render: props => <Machines {...props} /> },
   { id: 'control', label: 'Control center', render: props => <ControlCenter {...props} /> },
   { id: 'activity', label: 'Activity', render: props => <Activity {...props} /> },
   { id: 'leaderboard', label: 'Leaderboard', render: props => <Leaderboard {...props} /> },

@@ -14,7 +14,7 @@ import { cn } from '../ui/cn'
 import type { TabProps } from './page'
 
 /** The events the control loop posts as the orchestrator machine. */
-const LOOP_KINDS = new Set(['dispatched', 'retried', 'blocked', 'dispatch_waiting', 'dispatch_done'])
+const LOOP_KINDS = new Set(['dispatched', 'retried', 'blocked', 'dispatch_waiting', 'dispatch_done', 'orchestrator_failed'])
 
 export function Orchestrator({ pool, state }: TabProps) {
   const store = useStore()
@@ -69,7 +69,7 @@ function NoChat({ state, mine, account }: { state: PoolState; mine: boolean; acc
       <>
         <strong>No orchestrator yet</strong>
         <p className="text-sm text-muted-foreground">
-          An admin picks one of their machines as the orchestrator machine (Members), whose agent starts the orchestrator session, or makes
+          An admin picks one of their machines as the orchestrator machine (Machines), whose agent starts the orchestrator session, or makes
           one of their sessions the orchestrator. It plans the work and hands it to the others.
         </p>
       </>

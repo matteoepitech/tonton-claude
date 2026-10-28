@@ -276,8 +276,8 @@ The relay serves a website at `/`, built on the client core like the web app: si
 - The list shows each pool's name, opened with the member's keys. **New pool** makes the pool and its key in the
   browser; **Join** takes an invite pasted from a teammate (`tontonpool1.…`, for this relay only).
 - A pool's page has tabs, each a name and a component in `TABS` (`web/site/pools/page.tsx`): **Orchestrator**,
-  **Tasks**, **Control center**, **Activity**, **Leaderboard**, **Members**, **Invites** (owner and admins) and
-  **Settings**. The notes come as one more tab.
+  **Tasks**, **Machines**, **Control center**, **Activity**, **Leaderboard**, **Members**, **Invites** (owner and
+  admins) and **Settings**. The notes come as one more tab.
 - **Orchestrator** (`web/site/pools/orchestrator.tsx`) comes first, for the admin ([pool-autopilot.md](pool-autopilot.md)):
   the orchestrator session's conversation, with the box to write to it. It is one of the admin's own sessions, sealed
   with the admin's account key, so only the admin reads it and writes to it; the other members see who runs it. Beside
@@ -287,6 +287,16 @@ The relay serves a website at `/`, built on the client core like the web app: si
   opens with its goal, criteria, area, assignee, dependencies, branch, summary and history (the `task_*` events each
   change leaves). Members create, edit and move tasks; viewers read. A change over a revision someone else changed
   meanwhile is refused by the relay: the board shows their version, marked "changed meanwhile".
+- **Machines** (`web/site/pools/machines.tsx`) shows each machine members put in the pool, theirs first: whose it is,
+  online, ready or with an agent to update, the orchestrator machine, what it runs, how many sessions at once, what its
+  sessions may do without asking ("everything passes" is flagged), the tasks it takes and its areas. Below come its
+  slots: each task dispatched to it (assigned, in progress or blocked), its state and failed attempts, and the session
+  working on it, or why there is none yet (its machine is starting one, the machine is offline or the pool paused, or
+  the session left), then the free slots of a machine that takes tasks (`web/site/pools/machines-model.ts`). A member
+  opens its own sessions from there; the owner and admins, or the session's owner, **Stop** one (`pool_stop`): it ends,
+  and its machine puts the task back on the board. The machine's owner, the pool's owner and admins **Remove** it: its
+  sessions end, and the tasks it held stay on the board as they are. Owners and admins make one of their own machines
+  the orchestrator machine.
 - **Control center** (`web/site/pools/control.tsx`) shows every member with its machines and pool sessions: tool and model (from the
   session's `session` event), area, whether it is the orchestrator, online or not, its status, its current task, when it
   last wrote to the pool, and its usage. A count per status (working, needs its owner, idle, offline) sits on top, and
@@ -311,10 +321,9 @@ The relay serves a website at `/`, built on the client core like the web app: si
   the period's share of each session's running total. Lines changed are not counted: no event carries them yet.
 - The three tabs work out what they show in `shared/pool-stats.ts`, from the pool's state alone, so any client computes
   the same.
-- **Members** lists the members, the pool's sessions (tool, machine, online or not) and its machines. Roles change from a
-  menu, by the rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and
-  says who could not get the new one. Owners and admins make a session the orchestrator, or one of their own machines
-  the orchestrator machine.
+- **Members** lists the members and the pool's sessions (tool, machine, online or not). Roles change from a menu, by
+  the rules the relay enforces; **Make owner** hands the pool over; **Remove** kicks and rotates the key, and says who
+  could not get the new one. Owners and admins make a session the orchestrator.
 - **Invites** makes an invite (uses, how long, which role) and shows its link and a QR code, drawn in the page
   (`shared/qr.ts`, no dependency). Open invites are listed with **Revoke**.
 - Forms sit in dialogs (Radix, under the page's nonce) or keep their own state: live changes redraw the tab, never what is
