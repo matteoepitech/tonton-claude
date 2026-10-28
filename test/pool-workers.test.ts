@@ -33,7 +33,8 @@ const hasTmux = process.platform !== 'win32' && Bun.spawnSync(['tmux', '-V']).ex
 writeFileSync(join(dir, 'gitconfig'), '[user]\n\tname = Stand-in\n\temail = stand-in@example.com\n[init]\n\tdefaultBranch = main\n')
 // The login shell tmux runs claude with: here, the stand-in.
 const shell = join(dir, 'shell')
-writeFileSync(shell, `#!/bin/sh\nexec "${process.execPath}" "${STAND_IN}"\n`)
+// The shell's arguments (`-lic 'claude --model sonnet'`) go to the stand-in, which takes its model from them.
+writeFileSync(shell, `#!/bin/sh\nexec "${process.execPath}" "${STAND_IN}" "$@"\n`)
 chmodSync(shell, 0o755)
 const env: Record<string, string> = {
   ...(process.env as Record<string, string>),
@@ -182,6 +183,13 @@ beforeAll(async () => {
       }
     }
   })()
+  // What OpenCode's plugin answers the bridge's `models`: the catalog a pool session's model is chosen from.
+  const models = [
+    { providerID: 'anthropic', modelID: 'claude-haiku-4-5', released: 1_760_000_000_000 },
+    { providerID: 'anthropic', modelID: 'claude-sonnet-5-5', released: 1_790_000_000_000 },
+  ]
+  bridge.stdin.write(`${JSON.stringify({ type: 'tonton.models', data: { models } })}\n`)
+  bridge.stdin.flush()
   const openWorkdir = join(dir, 'opencode-work')
   expect(await watch.addMachine(poolId, openMachineId, { tool: 'opencode', capacity: 1, workdir: openWorkdir, mode: 'ask' })).toBe(true)
   await eventually(() => state()?.machines?.find(m => m.machine === openMachineId)?.ready, 'the OpenCode machine ready')
@@ -205,6 +213,9 @@ describe.skipIf(!hasTmux)('pool workers on a machine', () => {
     const done = await eventually(() => taskOf(id)?.state === 'done' && taskOf(id), 'the task done')
     expect(done.branch).toBe(`pool/${id}-secret-api-client`)
     expect(done.summary).toContain('Wrote the file.')
+    // A feature: its session was started on a balanced model, which its status line confirmed before it got the task.
+    expect(done.route).toMatchObject({ tier: 'balanced', model: 'sonnet', confirmed: 'claude-sonnet-stand-in' })
+    expect(logs()).toContain('on sonnet')
     // The worktree is the task's, on its branch, under the folder the owner chose; the branch reached the origin.
     const tree = join(workdir, 'tasks', id)
     expect(git(tree, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(done.branch)
@@ -218,13 +229,21 @@ describe.skipIf(!hasTmux)('pool workers on a machine', () => {
     await eventually(() => state()?.sessions.length === 0, 'no session left in the pool')
   }, 90_000)
 
-  test('a session that crashes before task_done puts its task back on the board', async () => {
+  test('a session that crashes before task_done puts its task back on the board, and the next one runs a tier up', async () => {
     const id = await dispatch('crash on start')
     const back = await eventually(() => taskOf(id)?.state === 'todo' && taskOf(id), 'the task back')
     expect(back.attempts).toBe(1)
+    expect(back.setbacks).toBe(1)
     expect(back.machine).toBeUndefined()
     expect(back.summary).toContain('ended before the task was done')
-  }, 90_000)
+    expect(back.route).toMatchObject({ tier: 'balanced', model: 'sonnet' })
+    // Dispatched again, as the control loop would: strong this time, and no further after it fails again (one tier at most).
+    await watch.saveTask(poolId, id, { ...back, state: 'assigned', machine: { account: accountId, machine: machineId } })
+    const again = await eventually(() => taskOf(id)?.state === 'todo' && taskOf(id)?.attempts === 2 && taskOf(id), 'the task back again')
+    expect(again.route).toMatchObject({ tier: 'strong', model: 'opus', escalated: 1, confirmed: 'claude-opus-stand-in' })
+    expect(again.setbacks).toBe(2)
+    expect(state()?.events.some(e => e.body?.kind === 'model' && e.body.taskId === id && e.body.text?.includes('up a tier'))).toBe(true)
+  }, 120_000)
 
   test('on an OpenCode machine, its service makes the session and the bridge hands it the task', async () => {
     const id = await dispatch('SECRET docs page', openMachineId)
@@ -235,6 +254,13 @@ describe.skipIf(!hasTmux)('pool workers on a machine', () => {
     )
     expect(prompt.directory).toBe(realpathSync(join(dir, 'opencode-work', 'tasks', id)))
     expect(prompt.text).toContain('Start it: call task_claim')
+    // Routine docs: a light model, switched to by the bridge before the task, which the task's first message carries.
+    expect(commands.find(c => c.op === 'model' && c.sessionID === prompt.sessionID)).toMatchObject({
+      providerID: 'anthropic',
+      modelID: 'claude-haiku-4-5',
+    })
+    expect(prompt).toMatchObject({ providerID: 'anthropic', modelID: 'claude-haiku-4-5' })
+    expect(taskOf(id)?.route).toMatchObject({ tier: 'light', model: 'haiku', confirmed: 'anthropic/claude-haiku-4-5' })
     // OpenCode calls the pool tools through Tonton's plugin; the bridge answers them.
     const tool = (callID: string, name: string, args: Record<string, unknown>) => {
       bridge.stdin.write(`${JSON.stringify({ type: 'tonton.tool', data: { callID, sessionID: prompt.sessionID, name, args } })}\n`)

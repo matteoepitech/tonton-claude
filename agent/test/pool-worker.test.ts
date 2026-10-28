@@ -62,13 +62,21 @@ let watch: PoolWatch
 let client: RelayClient
 const sessions = new Map<string, FakeSession>()
 const launched: { taskId: string; cwd: string; tool: string }[] = []
+/** The model each task's session was started with, and what each session says it runs on, as its status line would. */
+const models = new Map<string, string>()
+const reported = new Map<string, { model?: string; problem?: string }>()
+let silent = false
 const prepared: { workdir: string; repo: string; taskId: string; branch: string }[] = []
 let failPrepare: string | null = null
 
 /** Starts a session the way Claude Code's channel would show up: it says hello to the relay as the machine. */
-const launch: typeof launchForPool = async (taskId, cwd, tool) => {
+const launch: typeof launchForPool = async (taskId, cwd, tool, options) => {
   launched.push({ taskId, cwd, tool })
   const id = `ses_${taskId}`
+  if (options?.model) {
+    models.set(taskId, options.model)
+    reported.set(id, { model: `claude-${options.model}-4-5` })
+  }
   const socket = new WebSocket(`${base.replace('http', 'ws')}/ws/agent`, { headers: { authorization: `Bearer ${machine.token}` } } as never)
   const session: FakeSession = { id, socket, messages: [], alive: true }
   socket.onmessage = event => {
@@ -114,7 +122,8 @@ function worker(home: string) {
     id => work?.changed(id),
     join(home, 'pm.json'),
   )
-  work = new PoolWorker(pools, { machineName: 'Studio', home, launch, prepare, runs, end })
+  const effectiveModel = (_tool: string, sessionId: string) => (silent ? null : (reported.get(sessionId) ?? null))
+  work = new PoolWorker(pools, { machineName: 'Studio', home, launch, prepare, runs, end, effectiveModel, confirmMs: 300 })
   connection.connect()
   return { connection, pools, work }
 }
@@ -253,7 +262,8 @@ describe('a pool machine at work', () => {
     session.alive = false
     running.work.changed(poolId)
     const back = await eventually(() => taskOf(id)?.task?.state === 'todo' && taskOf(id), 'the task back')
-    expect(back.task).toMatchObject({ attempts: 1 })
+    // Its session failed it: the next one may run on a stronger model.
+    expect(back.task).toMatchObject({ attempts: 1, setbacks: 1 })
     expect(back.task?.assignee).toBeUndefined()
     expect(back.task?.machine).toBeUndefined()
     expect(back.task?.summary).toContain('ended before the task was done')
@@ -267,6 +277,8 @@ describe('a pool machine at work', () => {
       attempts: MAX_ATTEMPTS,
       summary: 'Studio could not start it: git clone failed: no such repository',
     })
+    // The machine failed it, not a session: no stronger model would help.
+    expect(blocked.task?.setbacks).toBeUndefined()
     failPrepare = null
   })
 
@@ -364,6 +376,40 @@ describe('a pool machine at work', () => {
     await eventually(() => taskOf(waiting)?.task?.state === 'todo', 'given back again')
     watch.stopMachine(poolId, machine.machineId, false)
     await eventually(() => state()?.machines?.[0] && !state()?.machines?.[0]?.stopped, 'started again')
+  })
+
+  test('each session starts on the model its task needs, confirmed before it gets the task', async () => {
+    // A feature: balanced, Claude Code's sonnet by default.
+    const api = taskOf(first)?.task
+    expect(models.get(first)).toBe('sonnet')
+    expect(api?.route).toMatchObject({ tier: 'balanced', model: 'sonnet', reason: 'a feature', confirmed: 'claude-sonnet-4-5' })
+    expect(api?.route?.problem).toBeUndefined()
+
+    // Routine work its session already failed once: up a tier from light, and the pool hears why.
+    const docs = await dispatch('Fix typos in the README', { size: 'simple', setbacks: 1 })
+    const started = await eventually(() => taskOf(docs)?.task?.route && taskOf(docs), 'the route')
+    expect(models.get(docs)).toBe('sonnet')
+    expect(started.task?.route).toMatchObject({ tier: 'balanced', escalated: 1, confirmed: 'claude-sonnet-4-5' })
+    const said = await eventually(() => state()?.events.find(e => e.body?.kind === 'model' && e.body.taskId === docs), 'the model event')
+    expect(said.body?.text).toBe(
+      'Fix typos in the README: sonnet (balanced): a small task, routine work (typos); up a tier after a session failed it.',
+    )
+    ;(sessions.get(`ses_${docs}`) as FakeSession).alive = false
+    running.work.changed(poolId)
+    await eventually(() => taskOf(docs)?.task?.state === 'todo', 'the task back')
+
+    // The next easy task is assessed on its own: light again. A session that says nothing still gets its task, and the
+    // pool hears the model was not confirmed.
+    silent = true
+    const next = await dispatch('Rename the settings labels', { size: 'simple' })
+    const quiet = await eventually(() => taskOf(next)?.task?.assignee && taskOf(next), 'the task with its session')
+    expect(models.get(next)).toBe('haiku')
+    expect(quiet.task?.route).toMatchObject({ tier: 'light', problem: 'Claude Code did not say which model it runs on' })
+    await eventually(() => state()?.events.some(e => e.body?.kind === 'model_problem' && e.body.taskId === next), 'the problem event')
+    silent = false
+    ;(sessions.get(`ses_${next}`) as FakeSession).alive = false
+    running.work.changed(poolId)
+    await eventually(() => running.work.running(poolId).length === 0, 'the slot free')
   })
 
   test('taken out of the pool, the machine ends its sessions', async () => {

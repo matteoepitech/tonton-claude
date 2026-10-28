@@ -33,16 +33,18 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
     public var takes: String?
     /// The areas it prefers.
     public var areas: [String]?
+    /// Which models its sessions run on. Nil: each task gets the tier it needs.
+    public var models: PoolModelPolicy?
 
     public init(
         name: String? = nil, tool: String, capacity: Int, workdir: String, mode: PoolMachineMode, takes: String? = nil,
-        areas: [String]? = nil
+        areas: [String]? = nil, models: PoolModelPolicy? = nil
     ) {
         (self.name, self.tool, self.capacity, self.workdir, self.mode) = (name, tool, capacity, workdir, mode)
-        (self.takes, self.areas) = (takes, areas)
+        (self.takes, self.areas, self.models) = (takes, areas, models)
     }
 
-    private enum Keys: String, CodingKey { case name, tool, capacity, workdir, mode, takes, areas }
+    private enum Keys: String, CodingKey { case name, tool, capacity, workdir, mode, takes, areas, models }
 
     /// What another member sealed is checked as the agent would: a profile it could not run reads as none.
     public init(from decoder: Decoder) throws {
@@ -57,6 +59,7 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
         name = try? c.decodeIfPresent(String.self, forKey: .name)
         takes = (try? c.decodeIfPresent(String.self, forKey: .takes)).flatMap { ["simple", "large"].contains($0) ? $0 : nil }
         areas = (try? c.decodeIfPresent([String].self, forKey: .areas)).map { $0.filter { !$0.isEmpty } }.flatMap { $0.isEmpty ? nil : $0 }
+        models = try? c.decodeIfPresent(PoolModelPolicy.self, forKey: .models)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -68,6 +71,7 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
         try c.encode(mode, forKey: .mode)
         try c.encodeIfPresent(takes, forKey: .takes)
         try c.encodeIfPresent(areas, forKey: .areas)
+        try c.encodeIfPresent(models, forKey: .models)
     }
 
     /// `/srv/pool`, `~/pool`, `C:\pool`: a folder from the root or the home folder, never relative, never climbing out.
@@ -75,6 +79,23 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
         guard path.count <= 1024, path.wholeMatch(of: #/(\/|~\/|[A-Za-z]:[\\\/]).+/#) != nil else { return false }
         let parts = path.split(whereSeparator: { $0 == "/" || $0 == "\\" })
         return !parts.contains("..") && !path.contains(where: { $0 == "\0" || $0 == "\n" || $0 == "\r" })
+    }
+}
+
+/// The machine owner's choice of models for the pool's tasks (shared/pool-model.ts): tiers are `light`, `balanced` and
+/// `strong`. The agent checks it; the app keeps it as it is, so that a profile it writes back still says so.
+public struct PoolModelPolicy: Codable, Equatable, Sendable {
+    /// Every task runs on this tier, whatever it is.
+    public var lock: String?
+    /// The tiers its sessions may use. Nil: all three.
+    public var allowed: [String]?
+    /// The model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`.
+    public var tiers: [String: String]?
+    /// How many tiers a task may climb after sessions failed it.
+    public var escalations: Int?
+
+    public init(lock: String? = nil, allowed: [String]? = nil, tiers: [String: String]? = nil, escalations: Int? = nil) {
+        (self.lock, self.allowed, self.tiers, self.escalations) = (lock, allowed, tiers, escalations)
     }
 }
 

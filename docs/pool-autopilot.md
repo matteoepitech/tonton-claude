@@ -92,6 +92,41 @@ them starts it again. The owner and admins stop every machine at once, and the d
 session goes on, so the admin can still talk to it. A machine owner can always take their machine out of the pool,
 stopped or not. Each of these is a line of the audit log (docs/pools.md, Control).
 
+## Models
+
+Each task runs on the least costly model that can reliably do it (#283, `shared/pool-model.ts`). Models come in three
+tiers: **light** for routine work, **balanced** for ordinary features, **strong** for demanding work. By default they are
+Claude Code's `haiku`, `sonnet` and `opus`; for OpenCode, the latest model of those families its catalog has.
+
+When a machine starts a task's session, its agent chooses the tier:
+
+1. The machine owner's **lock**, if any: every task runs on it, whatever else says.
+2. Else the tier the orchestrator or an admin set on the task (`task_create`'s `model`).
+3. Else the task's **assessment**, from what the task says, not from the tool that runs it: a feature, many criteria,
+   many hours, several dependencies or parts of the code, and words for demanding work (redesign, migration, protocol,
+   concurrency, debugging, security…) raise it; routine words (docs, typos, rename, translation…) and a short task lower
+   it. Plain code, so no model is asked to classify each task.
+   - **Escalation**: one tier up for each time a session failed the task itself (`setbacks`: it ended or stalled before
+     the task was done, or its branch fails main's checks), at most one tier unless the owner allows two. A machine going
+     offline or a session that could not start is not a setback. The escalation stays with that task: the next one is
+     assessed on its own.
+   - While the account is close to its plan's limit, strong becomes balanced, unless the task already failed.
+4. The nearest tier the owner **allows**: up first, since a weaker model would fail the task, else down.
+
+The owner's choices are the machine profile's `models`, sealed in its order: `lock`, `allowed` (tiers), `tiers` (the
+model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`), `escalations` (0 to 2).
+
+The model is applied before the task starts: Claude Code is started with `--model`, as `/model` would switch it; OpenCode
+is switched by its bridge, the same switch as the notch's model menu (OpenCode 1 takes it with the next message, which is
+the task). The agent then waits up to 20 seconds for the session to say what it runs on (Claude Code's status line, the
+bridge), and only then hands it the task. The task's `route` keeps the tier, the model, the reason, any escalation, and
+the model the session confirmed or why it could not be applied; the timeline gets a `model` event (`model_problem` when
+the switch failed or was not confirmed). The session runs either way, on what its tool chose. `pool_overview` and
+`pool_tasks` show the route.
+
+The budgets, the plan limits and the control loop's rules for who takes a task are unchanged: the model is chosen on the
+machine the loop picked.
+
 ## The website
 
 The pool page (#254) puts the orchestrator chat first, for the admin: the conversation with its live status, a box to

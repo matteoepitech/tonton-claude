@@ -6,16 +6,22 @@ import { join } from 'node:path'
 import { open, seal } from '../../shared/crypto'
 import type { AgentMessage, StartDetail } from '../../shared/protocol'
 import type { AgentConfig } from '../src/config'
+import { paths } from '../src/config'
 import {
   claim,
   descendsFrom,
+  effectiveModel,
   fromHome,
   handleStartAnswer,
   handleStartOrder,
+  launchForPool,
   newSession,
   openCodeMajor,
+  openCodeModelFile,
+  openCodeStarts,
   readOpenCodeService,
 } from '../src/launch'
+import { writeUsage } from '../src/usage'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-launch-'))
 const run = join(dir, 'run')
@@ -284,5 +290,28 @@ describe('OpenCode service', () => {
     expect(openCodeMajor('opencode v2.0.32')).toBe(2)
     expect(openCodeMajor('1.17.5')).toBe(1)
     expect(openCodeMajor('command not found')).toBeNull()
+  })
+})
+
+describe("a pool task's model", () => {
+  test('only a model name reaches the command line', async () => {
+    for (const model of ['opus --dangerously-skip-permissions', '$(id)', "sonnet'"]) {
+      expect(await launchForPool('task0001abcd', project, 'claude', { model })).toBe(
+        'The model chosen for the task is not one this machine can pass on.',
+      )
+    }
+  })
+
+  test('the session says which model it runs on: Claude Code in its status line, OpenCode through the bridge', () => {
+    expect(effectiveModel('claude', 'ses-quiet')).toBeNull()
+    writeUsage('ses-said', { model: 'claude-sonnet-4-5-20250929' })
+    expect(effectiveModel('claude', 'ses-said')).toEqual({ model: 'claude-sonnet-4-5-20250929' })
+    mkdirSync(openCodeStarts(run), { recursive: true })
+    writeFileSync(openCodeModelFile(run, 'ses_a'), JSON.stringify({ model: 'anthropic/claude-sonnet-5-5' }))
+    writeFileSync(openCodeModelFile(run, 'ses_b'), JSON.stringify({ problem: 'OpenCode has no opus model: the session runs on its own' }))
+    expect(effectiveModel('opencode', 'ses_a', run)).toEqual({ model: 'anthropic/claude-sonnet-5-5' })
+    expect(effectiveModel('opencode', 'ses_b', run)).toEqual({ problem: 'OpenCode has no opus model: the session runs on its own' })
+    expect(effectiveModel('opencode', 'ses_c', run)).toBeNull()
+    expect(paths.run).not.toBe(run)
   })
 })

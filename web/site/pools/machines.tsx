@@ -8,6 +8,7 @@ import {
   type PoolMachineMode,
   type PoolState,
   poolAbilities,
+  routeView,
   type SessionStatus,
   sessionName,
   TASK_STATE_LABELS,
@@ -171,6 +172,14 @@ function Slot({ slot, pool, state }: { slot: MachineSlot; pool: OpenPool; state:
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>{session ? sessionName(state, session) : PHASE_TEXTS[slot.phase]}</span>
         {task?.branch && <span className="font-mono">{task.branch}</span>}
+        {task?.route?.model && (
+          // The model its machine chose for it (shared/pool-model.ts), and why when hovered.
+          <span className={cn(task.route.problem && 'text-destructive')} title={routeView(task.route)}>
+            {task.route.confirmed ?? task.route.model}
+            {task.route.tier ? ` · ${task.route.tier}` : ''}
+            {task.route.escalated ? ' · escalated' : ''}
+          </span>
+        )}
         <span className="ms-auto flex gap-1.5">
           {own && assignee && (
             <Button

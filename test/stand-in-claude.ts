@@ -42,7 +42,14 @@ const transcript = join(home, 'stand-in', `${sessionId}.jsonl`)
 writeFileSync(transcript, `${JSON.stringify({ sessionId, type: 'user', uuid: 'u1', message: { content: 'ready' } })}\n`)
 mkdirSync(join(home, 'run'), { recursive: true })
 writeFileSync(join(home, 'run', `${process.pid}.json`), JSON.stringify({ sessionId, transcriptPath: transcript, cwd: process.cwd() }))
-note(`session ${sessionId} in ${process.cwd()}`)
+// What Claude Code's status line says of the model it was started with (`claude --model sonnet`), as agent/src/usage.ts
+// keeps it: the full id of an alias's family.
+const asked = /--model (\S+)/.exec(process.argv.slice(2).join(' '))?.[1]
+if (asked) {
+  const model = asked.startsWith('claude-') ? asked : `claude-${asked}-stand-in`
+  writeFileSync(join(home, 'run', `usage-${sessionId}.json`), JSON.stringify({ model }))
+}
+note(`session ${sessionId} in ${process.cwd()}${asked ? ` on ${asked}` : ''}`)
 
 const claude = new Client({ name: 'claude-code', version: 'stand-in' })
 await claude.connect(

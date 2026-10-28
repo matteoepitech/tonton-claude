@@ -272,6 +272,33 @@ describe('OpenCode through the relay', () => {
     })
   })
 
+  test("a pool task's session is switched to the model its machine chose before its task, and says so", async () => {
+    // The models are known since the model menu's test: a family resolves to the latest of it, an unknown one says so.
+    const chosen = 'ses_poolmodelchosen01'
+    const unknown = 'ses_poolmodelunknown1'
+    mkdirSync(join(home, 'run', 'opencode'), { recursive: true })
+    for (const [sessionId, model] of [
+      [chosen, 'sonnet'],
+      [unknown, 'opus'],
+    ])
+      writeFileSync(join(home, 'run', 'opencode', `${sessionId}.json`), JSON.stringify({ sessionId, cwd: '/Users/me/pool/task', model }))
+    await eventually(() => commands.find(c => c.op === 'model' && c.sessionID === chosen), 'the switch')
+    expect(commands.find(c => c.op === 'model' && c.sessionID === chosen)).toMatchObject({
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-5-5',
+    })
+    const said = (sessionId: string) => {
+      try {
+        return JSON.parse(readFileSync(join(home, 'run', 'opencode', `${sessionId}.model`), 'utf8'))
+      } catch {
+        return undefined
+      }
+    }
+    expect(await eventually(() => said(chosen), 'what it runs on')).toEqual({ model: 'anthropic/claude-sonnet-5-5' })
+    expect(await eventually(() => said(unknown), 'why not')).toEqual({ problem: 'OpenCode has no opus model: the session runs on its own' })
+    expect(commands.some(c => c.op === 'model' && c.sessionID === unknown)).toBe(false)
+  })
+
   test('a session started from the notch shows up before anyone writes to it', async () => {
     const started = 'ses_startedfromnotch01'
     mkdirSync(join(home, 'run', 'opencode'), { recursive: true })

@@ -388,6 +388,14 @@ describe('the orchestrator', () => {
     expect(relay.posts.filter(p => p.t === 'pool_event').length).toBeGreaterThanOrEqual(6)
   })
 
+  test("the orchestrator can set the tier a task needs over its machine's assessment, and nothing else", async () => {
+    await join()
+    expect(await call('task_create', { ...big('Session store'), model: 'huge' })).toBe('model is light, balanced or strong.')
+    await call('task_create', { ...big('Session store'), model: 'strong' })
+    const id = [...relay.tasks.keys()][0]
+    expect(await relay.read(id)).toMatchObject({ title: 'Session store', model: 'strong' })
+  })
+
   test('a task that waits is not handed out until what it waits for is done', async () => {
     await join()
     await call('task_create', big('Schema'))
