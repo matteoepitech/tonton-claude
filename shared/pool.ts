@@ -204,6 +204,7 @@ export function decodePoolTask(value: unknown): PoolTask | null {
     area: text(f.area),
     state: f.state as PoolTaskState,
     assignee: sessionRef(f.assignee),
+    completion: decodeCompletion(f.completion),
     dependsOn: texts(f.dependsOn),
     branch: text(f.branch),
     summary: text(f.summary),
@@ -220,6 +221,15 @@ export function decodePoolTask(value: unknown): PoolTask | null {
 }
 
 const MERGE_STATES: readonly PoolTaskMergeState[] = ['merged', 'pr', 'conflict', 'failed']
+
+/** Attribution is captured at the first completion, rather than inferred from a later assignee. */
+function decodeCompletion(value: unknown): PoolTask['completion'] {
+  const f = fields(value)
+  const at = text(f?.at)
+  const assignee = sessionRef(f?.assignee)
+  if (!f || !at || !Number.isFinite(Date.parse(at)) || !assignee) return undefined
+  return defined({ at, assignee, reviewer: sessionRef(f.reviewer) })
+}
 
 /** A task's merge record, as the orchestrator's agent wrote it: without a known state, there is none. */
 function decodePoolTaskMerge(value: unknown): PoolTaskMerge | undefined {

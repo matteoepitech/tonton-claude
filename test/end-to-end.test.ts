@@ -10,6 +10,7 @@ import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { open, seal } from '../shared/crypto'
 import type { AgentLog, Diagnosis, RelayToApp, SessionMeta, SessionSummary } from '../shared/protocol'
+import { RPGClient } from '../shared/rpg-client'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-e2e-'))
@@ -234,6 +235,14 @@ describe('end to end', () => {
       return opened?.tasks && opened
     }, 'the progress')
     expect(meta.tasks).toEqual({ done: 1, total: 3 })
+    appendFileSync(
+      transcript,
+      line({ type: 'user', uuid: 'todo-result', message: { content: [{ type: 'tool_result', tool_use_id: 'todo1', content: 'ok' }] } }),
+    )
+    await eventually(
+      async () => (await new RPGClient(`${base}/api/rpg`, accountToken, key).read()).state.xp === 10,
+      'successful checklist XP',
+    )
     expect(app.raw.slice(before).join('')).not.toContain('SECRET')
   })
 

@@ -53,8 +53,7 @@ struct ExpandedView: View {
 
     private var bottomBar: some View {
         HStack(alignment: .center, spacing: 8) {
-            TontonGlyph(size: 16).accessibilityHidden(true)
-            Text("Tonton Claude").font(.notch(12, weight: .semibold))
+            RPGButton()
             connectionBadge.padding(.leading, 4)
             Spacer(minLength: 12)
             if settings.showCosts { TodayCost(usage: store.usage) }

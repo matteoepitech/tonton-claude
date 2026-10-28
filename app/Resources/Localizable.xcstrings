@@ -1107,6 +1107,22 @@
         }
       }
     },
+    "%lld sparks · %lld boosters" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld sparks · %2$lld boosters"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld étincelles · %lld boosters"
+          }
+        }
+      }
+    },
     "%lld to look at" : {
       "localizations" : {
         "fr" : {
@@ -1269,6 +1285,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "+%lld"
+          }
+        }
+      }
+    },
+    "+%lld XP" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld XP"
           }
         }
       }
@@ -1669,6 +1695,16 @@
         }
       }
     },
+    "Accessory" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessoire"
+          }
+        }
+      }
+    },
     "Account" : {
       "localizations" : {
         "fr" : {
@@ -1989,6 +2025,16 @@
         }
       }
     },
+    "All rarities" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les raretés"
+          }
+        }
+      }
+    },
     "Allow" : {
       "localizations" : {
         "fr" : {
@@ -2225,6 +2271,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Joindre des fichiers, jusqu’à %@ par message"
+          }
+        }
+      }
+    },
+    "Aura" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aura"
           }
         }
       }
@@ -2780,6 +2836,16 @@
         }
       }
     },
+    "Common" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commun"
+          }
+        }
+      }
+    },
     "Compact" : {
       "comment" : "A size of the open notch",
       "localizations" : {
@@ -2827,6 +2893,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirmer"
+          }
+        }
+      }
+    },
+    "Connect an account to grow Tonton." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez un compte pour faire progresser Tonton."
           }
         }
       }
@@ -3017,6 +3093,16 @@
         }
       }
     },
+    "Cosmetic slot" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Emplacement cosmétique"
+          }
+        }
+      }
+    },
     "Cost" : {
       "localizations" : {
         "fr" : {
@@ -3083,6 +3169,16 @@
         }
       }
     },
+    "Could not equip this item. Try again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’équiper cet objet. Réessayez."
+          }
+        }
+      }
+    },
     "Could not make the image." : {
       "localizations" : {
         "fr" : {
@@ -3125,6 +3221,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Impossible d’enregistrer %1$@ : %2$@"
+          }
+        }
+      }
+    },
+    "Could not sync Tonton." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de synchroniser Tonton."
+          }
+        }
+      }
+    },
+    "Could not sync Tonton. Retrying…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de synchroniser Tonton. Nouvelle tentative…"
           }
         }
       }
@@ -3531,6 +3647,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chiffrement"
+          }
+        }
+      }
+    },
+    "Epic" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Épique"
+          }
+        }
+      }
+    },
+    "Equip" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Équiper"
+          }
+        }
+      }
+    },
+    "Equipped" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Équipé"
           }
         }
       }
@@ -3944,6 +4090,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Contient une note"
+          }
+        }
+      }
+    },
+    "Hat" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chapeau"
           }
         }
       }
@@ -4614,6 +4770,62 @@
         }
       }
     },
+    "Legendary" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Légendaire"
+          }
+        }
+      }
+    },
+    "Level %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau %lld"
+          }
+        }
+      }
+    },
+    "Level %lld · %lld XP" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Level %1$lld · %2$lld XP"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau %lld · %lld XP"
+          }
+        }
+      }
+    },
+    "Level up!" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau supérieur !"
+          }
+        }
+      }
+    },
+    "Levels 2–6 unlock starter cosmetics. Boosters are saved; opening and combat are coming later." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les niveaux 2 à 6 débloquent les premiers cosmétiques. Les boosters sont conservés ; leur ouverture et les combats arriveront plus tard."
+          }
+        }
+      }
+    },
     "Listening…" : {
       "localizations" : {
         "fr" : {
@@ -4640,6 +4852,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chargement des notes de version…"
+          }
+        }
+      }
+    },
+    "Locked" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verrouillé"
           }
         }
       }
@@ -4911,6 +5133,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Autorisation requise"
+          }
+        }
+      }
+    },
+    "Needs attention" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre attention est requise"
           }
         }
       }
@@ -5606,6 +5838,16 @@
         }
       }
     },
+    "Owned only" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objets possédés"
+          }
+        }
+      }
+    },
     "PINNED" : {
       "localizations" : {
         "fr" : {
@@ -5849,6 +6091,26 @@
         }
       }
     },
+    "Preview" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aperçu"
+          }
+        }
+      }
+    },
+    "Preview pose" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pose de l’aperçu"
+          }
+        }
+      }
+    },
     "Previous / next session" : {
       "localizations" : {
         "fr" : {
@@ -6016,6 +6278,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RÉCENTS"
+          }
+        }
+      }
+    },
+    "Rare" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rare"
+          }
+        }
+      }
+    },
+    "Rarity" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rareté"
           }
         }
       }
@@ -6346,6 +6628,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réinitialiser"
+          }
+        }
+      }
+    },
+    "Resting" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Au repos"
           }
         }
       }
@@ -7138,6 +7430,16 @@
         }
       }
     },
+    "Skin" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apparence"
+          }
+        }
+      }
+    },
     "Slides out under the camera when a session needs you." : {
       "localizations" : {
         "fr" : {
@@ -7479,6 +7781,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Utiliser"
+          }
+        }
+      }
+    },
+    "Syncing Tonton…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation de Tonton…"
           }
         }
       }
@@ -8210,6 +8522,16 @@
         }
       }
     },
+    "Tonton's progression and wardrobe" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progression et garde-robe de Tonton"
+          }
+        }
+      }
+    },
     "Toolsmith" : {
       "localizations" : {
         "fr" : {
@@ -8226,6 +8548,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Projet principal"
+          }
+        }
+      }
+    },
+    "Trail" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traînée"
           }
         }
       }
@@ -8250,6 +8582,16 @@
         }
       }
     },
+    "Uncommon" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peu commun"
+          }
+        }
+      }
+    },
     "Undo" : {
       "localizations" : {
         "fr" : {
@@ -8266,6 +8608,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annuler l’envoi"
+          }
+        }
+      }
+    },
+    "Unequip" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer"
           }
         }
       }
@@ -8356,6 +8708,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mettre à jour l’agent"
+          }
+        }
+      }
+    },
+    "Update the relay to enable Tonton's progression." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettez le relais à jour pour activer la progression de Tonton."
           }
         }
       }
@@ -8556,6 +8918,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Veut utiliser %@"
+          }
+        }
+      }
+    },
+    "Wardrobe" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garde-robe"
           }
         }
       }

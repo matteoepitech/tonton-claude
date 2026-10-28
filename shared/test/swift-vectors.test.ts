@@ -8,6 +8,7 @@ import { modelFamily, modelName } from '../model'
 import { openPoolGrant, openPoolSessionOrder } from '../pool'
 import { parsePoolInvite } from '../pool-link'
 import { openPoolMachineOrder } from '../pool-machines'
+import { parseRPGState } from '../rpg'
 import { acceptsCommands, displayStatusText, type Session } from '../session'
 import { parseShareLink } from '../share-link'
 import { Vault } from '../vault'
@@ -39,6 +40,13 @@ async function read() {
 }
 
 describe('vectors from the Swift implementation', () => {
+  test('the Swift hero opens as a validated TypeScript character', async () => {
+    const blob = vectors.blobs.find(b => b.name === 'rpg')
+    expect(blob).toBeDefined()
+    const hero = parseRPGState(await open(vectors.key, blob?.blob ?? ''))
+    expect(hero.xp).toBe(50)
+    expect(hero.receipts).toHaveLength(1)
+  })
   test('every blob the app seals opens to the JSON it sealed', async () => {
     expect(vectors.blobs.length).toBeGreaterThan(5)
     for (const blob of vectors.blobs) expect(await open(vectors.key, blob.blob)).toEqual(JSON.parse(blob.plaintext))
