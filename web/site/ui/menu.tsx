@@ -12,10 +12,7 @@ export function MenuContent({ className, sideOffset = 4, ...props }: ComponentPr
     <MenuPrimitive.Portal>
       <MenuPrimitive.Content
         sideOffset={sideOffset}
-        className={cn(
-          'z-50 min-w-[10rem] overflow-hidden rounded-xl border bg-popover/95 p-1 text-popover-foreground shadow-lg backdrop-blur',
-          className,
-        )}
+        className={cn('z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg', className)}
         {...props}
       />
     </MenuPrimitive.Portal>
@@ -26,7 +23,7 @@ export function MenuItem({ className, variant, ...props }: ComponentProps<typeof
   return (
     <MenuPrimitive.Item
       className={cn(
-        'relative flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none select-none focus:bg-accent data-[disabled]:opacity-50 [&_svg]:size-4',
+        'relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none focus:bg-accent data-[disabled]:opacity-50 [&_svg]:size-4',
         variant === 'destructive' && 'text-destructive',
         className,
       )}

@@ -11,7 +11,7 @@ export function SharedSession() {
   const relay = store.sharedRelay ? new URL(store.sharedRelay).host : ''
   const details = [view.title, view.tool === 'opencode' ? 'OpenCode' : null].filter(Boolean).join(' · ')
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-white">
       <header className="flex items-center gap-3 border-b px-4 py-2.5">
         <strong>Tonton Claude</strong>
         <Connection state={view.connection === 'connected' ? 'connected' : view.connection === 'ended' ? 'ended' : 'connecting'} />

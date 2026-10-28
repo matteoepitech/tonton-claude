@@ -1,13 +1,17 @@
 // A pool's control center, like a network's dashboard: every member, its machines and pool sessions, what each one runs
 // on and works on, whether it is online, what it spent and how much of its account's windows is left. Above them, the
-// graph (React Flow): every session a node, animated arrows for who writes to whom and for who works on which task.
+// graph (React Flow): the pool in the middle, its machines around it, their sessions and the tasks they work on, with
+// animated arrows for who writes to whom.
 import { Background, Controls, type Edge, Handle, MarkerType, type Node, type NodeProps, Position, ReactFlow } from '@xyflow/react'
+import { BotIcon, CpuIcon, NetworkIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
   type ControlFilter,
   controlCenter,
   filterControl,
   type MemberCard,
+  machinePlanLabel,
+  memberName,
   type PoolRole,
   type PoolState,
   type SessionCard,
@@ -17,7 +21,7 @@ import {
   talkGraph,
 } from '../../../shared'
 import { Empty, StatusDot, Toolbar } from '../common'
-import { ago, compact } from '../format'
+import { ago, compact, plural } from '../format'
 import { useStore } from '../store'
 import { Card } from '../ui/card'
 import { cn } from '../ui/cn'
@@ -169,43 +173,66 @@ interface PeerData extends Record<string, unknown> {
   label: string
   detail?: string
   group?: StatusGroup
-  kind: 'session' | 'member' | 'area' | 'everyone' | 'task'
+  kind: 'hub' | 'machine' | 'session' | 'member' | 'area' | 'everyone' | 'task'
+  /** The machine runs the orchestrator. */
+  leads?: boolean
 }
 
 function PeerNode({ data }: NodeProps<Node<PeerData>>) {
+  const hidden = '!size-1.5 !border-0 !bg-transparent'
   return (
     <div
       className={cn(
-        'max-w-44 rounded-lg border bg-card px-2.5 py-1.5 text-xs shadow-sm',
-        data.kind === 'task' && 'border-dashed bg-secondary',
-        data.kind === 'everyone' || data.kind === 'area' ? 'rounded-full text-muted-foreground' : '',
+        'raised flex max-w-52 items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-xs',
+        data.kind === 'hub' && 'border-primary/50 px-3 py-2',
+        data.kind === 'task' && 'border-dashed shadow-none',
+        (data.kind === 'everyone' || data.kind === 'area') && 'rounded-full text-muted-foreground shadow-none',
       )}
     >
-      <Handle type="target" position={Position.Top} className="!size-1.5 !border-0 !bg-transparent" />
-      <div className="flex items-center gap-1.5">
-        {data.group && <span className={cn('size-2 shrink-0 rounded-full bg-current', GROUP_COLORS[data.group])} />}
-        <strong className="truncate font-medium">{data.label}</strong>
-      </div>
-      {data.detail && <div className="truncate text-[10px] text-muted-foreground">{data.detail}</div>}
-      <Handle type="source" position={Position.Bottom} className="!size-1.5 !border-0 !bg-transparent" />
+      <Handle type="target" position={Position.Top} className={hidden} />
+      {data.kind === 'hub' && (
+        <span className="icon-tile size-7">
+          <NetworkIcon className="size-4" />
+        </span>
+      )}
+      {data.kind === 'machine' && (
+        <span className={cn('size-6', data.leads ? 'icon-tile' : 'icon-tile-ink')}>
+          {data.leads ? <BotIcon className="size-3.5" /> : <CpuIcon className="size-3.5" />}
+        </span>
+      )}
+      {data.kind === 'member' && (
+        <span className="icon-tile size-6 text-[11px] font-bold">{data.label.trim().charAt(0).toUpperCase()}</span>
+      )}
+      <span className="flex min-w-0 flex-col">
+        <span className="flex items-center gap-1.5">
+          {data.group && <span className={cn('size-2 shrink-0 rounded-full bg-current', GROUP_COLORS[data.group])} />}
+          <strong className={cn('truncate font-medium', data.kind === 'hub' && 'text-sm font-semibold')}>{data.label}</strong>
+        </span>
+        {data.detail && <span className="truncate text-[10px] text-muted-foreground">{data.detail}</span>}
+      </span>
+      <Handle type="source" position={Position.Bottom} className={hidden} />
     </div>
   )
 }
 
 const nodeTypes = { peer: PeerNode }
-/** A pool of one or two sessions is not drawn huge. */
-const FIT = { maxZoom: 1, padding: 0.3 }
+const FIT = { maxZoom: 1, padding: 0.2 }
+/** Straight lines from the middle out, as a network map draws its links. */
+const STRAIGHT = { type: 'straight' } as const
 
-/** Everyone on a circle, the tasks being worked on just outside their session, arrows for messages and for work. */
+/**
+ * The pool as a network: the pool in the middle, its machines around it (and the members without one), each machine's
+ * sessions further out, and the task each session works on at the edge. Animated arrows for who writes to whom.
+ */
 function Graph({ state }: { state: PoolState }) {
   const { nodes, edges } = useMemo(() => layout(state), [state])
-  if (!nodes.length) return null
   return (
-    <Card className="h-[420px] overflow-hidden" aria-label="Who talks to whom, and who works on what">
+    <Card className="h-[480px] overflow-hidden" aria-label="The pool's machines, sessions and tasks, and who writes to whom">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        defaultEdgeOptions={STRAIGHT}
         fitView
         fitViewOptions={FIT}
         minZoom={0.3}
@@ -213,58 +240,127 @@ function Graph({ state }: { state: PoolState }) {
         nodesConnectable={false}
         nodesDraggable={false}
       >
-        <Background gap={24} size={1} />
+        <Background gap={18} size={1} />
         <Controls showInteractive={false} />
       </ReactFlow>
     </Card>
   )
 }
 
+const at = (radius: number, angle: number) => ({ x: radius * Math.cos(angle) - 80, y: radius * Math.sin(angle) - 20 })
+
 function layout(state: PoolState): { nodes: Node<PeerData>[]; edges: Edge[] } {
   const talk = talkGraph(state)
   const cards = controlCenter(state).flatMap(card => card.sessions)
-  const card = (id: string) => cards.find(session => `s:${session.account}/${session.session}` === id)
-  const radius = Math.max(160, talk.nodes.length * 34)
   const nodes: Node<PeerData>[] = []
   const edges: Edge[] = []
-  talk.nodes.forEach((peer, index) => {
-    const angle = (2 * Math.PI * index) / Math.max(1, talk.nodes.length) - Math.PI / 2
-    const session = card(peer.id)
+  const machines = state.machines ?? []
+  const busy = (machine: string) =>
+    state.tasks.filter(item => item.task?.machine?.machine === machine && ['assigned', 'in_progress', 'blocked'].includes(item.task.state))
+      .length
+  nodes.push({
+    id: 'hub',
+    type: 'peer',
+    position: { x: -90, y: -24 },
+    data: {
+      label: state.info?.name ?? 'The pool',
+      detail: `${plural(machines.length, 'machine')} · ${plural(state.members.length, 'member')}`,
+      kind: 'hub',
+    },
+  })
+  // Around the pool: its machines, and the members who have none.
+  const anchors = [
+    ...machines.map(machine => ({ id: `mc:${machine.machine}`, account: machine.account, machine })),
+    ...state.members
+      .filter(member => !machines.some(machine => machine.account === member.account))
+      .map(member => ({ id: `m:${member.account}`, account: member.account, machine: undefined })),
+  ]
+  const inner = Math.max(170, anchors.length * 60)
+  const outer = inner + 180
+  const angles = new Map<string, number>()
+  anchors.forEach((anchor, index) => {
+    const angle = (2 * Math.PI * index) / Math.max(1, anchors.length) - Math.PI / 2
+    angles.set(anchor.id, angle)
+    const machine = anchor.machine
+    const online = machine ? machine.online && !machine.stopped : true
     nodes.push({
-      id: peer.id,
+      id: anchor.id,
       type: 'peer',
-      position: { x: radius * Math.cos(angle), y: radius * Math.sin(angle) },
+      position: at(inner, angle),
+      data: machine
+        ? {
+            label: machine.profile?.name ?? 'A machine',
+            detail: `${memberName(state, machine.account)} · ${machinePlanLabel(machine.profile)} · ${busy(machine.machine)}/${machine.profile?.capacity ?? 0}`,
+            group: !online ? 'offline' : busy(machine.machine) ? 'working' : 'idle',
+            kind: 'machine',
+            leads: state.orchestratorMachine?.machine === machine.machine,
+          }
+        : { label: memberName(state, anchor.account), detail: 'No machine in the pool yet', kind: 'member' },
+    })
+    edges.push({
+      id: `h:${anchor.id}`,
+      source: 'hub',
+      target: anchor.id,
+      style: online ? { stroke: 'var(--primary)', strokeWidth: 1.5 } : { stroke: 'var(--faint)', strokeDasharray: '4 4' },
+    })
+  })
+  // Each session next to its machine (or its member), a little apart from the others there, its task beyond it.
+  const placed = new Set(nodes.map(node => node.id))
+  const around = new Map<string, number>()
+  for (const session of state.sessions) {
+    const id = `s:${session.account}/${session.session}`
+    const anchor = session.machine && angles.has(`mc:${session.machine}`) ? `mc:${session.machine}` : `m:${session.account}`
+    const base = angles.get(anchor) ?? 0
+    const index = around.get(anchor) ?? 0
+    around.set(anchor, index + 1)
+    const angle = base + (index % 2 ? 1 : -1) * Math.ceil(index / 2) * 0.32
+    const card = cards.find(c => c.account === session.account && c.session === session.session)
+    nodes.push({
+      id,
+      type: 'peer',
+      position: at(outer, angle),
       data: {
-        label: peer.label,
-        kind: peer.kind,
-        group: session?.group,
-        detail: session
-          ? [session.tool === 'opencode' ? 'OpenCode' : 'Claude Code', session.machine].filter(Boolean).join(' · ')
-          : undefined,
+        label: talk.nodes.find(node => node.id === id)?.label ?? card?.name ?? 'A session',
+        detail: card ? (card.tool === 'opencode' ? 'OpenCode' : 'Claude Code') : undefined,
+        group: card?.group,
+        kind: 'session',
       },
     })
-    // Who works on what: the task a session is on, just outside it.
-    if (session?.task) {
-      const taskId = `t:${session.task.id}`
-      if (!nodes.some(node => node.id === taskId))
+    placed.add(id)
+    if (placed.has(anchor)) edges.push({ id: `a:${id}`, source: anchor, target: id, style: { stroke: 'var(--border)', strokeWidth: 1.5 } })
+    if (card?.task) {
+      const taskId = `t:${card.task.id}`
+      if (!placed.has(taskId)) {
         nodes.push({
           id: taskId,
           type: 'peer',
-          position: { x: (radius + 170) * Math.cos(angle), y: (radius + 170) * Math.sin(angle) },
-          data: { label: session.task.title, detail: TASK_STATE_LABELS[session.task.state], kind: 'task' },
+          position: at(outer + 190, angle),
+          data: { label: card.task.title, detail: TASK_STATE_LABELS[card.task.state], kind: 'task' },
         })
+        placed.add(taskId)
+      }
       edges.push({
-        id: `w:${peer.id}`,
-        source: peer.id,
+        id: `w:${id}`,
+        source: id,
         target: taskId,
-        animated: session.group === 'working',
+        animated: card.group === 'working',
         style: { stroke: 'var(--primary)', strokeDasharray: '4 4' },
       })
     }
+  }
+  // Who writes to whom: the areas and everyone, on the outside, and the arrows.
+  const others = talk.nodes.filter(node => !placed.has(node.id))
+  others.forEach((node, index) => {
+    nodes.push({
+      id: node.id,
+      type: 'peer',
+      position: at(outer + 400, (2 * Math.PI * index) / Math.max(1, others.length) + Math.PI / 4),
+      data: { label: node.label, kind: node.kind },
+    })
   })
   for (const link of talk.edges) {
     edges.push({
-      id: `m:${link.from}>${link.to}`,
+      id: `msg:${link.from}>${link.to}`,
       source: link.from,
       target: link.to,
       animated: true,

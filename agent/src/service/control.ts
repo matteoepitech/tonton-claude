@@ -105,12 +105,33 @@ export function registerAutostart(): boolean {
  * Starts the service on the installed binary, replacing a running one. `reload` also picks up a rewritten LaunchAgent,
  * which unloads the job first: never from inside the service itself.
  */
+/**
+ * Unloads the LaunchAgent and loads it again, with its new plist. launchd unloads in the background: loading at once
+ * fails while the old job is still there, and left the machine with no service after an update. So it waits until
+ * the job is gone, then loads, trying again a few times. False when it never loaded.
+ */
+export function relaunchAgent(
+  job: string,
+  domain: string,
+  plist: string,
+  run: (command: string[]) => boolean = exec,
+  sleep: (ms: number) => void = Bun.sleepSync,
+): boolean {
+  run(['launchctl', 'bootout', job])
+  for (let waited = 0; waited < 50 && run(['launchctl', 'print', job]); waited++) sleep(100)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (run(['launchctl', 'bootstrap', domain, plist])) return true
+    sleep(500)
+  }
+  return false
+}
+
 export function restartService({ reload = false } = {}) {
   if (disabled()) return
   if (process.platform === 'darwin' && existsSync(launchAgentPath())) {
     const job = `${launchdDomain()}/${LABEL}`
-    if (reload) exec(['launchctl', 'bootout', job])
-    if (!reload && exec(['launchctl', 'print', job])) exec(['launchctl', 'kickstart', '-k', job])
+    if (reload) relaunchAgent(job, launchdDomain(), launchAgentPath())
+    else if (exec(['launchctl', 'print', job])) exec(['launchctl', 'kickstart', '-k', job])
     else exec(['launchctl', 'bootstrap', launchdDomain(), launchAgentPath()])
     return
   }

@@ -1,38 +1,28 @@
 // Signing in: the recovery key of the Mac app (Settings › Relay), pasted or scanned from the QR code of Settings ›
 // Machines, or a teammate's read-only share key. The key stays in this browser.
-import { CameraIcon, KeyRoundIcon } from 'lucide-react'
+import { ArrowRightIcon, CameraIcon } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { parseAccountToken, parseRecoveryKey, parseShareLink } from '../../shared'
 import { cameraProblem, canScan, type Scan, startScan } from '../scanner'
 import { Problem } from './common'
+import { PixelLogo } from './logo'
+import { Mosaic } from './mosaic'
 import { useStore } from './store'
 import { Button } from './ui/button'
-import { Card } from './ui/card'
-import { cn } from './ui/cn'
-import { Textarea } from './ui/fields'
-import { Checkbox } from './ui/menu'
-
-/** What the site holds, as colored tags in the headline. */
-const TAGS = [
-  { label: 'sessions', className: 'border-[var(--aura-orange)]/60 text-[var(--aura-orange)]' },
-  { label: 'pools', className: 'border-[var(--aura-pink)]/60 text-[var(--aura-pink)]' },
-  { label: 'machines', className: 'border-[var(--aura-blue)] text-[#6b83e6]' },
-  { label: 'plans', className: 'border-[var(--aura-sun)] text-[#c99400]' },
-]
+import { Input } from './ui/fields'
 
 export function SignIn() {
   const store = useStore()
   const [text, setText] = useState('')
-  const [remember, setRemember] = useState(true)
   const [problem, setProblem] = useState<string | null>(store.signInProblem)
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
-  const pendingInvite = store.poolView?.kind === 'join' && store.poolView.invite
 
+  // The key is remembered in this browser, as a key no script can read back (store.ts).
   const submit = async (value: string) => {
     setBusy(true)
     try {
-      setProblem(await store.signIn(value, remember))
+      setProblem(await store.signIn(value, true))
     } catch {
       setProblem('This key could not be opened in this browser.')
     } finally {
@@ -45,34 +35,16 @@ export function SignIn() {
   }
 
   return (
-    <main className="flex min-h-full flex-col items-center justify-center gap-10 px-4 py-12">
-      <div className="flex max-w-3xl flex-col items-center gap-6 text-center">
-        <h1 className="font-serif text-5xl leading-[1.02] font-normal tracking-tight text-balance sm:text-7xl">
-          Every Claude you run.
-          <br />
-          In one calm place.
+    // A white column framed by dashed rules: the dots show on either side, never under the text.
+    <main className="flex min-h-full justify-center px-4 sm:px-10">
+      <div className="rule-dashed relative flex w-full max-w-4xl flex-col items-center justify-center gap-10 border-x bg-white px-4 py-16">
+        <Mosaic className="absolute top-0 left-0" />
+        <Mosaic className="absolute right-0 bottom-0 rotate-180" />
+        <PixelLogo className="size-10" />
+        <h1 className="max-w-3xl text-center text-5xl leading-[1.05] font-bold tracking-tight text-balance sm:text-7xl">
+          Every Claude you run, in one place
         </h1>
-        <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 text-lg text-muted-foreground">
-          Your
-          {TAGS.map(tag => (
-            <span key={tag.label} className={cn('rounded-full border px-3 py-0.5 text-base', tag.className)}>
-              {tag.label}
-            </span>
-          ))}
-          from every machine, sealed end to end.
-        </p>
-      </div>
-      <Card className="w-full max-w-md p-6">
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <KeyRoundIcon className="size-5 text-primary" />
-            <h2 className="font-serif text-xl tracking-tight">Sign in</h2>
-          </div>
-          <p className="text-muted-foreground">
-            Paste the recovery key of your account, from the Mac app: Settings › Relay › Recovery key, or scan its QR code in Settings ›
-            Machines. Or the read-only share key a teammate sent you.
-          </p>
-          {pendingInvite && <p className="text-sm">Sign in first: the pool invite opens after.</p>}
+        <form onSubmit={onSubmit} className="flex w-full max-w-lg flex-col gap-3">
           {scanning ? (
             <Scanner
               onCode={code => {
@@ -87,38 +59,31 @@ export function SignIn() {
               }}
             />
           ) : (
-            <Textarea
-              autoFocus
-              value={text}
-              onChange={event => setText(event.target.value)}
-              placeholder="tonton1.… or tontonshare1.…"
-              spellCheck={false}
-              autoComplete="off"
-              className="min-h-24 font-mono text-xs"
-              aria-label="Recovery key or share key"
-            />
-          )}
-          <span className="flex items-center gap-2">
-            <Checkbox id="remember" checked={remember} onCheckedChange={value => setRemember(value === true)} />
-            <label htmlFor="remember">Remember on this device</label>
-          </span>
-          {problem && <Problem>{problem}</Problem>}
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={busy || !text.trim()}>
-              Sign in
-            </Button>
-            {canScan() && !scanning && (
-              <Button type="button" variant="outline" onClick={() => setScanning(true)}>
-                <CameraIcon />
-                Scan the QR code
+            <div className="raised flex items-center gap-1.5 rounded-lg border bg-white p-1.5">
+              <Input
+                autoFocus
+                value={text}
+                onChange={event => setText(event.target.value)}
+                placeholder="Paste your recovery key"
+                spellCheck={false}
+                autoComplete="off"
+                className="h-10 border-0 bg-transparent font-mono text-sm focus-visible:ring-0"
+                aria-label="Recovery key or share key"
+                title="From the Mac app: Settings › Relay › Recovery key. A teammate's share key works too."
+              />
+              {canScan() && (
+                <Button type="button" variant="ghost" size="icon" onClick={() => setScanning(true)} aria-label="Scan the QR code">
+                  <CameraIcon />
+                </Button>
+              )}
+              <Button type="submit" size="icon" className="size-10" disabled={busy || !text.trim()} aria-label="Sign in">
+                <ArrowRightIcon />
               </Button>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Whoever has this key can read and drive your sessions. It stays in this browser and never goes to the relay.
-          </p>
+            </div>
+          )}
+          {problem && <Problem>{problem}</Problem>}
         </form>
-      </Card>
+      </div>
     </main>
   )
 }

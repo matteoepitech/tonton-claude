@@ -325,9 +325,11 @@ The relay serves a website at `/`, built on the client core like the web app: si
 - **Control center** (`web/site/pools/control.tsx`) shows every member with its machines and pool sessions: tool and model (from the
   session's `session` event), area, whether it is the orchestrator, online or not, its status, its current task, when it
   last wrote to the pool, and its usage. A count per status (working, needs its owner, idle, offline) sits on top, and
-  the filters by role, member and status above. A graph (React Flow) shows every session as a node, with an animated
-  arrow from each writer to the session, the area or everyone it wrote to, thicker with more messages, and a dashed one
-  from each session to the task it works on.
+  the filters by role, member and status above. A graph (React Flow) draws the pool as a network: the pool in the middle,
+  its machines around it with their plan and how busy they are (dashed while offline; the orchestrator's in indigo),
+  the members without a machine, each machine's sessions further out and the task each one works on at the edge, with
+  animated arrows from each writer to the session, the area or everyone it wrote to. It shows as soon as the pool has
+  a machine or a member, before any session runs.
 - The **status** comes from the relay, which knows it anyway: each pool session in the snapshot carries `status`, and the
   members get a new `pool_session` when it changes, never with every entry. Older relays send none: the page then says
   online or offline only.

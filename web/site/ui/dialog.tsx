@@ -9,9 +9,9 @@ export const Dialog = DialogPrimitive.Root
 export const DialogTrigger = DialogPrimitive.Trigger
 export const DialogClose = DialogPrimitive.Close
 
-const overlay = 'fixed inset-0 z-50 bg-black/30 backdrop-blur-sm'
+const overlay = 'fixed inset-0 z-50 bg-[#1e1d2b]/30'
 const panel =
-  'fixed top-1/2 left-1/2 z-50 grid max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-3xl border bg-popover p-6 text-popover-foreground shadow-lg'
+  'fixed top-1/2 left-1/2 z-50 grid max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-popover p-6 shadow-xl text-popover-foreground shadow-lg'
 
 export function DialogContent({ className, children, ...props }: ComponentProps<typeof DialogPrimitive.Content>) {
   return (

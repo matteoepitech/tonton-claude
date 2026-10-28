@@ -76,7 +76,10 @@ export function Problem({ children, onDismiss }: { children: ReactNode; onDismis
 export function Toolbar({ title, detail, children }: { title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <h2 className="text-base font-semibold">{title}</h2>
+      <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+        <span className="icon-tile size-2.5" />
+        {title}
+      </h2>
       {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
       <div className="ms-auto flex flex-wrap items-center gap-2">{children}</div>
     </div>

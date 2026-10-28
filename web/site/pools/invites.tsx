@@ -55,10 +55,6 @@ export function InviteButton({ pool, state, variant = 'default' }: TabProps & { 
         ) : (
           <p className="text-sm">The invite could not be made: {watch?.problem ?? 'try again in a moment.'}</p>
         )}
-        <p className="text-xs text-muted-foreground">
-          Up to 20 people, {state.info?.deadline ? 'until the deadline' : 'for a week'}, as members. It holds the pool key: send it to
-          people you trust.
-        </p>
         <NewInvite poolId={pool.id} role={pool.role} onMade={() => {}} />
       </DialogContent>
     </Dialog>
@@ -209,7 +205,6 @@ function InviteResult({ link }: { link: string }) {
         </Button>
       </div>
       <QrCanvas text={link} />
-      <p className="text-xs text-muted-foreground">Opening the link joins the pool on this relay's website.</p>
     </div>
   )
 }

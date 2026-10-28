@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react'
 import { cn } from './cn'
 
 export function Card({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('glass rounded-2xl border text-card-foreground', className)} {...props} />
+  return <div className={cn('raised rounded-lg border bg-card text-card-foreground', className)} {...props} />
 }
 
 export function CardHeader({ className, ...props }: ComponentProps<'div'>) {
@@ -19,15 +19,15 @@ export function CardContent({ className, ...props }: ComponentProps<'div'>) {
   return <div className={cn('p-4', className)} {...props} />
 }
 
-const badgeVariants = cva('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap', {
+const badgeVariants = cva('inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap', {
   variants: {
     variant: {
-      default: 'border-primary/40 bg-primary/5 text-primary',
-      secondary: 'border-transparent bg-secondary text-muted-foreground',
+      default: 'border-primary/30 text-primary',
+      secondary: 'text-muted-foreground',
       outline: 'text-muted-foreground',
-      success: 'border-success/40 bg-success/5 text-success',
-      warning: 'border-warning/45 bg-warning/5 text-warning',
-      destructive: 'border-destructive/40 bg-destructive/5 text-destructive',
+      success: 'border-success/30 text-success',
+      warning: 'border-warning/30 text-warning',
+      destructive: 'border-destructive/30 text-destructive',
     },
   },
   defaultVariants: { variant: 'default' },

@@ -2,7 +2,7 @@
 // chat with the orchestrator (docs/pool-autopilot.md). The orchestrator is one of the admin's own sessions, sealed with
 // the admin's account key: only the admin reads it and writes to it, here, as any of their sessions. Beside it: the
 // machines at a glance and what the control loop did. The other members see who runs it and what it does.
-import { BotIcon, CheckIcon, PauseIcon, PlayIcon, PlusIcon } from 'lucide-react'
+import { ActivityIcon, BotIcon, CheckIcon, CpuIcon, PauseIcon, PlayIcon, PlusIcon } from 'lucide-react'
 import { type ReactNode, useEffect } from 'react'
 import { bestOrchestrator, machinePlanLabel, machinesToAdd, memberName, type PoolState, pendingPlan, poolAbilities } from '../../../shared'
 import { Empty, StatusDot } from '../common'
@@ -42,7 +42,7 @@ export function Overview({ pool, state }: TabProps) {
   return (
     // On phones the chat and its side column scroll as one page; side by side, each scrolls on its own.
     <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[1fr_320px] lg:overflow-hidden">
-      <section className="flex min-h-[70dvh] flex-col border-e lg:min-h-0" aria-label="The orchestrator">
+      <section className="flex min-h-[70dvh] flex-col border-e bg-white lg:min-h-0" aria-label="The orchestrator">
         {(!started || plan) && (
           <div className="flex max-h-[60%] shrink-0 flex-col gap-3 overflow-y-auto border-b p-3">
             {!started && !plan && <GetStarted pool={pool} state={state} />}
@@ -68,7 +68,10 @@ export function Overview({ pool, state }: TabProps) {
         {started && <Progress pool={pool} state={state} />}
         <Card className="flex flex-col gap-2 p-3">
           <div className="flex items-center">
-            <strong className="text-sm">Machines</strong>
+            <span className="icon-tile size-6">
+              <CpuIcon className="size-3.5" />
+            </span>
+            <strong className="ms-2 text-sm">Machines</strong>
             <Button variant="link" size="sm" className="ms-auto h-auto p-0" onClick={() => store.setPoolTab('team')}>
               Team
             </Button>
@@ -155,7 +158,7 @@ function GetStarted({ pool, state }: TabProps) {
       done: state.tasks.length > 0,
       title: 'Tell it what to build',
       detail: state.tasks.length
-        ? plural(state.tasks.length, 'task') + ' written'
+        ? `${plural(state.tasks.length, 'task')} written`
         : 'In the chat below, in plain words: it plans and writes the tasks.',
     },
     {
@@ -171,16 +174,15 @@ function GetStarted({ pool, state }: TabProps) {
       {steps.map((step, index) => (
         <li
           key={step.title}
-          className={cn('flex items-center gap-3 rounded-lg px-2.5 py-1.5', index === next && 'bg-primary/5 ring-1 ring-primary/30')}
+          className={cn(
+            'flex items-center gap-3 rounded-lg border border-transparent px-2.5 py-2',
+            index === next && 'raised border-border bg-white',
+          )}
         >
           <span
             className={cn(
-              'flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
-              step.done
-                ? 'bg-success/20 text-success'
-                : index === next
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-muted-foreground',
+              'flex size-7 shrink-0 items-center justify-center rounded-[3px] text-xs font-bold',
+              step.done ? 'icon-tile-ink' : index === next ? 'icon-tile' : 'border bg-white text-muted-foreground',
             )}
           >
             {step.done ? <CheckIcon className="size-3" /> : index + 1}
@@ -316,7 +318,12 @@ function LoopNotices({ state }: { state: PoolState }) {
     .reverse()
   return (
     <Card className="flex flex-col gap-2 p-3">
-      <strong className="text-sm">Latest</strong>
+      <span className="flex items-center gap-2">
+        <span className="icon-tile size-6">
+          <ActivityIcon className="size-3.5" />
+        </span>
+        <strong className="text-sm">Latest</strong>
+      </span>
       {notices.length ? (
         <ol className="flex flex-col gap-2">
           {notices.map(event => (
