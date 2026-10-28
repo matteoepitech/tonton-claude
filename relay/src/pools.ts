@@ -53,10 +53,14 @@ export interface PoolSessionOrderRow {
   order: string
 }
 
-/** Who wrote: the account, and the pool session it spoke from (null for an app or the website). */
+/**
+ * Who wrote: the account, the pool session it spoke from (null for an app or the website), and the pool machine whose
+ * agent service wrote it, if one did.
+ */
 export interface Author {
   accountId: string
   sessionId: string | null
+  machineId?: string | null
 }
 
 /** Why a rotation was refused, for the route to say. */
@@ -104,6 +108,7 @@ interface ItemRow {
   updated_at: string
   account_id: string
   session_id: string | null
+  machine_id?: string | null
   blob: string
 }
 
@@ -113,8 +118,12 @@ interface PostRow {
   ts: string
   account_id: string
   session_id: string | null
+  machine_id: string | null
   blob: string
 }
+
+/** The machine that wrote it, when one did: left out otherwise, as older relays do. */
+export const byMachine = (machineId: string | null | undefined): { machine?: string } => (machineId ? { machine: machineId } : {})
 
 const now = () => new Date().toISOString()
 const toRole = (role: string): PoolRole => (role === 'owner' || role === 'admin' || role === 'viewer' ? role : 'member')
@@ -133,6 +142,7 @@ const toTask = (row: ItemRow): PoolTaskWire => ({
   updatedAt: row.updated_at,
   account: row.account_id,
   session: row.session_id,
+  ...byMachine(row.machine_id),
   blob: row.blob,
 })
 
@@ -150,6 +160,7 @@ const toPost = (row: PostRow): PoolPostWire => ({
   ts: row.ts,
   account: row.account_id,
   session: row.session_id,
+  ...byMachine(row.machine_id),
   blob: row.blob,
 })
 
@@ -491,13 +502,17 @@ export class PoolStore {
 
   // MARK: Sessions
 
-  /** Puts a session of a member in the pool, or updates its order. Null when the pool has no room. */
+  /**
+   * Puts a session of a member in the pool, or updates its order. `machineId`: the pool machine whose agent started it,
+   * null for a session put in by hand. Null when the pool has no room.
+   */
   addSession(
     poolId: string,
     accountId: string,
     sessionId: string,
     order: string,
     profile: string,
+    machineId: string | null = null,
   ): Omit<PoolSessionWire, 'online' | 'ready' | 'status'> | null {
     return this.db.transaction(() => {
       const known = this.db
@@ -505,18 +520,38 @@ export class PoolStore {
         .get(poolId, accountId, sessionId) as { joined_at: string } | null
       if (known) {
         this.db
-          .query('UPDATE pool_sessions SET order_blob = ?, profile_blob = ? WHERE pool_id = ? AND account_id = ? AND session_id = ?')
-          .run(order, profile, poolId, accountId, sessionId)
-        return { account: accountId, session: sessionId, joinedAt: known.joined_at, profile }
+          .query(
+            'UPDATE pool_sessions SET order_blob = ?, profile_blob = ?, machine_id = ? WHERE pool_id = ? AND account_id = ? AND session_id = ?',
+          )
+          .run(order, profile, machineId, poolId, accountId, sessionId)
+        return { account: accountId, session: sessionId, joinedAt: known.joined_at, profile, ...byMachine(machineId) }
       }
       const { count } = this.db.query('SELECT COUNT(*) AS count FROM pool_sessions WHERE pool_id = ?').get(poolId) as { count: number }
       if (count >= MAX_POOL_SESSIONS) return null
       const joinedAt = now()
       this.db
-        .query('INSERT INTO pool_sessions (pool_id, account_id, session_id, joined_at, profile_blob, order_blob) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(poolId, accountId, sessionId, joinedAt, profile, order)
-      return { account: accountId, session: sessionId, joinedAt, profile }
+        .query(
+          'INSERT INTO pool_sessions (pool_id, account_id, session_id, joined_at, profile_blob, order_blob, machine_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(poolId, accountId, sessionId, joinedAt, profile, order, machineId)
+      return { account: accountId, session: sessionId, joinedAt, profile, ...byMachine(machineId) }
     })()
+  }
+
+  /** The pool machine whose agent started the session, or null for one put in by hand or not in the pool. */
+  sessionMachine(poolId: string, accountId: string, sessionId: string): string | null {
+    const row = this.db
+      .query('SELECT machine_id FROM pool_sessions WHERE pool_id = ? AND account_id = ? AND session_id = ?')
+      .get(poolId, accountId, sessionId) as { machine_id: string | null } | null
+    return row?.machine_id ?? null
+  }
+
+  /** The sessions a pool machine started, to take out with it. */
+  sessionsOfMachine(poolId: string, machineId: string): PoolSessionOrderRow[] {
+    const rows = this.db
+      .query('SELECT account_id, session_id, order_blob FROM pool_sessions WHERE pool_id = ? AND machine_id = ?')
+      .all(poolId, machineId) as { account_id: string; session_id: string; order_blob: string }[]
+    return rows.map(row => ({ poolId, accountId: row.account_id, sessionId: row.session_id, order: row.order_blob }))
   }
 
   removeSession(poolId: string, accountId: string, sessionId: string): boolean {
@@ -555,17 +590,25 @@ export class PoolStore {
     // With the revision of the rules its owner accepted for it (relay/src/pool-safety.ts).
     const rows = this.db
       .query(
-        `SELECT s.account_id, s.session_id, s.joined_at, s.profile_blob, a.rev AS accepted FROM pool_sessions s
+        `SELECT s.account_id, s.session_id, s.joined_at, s.profile_blob, s.machine_id, a.rev AS accepted FROM pool_sessions s
          LEFT JOIN pool_acceptances a ON a.pool_id = s.pool_id AND a.account_id = s.account_id AND a.session_id = s.session_id
          WHERE s.pool_id = ? ORDER BY s.joined_at`,
       )
-      .all(poolId) as { account_id: string; session_id: string; joined_at: string; profile_blob: string | null; accepted: number | null }[]
+      .all(poolId) as {
+      account_id: string
+      session_id: string
+      joined_at: string
+      profile_blob: string | null
+      machine_id: string | null
+      accepted: number | null
+    }[]
     return rows.map(row => ({
       account: row.account_id,
       session: row.session_id,
       joinedAt: row.joined_at,
       profile: row.profile_blob,
       accepted: row.accepted ?? 0,
+      ...byMachine(row.machine_id),
     }))
   }
 
@@ -575,28 +618,36 @@ export class PoolStore {
   putTask(poolId: string, id: string, rev: number, blob: string, author: Author): Put<PoolTaskWire> {
     return this.db.transaction((): Put<PoolTaskWire> => {
       const current = this.db
-        .query('SELECT id, rev, updated_at, account_id, session_id, blob FROM pool_tasks WHERE pool_id = ? AND id = ?')
+        .query('SELECT id, rev, updated_at, account_id, session_id, machine_id, blob FROM pool_tasks WHERE pool_id = ? AND id = ?')
         .get(poolId, id) as ItemRow | null
       if ((current?.rev ?? 0) !== rev) return { ok: false, reason: 'conflict', current: current ? toTask(current) : null }
       if (!current) {
         const { count } = this.db.query('SELECT COUNT(*) AS count FROM pool_tasks WHERE pool_id = ?').get(poolId) as { count: number }
         if (count >= MAX_POOL_TASKS) return { ok: false, reason: 'limit' }
       }
-      const row: ItemRow = { id, rev: rev + 1, updated_at: now(), account_id: author.accountId, session_id: author.sessionId, blob }
+      const row: ItemRow = {
+        id,
+        rev: rev + 1,
+        updated_at: now(),
+        account_id: author.accountId,
+        session_id: author.sessionId,
+        machine_id: author.machineId ?? null,
+        blob,
+      }
       this.db
         .query(
-          `INSERT INTO pool_tasks (pool_id, id, rev, updated_at, account_id, session_id, blob) VALUES (?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO pool_tasks (pool_id, id, rev, updated_at, account_id, session_id, machine_id, blob) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (pool_id, id) DO UPDATE SET rev = excluded.rev, updated_at = excluded.updated_at,
-             account_id = excluded.account_id, session_id = excluded.session_id, blob = excluded.blob`,
+             account_id = excluded.account_id, session_id = excluded.session_id, machine_id = excluded.machine_id, blob = excluded.blob`,
         )
-        .run(poolId, id, row.rev, row.updated_at, row.account_id, row.session_id, row.blob)
+        .run(poolId, id, row.rev, row.updated_at, row.account_id, row.session_id, row.machine_id ?? null, row.blob)
       return { ok: true, value: toTask(row) }
     })()
   }
 
   tasks(poolId: string): PoolTaskWire[] {
     const rows = this.db
-      .query('SELECT id, rev, updated_at, account_id, session_id, blob FROM pool_tasks WHERE pool_id = ? ORDER BY rowid')
+      .query('SELECT id, rev, updated_at, account_id, session_id, machine_id, blob FROM pool_tasks WHERE pool_id = ? ORDER BY rowid')
       .all(poolId) as ItemRow[]
     return rows.map(toTask)
   }
@@ -636,9 +687,10 @@ export class PoolStore {
     return this.db.transaction(() => {
       if (this.db.query('SELECT 1 FROM pool_posts WHERE pool_id = ? AND kind = ? AND id = ?').get(poolId, kind, id)) return null
       const ts = now()
+      const machineId = author.machineId ?? null
       const { lastInsertRowid } = this.db
-        .query('INSERT INTO pool_posts (pool_id, kind, id, ts, account_id, session_id, blob) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(poolId, kind, id, ts, author.accountId, author.sessionId, blob)
+        .query('INSERT INTO pool_posts (pool_id, kind, id, ts, account_id, session_id, machine_id, blob) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(poolId, kind, id, ts, author.accountId, author.sessionId, machineId, blob)
       const cap = kind === 'message' ? MAX_POOL_MESSAGES : MAX_POOL_EVENTS
       this.db
         .query(
@@ -646,14 +698,16 @@ export class PoolStore {
              SELECT seq FROM pool_posts WHERE pool_id = ? AND kind = ? ORDER BY seq DESC LIMIT 1 OFFSET ?)`,
         )
         .run(poolId, kind, poolId, kind, cap)
-      return { id, seq: Number(lastInsertRowid), ts, account: author.accountId, session: author.sessionId, blob }
+      return { id, seq: Number(lastInsertRowid), ts, account: author.accountId, session: author.sessionId, ...byMachine(machineId), blob }
     })()
   }
 
   /** The latest `limit` posts of a kind, oldest first. */
   posts(kind: PostKind, poolId: string, limit: number): PoolPostWire[] {
     const rows = this.db
-      .query('SELECT seq, id, ts, account_id, session_id, blob FROM pool_posts WHERE pool_id = ? AND kind = ? ORDER BY seq DESC LIMIT ?')
+      .query(
+        'SELECT seq, id, ts, account_id, session_id, machine_id, blob FROM pool_posts WHERE pool_id = ? AND kind = ? ORDER BY seq DESC LIMIT ?',
+      )
       .all(poolId, kind, limit) as PostRow[]
     return rows.reverse().map(toPost)
   }

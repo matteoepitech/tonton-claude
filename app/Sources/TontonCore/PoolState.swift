@@ -27,6 +27,22 @@ public struct PoolState: Equatable, Sendable {
         public let online: Bool
         /// Its agent took the order and holds the pool key.
         public let ready: Bool
+        /// The pool machine whose agent started it. Nil for a session put in by hand.
+        public var machine: String? = nil
+    }
+
+    /// A whole machine a member put in the pool (docs/pool-autopilot.md).
+    public struct Machine: Equatable, Sendable, Identifiable {
+        public let account: String
+        public let machine: String
+        public let addedAt: String
+        /// Nil when it does not open with the pool key.
+        public let profile: PoolMachineProfile?
+        public let online: Bool
+        /// Its agent service took the order. Online but never ready: its agent is older.
+        public let ready: Bool
+
+        public var id: String { machine }
     }
 
     public struct Task: Equatable, Sendable, Identifiable {
@@ -68,6 +84,12 @@ public struct PoolState: Equatable, Sendable {
     public var budgets: PoolBudgets?
     /// The latest lines of what the relay enforced, oldest first.
     public var audit: [PoolAuditWire]
+    /// The machines members put in the pool. Nil from older relays, which have none.
+    public var machines: [Machine]?
+    /// The admin's machine whose agent runs the orchestrator and the control loop.
+    public var orchestratorMachine: PoolMachineRef?
+    /// Whether the control loop hands out tasks. Nil: never set, or an older relay.
+    public var dispatch: PoolDispatch?
     /// This member's private key for the pool and the pool keys wrapped for it.
     var own: PoolOwnKeys
 
@@ -89,6 +111,9 @@ public struct PoolState: Equatable, Sendable {
         rules = snapshot.rules.flatMap { vault.open($0.blob, as: PoolRules.self) }
         budgets = snapshot.budgets.flatMap { vault.open($0.blob, as: PoolBudgets.self) }
         audit = Array((snapshot.audit ?? []).suffix(keptPoolPosts))
+        machines = snapshot.machines.map { $0.map { Self.machine($0, vault) } }
+        orchestratorMachine = snapshot.orchestratorMachine
+        dispatch = snapshot.dispatch.flatMap { vault.open($0.blob, as: PoolDispatch.self) }
     }
 
     /// Folds a change in. False when the pool is gone for this member.
@@ -114,15 +139,24 @@ public struct PoolState: Equatable, Sendable {
         case .memberLeft(_, let account):
             members.removeAll { $0.account == account }
             sessions.removeAll { $0.account == account }
+            machines?.removeAll { $0.account == account }
+            if orchestratorMachine?.account == account { orchestratorMachine = nil }
         case .session(_, let wire):
             sessions = sessions.filter { $0.account != wire.account || $0.session != wire.session } + [Self.session(wire, vault)]
         case .sessionLeft(_, let account, let session):
             sessions.removeAll { $0.account == account && $0.session == session }
+        case .machine(_, let wire):
+            machines = (machines ?? []).filter { $0.machine != wire.machine } + [Self.machine(wire, vault)]
+        case .machineLeft(_, _, let machine):
+            machines?.removeAll { $0.machine == machine }
+            if orchestratorMachine?.machine == machine { orchestratorMachine = nil }
+        case .dispatch(_, let wire):
+            dispatch = vault.open(wire.blob, as: PoolDispatch.self)
         case .key(_, let wrap):
             own = PoolOwnKeys(
                 secret: own.secret, wraps: (own.wraps.filter { $0.version != wrap.version } + [wrap]).sorted { $0.version < $1.version })
-        case .orchestrator(_, let ref):
-            orchestrator = ref
+        case .orchestrator(_, let ref, let machine):
+            (orchestrator, orchestratorMachine) = (ref, machine)
         case .rules(_, let wire):
             rules = vault.open(wire.blob, as: PoolRules.self)
         case .budgets(_, let wire):
@@ -143,7 +177,8 @@ public struct PoolState: Equatable, Sendable {
         case .snapshot(let snapshot): snapshot.id
         case .task(let id, _), .notes(let id, _), .message(let id, _), .event(let id, _), .info(let id, _, _, _), .member(let id, _),
             .memberLeft(let id, _), .session(let id, _), .sessionLeft(let id, _, _), .key(let id, _), .conflict(let id, _, _, _),
-            .removed(let id), .error(let id, _), .orchestrator(let id, _), .rules(let id, _), .budgets(let id, _), .audit(let id, _):
+            .removed(let id), .error(let id, _), .orchestrator(let id, _, _), .rules(let id, _), .budgets(let id, _), .audit(let id, _),
+            .machine(let id, _), .machineLeft(let id, _, _), .dispatch(let id, _):
             id
         }
     }
@@ -210,8 +245,18 @@ public struct PoolState: Equatable, Sendable {
     private static func session(_ wire: PoolSessionWire, _ vault: PoolVault) -> Session {
         Session(
             account: wire.account, session: wire.session, joinedAt: wire.joinedAt,
-            profile: vault.open(wire.profile, as: PoolSessionProfile.self), online: wire.online, ready: wire.ready)
+            profile: vault.open(wire.profile, as: PoolSessionProfile.self), online: wire.online, ready: wire.ready, machine: wire.machine)
     }
+
+    private static func machine(_ wire: PoolMachineWire, _ vault: PoolVault) -> Machine {
+        Machine(
+            account: wire.account, machine: wire.machine, addedAt: wire.addedAt,
+            profile: vault.open(wire.profile, as: PoolMachineProfile.self),
+            online: wire.online, ready: wire.ready)
+    }
+
+    /// The machines of one member, such as this account's own in Settings › Machines.
+    public func machines(of account: String) -> [Machine] { (machines ?? []).filter { $0.account == account } }
 
     private static func task(_ wire: PoolItemWire, _ vault: PoolVault) -> Task? {
         guard let id = wire.id else { return nil }

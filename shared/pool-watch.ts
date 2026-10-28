@@ -16,11 +16,16 @@ import {
   sealPoolMemberSecret,
 } from './pool-keys'
 import { formatPoolInvite, parsePoolInvite } from './pool-link'
+import { sealPoolMachineOrder } from './pool-machines'
 import type {
   PoolAppMessage,
+  PoolDispatch,
   PoolInfo,
+  PoolMachineProfile,
+  PoolMachineRef,
   PoolMemberProfile,
   PoolNotes,
+  PoolPolicyWire,
   PoolRole,
   PoolSessionRef,
   PoolSummary,
@@ -204,6 +209,40 @@ export class PoolWatch {
     return this.options.link.sendPool({ t: 'pool_profile', poolId, profile: await opened.vault.seal(profile) })
   }
 
+  // MARK: Machines (docs/pool-autopilot.md)
+
+  /**
+   * Puts one of this account's machines in the pool, or changes how it works for it: `profile` comes from
+   * `poolMachineProfile`. Its agent service gets the order sealed with the account key, with the pool key it holds now;
+   * the pool sees the profile. False when the pool is still opening or the socket is down.
+   */
+  async addMachine(poolId: string, machineId: string, profile: PoolMachineProfile): Promise<boolean> {
+    const opened = this.opened.get(poolId)
+    const keyring = opened?.keyring
+    const key = keyring?.key(keyring.version)
+    if (!opened?.vault || !keyring || !key) return false
+    const order = await sealPoolMachineOrder(this.options.accountKey, { poolId, machineId, key, version: keyring.version, profile })
+    return this.options.link.sendPool({ t: 'pool_add_machine', poolId, machineId, order, profile: await opened.vault.seal(profile) })
+  }
+
+  /** Its owner, or the pool's owner and admins: takes a machine out, with the sessions it started. */
+  removeMachine(poolId: string, machineId: string): boolean {
+    return this.options.link.sendPool({ t: 'pool_remove_machine', poolId, machineId })
+  }
+
+  /** Owner and admins: one of their own machines in the pool runs the orchestrator, or none. */
+  setOrchestratorMachine(poolId: string, machine: PoolMachineRef | null): boolean {
+    return this.options.link.sendPool({ t: 'pool_orchestrator_machine', poolId, machine })
+  }
+
+  /** Owner and admins: the control loop hands out tasks, or stops. Over the revision this member saw. */
+  async setDispatch(poolId: string, dispatch: PoolDispatch): Promise<boolean> {
+    const opened = this.opened.get(poolId)
+    if (!opened?.vault || !opened.state) return false
+    const rev = opened.state.dispatch?.rev ?? 0
+    return this.options.link.sendPool({ t: 'pool_dispatch', poolId, rev, blob: await opened.vault.seal(dispatch) })
+  }
+
   // MARK: Invites and members
 
   /** A new invite, as the link to share, sealed with the pool key it holds now. */
@@ -320,6 +359,10 @@ export class PoolWatch {
       if (update.kind === 'task' && update.id && update.current && opened.state && opened.vault) {
         opened.conflicts.add(update.id)
         opened.state = await opened.vault.apply(opened.state, { t: 'pool_task', poolId, task: update.current as PoolTaskWire })
+      } else if (update.kind === 'dispatch' && update.current && opened.state && opened.vault) {
+        // Someone started or stopped it meanwhile: theirs shows, and the member decides again.
+        opened.state = await opened.vault.apply(opened.state, { t: 'pool_dispatch', poolId, dispatch: update.current as PoolPolicyWire })
+        opened.problem = 'The dispatch changed meanwhile: check it and try again.'
       }
     } else if (opened.state && opened.vault) {
       const next = await opened.vault.apply(opened.state, update)

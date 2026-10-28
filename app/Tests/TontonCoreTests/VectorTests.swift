@@ -162,6 +162,14 @@ final class VectorTests: XCTestCase {
                 try vault.sealPoolSessionOrder(
                     poolId: "pool00000001", sessionId: "s1", key: String(repeating: "k", count: 43), version: 1, issuedAt: issuedAt)
             ),
+            (
+                "pool machine order",
+                try vault.sealPoolMachineOrder(
+                    poolId: "pool00000001", machineId: "machine00001", key: String(repeating: "k", count: 43), version: 1,
+                    profile: PoolMachineProfile(
+                        name: "Studio ✨", tool: "opencode", capacity: 3, workdir: "~/pool", mode: .edits, takes: "simple", areas: ["back"]),
+                    issuedAt: issuedAt)
+            ),
         ]
         let invite = PoolInvite(
             relay: "https://relay.example.com/tonton", pool: "pool00000001", token: "tp_abcdefghijkl_" + String(repeating: "t", count: 43),

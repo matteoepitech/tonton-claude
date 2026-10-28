@@ -80,6 +80,8 @@ async function joinMachine(ctx: RelayContext, req: Request, ip: string): Promise
 /** Creates the account token, or replaces it and signs out every machine that joined with the previous one. */
 async function accountToken(ctx: RelayContext, req: Request, accountId: string): Promise<Response> {
   const body = await readJson<{ regenerate?: unknown }>(req, 1024)
+  // Read before: the machines' pools go with them.
+  const pooled = ctx.registry.machines(accountId).flatMap(machine => ctx.poolMachines.poolsOf(machine.id))
   const result = ctx.registry.newJoinSecret(accountId, body?.regenerate === true)
   if (!result) return fail(409, 'This account already has a token. Copy it from the Mac where it was created, or regenerate it.')
   for (const machineId of result.revoked) {
@@ -87,6 +89,7 @@ async function accountToken(ctx: RelayContext, req: Request, accountId: string):
     ctx.forgetMachine(machineId)
     ctx.sessions.removeMachine(accountId, machineId)
   }
+  for (const row of pooled) if (result.revoked.includes(row.machineId)) ctx.poolMachineGone(row)
   if (result.revoked.length) ctx.pushMachines(accountId)
   return json({ secret: result.secret })
 }
@@ -212,7 +215,10 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
   const machinePath = MACHINE_PATH.exec(path)
   if (machinePath && req.method === 'DELETE') {
     const machineId = machinePath[1]
+    // Read before: the machine's pools go with it.
+    const pooled = ctx.poolMachines.poolsOf(machineId).filter(row => row.accountId === accountId)
     if (!ctx.registry.revokeMachine(accountId, machineId)) return fail(404, 'No such machine.')
+    for (const row of pooled) ctx.poolMachineGone(row)
     ctx.hub.disconnectMachine(machineId, 'revoked')
     ctx.forgetMachine(machineId)
     ctx.sessions.removeMachine(accountId, machineId)

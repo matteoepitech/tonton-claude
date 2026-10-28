@@ -62,6 +62,10 @@ export const MAX_POOL_BUDGETS_BYTES = 16 * 1024
 /** Lines of a pool's audit log kept, oldest first to go, and how many a snapshot carries. */
 export const MAX_POOL_AUDIT = 5000
 export const POOL_SNAPSHOT_AUDIT = 300
+/** Whole machines a pool may hold (docs/pool-autopilot.md). Their profile and order are under MAX_POOL_INFO_BYTES. */
+export const MAX_POOL_MACHINES = 50
+/** The sealed dispatch setting: on or off, and a few words. */
+export const MAX_POOL_DISPATCH_BYTES = 4096
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
 /** iPhones and iPads that get pushes, per account. The least recently registered goes first. */

@@ -33,6 +33,8 @@ export class Hub {
   private readonly poolApps = new Map<string, Set<Socket>>()
   /** `pool/account/session` of the pool sessions whose agent took its order since it connected. */
   private readonly readyPoolSessions = new Set<string>()
+  /** `pool/machine` of the pool machines whose service took its order since it connected. */
+  private readonly readyPoolMachines = new Set<string>()
   /** Every message goes through `send`, so that it is counted. */
   readonly traffic = new Traffic()
 
@@ -62,9 +64,11 @@ export class Hub {
       if (socket.data.accountId === accountId) this.unsubscribePool(socket, poolId)
   }
 
-  /** To the apps that subscribed to the pool and to the agents of `sessions`, the pool's sessions. */
-  /** To one member of the pool only: its apps that follow the pool and the agents of its pool sessions. */
-  sendToPoolMember(poolId: string, accountId: string, message: PoolUpdate, sessions: readonly string[]) {
+  /**
+   * To one member of the pool only: its apps that follow the pool, the agents of its pool sessions and the services of
+   * its pool machines.
+   */
+  sendToPoolMember(poolId: string, accountId: string, message: PoolUpdate, sessions: readonly string[], machines: readonly string[] = []) {
     const raw = JSON.stringify(message)
     const bytes = Buffer.byteLength(raw)
     for (const socket of this.poolApps.get(poolId) ?? []) if (socket.data.accountId === accountId) this.sendRaw(socket, raw, bytes)
@@ -72,15 +76,49 @@ export class Hub {
       const agent = this.agents.get(sessionKey(accountId, sessionId))
       if (agent) this.sendRaw(agent, raw, bytes)
     }
+    this.sendToServices(machines, raw, bytes)
   }
 
-  sendToPool(poolId: string, message: PoolUpdate, sessions: readonly { accountId: string; sessionId: string }[]) {
+  /** To the apps that subscribed to the pool, the agents of `sessions` and the services of `machines`, the pool's. */
+  sendToPool(
+    poolId: string,
+    message: PoolUpdate,
+    sessions: readonly { accountId: string; sessionId: string }[],
+    machines: readonly string[] = [],
+  ) {
     const raw = JSON.stringify(message)
     const bytes = Buffer.byteLength(raw)
     for (const socket of this.poolApps.get(poolId) ?? []) this.sendRaw(socket, raw, bytes)
     for (const { accountId, sessionId } of sessions) {
       const agent = this.agents.get(sessionKey(accountId, sessionId))
       if (agent) this.sendRaw(agent, raw, bytes)
+    }
+    this.sendToServices(machines, raw, bytes)
+  }
+
+  private sendToServices(machines: readonly string[], raw: string, bytes: number) {
+    for (const machineId of machines) {
+      const service = this.serviceSocket(machineId)
+      if (service) this.sendRaw(service, raw, bytes)
+    }
+  }
+
+  /** The machine's background service, and none of its sessions' channels: pool machines are run by it. */
+  serviceSocket(machineId: string): Socket | null {
+    return [...(this.machines.get(machineId) ?? [])].find(socket => socket.data.service) ?? null
+  }
+
+  setPoolMachineReady(poolId: string, machineId: string, ready: boolean) {
+    const key = `${poolId}/${machineId}`
+    if (ready) this.readyPoolMachines.add(key)
+    else this.readyPoolMachines.delete(key)
+  }
+
+  /** Online as Settings › Machines shows it; ready once its service took the order, while it stays connected. */
+  poolMachineState(poolId: string, machineId: string): { online: boolean; ready: boolean } {
+    return {
+      online: this.isMachineOnline(machineId),
+      ready: this.serviceSocket(machineId) !== null && this.readyPoolMachines.has(`${poolId}/${machineId}`),
     }
   }
 

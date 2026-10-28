@@ -1,0 +1,125 @@
+import CryptoKit
+import XCTest
+
+@testable import TontonCore
+
+/// Pool machines (docs/pool-autopilot.md), read as the relay sends them and as the client core seals them.
+final class PoolMachineTests: XCTestCase {
+    private let decode = { (json: String) in try JSONDecoder().decode(RelayMessage.self, from: Data(json.utf8)) }
+
+    func testTheFormGivesAProfileOnlyAnAgentCanRun() throws {
+        var form = PoolMachineForm(tool: .openCode)
+        XCTAssertEqual(form.mode, .ask)
+        XCTAssertEqual(form.capacity, 1)
+        XCTAssertEqual(form.takes, .simple)
+        form.areas = ["Back, front", "back", " "]
+        form.workdir = " /srv/pool "
+        XCTAssertEqual(
+            form.profile(name: "Studio"),
+            PoolMachineProfile(
+                name: "Studio", tool: "opencode", capacity: 1, workdir: "/srv/pool", mode: .ask, takes: "simple", areas: ["back", "front"]))
+        form.capacity = 9
+        XCTAssertEqual(form.problem, .capacity)
+        XCTAssertNil(form.profile(name: nil))
+        form.capacity = 8
+        for bad in ["pool", "./pool", "/", "~", "~/", "/srv/../etc", "C:", "/a\nb"] {
+            form.workdir = bad
+            XCTAssertEqual(form.problem, .workdir, bad)
+        }
+        for good in ["/srv/pool", "~/pool", #"C:\pool"#, "D:/work"] { XCTAssertTrue(PoolMachineProfile.isWorkdir(good), good) }
+    }
+
+    func testAProfileAnotherMemberSealedReadsAsTheClientCoreReadsIt() throws {
+        let pool = try PoolVault(key: E2E.newKey())
+        let profile = PoolMachineProfile(name: "Studio", tool: "claude", capacity: 2, workdir: "~/pool", mode: .full, areas: ["back"])
+        XCTAssertEqual(pool.open(try pool.seal(profile), as: PoolMachineProfile.self), profile)
+        // What the agent could not run is no profile at all; extra fields and wrong optional ones are left out.
+        let read = { (json: String) in try? JSONDecoder().decode(PoolMachineProfile.self, from: Data(json.utf8)) }
+        let base = #""tool":"claude","capacity":2,"workdir":"~/pool","mode":"edits""#
+        XCTAssertNil(read(#"{"tool":"claude","capacity":0,"workdir":"~/pool","mode":"edits"}"#))
+        XCTAssertNil(read(#"{"tool":"claude","capacity":2,"workdir":"~/pool","mode":"root"}"#))
+        XCTAssertNil(read(#"{"tool":"claude","capacity":2,"workdir":"../x","mode":"edits"}"#))
+        XCTAssertNil(read(#"{"tool":"cursor","capacity":2,"workdir":"~/pool","mode":"edits"}"#))
+        XCTAssertEqual(
+            read("{\(base),\"takes\":\"huge\",\"areas\":[\"front\",\"\"],\"name\":5,\"extra\":1}"),
+            PoolMachineProfile(tool: "claude", capacity: 2, workdir: "~/pool", mode: .edits, areas: ["front"]))
+    }
+
+    func testTheMachineMessagesDecodeAsTheRelaySendsThem() throws {
+        let machine = #"{"account":"acct","machine":"machine00001","addedAt":"x","profile":"sealed","online":true,"ready":false}"#
+        guard case .pool(.machine("p", let wire)) = try decode(#"{"t":"pool_machine","poolId":"p","machine":\#(machine)}"#) else {
+            return XCTFail("not a machine")
+        }
+        XCTAssertEqual(wire.machine, "machine00001")
+        XCTAssertFalse(wire.ready)
+        guard
+            case .pool(.machineLeft("p", "acct", "machine00001")) = try decode(
+                #"{"t":"pool_machine_left","poolId":"p","account":"acct","machine":"machine00001"}"#)
+        else { return XCTFail("not a machine leaving") }
+        let lead = #"{"t":"pool_orchestrator","poolId":"p","orchestrator":null,"machine":{"account":"acct","machine":"machine00001"}}"#
+        guard case .pool(.orchestrator("p", nil, let ref)) = try decode(lead) else { return XCTFail("not an orchestrator") }
+        XCTAssertEqual(ref, PoolMachineRef(account: "acct", machine: "machine00001"))
+        let dispatch =
+            #"{"t":"pool_dispatch","poolId":"p","dispatch":{"rev":1,"updatedAt":"x","account":"acct","session":null,"machine":"m1","blob":"b"}}"#
+        guard case .pool(.dispatch("p", let item)) = try decode(dispatch) else { return XCTFail("not a dispatch") }
+        XCTAssertEqual(item.machine, "m1")
+        // A machine the app does not know the shape of is no message, as with every pool message.
+        guard case .unknown = try decode(#"{"t":"pool_machine","poolId":"p","machine":{"account":"acct"}}"#) else {
+            return XCTFail("a wrong shape decoded")
+        }
+    }
+
+    func testThePoolStateFollowsItsMachinesAndTheDispatch() throws {
+        let pool = try PoolVault(key: E2E.newKey())
+        let profile = PoolMachineProfile(tool: "claude", capacity: 2, workdir: "~/pool", mode: .edits)
+        let wire = { (ready: Bool) in
+            PoolMachineWire(
+                account: "bob", machine: "machine00001", addedAt: "x", profile: try pool.seal(profile), online: true, ready: ready)
+        }
+        let older = PoolSnapshot(
+            id: "p", createdAt: "x", paused: false, keyVersion: 1, info: try pool.seal(PoolInfo(name: "Hack")), members: [], sessions: [],
+            tasks: [], notes: nil, messages: [], events: [], own: nil, rules: nil, budgets: nil, audit: nil, orchestrator: nil)
+        XCTAssertNil(PoolState(snapshot: older, vault: pool).machines)
+
+        var snapshot = older
+        snapshot.machines = [try wire(false)]
+        snapshot.dispatch = PoolItemWire(
+            id: nil, rev: 1, seq: nil, updatedAt: "x", ts: nil, account: "ana", session: nil, blob: try pool.seal(PoolDispatch(on: true)))
+        var state = PoolState(snapshot: snapshot, vault: pool)
+        XCTAssertEqual(state.machines?.first?.profile, profile)
+        XCTAssertEqual(state.dispatch, PoolDispatch(on: true))
+        _ = state.apply(.machine(poolId: "p", try wire(true)), vault: pool)
+        XCTAssertEqual(state.machines?.map(\.ready), [true])
+        XCTAssertEqual(state.machines(of: "bob").count, 1)
+        _ = state.apply(.orchestrator(poolId: "p", nil, machine: PoolMachineRef(account: "bob", machine: "machine00001")), vault: pool)
+        XCTAssertEqual(state.orchestratorMachine?.machine, "machine00001")
+        _ = state.apply(.machineLeft(poolId: "p", account: "bob", machine: "machine00001"), vault: pool)
+        XCTAssertEqual(state.machines, [])
+        XCTAssertNil(state.orchestratorMachine)
+
+        _ = state.apply(.machine(poolId: "p", try wire(true)), vault: pool)
+        _ = state.apply(.memberLeft(poolId: "p", account: "bob"), vault: pool)
+        XCTAssertEqual(state.machines, [])
+    }
+
+    func testATaskNamesItsMachineAndItsAttempts() throws {
+        let json = #"{"title":"API","state":"assigned","machine":{"account":"acct","machine":"m1"},"attempts":2}"#
+        let task = try JSONDecoder().decode(PoolTask.self, from: Data(json.utf8))
+        XCTAssertEqual(task.machine, PoolMachineRef(account: "acct", machine: "m1"))
+        XCTAssertEqual(task.attempts, 2)
+        let session =
+            #"{"account":"a","session":"s","joinedAt":"x","profile":null,"online":true,"ready":true,"machine":"m1"}"#
+        XCTAssertEqual(try JSONDecoder().decode(PoolSessionWire.self, from: Data(session.utf8)).machine, "m1")
+    }
+
+    func testOnlyAgentsThatRunPoolMachinesAreOffered() {
+        let machine = { (version: String?) in
+            MachineInfo(
+                id: "m", name: "PC", platform: nil, createdAt: Date(), lastSeen: nil, online: true, agentVersion: version, health: nil)
+        }
+        XCTAssertFalse(machine("0.8.0").runsPoolMachines)
+        XCTAssertFalse(machine(nil).runsPoolMachines)
+        XCTAssertTrue(machine("0.9.0").runsPoolMachines)
+        XCTAssertTrue(machine("0.0.0").runsPoolMachines)
+    }
+}

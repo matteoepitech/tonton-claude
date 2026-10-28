@@ -101,9 +101,9 @@ final class PoolTests: XCTestCase {
     func testTheOrchestratorAndTheStructuredNotesDecodeAsTheClientCoreWritesThem() throws {
         let decode = { (json: String) in try JSONDecoder().decode(RelayMessage.self, from: Data(json.utf8)) }
         let set = #"{"t":"pool_orchestrator","poolId":"pool00000001","orchestrator":{"account":"acct","session":"ses_1"}}"#
-        guard case .pool(.orchestrator("pool00000001", let lead)) = try decode(set) else { return XCTFail("not an orchestrator") }
+        guard case .pool(.orchestrator("pool00000001", let lead, nil)) = try decode(set) else { return XCTFail("not an orchestrator") }
         XCTAssertEqual(lead, PoolSessionRef(account: "acct", session: "ses_1"))
-        guard case .pool(.orchestrator(_, nil)) = try decode(#"{"t":"pool_orchestrator","poolId":"p","orchestrator":null}"#) else {
+        guard case .pool(.orchestrator(_, nil, nil)) = try decode(#"{"t":"pool_orchestrator","poolId":"p","orchestrator":null}"#) else {
             return XCTFail("not none")
         }
         let snapshot = #"""

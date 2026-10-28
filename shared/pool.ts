@@ -5,17 +5,21 @@
 import { bytesToBase64Url } from './base64'
 import { type AccountKey, newAccountKey, open, seal } from './crypto'
 import { PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
+import { decodePoolDispatch, decodePoolMachineProfile, decodePoolMachineRef, isPoolMachineMode } from './pool-machines'
 import type {
   PoolArea,
   PoolAuditWire,
   PoolAuthor,
   PoolBudget,
   PoolBudgets,
+  PoolDispatch,
   PoolEventBody,
   PoolInfo,
   PoolKeyGrant,
   PoolLimits,
   PoolLimitWindow,
+  PoolMachineProfile,
+  PoolMachineRef,
   PoolMemberProfile,
   PoolMessageBody,
   PoolNotes,
@@ -90,7 +94,9 @@ export async function openPoolSessionOrder(
   if (!order || order.sessionId !== sessionId || order.poolId !== poolId) return null
   if (typeof order.key !== 'string' || !KEY.test(order.key) || !isVersion(order.version) || typeof order.issuedAt !== 'string') return null
   const autoStart = order.autoStart === true ? { autoStart: true } : {}
-  return { poolId, sessionId, key: order.key, version: order.version, issuedAt: order.issuedAt, ...autoStart }
+  // A session a pool machine started: the machine, and the mode its owner chose for it.
+  const worker = typeof order.machine === 'string' && isPoolMachineMode(order.mode) ? { machine: order.machine, mode: order.mode } : {}
+  return { poolId, sessionId, key: order.key, version: order.version, issuedAt: order.issuedAt, ...autoStart, ...worker }
 }
 
 /** What a machine owner accepted of the pool rules, for one of its sessions: only its agent opens it. */
@@ -204,6 +210,9 @@ export function decodePoolTask(value: unknown): PoolTask | null {
     hours: typeof f.hours === 'number' && Number.isFinite(f.hours) && f.hours > 0 && f.hours <= 1000 ? f.hours : undefined,
     reviewer: sessionRef(f.reviewer),
     review: text(f.review),
+    machine: decodePoolMachineRef(f.machine),
+    attempts:
+      typeof f.attempts === 'number' && Number.isInteger(f.attempts) && f.attempts >= 0 && f.attempts <= 1000 ? f.attempts : undefined,
   })
 }
 
@@ -354,6 +363,21 @@ export interface PoolSession {
   status: SessionStatus | null
   /** The revision of the pool rules its owner accepted for it, 0 for none. */
   accepted: number
+  /** The pool machine whose agent started it, as the relay attests it. Missing for a session put in by hand. */
+  machine?: string
+}
+
+/** A whole machine a member put in the pool (docs/pool-autopilot.md). */
+export interface PoolMachine {
+  account: string
+  machine: string
+  addedAt: string
+  /** Null when it does not open with the pool key or has the wrong shape. */
+  profile: PoolMachineProfile | null
+  /** Connected to the relay, as Settings › Machines shows it. */
+  online: boolean
+  /** Its agent service took the order: it starts sessions for the pool. Online but not ready: its agent is older. */
+  ready: boolean
 }
 
 /** The pool's rules or budgets as last set, opened; `value` is null when the blob does not open. */
@@ -401,6 +425,12 @@ export interface PoolState {
   audit: PoolAuditWire[]
   /** The session that plans and assigns, as an owner or an admin set it on the relay. */
   orchestrator: PoolSessionRef | null
+  /** The machines members put in the pool. Missing from older relays, which have none. */
+  machines?: PoolMachine[]
+  /** The admin's machine whose agent runs the orchestrator session and the control loop. */
+  orchestratorMachine?: PoolMachineRef | null
+  /** Whether the control loop hands out tasks, as last set. */
+  dispatch?: PoolPolicyItem<PoolDispatch> | null
 }
 
 /** How many messages and events a client keeps in memory. */
@@ -429,7 +459,9 @@ export class PoolVault {
       | PoolMessageBody
       | PoolEventBody
       | PoolRules
-      | PoolBudgets,
+      | PoolBudgets
+      | PoolMachineProfile
+      | PoolDispatch,
   ) {
     return this.keyring.seal(value)
   }
@@ -469,6 +501,9 @@ export class PoolVault {
       budgets: pool.budgets ? await this.policy(pool.budgets, decodePoolBudgets) : null,
       audit: (pool.audit ?? []).slice(-KEPT_POSTS),
       orchestrator: pool.orchestrator ?? null,
+      ...(pool.machines ? { machines: await Promise.all(pool.machines.map(machine => this.machine(machine))) } : {}),
+      orchestratorMachine: pool.orchestratorMachine ?? null,
+      dispatch: pool.dispatch ? await this.policy(pool.dispatch, decodePoolDispatch) : null,
     }
   }
 
@@ -491,7 +526,12 @@ export class PoolVault {
       case 'pool_info':
         return { ...state, info: await this.read(update.info, decodePoolInfo), paused: update.paused, keyVersion: update.keyVersion }
       case 'pool_orchestrator':
-        return { ...state, orchestrator: update.orchestrator }
+        // Older relays name no machine: the one known stays.
+        return {
+          ...state,
+          orchestrator: update.orchestrator,
+          orchestratorMachine: update.machine === undefined ? (state.orchestratorMachine ?? null) : update.machine,
+        }
       case 'pool_member': {
         const member = await this.member(update.member)
         const others = state.members.filter(m => m.account !== member.account)
@@ -502,8 +542,10 @@ export class PoolVault {
           ...state,
           members: state.members.filter(m => m.account !== update.account),
           sessions: state.sessions.filter(s => s.account !== update.account),
-          // The relay drops an orchestrator whose session left: so does the client.
+          machines: state.machines?.filter(m => m.account !== update.account),
+          // The relay drops an orchestrator whose session or machine left: so does the client.
           orchestrator: state.orchestrator?.account === update.account ? null : state.orchestrator,
+          orchestratorMachine: state.orchestratorMachine?.account === update.account ? null : state.orchestratorMachine,
         }
       case 'pool_session': {
         const session = await this.session(update.session)
@@ -519,6 +561,21 @@ export class PoolVault {
           orchestrator: gone ? null : lead,
         }
       }
+      case 'pool_machine': {
+        const machine = await this.machine(update.machine)
+        const others = (state.machines ?? []).filter(m => m.machine !== machine.machine)
+        return { ...state, machines: [...others, machine] }
+      }
+      case 'pool_machine_left': {
+        const lead = state.orchestratorMachine
+        return {
+          ...state,
+          machines: state.machines?.filter(m => m.machine !== update.machine),
+          orchestratorMachine: lead?.machine === update.machine ? null : lead,
+        }
+      }
+      case 'pool_dispatch':
+        return { ...state, dispatch: await this.policy(update.dispatch, decodePoolDispatch) }
       case 'pool_key': {
         const others = state.own.wraps.filter(wrap => wrap.version !== update.wrap.version)
         return { ...state, own: { ...state.own, wraps: [...others, update.wrap].sort((a, b) => a.version - b.version) } }
@@ -558,17 +615,30 @@ export class PoolVault {
       status: isSessionStatus(session.status) ? session.status : null,
       accepted: session.accepted ?? 0,
       profile: await this.read(session.profile, decodePoolSessionProfile),
+      ...byMachine(session.machine),
+    }
+  }
+
+  private async machine(machine: NonNullable<PoolSnapshot['machines']>[number]): Promise<PoolMachine> {
+    const { account, addedAt, online, ready } = machine
+    return {
+      account,
+      machine: machine.machine,
+      addedAt,
+      online,
+      ready,
+      profile: await this.read(machine.profile, decodePoolMachineProfile),
     }
   }
 
   private async policy<T>(policy: PoolPolicyWire, decode: (value: unknown) => T | null): Promise<PoolPolicyItem<T>> {
     const { rev, updatedAt, account, session } = policy
-    return { rev, updatedAt, account, session, value: await this.read(policy.blob, decode) }
+    return { rev, updatedAt, account, session, ...byMachine(policy.machine), value: await this.read(policy.blob, decode) }
   }
 
   private async task(task: PoolSnapshot['tasks'][number]): Promise<PoolTaskItem> {
     const { id, rev, updatedAt, account, session } = task
-    return { id, rev, updatedAt, account, session, task: await this.read(task.blob, decodePoolTask) }
+    return { id, rev, updatedAt, account, session, ...byMachine(task.machine), task: await this.read(task.blob, decodePoolTask) }
   }
 
   private async notes(notes: NonNullable<PoolSnapshot['notes']>) {
@@ -579,9 +649,12 @@ export class PoolVault {
 
   private async post<T>(post: PoolSnapshot['messages'][number], decode: (value: unknown) => T | null): Promise<PoolPostItem<T>> {
     const { id, seq, ts, account, session } = post
-    return { id, seq, ts, account, session, body: await this.read(post.blob, decode) }
+    return { id, seq, ts, account, session, ...byMachine(post.machine), body: await this.read(post.blob, decode) }
   }
 }
+
+/** The machine that wrote it, when one did, as the relay attests it. */
+const byMachine = (machine: string | undefined): { machine?: string } => (machine ? { machine } : {})
 
 // MARK: Budgets
 

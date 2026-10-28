@@ -213,6 +213,10 @@ public struct PoolTask: Codable, Equatable, Sendable {
     public var reviewer: PoolSessionRef?
     /// What the last review said.
     public var review: String?
+    /// Dispatched to this pool machine: its agent starts the session that becomes the assignee.
+    public var machine: PoolMachineRef?
+    /// How many times it went back to the board because its machine or its session failed it.
+    public var attempts: Int?
 
     public init(
         title: String, goal: String? = nil, criteria: [String]? = nil, area: String? = nil, state: PoolTaskState,
@@ -432,6 +436,8 @@ public struct PoolSessionWire: Codable, Equatable, Sendable {
     public var status: String? = nil
     /// The revision of the pool rules its owner accepted for it, 0 for none. Nil from older relays.
     public let accepted: Int?
+    /// The pool machine whose agent started it, as the relay attests it. Nil for a session put in by hand.
+    public var machine: String? = nil
 }
 
 /// A task, the notes, a message or an event: who wrote it, when, and the sealed blob.
@@ -447,6 +453,8 @@ public struct PoolItemWire: Codable, Equatable, Sendable {
     public let account: String
     public let session: String?
     public let blob: String
+    /// The pool machine whose agent service wrote it, as the relay attests it.
+    public var machine: String? = nil
 }
 
 /// A line of the pool's audit log, which the relay writes in clear: who did what, to whom, when.
@@ -454,6 +462,7 @@ public struct PoolAuditWire: Codable, Equatable, Sendable {
     public struct Target: Codable, Equatable, Sendable {
         public let account: String?
         public let session: String?
+        public var machine: String? = nil
     }
     public let seq: Int
     public let ts: String
@@ -463,6 +472,8 @@ public struct PoolAuditWire: Codable, Equatable, Sendable {
     public let action: String
     public let target: Target?
     public let rev: Int?
+    /// The pool machine whose agent service did it.
+    public var machine: String? = nil
 }
 
 public struct PoolSnapshot: Codable, Equatable, Sendable {
@@ -485,6 +496,12 @@ public struct PoolSnapshot: Codable, Equatable, Sendable {
     public let audit: [PoolAuditWire]?
     /// The session that plans and assigns, as an owner or an admin set it. Nil: none, or an older relay.
     public let orchestrator: PoolSessionRef?
+    /// The machines members put in the pool. Nil from older relays, which have none.
+    public var machines: [PoolMachineWire]? = nil
+    /// The admin's machine that runs the orchestrator and the control loop.
+    public var orchestratorMachine: PoolMachineRef? = nil
+    /// The sealed `PoolDispatch`.
+    public var dispatch: PoolItemWire? = nil
 }
 
 /// The pool messages of the relay, on the app's socket (`RelayMessage.pool`).
@@ -495,12 +512,16 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
     case message(poolId: String, PoolItemWire)
     case event(poolId: String, PoolItemWire)
     case info(poolId: String, info: String, paused: Bool, keyVersion: Int)
-    /// The pool's orchestrator changed; nil: none.
-    case orchestrator(poolId: String, PoolSessionRef?)
+    /// The pool's orchestrator session and machine changed; nil: none.
+    case orchestrator(poolId: String, PoolSessionRef?, machine: PoolMachineRef?)
     case member(poolId: String, PoolMemberWire)
     case memberLeft(poolId: String, account: String)
     case session(poolId: String, PoolSessionWire)
     case sessionLeft(poolId: String, account: String, session: String)
+    case machine(poolId: String, PoolMachineWire)
+    case machineLeft(poolId: String, account: String, machine: String)
+    /// Whether the control loop hands out tasks, sealed.
+    case dispatch(poolId: String, PoolItemWire)
     /// To one member: the pool key was rotated, here is the new version wrapped for it.
     case key(poolId: String, PoolKeyWrapWire)
     /// A change sent over an older revision was refused: the current one, if any.
@@ -514,7 +535,7 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
     private enum Keys: String, CodingKey {
         case t, pool, poolId, task, notes, message, event, info, paused, keyVersion, member, account, session, kind, id, current, wrap
         case rules, budgets, entry
-        case orchestrator
+        case orchestrator, machine, dispatch
     }
 
     public init(from decoder: Decoder) throws {
@@ -534,12 +555,18 @@ public enum PoolUpdate: Decodable, Equatable, Sendable {
         case "pool_info":
             self = .info(poolId: poolId, info: try value(.info), paused: try value(.paused), keyVersion: try value(.keyVersion))
         case "pool_orchestrator":
-            self = .orchestrator(poolId: poolId, try container.decodeIfPresent(PoolSessionRef.self, forKey: .orchestrator))
+            self = .orchestrator(
+                poolId: poolId, try container.decodeIfPresent(PoolSessionRef.self, forKey: .orchestrator),
+                machine: try container.decodeIfPresent(PoolMachineRef.self, forKey: .machine))
         case "pool_member": self = .member(poolId: poolId, try value(.member))
         case "pool_member_left": self = .memberLeft(poolId: poolId, account: try value(.account))
         case "pool_session": self = .session(poolId: poolId, try value(.session))
         case "pool_session_left":
             self = .sessionLeft(poolId: poolId, account: try value(.account), session: try container.decode(String.self, forKey: .session))
+        case "pool_machine": self = .machine(poolId: poolId, try value(.machine))
+        case "pool_machine_left":
+            self = .machineLeft(poolId: poolId, account: try value(.account), machine: try container.decode(String.self, forKey: .machine))
+        case "pool_dispatch": self = .dispatch(poolId: poolId, try value(.dispatch))
         case "pool_conflict":
             self = .conflict(
                 poolId: poolId, kind: try value(.kind), id: try container.decodeIfPresent(String.self, forKey: .id),
