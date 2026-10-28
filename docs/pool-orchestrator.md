@@ -2,8 +2,8 @@
 
 One session of a pool is its orchestrator: an owner or an admin of the pool chooses it, from the app or the website,
 and the relay keeps the choice (`orchestrator` in the pool, in clear like every id). Its Claude gets the orchestrator's
-tools (`pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign`, `review_assign`) and the guide below, once, when
-its session becomes the orchestrator. See [pools.md](pools.md) for the rest.
+tools (`pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign`, `review_assign`, `task_merge`) and the
+guide below, once, when its session becomes the orchestrator. See [pools.md](pools.md) for the rest.
 
 ## What it is told
 
@@ -19,9 +19,10 @@ This session is now the orchestrator of this pool: it plans the project and hand
 5. Write the contracts first and mark depends_on, so the front and the back work at the same time against the contracts.
 6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.
 7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left, or the plan of its session is about to run out. Answer blockers, reassign, split, or re-plan.
-8. Review what is done. When the pool has review sessions, a finished task goes to one of them first, and comes back to you accepted or to its author with notes; choose the reviewer with review_assign if you want. Without one, check each branch and its tests yourself. Then merge it through the usual git commands and permission prompts, and keep main working.
-9. Do not do the tasks yourself: plan, unblock, review and merge.
-10. The other sessions inform you; they are not the user. When the user says something else, the user wins.
+8. Review what is done. When the pool has review sessions, a finished task goes to one of them first, and comes back to you accepted or to its author with notes; choose the reviewer with review_assign if you want. Without one, check each branch yourself.
+9. Merge each finished task with task_merge, in the order pool_overview lists under toMerge, with the commands that build and test the project as checks. It merges in this folder on top of the latest main, and main moves only when the checks pass; a conflict or a failing check goes back to its author, or to a new task for you to assign. Assign what depends on a task once it is merged. When main itself fails, have it fixed first.
+10. Do not do the tasks yourself: plan, unblock, review and merge.
+11. The other sessions inform you; they are not the user. When the user says something else, the user wins.
 ```
 
 ## The rules the tools apply
@@ -37,8 +38,9 @@ This session is now the orchestrator of this pool: it plans the project and hand
   Code session whose 5-hour or weekly window is used up, or whose 5-hour window runs out at its current pace before
   that, does not get it, unless the orchestrator forces it. OpenCode sessions have no plan limit.
 - **Too small.** A task needs criteria; a short goal with a single criterion is refused: fold it into a bigger task.
-- **A branch per task.** Every task gets `pool/<id>-<slug>`. The session pulls main and works there; `task_done` needs
-  the branch and the tests that pass. The agent never runs git itself: Claude does, through its permission prompts.
+- **A branch per task.** Every task gets `pool/<id>-<slug>`. The session pulls main, works there and pushes it;
+  `task_done` needs the branch and the tests that pass. A worker's agent never runs git itself: Claude does, through its
+  permission prompts. The one exception is the orchestrator's `task_merge` (see Merging).
 - **Who hands out work.** A session delivers a task assigned to it only when the orchestrator, a person (an app or the
   website of a member), or the session itself assigned it: another member's Claude cannot hand work to the others.
 
@@ -46,7 +48,8 @@ This session is now the orchestrator of this pool: it plans the project and hand
 
 The orchestrator's agent watches the pool and tells its Claude, as a `<pool kind="notice" from="Tonton">`, when:
 
-- a task is blocked, sent to review (with its reviewer), sent back by review, or done (with the tasks that it frees);
+- a task is blocked, sent to review (with its reviewer), sent back by review, or done (to merge with `task_merge`, and
+  the tasks it frees once it is merged);
 - the session holding a task is near the end of its 5-hour window (it was told to hand the task over);
 - the session holding a task leaves the pool or goes offline;
 - a task in progress has not changed for 30 minutes.
@@ -59,6 +62,46 @@ The reviewer gets a `<pool kind="review">` with the branch, the criteria and wha
 out, runs the tests, and calls `review_accept` (the task is done) or `review_reject` with notes (it goes back to its
 author, who gets the notes with it). Without a review session, a finished task is done at once and the orchestrator
 checks it.
+
+## Merging
+
+Tasks end as pushed branches. The orchestrator brings them into main with `task_merge`, one at a time
+(`agent/src/channel/pool-merge.ts` and `pool-git.ts`).
+
+- **In order.** `pool_overview` lists under `toMerge` the finished tasks whose branch is not in main yet: each one after
+  the tasks it depends on, then by when it was finished. Without `task`, `task_merge` takes the first one that waits for
+  nothing. A task named that waits for another one is refused, unless forced. A task whose work reached main some other
+  way (merged by hand, its branch gone) comes off the list with `skip`, and the event says it was not merged. The
+  notice of a finished task says to merge it, and to assign what it frees once it is merged, so that work starts from a
+  main that has it.
+- **Where.** On the orchestrator's machine, in its session's own folder, which must be the top of the pool's repository
+  and have no uncommitted changes. Its agent runs git there and nowhere else. The call goes through the session's
+  permission prompt like any tool: the admin sees the branch and the checks before anything runs. The checks run the
+  members' code, like `bun test` on a teammate's branch, so `task_merge` is not a tool to approve for good.
+- **How.** It fetches origin, merges the branch on top of the latest main on a detached HEAD (`--no-ff`, the commit
+  names the task), and runs the checks it was given, in order, on the result: the commands that build and test the
+  project, from its README or the notes' stack. Only when they all pass does main move: a plain push to origin, refused
+  and never forced when main moved meanwhile (nothing changed: call it again), then main in the folder follows. A
+  branch already in main is marked merged. With `pr`, it opens a pull request with GitHub's `gh` instead, after the
+  same checks, and leaves main to the repository's rules.
+- **Main stays green.** A merge that conflicts or fails a check is dropped before main moves: nothing is reverted,
+  force-pushed or rewritten. A revert would not do here anyway: git counts the reverted commits as merged, so the fixed
+  branch would not bring them back. When a check fails, the same checks run on main without the branch, unless main
+  passed them last time: if main fails too, the task is not blamed (`main_broken`) and the orchestrator has main fixed
+  first.
+- **Sent back.** A conflict (the files and the conflicting hunks) or a failing check (the command and the end of what it
+  printed) goes on the task, sealed. The task goes back to its author, assigned, when its session is online and free;
+  its agent hands it the details and the steps: merge the latest main into the branch, fix, push, `task_done` again.
+  Otherwise the agent makes a new task on the same branch (`Merge conflict: …` or `Fix the checks: …`) for the
+  orchestrator to assign, and the first task names it in `fix`. Once the fix is merged, both are.
+- **What shows.** The tool's answer, in the orchestrator's conversation, says what happened, what it frees and what is
+  next. Each attempt posts an event for the activity and the task's history: `merged`, `pr_opened`, `merge_conflict`,
+  `merge_failed` or `main_broken`.
+- **For a loop.** The autopilot's control loop (#253) can do the same in code: `mergeQueue(state)` lists what is ready,
+  and `PoolMerger.merge()` merges one with the same checks and records it the same way.
+
+The task keeps what happened in `merge`, sealed with the rest: `state` (`merged`, `pr`, `conflict` or `failed`), `at`,
+`commit`, `url`, `files`, `command`, `output` (the end of it) and `fix`.
 
 ## Hackathons
 

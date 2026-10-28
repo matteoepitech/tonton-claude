@@ -45,7 +45,7 @@ picks it when the session joins; without a choice it follows the tool. The orche
 | Key wraps | account id, version, who made it | a later version of the pool key, wrapped for that member (see Keys) |
 | Invites | id, role, token hash, uses left, expiry | — |
 | Pool sessions | account id, session id, joined at; whether its agent is connected and took its order; its status, which the relay already sees for its own account and now shows the members | profile (area, skills, repo, tool, kind of task); the order, sealed with the account key |
-| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, size, paths, state, assignee, dependencies, branch, summary |
+| Tasks | id, revision, updated at, who changed it last | goal, criteria, area, size, paths, state, assignee, dependencies, branch, summary, what its merge into main gave |
 | Notes | revision, updated at, who changed them last | free text, the sections (goal, stack, contracts, decisions), the areas and the paths each owns |
 | Messages | id, order, sender account and session, time | text, and who it is for (a session, an area or everyone) |
 | Events | id, order, sender account and session, time | what happened (task moved, merge, blocker…), and each session's usage: cost, tokens, its account's windows |
@@ -144,6 +144,7 @@ The agent turns a pool session into tools, served by the MCP channel for Claude 
 | `pool_notes_read`, `pool_notes_write` | all | The shared notes, whole or one section at a time |
 | `review_accept`, `review_reject` | the task's reviewer | Accept a task in review, or send it back to its author with notes |
 | `pool_overview`, `plan_create`, `task_create`, `task_assign`, `task_reassign`, `review_assign` | orchestrator | Plan and hand out work ([pool-orchestrator.md](pool-orchestrator.md)) |
+| `task_merge` | orchestrator | Merge a finished branch into main once the checks pass on the result (pool-orchestrator.md, Merging) |
 
 A task assigned to a session, or a message to it, arrives like a message from the notch, but marked as coming from the
 pool and from which member: `<pool kind="task" from="Ana · orchestrator" task="…">…</pool>`, or `kind="message"`. What
@@ -174,9 +175,13 @@ Details:
   app or the website), or from itself. The relay attests who wrote each task last, so another member's Claude cannot
   hand work to the others' sessions.
 - **A branch per task.** The orchestrator's tasks get `pool/<id>-<slug>`. The task tells the session to pull main and
-  work there, never on main; the agent never runs git itself, Claude does through its permission prompts. `task_done`
-  needs the branch and the tests that pass (or "none" and why). A merge conflict is reported with `task_update`
-  (blocked), which tells the orchestrator.
+  work there, never on main, and to push it before `task_done`; a worker's agent never runs git itself, Claude does
+  through its permission prompts. `task_done` needs the branch and the tests that pass (or "none" and why). A merge
+  conflict is reported with `task_update` (blocked), which tells the orchestrator.
+- **Merging.** The orchestrator brings finished branches into main with `task_merge`, in dependency order: its agent
+  merges in the orchestrator's own folder, runs the checks it is given on the result, and moves main only when they
+  pass. A conflict or a failing check goes on the task, sealed, and sends it back to its author or to a new task.
+  Details in [pool-orchestrator.md](pool-orchestrator.md), Merging.
 - **Shared notes.** Free text plus sections (goal, stack, contracts, decisions) and areas with the paths each owns.
   `pool_notes_write` changes one part and keeps the others; each change posts a `notes_changed` event, so the timeline
   says who changed what. A session is told, as a short `<pool kind="notes">` notice and never with the whole text, when
@@ -345,7 +350,8 @@ A pool against a deadline (`shared/pool-hackathon.ts`, `TontonCore/PoolHackathon
 
 Pools need a relay, agents and apps that know them. An older relay answers 404 to the pool routes: the app and the
 website say so. An older agent ignores pool orders: the app does not offer to join a session whose agent is older than
-the version that brings pools. Every pool field is optional, as everywhere else.
+the version that brings pools. Every pool field is optional, as everywhere else: a task's `merge` record, for one, is
+read by the agents and apps that know it, and an older one that writes the task again leaves it out.
 
 ## Order of work
 

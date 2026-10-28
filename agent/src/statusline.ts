@@ -85,7 +85,7 @@ async function runUserCommand(command: string, input: string): Promise<string> {
 }
 
 /** On Windows, Claude Code uses Git Bash when it is installed and PowerShell otherwise. */
-function shell(): string[] {
+export function shell(): string[] {
   if (process.platform !== 'win32') return ['/bin/sh', '-c']
   const gitBash = process.env.CLAUDE_CODE_GIT_BASH_PATH || join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
   return existsSync(gitBash) ? [gitBash, '-c'] : ['powershell', '-NoProfile', '-Command']

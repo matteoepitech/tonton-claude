@@ -17,12 +17,15 @@ import type {
 } from '../../../shared/pool-protocol'
 import type { AgentMessage, UsageLimit } from '../../../shared/protocol'
 import { log } from '../log'
+import { PoolGit } from './pool-git'
 import { LimitsReporter, limitsMark, limitsView, nearLimit, shouldPost } from './pool-limits'
+import { mergeBrief, PoolMerger } from './pool-merge'
 import {
   HACKATHON_GUIDE,
   isOrchestrator,
   ORCHESTRATOR_GUIDE,
   ORCHESTRATOR_TOOLS,
+  type PoolOps,
   PoolOrchestrator,
   parseArea,
   STALL_MS,
@@ -77,7 +80,7 @@ export const POOL_TOOLS: PoolToolSpec[] = [
   },
   {
     name: 'task_done',
-    description: "Finish this session's task: what was done, the branch, the tests that pass.",
+    description: "Finish this session's task: what was done, the branch (pushed), the tests that pass.",
     params: {
       pool: POOL,
       task: TASK,
@@ -185,7 +188,9 @@ export class PoolWork {
   private readonly limitsPosted = new Map<string, { mark: string; at: number }>()
   /** Handovers already asked of this session's Claude, by task and window. */
   private readonly handovers = new Set<string>()
+  private readonly ops: PoolOps
   private readonly orchestrator: PoolOrchestrator
+  private merger: PoolMerger | null = null
   private readonly stallTimer: ReturnType<typeof setInterval>
 
   constructor(
@@ -200,17 +205,19 @@ export class PoolWork {
     /** How long a task in progress may stay unchanged before the orchestrator hears of it. */
     stallMs = STALL_MS,
   ) {
+    this.ops = {
+      putTask: (poolId, id, rev, next) => this.putTask(poolId, { id, rev }, next),
+      putNotes: (poolId, rev, notes) => this.saveNotes(poolId, rev, notes),
+      message: (poolId, to, text) => this.message(poolId, { text, to: { session: to } }),
+      event: (poolId, kind, taskId, text) => this.event(poolId, kind, taskId, text),
+      descriptions: state => this.descriptions(state),
+      who: (state, account, session) => this.who(state, account, session),
+    }
     this.orchestrator = new PoolOrchestrator(
-      {
-        putTask: (poolId, id, rev, next) => this.putTask(poolId, { id, rev }, next),
-        putNotes: (poolId, rev, notes) => this.saveNotes(poolId, rev, notes),
-        message: (poolId, to, text) => this.message(poolId, { text, to: { session: to } }),
-        event: (poolId, kind, taskId, text) => this.event(poolId, kind, taskId, text),
-        descriptions: state => this.descriptions(state),
-        who: (state, account, session) => this.who(state, account, session),
-      },
+      this.ops,
       text => this.deliver(envelope('notice', 'Tonton', {}, text)),
       stallMs,
+      () => this.merger,
     )
     pools.onChange(poolId => this.changed(poolId))
     // A task that stops moving changes nothing in the pool: the orchestrator's agent looks every minute, and every agent
@@ -224,6 +231,11 @@ export class PoolWork {
 
   useSafety(safety: NonNullable<PoolWork['safety']>) {
     this.safety = safety
+  }
+
+  /** The session's folder: as the orchestrator, it merges finished branches there (pool-merge.ts), and nowhere else. */
+  useRepository(folder: () => string | undefined, git = new PoolGit()) {
+    this.merger = new PoolMerger(this.ops, git, folder, poolId => this.pools.state(poolId))
   }
 
   /** The tools, while the session is in a pool; the orchestrator's too while it is one. */
@@ -441,11 +453,13 @@ export class PoolWork {
       return 'Say which tests you ran and that pass, in tests (or "none" and why, for a task with nothing to test).'
     }
     const summary = `${args.summary.trim()}\n\nTests: ${args.tests.trim()}`
+    // Finished again after the merge sent it back: what failed then is what was fixed.
+    const { merge: _fixed, ...task } = item.task as PoolTask
     // With review sessions in the pool, it is done once one of them accepts it.
-    const reviewer = reviewers(state, item.task as PoolTask)[0]
+    const reviewer = reviewers(state, task)[0]
     const next: PoolTask = reviewer
-      ? { ...(item.task as PoolTask), state: 'review', summary, branch, reviewer: { account: reviewer.account, session: reviewer.session } }
-      : { ...(item.task as PoolTask), state: 'done', summary, branch }
+      ? { ...task, state: 'review', summary, branch, reviewer: { account: reviewer.account, session: reviewer.session } }
+      : { ...task, state: 'done', summary, branch }
     const result = await this.putTask(poolId, item, next)
     if (result) return result
     const who = reviewer ? this.who(state, reviewer.account, reviewer.session) : ''
@@ -778,6 +792,7 @@ export class PoolWork {
       task.paths?.length ? `Its area owns: ${task.paths.join(', ')}. Leave other files to their areas, or say why in task_done.` : '',
       task.branch ? branchSteps(task.branch) : '',
       task.review ? `Sent back by review: ${task.review}\nFix it on the same branch, then call task_done again.` : '',
+      mergeBrief(task),
     ].filter(Boolean)
     const next = autoStart
       ? 'Start it: call task_claim, work on it, report with task_update when blocked (a merge conflict too), and finish with task_done (branch and tests).'
@@ -835,6 +850,8 @@ export class PoolWork {
       assignee: task.assignee ? this.who(state, task.assignee.account, task.assignee.session) : undefined,
       waitsFor: task.dependsOn?.length ? task.dependsOn : undefined,
       branch: task.branch,
+      // merged, pr, conflict or failed: what the orchestrator's merge made of it.
+      merge: task.merge?.state,
       ...(full ? { goal: task.goal, criteria: task.criteria, summary: task.summary } : {}),
     }
   }
@@ -907,7 +924,7 @@ export const POOL_INSTRUCTIONS = [
 
 /** How a session starts on a task's branch: Claude runs it, through its usual permission prompts. */
 export function branchSteps(branch: string): string {
-  return `Branch: ${branch}. Before you start, pull the latest main, then create or switch to it (git fetch, then git switch ${branch}, or git switch -c ${branch} origin/main). Commit your work there, never on main.`
+  return `Branch: ${branch}. Before you start, pull the latest main, then create or switch to it (git fetch, then git switch ${branch}, or git switch -c ${branch} origin/main). Commit your work there, never on main, and push it before task_done (git push -u origin ${branch}): the orchestrator merges it from there.`
 }
 
 type NotesPart = PoolNotesSection | 'areas' | 'text'

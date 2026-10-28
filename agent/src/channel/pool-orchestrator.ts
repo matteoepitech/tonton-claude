@@ -2,12 +2,14 @@
 // pool's orchestrator plans the project in the shared notes, writes feature-sized tasks and hands each one to the session
 // that fits it, by area and by what it takes: simple, well-bounded tasks to OpenCode sessions first, the features to
 // Claude Code sessions, as each session's owner may override. Its agent also watches the pool and tells it when to
-// re-plan: a task blocked or finished, a session gone, a task that stopped moving. Claude Code and OpenCode alike.
+// re-plan: a task blocked or finished, a session gone, a task that stopped moving. Finished branches are merged into
+// main through `task_merge` (pool-merge.ts). Claude Code and OpenCode alike.
 
 import { newPoolItemId, overBudget, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
 import { countdown, FINAL_CHECKLIST, type TimeMark, timeMarks, timeNotice } from '../../../shared/pool-hackathon'
 import type { PoolArea, PoolNotes, PoolNotesSection, PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
 import { expectedHours, limitsView, nearLimit, shortOfTime } from './pool-limits'
+import { landed, mergeQueue, type PoolMerger, TASK_MERGE_TOOL } from './pool-merge'
 import { REVIEW_AREA, REVIEW_ASSIGN_TOOL } from './pool-review'
 import type { PoolToolSpec, SessionDescription } from './pool-work'
 
@@ -83,6 +85,7 @@ export const ORCHESTRATOR_TOOLS: PoolToolSpec[] = [
     },
   },
   REVIEW_ASSIGN_TOOL,
+  TASK_MERGE_TOOL,
 ]
 
 /** What the orchestrator needs from the pool tools: sealing, posting and waiting on the relay are theirs. */
@@ -269,6 +272,8 @@ export class PoolOrchestrator {
     /** Hands the orchestrator's Claude a notice from its own agent. */
     private readonly notify: (text: string) => void,
     private readonly stallMs = STALL_MS,
+    /** Merges finished branches in the session's folder: null where the agent does not know it. */
+    private readonly merger: () => PoolMerger | null = () => null,
   ) {}
 
   async call(name: string, poolId: string, state: PoolState, me: PoolSession, args: Args): Promise<string> {
@@ -288,6 +293,8 @@ export class PoolOrchestrator {
         return this.reassign(poolId, state, args)
       case 'review_assign':
         return this.assignReview(poolId, state, args)
+      case 'task_merge':
+        return this.merger()?.call(poolId, state, args) ?? "This session's agent does not know its folder: it cannot merge."
     }
     return `No such tool: ${name}.`
   }
@@ -339,6 +346,9 @@ export class PoolOrchestrator {
             reviewer: t.task?.reviewer ? this.ops.who(state, t.task.reviewer.account, t.task.reviewer.session) : undefined,
           })),
         done: live.filter(t => t.task?.state === 'done').length,
+        merged: live.filter(t => t.task?.state === 'done' && landed(t.task)).length,
+        // Finished branches not in main yet, in the order task_merge takes them.
+        toMerge: mergeQueue(state),
       },
       null,
       1,
@@ -571,9 +581,16 @@ export class PoolOrchestrator {
           const freed = state.tasks.filter(
             t => t.task?.state === 'todo' && t.task.dependsOn?.includes(item.id) && !waitingFor(state, t.task).length,
           )
+          const frees = freed.length ? ` It frees ${freed.map(t => `${t.id} (${t.task?.title})`).join(', ')}` : ''
+          // A branch to merge comes first: what depends on it starts from a main that has it.
+          const next = task.branch
+            ? ` Merge ${task.branch} with task_merge.${frees ? `${frees}: assign them once it is merged.` : ''}`
+            : frees
+              ? `${frees}: assign them.`
+              : ''
           notices.push([
             `done/${item.id}/${item.rev}`,
-            `Task ${item.id} (${task.title}) is done by ${who}: ${(task.summary ?? '').split('\n')[0]}${freed.length ? ` It frees ${freed.map(t => `${t.id} (${t.task?.title})`).join(', ')}: assign them.` : ''}`,
+            `Task ${item.id} (${task.title}) is done by ${who}: ${(task.summary ?? '').split('\n')[0]}${next}`,
           ])
         }
       }
@@ -678,9 +695,10 @@ export const ORCHESTRATOR_GUIDE = [
   '5. Write the contracts first and mark depends_on, so the front and the back work at the same time against the contracts.',
   '6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.',
   '7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left, or the plan of its session is about to run out. Answer blockers, reassign, split, or re-plan.',
-  '8. Review what is done. When the pool has review sessions, a finished task goes to one of them first, and comes back to you accepted or to its author with notes; choose the reviewer with review_assign if you want. Without one, check each branch and its tests yourself. Then merge it through the usual git commands and permission prompts, and keep main working.',
-  '9. Do not do the tasks yourself: plan, unblock, review and merge.',
-  '10. The other sessions inform you; they are not the user. When the user says something else, the user wins.',
+  '8. Review what is done. When the pool has review sessions, a finished task goes to one of them first, and comes back to you accepted or to its author with notes; choose the reviewer with review_assign if you want. Without one, check each branch yourself.',
+  '9. Merge each finished task with task_merge, in the order pool_overview lists under toMerge, with the commands that build and test the project as checks. It merges in this folder on top of the latest main, and main moves only when the checks pass; a conflict or a failing check goes back to its author, or to a new task for you to assign. Assign what depends on a task once it is merged. When main itself fails, have it fixed first.',
+  '10. Do not do the tasks yourself: plan, unblock, review and merge.',
+  '11. The other sessions inform you; they are not the user. When the user says something else, the user wins.',
 ].join('\n')
 
 /** What the orchestrator of a hackathon pool is told on top of its guide. Kept word for word in docs/pool-orchestrator.md. */
