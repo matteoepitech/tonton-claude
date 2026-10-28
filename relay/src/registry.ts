@@ -246,6 +246,8 @@ const MIGRATIONS = [
    ALTER TABLE pool_policies ADD COLUMN machine_id TEXT;
    ALTER TABLE pool_audit ADD COLUMN machine_id TEXT;
    ALTER TABLE pool_audit ADD COLUMN target_machine TEXT;`,
+  // A pool machine its owner or an admin stopped (relay/src/pool-machines.ts): it takes no work until started again.
+  `ALTER TABLE pool_machines ADD COLUMN stopped INTEGER NOT NULL DEFAULT 0;`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */

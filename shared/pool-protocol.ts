@@ -373,6 +373,8 @@ export interface PoolMachineWire extends PoolMachineRef {
   online: boolean
   /** Its agent service took the order and holds the pool key. Online but never ready: its agent is older. */
   ready: boolean
+  /** Its owner or an admin stopped it: it takes no work until one of them starts it again. Missing: it works. */
+  stopped?: boolean
 }
 
 /** A task: its revision goes up with every change, so two members never overwrite each other unknowingly. */
@@ -424,6 +426,8 @@ export type PoolAuditAction =
   | 'budgets_set'
   | 'machine_added'
   | 'machine_removed'
+  | 'machine_stopped'
+  | 'machine_started'
   | 'dispatch_set'
 
 /** One line of the audit log: who did what, to whom, when. */
@@ -519,6 +523,11 @@ export type PoolAppMessage =
   | { t: 'pool_add_machine'; poolId: string; machineId: string; order: Sealed; profile: Sealed }
   /** The machine's owner, or the pool's owner and admins: takes a machine out, with the sessions it started. */
   | { t: 'pool_remove_machine'; poolId: string; machineId: string }
+  /**
+   * Stops a machine (`stopped`: its pool sessions end and its tasks go back to the board) or lets it work again. Its
+   * owner, or the pool's owner and admins; `machine` null: every machine, the owner and admins only.
+   */
+  | { t: 'pool_stop_machine'; poolId: string; machine: string | null; stopped: boolean }
   /** Owner and admins: one of their own pool machines runs the orchestrator, or none. */
   | { t: 'pool_orchestrator_machine'; poolId: string; machine: PoolMachineRef | null }
   /** Owner and admins: a new sealed `PoolDispatch`. `rev`: the revision it replaces, 0 at first. */

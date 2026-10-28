@@ -52,6 +52,11 @@ final class PoolMachineTests: XCTestCase {
         }
         XCTAssertEqual(wire.machine, "machine00001")
         XCTAssertFalse(wire.ready)
+        XCTAssertNil(wire.stopped)
+        let stopped =
+            #"{"t":"pool_machine","poolId":"p","machine":{"account":"a","machine":"m","addedAt":"x","profile":null,"online":true,"ready":true,"stopped":true}}"#
+        guard case .pool(.machine(_, let halted)) = try decode(stopped) else { return XCTFail("not a stopped machine") }
+        XCTAssertEqual(halted.stopped, true)
         guard
             case .pool(.machineLeft("p", "acct", "machine00001")) = try decode(
                 #"{"t":"pool_machine_left","poolId":"p","account":"acct","machine":"machine00001"}"#)
@@ -90,6 +95,12 @@ final class PoolMachineTests: XCTestCase {
         XCTAssertEqual(state.dispatch, PoolDispatch(on: true))
         _ = state.apply(.machine(poolId: "p", try wire(true)), vault: pool)
         XCTAssertEqual(state.machines?.map(\.ready), [true])
+        XCTAssertEqual(state.machines?.map(\.stopped), [false])
+        var halted = try wire(true)
+        halted.stopped = true
+        _ = state.apply(.machine(poolId: "p", halted), vault: pool)
+        XCTAssertEqual(state.machines?.map(\.stopped), [true])
+        _ = state.apply(.machine(poolId: "p", try wire(true)), vault: pool)
         XCTAssertEqual(state.machines(of: "bob").count, 1)
         _ = state.apply(.orchestrator(poolId: "p", nil, machine: PoolMachineRef(account: "bob", machine: "machine00001")), vault: pool)
         XCTAssertEqual(state.orchestratorMachine?.machine, "machine00001")

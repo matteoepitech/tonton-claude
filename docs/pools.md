@@ -244,6 +244,13 @@ Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safe
   The relay tells the agent (`pool_stop`), which interrupts the turn (Escape in tmux for Claude Code, OpenCode's own
   interrupt), and takes the session out of the pool. Without tmux, Claude Code's turn cannot be interrupted: the user is
   told. Every machine owner can also take a session out (`pool_leave_session`) or leave the pool at any time.
+- **Stop a machine.** A machine put in the pool for the autopilot is stopped by its owner, or by the owner and admins
+  (`pool_stop_machine`); the owner and admins stop every machine at once, and the website turns the dispatch off with
+  them. The relay keeps the machine `stopped`, in clear, interrupts the sessions it started for the pool's tasks and
+  takes them out, like `pool_stop`; its service gives their tasks back to the board as they were, uncounted, and takes no
+  work until the machine is started again (`stopped: false`). The control loop hands it nothing, and gives back what it
+  held when the machine cannot. The orchestrator session an orchestrator machine runs goes on: the admin still talks to
+  it. A machine owner can always take its machine out of the pool (`pool_remove_machine`), stopped or paused.
 - **Budgets.** The owner and admins set `PoolBudgets` (`pool_budgets`, sealed): a cap for the pool, one for every member,
   or one for a named member, in cost at list price and hours Claude worked. Each agent counts what its session spent
   since it joined the pool, from its own meta (kept in `~/.tonton/pool-spend.json`, so a restart does not reset it), and
@@ -253,8 +260,9 @@ Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safe
   tools refuse to hand out work while the pool is paused.
 - **Audit log.** The relay writes a line, in clear, for what it enforces: `created`, `joined`, `left`, `kicked`, `role`,
   `owner`, `rotated`, `invite_created`, `invite_revoked`, `session_joined`, `session_left`, `paused`, `resumed`,
-  `stopped`, `rules_proposed`, `rules_accepted`, `budgets_set`. Each line has who, when, the member or session it was
-  about, and the revision. It says nothing about what a task, a rule or a budget holds: those stay sealed. The latest
+  `stopped`, `rules_proposed`, `rules_accepted`, `budgets_set`, and for pool machines `machine_added`, `machine_removed`,
+  `machine_stopped`, `machine_started` and `dispatch_set`. Each line has who, when, the member, session or machine it
+  was about, and the revision. It says nothing about what a task, a rule or a budget holds: those stay sealed. The latest
   lines come with the snapshot, new ones as `pool_audit`; 5000 per pool are kept.
 
 ## The notch

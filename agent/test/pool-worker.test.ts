@@ -342,6 +342,30 @@ describe('a pool machine at work', () => {
     expect(running.work.running(poolId)).toEqual([])
   })
 
+  test('stopped, the machine ends its sessions and gives their tasks back uncounted; it takes none until started again', async () => {
+    const id = await dispatch('Orders page')
+    await eventually(() => taskOf(id)?.task?.assignee, 'the task with its session')
+    expect(watch.stopMachine(poolId, machine.machineId)).toBe(true)
+    const back = await eventually(() => taskOf(id)?.task?.state === 'todo' && taskOf(id), 'the task back')
+    // Said by whichever the machine heard first: its session taken out by the relay, or itself stopped.
+    expect(back.task?.summary).toContain('was stopped.')
+    expect(back.task?.attempts).toBeUndefined()
+    expect((sessions.get(`ses_${id}`) as FakeSession).alive).toBe(false)
+    // Stopped, it takes nothing dispatched to it.
+    const waiting = await dispatch('Invoices page')
+    await running.work.settled()
+    await Bun.sleep(300)
+    expect(launched.some(l => l.taskId === waiting)).toBe(false)
+    // Started again, it does.
+    expect(watch.stopMachine(poolId, machine.machineId, false)).toBe(true)
+    await eventually(() => taskOf(waiting)?.task?.assignee, 'the task taken once started again')
+    // Its slot free again for what follows.
+    watch.stopMachine(poolId, machine.machineId)
+    await eventually(() => taskOf(waiting)?.task?.state === 'todo', 'given back again')
+    watch.stopMachine(poolId, machine.machineId, false)
+    await eventually(() => state()?.machines?.[0] && !state()?.machines?.[0]?.stopped, 'started again')
+  })
+
   test('taken out of the pool, the machine ends its sessions', async () => {
     const id = await dispatch('Settings page')
     await eventually(() => taskOf(id)?.task?.assignee, 'the task with its session')

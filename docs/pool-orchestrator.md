@@ -134,7 +134,8 @@ This pool runs on autopilot: members put whole machines in it, and the control l
   capacity; by its tool or its owner's `takes`, simple tasks go to OpenCode machines first and large ones never to a
   machine that takes simple ones only; the task's area first; a task waits for its `depends_on`; a Claude Code machine
   whose account's plan runs out before the task would be done does not get it; nothing goes past a member's or the
-  pool's budget. One change at a time, over the task's revision.
+  pool's budget; a stopped machine gets nothing, and what it held goes back as it was, uncounted. One change at a time,
+  over the task's revision.
 - **What it gives back.** A task whose machine left the pool or stayed offline for two minutes, that its machine did
   not start within fifteen minutes (cloning a large repository comes first), whose session left the pool, or that has
   not moved for 30 minutes while its session did no work either goes back to the board with why, and is handed out

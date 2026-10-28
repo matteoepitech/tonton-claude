@@ -54,7 +54,7 @@ export function failedTask(task: PoolTask, why: string): PoolTask {
 }
 
 /** Back on the board as it was, for another machine: nothing failed. */
-function freedTask(task: PoolTask, why: string): PoolTask {
+export function freedTask(task: PoolTask, why: string): PoolTask {
   const { machine: _machine, assignee: _assignee, ...rest } = task
   return { ...rest, summary: why, state: 'todo' }
 }
@@ -118,6 +118,12 @@ export class PoolWorker {
     const before = this.pools.state(poolId)
     const account = this.pools.account(poolId)
     if (!before || !account) return
+    const me = before.machines?.find(machine => machine.machine === this.pools.machineId)
+    if (me?.stopped) {
+      // Stopped by its owner or an admin: its sessions end, their tasks go back, and it takes none until started again.
+      for (const slot of mine) await this.giveBack(slot, `${this.options.machineName} was stopped.`)
+      return
+    }
     for (const slot of mine) await this.follow(slot, before, account)
     // Following them may have put tasks back: dispatching reads the pool as it is now.
     const state = this.pools.state(poolId) ?? before
@@ -241,6 +247,16 @@ export class PoolWorker {
     this.slots.delete(key(slot.poolId, slot.taskId))
     rmSync(join(this.folder, `${slot.poolId}-${slot.taskId}.json`), { force: true })
     log('pool session ended', { pool: slot.poolId, task: slot.taskId })
+  }
+
+  /** Ends the slot and puts its task back on the board as it was, uncounted: nothing failed. */
+  private async giveBack(slot: Slot, why: string) {
+    this.end(slot)
+    const latest = this.latest(slot.poolId, slot.taskId)
+    const account = this.pools.account(slot.poolId)
+    if (!latest?.task || !account || !this.isOurs(latest.task, account)) return
+    if (latest.task.state === 'done' || latest.task.state === 'review') return
+    await this.pools.putTask(slot.poolId, latest, freedTask(latest.task, why))
   }
 
   /** The task back on the board, or blocked once it failed too often, unless it moved on meanwhile. */

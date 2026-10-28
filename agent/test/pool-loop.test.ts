@@ -273,6 +273,22 @@ describe('the control loop', () => {
     expect(fresh.get().tasks[0].task?.state).toBe('assigned')
   })
 
+  test('a stopped machine gets nothing, and what it held goes elsewhere as it was, uncounted', async () => {
+    const stopped = { ...worker, stopped: true }
+    expect(machineCandidates(pool([stopped], []), { size: 'large' })).toEqual([])
+    expect(whyNoMachine(pool([stopped], []), { size: 'large' })).toBe('every machine that takes it is stopped')
+    const on = { account: 'memberacct01', machine: 'machinework1' }
+    const held = item('task0001api', big('API', { state: 'in_progress', machine: on, attempts: 1 }))
+    const fake = fakePools(pool([stopped], [held]), () => T0)
+    await look(fake, new DispatchLoop(fake.pools, { now: () => T0 }))
+    expect(fake.get().tasks[0].task).toMatchObject({ state: 'todo', attempts: 1, summary: 'Linux was stopped.' })
+    expect(fake.events[0]).toEqual({
+      kind: 'retried',
+      taskId: 'task0001api',
+      text: 'task0001api (API) went back to the board: Linux was stopped.',
+    })
+  })
+
   test('when every task is done it says so, with what waits to be merged, and stops the dispatch', async () => {
     const done = [
       item('task0001api', big('API', { state: 'done', branch: 'pool/task0001api' })),

@@ -166,6 +166,8 @@ public struct PoolMachineWire: Codable, Equatable, Sendable {
     public let online: Bool
     /// Its agent service took the order. Online but never ready: its agent is older.
     public let ready: Bool
+    /// Its owner or an admin stopped it: it takes no work until one of them starts it again. Nil: it works.
+    public var stopped: Bool? = nil
 }
 
 /// Whether the pool's control loop hands out tasks, sealed with the pool key.

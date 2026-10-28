@@ -400,6 +400,8 @@ export interface PoolMachine {
   online: boolean
   /** Its agent service took the order: it starts sessions for the pool. Online but not ready: its agent is older. */
   ready: boolean
+  /** Its owner or an admin stopped it: it takes no work until one of them starts it again. */
+  stopped?: boolean
 }
 
 /** The pool's rules or budgets as last set, opened; `value` is null when the blob does not open. */
@@ -649,6 +651,7 @@ export class PoolVault {
       addedAt,
       online,
       ready,
+      ...(machine.stopped ? { stopped: true } : {}),
       profile: await this.read(machine.profile, decodePoolMachineProfile),
     }
   }

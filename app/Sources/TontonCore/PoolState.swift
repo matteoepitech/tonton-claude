@@ -41,6 +41,8 @@ public struct PoolState: Equatable, Sendable {
         public let online: Bool
         /// Its agent service took the order. Online but never ready: its agent is older.
         public let ready: Bool
+        /// Its owner or an admin stopped it: its pool sessions ended, and it takes no work until started again.
+        public var stopped = false
 
         public var id: String { machine }
     }
@@ -252,7 +254,7 @@ public struct PoolState: Equatable, Sendable {
         Machine(
             account: wire.account, machine: wire.machine, addedAt: wire.addedAt,
             profile: vault.open(wire.profile, as: PoolMachineProfile.self),
-            online: wire.online, ready: wire.ready)
+            online: wire.online, ready: wire.ready, stopped: wire.stopped == true)
     }
 
     /// The machines of one member, such as this account's own in Settings › Machines.
