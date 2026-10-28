@@ -17,9 +17,11 @@ import {
 } from './pool-keys'
 import { parsePoolInvite, poolInviteLink } from './pool-link'
 import { sealPoolMachineOrder } from './pool-machines'
+import { PLAN_ACCEPTED, pendingPlan } from './pool-plan'
 import type {
   PoolAppMessage,
   PoolDispatch,
+  PoolEventBody,
   PoolInfo,
   PoolMachineProfile,
   PoolMachineRef,
@@ -259,6 +261,18 @@ export class PoolWatch {
     if (!opened?.vault || !opened.state) return false
     const rev = opened.state.dispatch?.rev ?? 0
     return this.options.link.sendPool({ t: 'pool_dispatch', poolId, rev, blob: await opened.vault.seal(dispatch) })
+  }
+
+  /**
+   * Owner and admins: accepts the plan the orchestrator proposed (shared/pool-plan.ts). The dispatch starts, then the
+   * event says who accepted it, which the orchestrator hears and which takes the card off every member's page.
+   */
+  async acceptPlan(poolId: string): Promise<boolean> {
+    const opened = this.opened.get(poolId)
+    if (!opened?.vault || !opened.state || !pendingPlan(opened.state)) return false
+    if (!(await this.setDispatch(poolId, { on: true, note: 'Plan accepted.' }))) return false
+    const event: PoolEventBody = { kind: PLAN_ACCEPTED, text: 'Accepted the plan: the dispatch is on.' }
+    return this.options.link.sendPool({ t: 'pool_event', poolId, id: newPoolItemId(), blob: await opened.vault.seal(event) })
   }
 
   // MARK: Invites and members

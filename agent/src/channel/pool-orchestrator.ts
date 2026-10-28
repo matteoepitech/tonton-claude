@@ -8,8 +8,18 @@
 import { newPoolItemId, overBudget, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
 import { countdown, FINAL_CHECKLIST, type TimeMark, timeMarks, timeNotice } from '../../../shared/pool-hackathon'
 import { isModelTier, routeView } from '../../../shared/pool-model'
-import type { PoolArea, PoolDispatch, PoolNotes, PoolNotesSection, PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
-import { DISPATCH_TOOLS, dispatching, LOOP_EVENTS, machinesView, nextDispatch } from './pool-dispatch'
+import { MAX_PLAN_TASKS, PLAN_ACCEPTED, PLAN_PROPOSED } from '../../../shared/pool-plan'
+import type {
+  PoolArea,
+  PoolDispatch,
+  PoolEventBody,
+  PoolNotes,
+  PoolNotesSection,
+  PoolPlanProposal,
+  PoolTask,
+  PoolTaskSize,
+} from '../../../shared/pool-protocol'
+import { DISPATCH_TOOLS, dispatching, LOOP_EVENTS, machineCandidates, machinesView, nextDispatch } from './pool-dispatch'
 import { expectedHours, limitsView, nearLimit, shortOfTime } from './pool-limits'
 import { landed, mergeQueue, type PoolMerger, TASK_MERGE_TOOL } from './pool-merge'
 import { REVIEW_AREA, REVIEW_ASSIGN_TOOL } from './pool-review'
@@ -104,7 +114,7 @@ export interface PoolOps {
   /** Turns the control loop on or off over revision `rev` (docs/pool-autopilot.md). */
   putDispatch(poolId: string, rev: number, dispatch: PoolDispatch): Promise<string | null>
   message(poolId: string, to: { account: string; session: string }, text: string): Promise<string | null>
-  event(poolId: string, kind: string, taskId: string | undefined, text: string | undefined): Promise<void>
+  event(poolId: string, kind: string, taskId: string | undefined, text: string | undefined, extra?: Partial<PoolEventBody>): Promise<void>
   descriptions(state: PoolState): Map<string, SessionDescription>
   who(state: PoolState, account: string, session: string | null): string
 }
@@ -259,6 +269,28 @@ export function waitingFor(state: PoolState, task: PoolTask): string[] {
   return (task.dependsOn ?? []).filter(id => state.tasks.find(t => t.id === id)?.task?.state !== 'done')
 }
 
+/**
+ * Where each task to do starts once the plan is accepted: what the control loop would do now, task after task, each
+ * one taking its machine's slot for the next. A task that waits for another, or finds no free machine, starts later.
+ */
+export function planPreview(state: PoolState, now = Date.now()): PoolPlanProposal {
+  let ahead = state
+  const tasks: PoolPlanProposal['tasks'] = []
+  for (const item of state.tasks) {
+    const task = item.task
+    if (task?.state !== 'todo' || tasks.length >= MAX_PLAN_TASKS) continue
+    const machine = waitingFor(ahead, task).length ? undefined : machineCandidates(ahead, task, now)[0]
+    if (!machine) {
+      tasks.push({ id: item.id })
+      continue
+    }
+    const ref = { account: machine.account, machine: machine.machine }
+    tasks.push({ id: item.id, machine: ref })
+    ahead = { ...ahead, tasks: ahead.tasks.map(t => (t.id === item.id ? { ...t, task: { ...task, state: 'assigned', machine: ref } } : t)) }
+  }
+  return { tasks }
+}
+
 /** Active tasks whose paths overlap this one's: two sessions on the same files. */
 export function overlapping(state: PoolState, id: string, paths: string[]): PoolTaskItem[] {
   if (!paths.length) return []
@@ -307,6 +339,8 @@ export class PoolOrchestrator {
         return this.reassign(poolId, state, args)
       case 'review_assign':
         return this.assignReview(poolId, state, args)
+      case 'plan_propose':
+        return this.propose(poolId, state, args)
       case 'task_merge':
         return this.merger()?.call(poolId, state, args) ?? "This session's agent does not know its folder: it cannot merge."
     }
@@ -401,6 +435,27 @@ export class PoolOrchestrator {
     if (result) return result
     await this.ops.event(poolId, 'plan', undefined, `goal, contracts${areas.length ? `, ${areas.length} areas` : ''}`)
     return 'The plan is in the notes. Now write the tasks with task_create: whole features or areas, each with its criteria.'
+  }
+
+  /** Shows the plan to the user: the tasks to do, where each one starts once an admin accepts it. */
+  private async propose(poolId: string, state: PoolState, args: Args): Promise<string> {
+    const summary = str(args.summary)
+    if (!summary) return 'Give the plan in a few sentences for the user: what gets built, in what order, and who does what.'
+    if (dispatching(state)) return 'The dispatch is already on: the work started. Tell the user what changed in the chat instead.'
+    if (!state.tasks.some(item => item.task?.state === 'todo')) return 'There is no task to do: write them with task_create first.'
+    const proposal = planPreview(state)
+    await this.ops.event(poolId, PLAN_PROPOSED, undefined, summary.slice(0, 2000), { proposal })
+    const starting = proposal.tasks.filter(task => task.machine).length
+    const machines = new Set(proposal.tasks.flatMap(task => (task.machine ? [task.machine.machine] : []))).size
+    return [
+      `The plan is on the pool's page and in the notch with an Accept button: ${starting} of ${proposal.tasks.length} tasks start on ${machines} machine${machines === 1 ? '' : 's'} as soon as an admin accepts it, the others once what they wait for is done.`,
+      starting
+        ? ''
+        : `Nothing could start now: ${state.machines?.length ? 'every machine is offline, busy or out of time on its plan' : 'the pool has no machines yet'}.`,
+      'Wait: the dispatch starts on its own when it is accepted, and you will be told. Do not call dispatch_start unless the user asks for it here.',
+    ]
+      .filter(Boolean)
+      .join(' ')
   }
 
   private async create(poolId: string, state: PoolState, args: Args): Promise<string> {
@@ -675,9 +730,21 @@ export class PoolOrchestrator {
     const since = this.loopSeen.get(poolId) ?? Number.POSITIVE_INFINITY
     this.loopSeen.set(poolId, state.events.at(-1)?.seq ?? 0)
     if (first || !lead) return []
-    return state.events
-      .filter(e => e.seq > since && e.machine === lead.machine && e.account === lead.account && LOOP_EVENTS.has(e.body?.kind ?? ''))
-      .map(e => [`loop/${e.seq}`, e.body?.text ?? e.body?.kind ?? ''] as [string, string])
+    // An owner or an admin accepted the plan from the website or the notch: the dispatch started with it.
+    const leads = (account: string) => ['owner', 'admin'].includes(state.members.find(m => m.account === account)?.role ?? '')
+    return state.events.flatMap((e): [string, string][] => {
+      if (e.seq <= since) return []
+      if (e.body?.kind === PLAN_ACCEPTED && !e.machine && leads(e.account)) {
+        return [
+          [
+            `loop/${e.seq}`,
+            `${this.ops.who(state, e.account, null)} accepted the plan: the dispatch is on, and the control loop hands out the tasks.`,
+          ],
+        ]
+      }
+      if (e.machine !== lead.machine || e.account !== lead.account || !LOOP_EVENTS.has(e.body?.kind ?? '')) return []
+      return [[`loop/${e.seq}`, e.body?.text ?? e.body?.kind ?? '']]
+    })
   }
 
   /**

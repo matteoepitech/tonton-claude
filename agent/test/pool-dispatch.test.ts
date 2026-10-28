@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import type { PoolMachine, PoolPostItem, PoolSession, PoolState, PoolTaskItem } from '../../shared/pool'
 import type { PoolDispatch, PoolEventBody, PoolTask } from '../../shared/pool-protocol'
 import { AUTOPILOT_GUIDE } from '../src/channel/pool-dispatch'
-import { type PoolOps, PoolOrchestrator } from '../src/channel/pool-orchestrator'
+import { type PoolOps, PoolOrchestrator, planPreview } from '../src/channel/pool-orchestrator'
 
 const ADMIN = 'adminaccount'
 const LEAD_MACHINE = 'machinelead1'
@@ -59,6 +59,7 @@ function pool(fields: Partial<PoolState> = {}): PoolState {
 function orchestrator() {
   const dispatches: { rev: number; dispatch: PoolDispatch }[] = []
   const notices: string[] = []
+  const posted: PoolEventBody[] = []
   const ops: PoolOps = {
     putTask: async () => null,
     putNotes: async () => null,
@@ -67,11 +68,13 @@ function orchestrator() {
       return null
     },
     message: async () => null,
-    event: async () => {},
+    event: async (_pool, kind, taskId, text, extra) => {
+      posted.push({ ...extra, kind, ...(taskId ? { taskId } : {}), ...(text ? { text } : {}) })
+    },
     descriptions: () => new Map(),
     who: (_state, _account, session) => session ?? 'a member',
   }
-  return { orchestrator: new PoolOrchestrator(ops, text => notices.push(text)), dispatches, notices }
+  return { orchestrator: new PoolOrchestrator(ops, text => notices.push(text)), dispatches, notices, posted }
 }
 
 const event = (seq: number, body: PoolEventBody, author: Partial<PoolPostItem<PoolEventBody>> = {}): PoolPostItem<PoolEventBody> => ({
@@ -131,6 +134,89 @@ describe('starting and stopping the dispatch', () => {
         running: [{ id: 'task0001api', title: 'API', state: 'in_progress' }],
       },
     ])
+  })
+})
+
+describe('the plan the orchestrator proposes', () => {
+  const todo = (id: string, fields: Partial<PoolTask> = {}): PoolTaskItem => ({
+    id,
+    rev: 1,
+    updatedAt: 'x',
+    account: ADMIN,
+    session: 'ses_lead',
+    task: { title: id, state: 'todo', criteria: ['a', 'b'], ...fields },
+  })
+  const laptop: PoolMachine = {
+    ...studio,
+    machine: 'machinelapt1',
+    profile: { ...studio.profile, name: 'Laptop', capacity: 1 },
+  } as PoolMachine
+
+  test('each task where the loop would start it now, slots taken one after the other; what waits starts later', () => {
+    const state = pool({
+      machines: [studio, laptop],
+      tasks: [
+        todo('task0001api'),
+        todo('task0002web'),
+        todo('task0003ops'),
+        todo('task0004e2e', { dependsOn: ['task0001api'] }),
+        todo('task0005more'),
+      ],
+    })
+    expect(planPreview(state).tasks).toEqual([
+      { id: 'task0001api', machine: { account: 'memberacct01', machine: 'machinestud1' } },
+      { id: 'task0002web', machine: { account: 'memberacct01', machine: 'machinestud1' } },
+      { id: 'task0003ops', machine: { account: 'memberacct01', machine: 'machinelapt1' } },
+      // It waits for the API.
+      { id: 'task0004e2e' },
+      // Every slot is taken.
+      { id: 'task0005more' },
+    ])
+  })
+
+  test('plan_propose posts it for the user, never starts the dispatch, and says what to wait for', async () => {
+    const { orchestrator: o, dispatches, posted } = orchestrator()
+    const call = (state: PoolState, args = {}) => o.call('plan_propose', state.id, state, lead, args)
+    expect(await call(pool({ tasks: [todo('task0001api')] }))).toContain('Give the plan')
+    expect(await call(pool(), { summary: 'A shop.' })).toContain('no task to do')
+    const on = { rev: 1, updatedAt: 'x', account: ADMIN, session: null, value: { on: true } }
+    expect(await call(pool({ tasks: [todo('task0001api')], dispatch: on }), { summary: 'A shop.' })).toContain('already on')
+    const answer = await call(pool({ tasks: [todo('task0001api'), todo('task0002web')] }), { summary: 'The API, then the shop.' })
+    expect(answer).toContain('2 of 2 tasks start on 1 machine')
+    expect(answer).toContain('Do not call dispatch_start')
+    expect(posted).toEqual([
+      {
+        kind: 'plan_proposed',
+        text: 'The API, then the shop.',
+        proposal: {
+          tasks: [
+            { id: 'task0001api', machine: { account: 'memberacct01', machine: 'machinestud1' } },
+            { id: 'task0002web', machine: { account: 'memberacct01', machine: 'machinestud1' } },
+          ],
+        },
+      },
+    ])
+    expect(dispatches).toEqual([])
+    expect(await call(pool({ tasks: [todo('task0001api')], machines: [] }), { summary: 'A shop.' })).toContain('no machines yet')
+  })
+
+  test('the orchestrator hears when an owner or an admin accepts it, not when anyone else says so', () => {
+    const { orchestrator: o, notices } = orchestrator()
+    const members: PoolState['members'] = [
+      { account: ADMIN, role: 'owner', joinedAt: 'x', profile: { name: 'Ana' }, publicKeys: [] },
+      { account: 'memberacct01', role: 'member', joinedAt: 'x', profile: { name: 'Bob' }, publicKeys: [] },
+    ]
+    const first = pool({ members })
+    o.watch(first.id, first, lead)
+    const accepted = pool({
+      members,
+      events: [
+        event(1, { kind: 'plan_accepted' }, { machine: undefined, account: 'memberacct01' }),
+        event(2, { kind: 'plan_accepted' }, { machine: undefined }),
+      ],
+    })
+    o.watch(accepted.id, accepted, lead)
+    expect(notices).toEqual(['a member accepted the plan: the dispatch is on, and the control loop hands out the tasks.'])
   })
 })
 

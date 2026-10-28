@@ -7,16 +7,17 @@
 // task's area first, the account's limits and the pool's budgets). What it does goes to the pool as events, which the
 // orchestrator's agent turns into notices. When every task is done, it says so and stops.
 
-import { overBudget, type PoolMachine, type PoolState, type PoolTaskItem } from '../../../shared/pool'
-import { planRank } from '../../../shared/pool-machines'
-import type { PoolTask, PoolTaskSize } from '../../../shared/pool-protocol'
-import { dispatching, machineName } from '../channel/pool-dispatch'
-import { accountLimits, expectedHours, shortOfTime } from '../channel/pool-limits'
+import type { PoolMachine, PoolState, PoolTaskItem } from '../../../shared/pool'
+import type { PoolTask } from '../../../shared/pool-protocol'
+import { dispatching, machineCandidates, machineName, whyNoMachine } from '../channel/pool-dispatch'
 import { mergeQueue } from '../channel/pool-merge'
 import { STALL_MS, waitingFor } from '../channel/pool-orchestrator'
 import { log } from '../log'
 import type { MachinePools } from './pool-machines'
 import { failedTask, freedTask, MAX_ATTEMPTS } from './pool-worker'
+
+/** Where the loop hands a task: in agent/src/channel/pool-dispatch.ts, which the orchestrator's plan works out with too. */
+export { machineCandidates, whyNoMachine }
 
 export const LOOP_MS = 10_000
 /** A machine offline this long gives its tasks back: a short loss of the network does not. */
@@ -43,63 +44,6 @@ const ACTIVE = new Set(['assigned', 'in_progress', 'blocked'])
 export interface LoopOptions {
   now?: () => number
   stallMs?: number
-}
-
-/** What a machine takes: its owner's choice, else by its tool, as for sessions. */
-const kindOf = (machine: PoolMachine): PoolTaskSize => machine.profile?.takes ?? (machine.profile?.tool === 'opencode' ? 'simple' : 'large')
-
-/** How many sessions the machine runs for the pool's tasks now. */
-const held = (state: PoolState, machine: string) =>
-  state.tasks.filter(item => item.task?.machine?.machine === machine && ACTIVE.has(item.task.state)).length
-
-/**
- * The machines that may take the task, best first: online, their service ready, a free slot, within their member's and
- * the pool's budgets, with time left on their account's plan for it (Claude Code), and of the kind the task needs. A
- * simple task goes to the machines that take simple tasks first, OpenCode ones before the others; a large one never
- * goes to a machine that takes simple tasks only. Within that, a machine of the task's area, then by its account's plan
- * (a large task to the largest, a simple one to the smallest), then the freest.
- */
-export function machineCandidates(state: PoolState, task: Pick<PoolTask, 'area' | 'size' | 'hours'>, now = Date.now()): PoolMachine[] {
-  const size = task.size ?? 'large'
-  const rank = (kind: PoolTaskSize) => (size === 'simple' ? { simple: 0, large: 2 }[kind] : { large: 0, simple: 9 }[kind])
-  return (state.machines ?? [])
-    .filter(machine => machine.online && machine.ready && machine.profile && !machine.stopped)
-    .filter(machine => !overBudget(state, machine.account))
-    .map(machine => ({ machine, kind: kindOf(machine), free: (machine.profile?.capacity ?? 0) - held(state, machine.machine) }))
-    .filter(c => c.free > 0 && rank(c.kind) < 9)
-    .filter(c => c.machine.profile?.tool === 'opencode' || !shortOfTime(accountLimits(state, c.machine.account), expectedHours(task), now))
-    .sort((a, b) => {
-      const byKind = rank(a.kind) - rank(b.kind)
-      if (byKind) return byKind
-      const tool = (c: typeof a) => (size === 'simple' && c.machine.profile?.tool === 'opencode' ? 0 : 1)
-      const area = (c: typeof a) => (task.area && c.machine.profile?.areas?.includes(task.area) ? 0 : 1)
-      // A large task to the largest plan, a simple one to the smallest, which keeps the large plans for large tasks.
-      const plan = (c: typeof a) => (size === 'simple' ? -planRank(c.machine.profile) : planRank(c.machine.profile))
-      return (
-        tool(a) - tool(b) || area(a) - area(b) || plan(a) - plan(b) || b.free - a.free || a.machine.addedAt.localeCompare(b.machine.addedAt)
-      )
-    })
-    .map(c => c.machine)
-}
-
-/** Why no machine takes the task now, for the orchestrator. */
-export function whyNoMachine(state: PoolState, task: Pick<PoolTask, 'size' | 'hours'>): string {
-  const machines = (state.machines ?? []).filter(machine => machine.profile)
-  if (!machines.length) return 'the pool has no machines'
-  const size = task.size ?? 'large'
-  const kinds = machines.filter(machine => size === 'simple' || kindOf(machine) === 'large')
-  if (!kinds.length) return 'every machine of the pool takes simple tasks only'
-  const working = kinds.filter(machine => !machine.stopped)
-  if (!working.length) return 'every machine that takes it is stopped'
-  const ready = working.filter(machine => machine.online && machine.ready)
-  if (!ready.length) return 'no machine that takes it is online with an agent that runs pool machines'
-  const spent = ready.map(machine => overBudget(state, machine.account))
-  if (spent.every(Boolean)) return (spent[0] as string).replace(/^./, first => first.toLowerCase())
-  const free = ready.filter(
-    machine => (machine.profile?.capacity ?? 0) > held(state, machine.machine) && !overBudget(state, machine.account),
-  )
-  if (!free.length) return 'every machine that takes it is busy'
-  return `no free machine has time left on its plan for it (${expectedHours(task)} h)`
 }
 
 export class DispatchLoop {

@@ -87,10 +87,30 @@ rules, or by `full`).
   and guide. Since it is the admin's session, sealed with the admin's account key, only the admin's account reads it and
   writes to it: the website's chat is that session's conversation. Nobody else can drive the orchestrator.
 - The admin talks to it in plain words: "build this app" → it writes the plan (notes: contracts, areas) and creates the
-  tasks with `plan_create` and `task_create`, without assigning them. "Go" → it calls `dispatch_start`. "Pause" →
-  `dispatch_stop`. It answers questions about the pool from `pool_overview`.
+  tasks with `plan_create` and `task_create`, without assigning them, then proposes the plan (`plan_propose`, below).
+  The admin accepts it with a button and the work starts. "Pause" → `dispatch_stop`. It answers questions about the pool
+  from `pool_overview`.
+- Its machine takes tasks too, in sessions of their own, up to its capacity: the orchestrator plans, merges and answers,
+  and the same computer works alongside the others.
 - It merges finished branches into main (`git` through its own session, on the admin's machine), keeps main working, and
   re-plans when tasks fail.
+
+## The plan
+
+Once the tasks are written, the orchestrator calls `plan_propose` with the plan in a few sentences. Its agent works out
+where each task starts, with the control loop's own rules (`planPreview` in `agent/src/channel/pool-orchestrator.ts`):
+task after task, each taking a free slot of the machine that fits it, the others later, once what they wait for is done
+or a slot frees. It posts a `plan_proposed` event, sealed like the rest, with that `proposal`
+(`PoolPlanProposal`, `shared/pool-plan.ts` and `TontonCore/PoolPlan.swift`).
+
+- The pool's page and the notch, above the orchestrator's conversation, show it as a card: the orchestrator's words,
+  each machine with its plan (Claude Max 20x, Pro, OpenCode) and the tasks it starts, and what comes later.
+- The owner and admins **Accept and start**: the dispatch goes on, then a `plan_accepted` event says who accepted it.
+  The orchestrator is told, and the card goes away for everyone. Others read "Waiting for the owner or an admin".
+- To change it, the admin tells the orchestrator in the chat; it changes the tasks and proposes again. Only the latest
+  proposal of the pool's orchestrator shows, as the relay attests its sender, and only while the dispatch is off and
+  nothing since says the work started (`plan_accepted`, `dispatched`, `dispatch_done`).
+- The orchestrator never starts the dispatch itself after proposing, unless the admin asks it to in the chat.
 
 ## The control loop
 
@@ -179,9 +199,9 @@ It starts:
 - a pool on that repository, with the three machines in it and Lead chosen as the orchestrator machine.
 
 From there, nobody moves a card. The orchestrator session writes the plan (the goal, the contracts, the areas) and four
-tasks, one of which waits for another, then starts the dispatch. The control loop hands each task to the machine that
-fits it; each machine starts a session per task in its own worktree, which claims it, commits on its branch, pushes it
-and finishes it. When every task is done, the loop says so and stops. The terminal shows the board as it moves.
+tasks, one of which waits for another, then proposes it: accept it on the website, or the demo does after a minute. The
+control loop hands each task to the machine that fits it; each machine starts a session per task in its own worktree,
+which claims it, commits on its branch, pushes it and finishes it. When every task is done, the loop says so and stops. The terminal shows the board as it moves.
 
 The sessions are stand-ins for Claude Code (`test/stand-in-claude.ts`) that run the real channel and the real pool
 tools, so the demo spends no tokens: what you watch is the autopilot itself, not what Claude writes. To see it on the

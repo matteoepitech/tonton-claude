@@ -327,6 +327,8 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
 
     /// `limits` events: the account's plan usage, from a Claude Code session's agent.
     public var limits: PoolLimits?
+    /// `plan_proposed` events: the plan the orchestrator asks an admin to accept (PoolPlan.swift).
+    public var proposal: PoolPlanProposal?
 }
 
 /// Auto-approve rules proposed to the pool's sessions. They apply only where a machine owner accepted them.
