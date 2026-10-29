@@ -2,8 +2,9 @@
 // pool's orchestrator plans the project in the shared notes, writes feature-sized tasks and hands each one to the session
 // that fits it, by area and by what it takes: simple, well-bounded tasks to OpenCode sessions first, the features to
 // Claude Code sessions, as each session's owner may override. Its agent also watches the pool and tells it when to
-// re-plan: a task blocked or finished, a session gone, a task that stopped moving. Finished branches are merged into
-// main through `task_merge` (pool-merge.ts). Claude Code and OpenCode alike.
+// re-plan: a task blocked or finished, a session gone, a task that stopped moving, a question nobody answered; it nudges
+// the session first, which costs the orchestrator no tokens (pool-team.ts). Finished branches are merged into main
+// through `task_merge` (pool-merge.ts). Claude Code and OpenCode alike.
 
 import { newPoolItemId, overBudget, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
 import { countdown, FINAL_CHECKLIST, type TimeMark, timeMarks, timeNotice } from '../../../shared/pool-hackathon'
@@ -23,6 +24,7 @@ import { DISPATCH_TOOLS, dispatching, LOOP_EVENTS, machineCandidates, machinesVi
 import { expectedHours, limitsView, nearLimit, shortOfTime } from './pool-limits'
 import { landed, mergeQueue, type PoolMerger, TASK_MERGE_TOOL } from './pool-merge'
 import { REVIEW_AREA, REVIEW_ASSIGN_TOOL } from './pool-review'
+import { unanswered, waitingFor } from './pool-team'
 import type { PoolToolSpec, SessionDescription } from './pool-work'
 
 const POOL = { type: 'string', description: 'The pool, by id or name. Only needed when the session is in more than one.' } as const
@@ -69,7 +71,15 @@ export const ORCHESTRATOR_TOOLS: PoolToolSpec[] = [
         description:
           'How long it should take, in hours (default 1 for small, 3 for large): a session whose plan runs out sooner does not get it.',
       },
-      depends_on: { type: 'array', description: 'Ids of the tasks it waits for.' },
+      depends_on: {
+        type: 'array',
+        description: 'Ids of the tasks it cannot start without: it starts once their work is merged into main.',
+      },
+      builds_on: {
+        type: 'array',
+        description:
+          'Ids of the tasks it uses but can start before, against the contracts: it starts at once, asks their sessions what it needs, and is told when their work is in main. Prefer it to depends_on.',
+      },
       paths: { type: 'array', description: "The files and folders it works in. Default: its area's paths." },
       model: {
         type: 'string',
@@ -264,10 +274,8 @@ export function refusal(
   return null
 }
 
-/** The tasks it waits for that are not done yet. */
-export function waitingFor(state: PoolState, task: PoolTask): string[] {
-  return (task.dependsOn ?? []).filter(id => state.tasks.find(t => t.id === id)?.task?.state !== 'done')
-}
+/** What a task waits for: in pool-team.ts, which the control loop and the briefs read too. */
+export { waitingFor }
 
 /**
  * Where each task to do starts once the plan is accepted: what the control loop would do now, task after task, each
@@ -310,6 +318,8 @@ export class PoolOrchestrator {
   private readonly loopSeen = new Map<string, number>()
   /** What each task looked like last time, per pool, to notice what changed. */
   private readonly last = new Map<string, Map<string, { state: string; session?: string; online?: boolean }>>()
+  /** When each session holding a task was first seen doing nothing: idle, waiting for input or for a permission. */
+  private readonly quietSince = new Map<string, number>()
 
   constructor(
     private readonly ops: PoolOps,
@@ -397,7 +407,9 @@ export class PoolOrchestrator {
           : {}),
         notes: state.notes ? { rev: state.notes.rev, sections: Object.keys(state.notes.sections ?? {}), areas: state.notes.areas } : null,
         sessions,
-        todo: live.filter(t => t.task?.state === 'todo').map(t => ({ ...view(t), waitsFor: waitingFor(state, t.task as PoolTask) })),
+        todo: live
+          .filter(t => t.task?.state === 'todo')
+          .map(t => ({ ...view(t), waitsFor: waitingFor(state, t.task as PoolTask), buildsOn: t.task?.buildsOn })),
         blocked: live.filter(t => t.task?.state === 'blocked').map(t => ({ ...view(t), why: t.task?.summary })),
         stalled: live.filter(t => t.task?.state === 'in_progress' && now - Date.parse(t.updatedAt) > this.stallMs).map(view),
         review: live
@@ -485,12 +497,15 @@ export class PoolOrchestrator {
       ...(paths.length ? { paths } : {}),
       ...(typeof hours === 'number' ? { hours } : {}),
       ...(strings(args.depends_on)?.length ? { dependsOn: strings(args.depends_on) } : {}),
+      ...(strings(args.builds_on)?.length ? { buildsOn: strings(args.builds_on) } : {}),
       ...(model ? { model } : {}),
     }
     const small = tooSmall(task)
     if (small) return small
     const missing = (task.dependsOn ?? []).filter(dep => !state.tasks.some(t => t.id === dep))
     if (missing.length) return `No such task to wait for: ${missing.join(', ')}. pool_tasks lists them.`
+    const unknown = (task.buildsOn ?? []).filter(dep => !state.tasks.some(t => t.id === dep))
+    if (unknown.length) return `No such task to build on: ${unknown.join(', ')}. pool_tasks lists them.`
     // Handed out in the same write when asked: the task never sits unassigned in between.
     const assign = str(args.assign)
     const picked = assign ? this.pick(state, id, task, assign === 'auto' ? undefined : assign, false) : null
@@ -628,6 +643,10 @@ export class PoolOrchestrator {
    */
   watch(poolId: string, state: PoolState, me: PoolSession, now = Date.now()) {
     if (!isOrchestrator(state, me)) return
+    // Told to a session first, by its agent rather than its Claude: it costs the orchestrator no tokens.
+    const nudges: [key: string, to: { account: string; session: string }, text: string][] = []
+    const nudgeMs = this.stallMs / 3
+    const minutes = (ms: number) => Math.round(ms / 60_000)
     let last = this.last.get(poolId)
     const first = !last
     if (!last) {
@@ -665,16 +684,19 @@ export class PoolOrchestrator {
             `Review sent task ${item.id} (${task.title}) back to ${who}: ${task.review.split('\n')[0]}`,
           ])
         if (task.state === 'done') {
+          // What waits for this task alone: free once its work is in main.
           const freed = state.tasks.filter(
-            t => t.task?.state === 'todo' && t.task.dependsOn?.includes(item.id) && !waitingFor(state, t.task).length,
+            t => t.task?.state === 'todo' && t.task.dependsOn?.includes(item.id) && !waitingFor(state, t.task).some(id => id !== item.id),
           )
           const frees = freed.length ? ` It frees ${freed.map(t => `${t.id} (${t.task?.title})`).join(', ')}` : ''
+          const start = dispatching(state) ? 'the control loop starts them' : 'assign them'
           // A branch to merge comes first: what depends on it starts from a main that has it.
-          const next = task.branch
-            ? ` Merge ${task.branch} with task_merge.${frees ? `${frees}: assign them once it is merged.` : ''}`
-            : frees
-              ? `${frees}: assign them.`
-              : ''
+          const next =
+            task.branch && task.merge?.state !== 'merged'
+              ? ` Merge ${task.branch} with task_merge.${frees ? `${frees}: ${start} once it is merged.` : ''}`
+              : frees
+                ? `${frees}: ${start}.`
+                : ''
           notices.push([
             `done/${item.id}/${item.rev}`,
             `Task ${item.id} (${task.title}) is done by ${who}: ${(task.summary ?? '').split('\n')[0]}${next}`,
@@ -704,6 +726,28 @@ export class PoolOrchestrator {
           `${who}'s 5-hour window ${short} while it holds ${item.id} (${task.title}). It was told to hand it over: reassign it with task_reassign once it has, or now.`,
         ])
       }
+      // A session that holds a task and does nothing: it may wait for an answer that never comes, or think it is done.
+      const working = holder?.online && task.assignee && (task.state === 'in_progress' || task.state === 'assigned')
+      const since = working && holder ? this.quiet(holder.session, holder.status, now) : null
+      if (holder && since !== null && now - since > nudgeMs) {
+        if (holder.status === 'permission') {
+          notices.push([
+            `permission/${item.id}/${holder.session}/${since}`,
+            `${who} has waited ${minutes(now - since)} minutes for a permission on its machine, holding ${item.id} (${task.title}): its owner answers it in the notch or on the website. Tell the user if it is theirs.`,
+          ])
+        } else {
+          nudges.push([
+            `idle/${item.id}/${holder.session}/${since}`,
+            { account: holder.account, session: holder.session },
+            `Tonton: ${item.id} (${task.title}) has had no work from you for ${minutes(now - since)} minutes. Waiting for another session? Ask it with pool_send and go on with what does not need it. Stuck? task_update blocked, with why. Finished? task_done.`,
+          ])
+          if (now - since > 2 * nudgeMs)
+            notices.push([
+              `idle-lead/${item.id}/${holder.session}/${since}`,
+              `${who} has done nothing on ${item.id} (${task.title}) for ${minutes(now - since)} minutes, even after a nudge: ask it where it stands, or reassign it.`,
+            ])
+        }
+      }
       if (task.state === 'in_progress' && !looped && now - Date.parse(item.updatedAt) > this.stallMs) {
         // Once per revision: it is said again only if the task moves, then stops again.
         notices.push([
@@ -712,13 +756,44 @@ export class PoolOrchestrator {
         ])
       }
     }
+    for (const waiting of unanswered(state, me.session, nudgeMs, now)) {
+      const asker = this.ops.who(state, waiting.from.account, waiting.from.session)
+      const asked = this.ops.who(state, waiting.to.account, waiting.to.session)
+      const text = excerpt(waiting.message.body?.text ?? '')
+      nudges.push([
+        `unanswered/${waiting.message.id}`,
+        waiting.to,
+        `Tonton: ${asker} wrote to you ${minutes(waiting.age)} minutes ago and has no answer yet: "${text}". Answer with pool_send to_session ${waiting.from.session}, even to say when you will know.`,
+      ])
+      if (waiting.age > 2 * nudgeMs)
+        notices.push([
+          `unanswered-lead/${waiting.message.id}`,
+          `${asked} has not answered ${asker} for ${minutes(waiting.age)} minutes: "${text}". Answer it yourself from the plan and the notes if you can, or find out why.`,
+        ])
+    }
     notices.push(...this.loopNotices(poolId, state, first))
     for (const [key, text] of notices) {
       if (this.told.has(`${poolId}/${key}`)) continue
       this.told.add(`${poolId}/${key}`)
       this.notify(text)
     }
+    for (const [key, to, text] of nudges) {
+      if (this.told.has(`${poolId}/${key}`)) continue
+      this.told.add(`${poolId}/${key}`)
+      this.ops.message(poolId, to, text).catch(() => {})
+    }
     this.clock(poolId, state, now)
+  }
+
+  /** Since when the session does nothing, or null while it works. */
+  private quiet(session: string, status: PoolSession['status'], now: number): number | null {
+    if (status !== 'idle' && status !== 'waiting' && status !== 'permission') {
+      this.quietSince.delete(session)
+      return null
+    }
+    const since = this.quietSince.get(session) ?? now
+    this.quietSince.set(session, since)
+    return since
   }
 
   /**
@@ -795,6 +870,12 @@ export class PoolOrchestrator {
   }
 }
 
+/** The start of a message, on one line, for a notice. */
+const excerpt = (text: string): string => {
+  const line = text.replace(/\s+/g, ' ').trim()
+  return line.length > 200 ? `${line.slice(0, 199)}…` : line
+}
+
 const str = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
 const strings = (value: unknown): string[] | undefined =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.trim() !== '').map(v => v.trim()) : undefined
@@ -808,10 +889,10 @@ export const ORCHESTRATOR_GUIDE = [
   '1. Read pool_overview and pool_notes_read first.',
   '2. Plan with plan_create before any task: the goal, then the contracts (API routes, data shapes, folder layout), the stack, the decisions, and the areas with the paths each one owns.',
   '3. Split the work into tasks one session owns from start to end: a feature, an area, hours of work, with criteria. Never single steps: a session that waits for orders every few minutes costs more than one session doing it all.',
-  '4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit.',
-  '5. Write the contracts first and mark depends_on, so the front and the back work at the same time against the contracts.',
+  "4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit. Leave the model to each machine's assessment: set model only to raise a task, or to lower a mechanical one by a tier.",
+  "5. Write the contracts first, so the front and the back work at the same time against them. Mark depends_on only for a task that cannot start at all before another one is merged. When it only uses another task's work (the front on the back's API), mark builds_on instead: both start at once, ask each other with pool_send, and are told when the other's work is in main.",
   '6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.',
-  '7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left, or the plan of its session is about to run out. Answer blockers, reassign, split, or re-plan.',
+  '7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left or does nothing even after a nudge, a question between sessions gets no answer, or the plan of its session is about to run out. Answer blockers and questions, reassign, split, or re-plan.',
   '8. Review what is done. When the pool has review sessions, a finished task goes to one of them first, and comes back to you accepted or to its author with notes; choose the reviewer with review_assign if you want. Without one, check each branch yourself.',
   '9. Merge each finished task with task_merge, in the order pool_overview lists under toMerge, with the commands that build and test the project as checks. It merges in this folder on top of the latest main, and main moves only when the checks pass; a conflict or a failing check goes back to its author, or to a new task for you to assign. Assign what depends on a task once it is merged. When main itself fails, have it fixed first.',
   '10. Do not do the tasks yourself: plan, unblock, review and merge.',

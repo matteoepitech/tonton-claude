@@ -145,16 +145,20 @@ Claude Code's `haiku`, `sonnet` and `opus`; for OpenCode, the latest model of th
 When a machine starts a task's session, its agent chooses the tier:
 
 1. The machine owner's **lock**, if any: every task runs on it, whatever else says.
-2. Else the tier the orchestrator or an admin set on the task (`task_create`'s `model`).
+2. Else the tier the orchestrator or an admin set on the task (`task_create`'s `model`), never more than one tier below
+   the task's assessment: a mechanical feature may go a tier down, a redesign never to light.
 3. Else the task's **assessment**, from what the task says, not from the tool that runs it: a feature, many criteria,
    many hours, several dependencies or parts of the code, and words for demanding work (redesign, migration, protocol,
    concurrency, debugging, security…) raise it; routine words (docs, typos, rename, translation…) and a short task lower
-   it. Plain code, so no model is asked to classify each task.
-   - **Escalation**: one tier up for each time a session failed the task itself (`setbacks`: it ended or stalled before
-     the task was done, or its branch fails main's checks), at most one tier unless the owner allows two. A machine going
+   it. A feature (a large task that is not routine work) is never light, however short: only routine work and small
+   tasks are. Plain code, so no model is asked to classify each task.
+   - **Escalation**, from this tier or the one the orchestrator set: one tier up for each time a session failed the
+     task itself (`setbacks`: it ended or stalled before the task was done, or its branch fails main's checks), at
+     most one tier unless the owner allows two. A machine going
      offline or a session that could not start is not a setback. The escalation stays with that task: the next one is
      assessed on its own.
-   - While the account is close to its plan's limit, strong becomes balanced, unless the task already failed.
+   - While the account is close to its plan's limit, strong becomes balanced, unless the task already failed or the
+     orchestrator asked for strong.
 4. The nearest tier the owner **allows**: up first, since a weaker model would fail the task, else down.
 
 The owner's choices are the machine profile's `models`, sealed in its order: `lock`, `allowed` (tiers), `tiers` (the

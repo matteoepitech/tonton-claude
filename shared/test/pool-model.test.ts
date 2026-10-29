@@ -70,7 +70,13 @@ describe('assessing a task', () => {
     const assessed = assessTask(big)
     expect(assessed.tier).toBe('strong')
     expect(assessed.reason).toBe('a feature, 5 criteria, 8 hours, built on several tasks, 3 parts of the code')
-    expect(assessTask({ ...feature, hours: 1 }).tier).toBe('light')
+    expect(assessTask({ ...feature, buildsOn: ['t1'], dependsOn: ['t2'] }).reason).toBe('a feature, built on several tasks')
+  })
+
+  test('a feature never goes to the light tier, however short; routine work and small tasks do', () => {
+    expect(assessTask({ ...feature, hours: 1 })).toEqual({ tier: 'balanced', reason: 'a feature' })
+    expect(assessTask({ ...feature, hours: 1, size: 'simple' }).tier).toBe('light')
+    expect(assessTask({ ...feature, title: 'Update the docs of the cart', hours: 1 }).tier).toBe('light')
   })
 })
 
@@ -102,6 +108,16 @@ describe('choosing the model', () => {
     expect(chosen({ task: docs, tool: 'claude', policy: { lock: 'strong', allowed: ['light'] } }).tier).toBe('strong')
     const set = chosen({ task: { ...docs, model: 'strong' }, tool: 'claude' })
     expect(set).toMatchObject({ tier: 'strong', reason: 'set to strong for this task' })
+  })
+
+  test("the task's own tier is at most one below its assessment, and climbs after a failure too", () => {
+    expect(chosen({ task: { ...feature, model: 'light' }, tool: 'claude' })).toMatchObject({ tier: 'light', model: 'haiku' })
+    const redesign = chosen({ task: { ...architecture, model: 'light' }, tool: 'claude' })
+    expect(redesign.tier).toBe('balanced')
+    expect(redesign.reason).toStartWith('set to light for this task; balanced at least for ')
+    expect(chosen({ task: { ...feature, model: 'light', setbacks: 1 }, tool: 'claude' })).toMatchObject({ tier: 'balanced', escalated: 1 })
+    // What the orchestrator asked for is not spared.
+    expect(chosen({ task: { ...feature, model: 'strong' }, tool: 'claude', spare: 'is 92 % used' }).tier).toBe('strong')
   })
 
   test('a failed session climbs a tier, within the limit; the next easy task starts light again', () => {
