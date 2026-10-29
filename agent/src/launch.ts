@@ -29,25 +29,52 @@ const MAX_RUNNING = 4
 /** As the relay checks it. Names the tmux session, so nothing tmux would read as a format. */
 const LAUNCH_ID = /^[a-z0-9]{8,32}$/
 
-/** What Claude Code asks while starting, as it reads on screen, and what the notch shows the user. */
+/**
+ * What Claude Code asks while starting, as it reads on screen (any of `markers`), and what the notch shows the user.
+ * The trust question's title changed: "Quick safety check" in older versions, "Accessing workspace" in newer ones.
+ */
 export const QUESTIONS = [
-  { marker: 'Loading development channels', text: 'Claude Code asks to load the Tonton Claude channel, for local development.' },
-  { marker: 'Quick safety check', text: 'Claude Code asks whether you trust the files in this folder.' },
+  { markers: ['Loading development channels'], text: 'Claude Code asks to load the Tonton Claude channel, for local development.' },
+  {
+    markers: ['Accessing workspace', 'Quick safety check'],
+    text: 'Claude Code asks whether you trust the files in this folder.',
+  },
 ]
+
+/** The question on screen, if any, among those not answered yet (by their text). */
+export function questionOn(screen: string, answered: ReadonlySet<string> = new Set()): (typeof QUESTIONS)[number] | undefined {
+  return QUESTIONS.find(q => !answered.has(q.text) && q.markers.some(marker => screen.includes(marker)))
+}
 
 /** Between moving the cursor of a question and Enter, for its screen to follow. */
 const KEY_SETTLE_MS = 200
 
+/** A choice that says yes: `Yes, I trust this folder`, `1. Yes`, with the cursor on it or not. */
+const YES = /^(❯\s*)?(\d+[.)]\s*)?Yes\b/i
+const moves = (from: number, to: number, forward: string, back: string): string[] =>
+  Array.from({ length: Math.abs(to - from) }, () => (to > from ? forward : back))
+
 /**
- * The arrow keys that move the cursor (`❯`) of a question on screen to its yes (`Yes, I trust this folder`, `1. Yes`),
- * none when it is there already or the screen shows no such menu. One option per line, as Claude Code draws them.
+ * The arrow keys that move the cursor (`❯`) of a question on screen to its yes, none when it is there already or the
+ * screen shows no such menu. Claude Code draws the choices one per line (Down and Up), or side by side on one line
+ * (`❯ No, exit | Yes, I trust this folder`: Right and Left). Its trust question selects No first.
  */
 export function keysToYes(screen: string): string[] {
   const lines = screen.split('\n')
-  const cursor = lines.findIndex(line => /^\s*❯/.test(line))
-  const yes = lines.findIndex(line => /^\s*(❯\s*)?(\d+[.)]\s*)?Yes\b/i.test(line))
-  if (cursor < 0 || yes < 0 || yes === cursor) return []
-  return Array.from({ length: Math.abs(yes - cursor) }, () => (yes > cursor ? 'Down' : 'Up'))
+  const cursor = lines.findIndex(line => line.includes('❯'))
+  if (cursor < 0) return []
+  // Side by side: the cursor's line holds several choices, apart by a bar or a wide gap.
+  const choices = lines[cursor]
+    .trim()
+    .split(/\s*\|\s*|\s{3,}/)
+    .filter(Boolean)
+  const selected = choices.findIndex(choice => choice.startsWith('❯'))
+  const yesHere = choices.findIndex(choice => YES.test(choice))
+  if (choices.length > 1 && selected >= 0 && yesHere >= 0) return moves(selected, yesHere, 'Right', 'Left')
+  // One per line.
+  const yes = lines.findIndex(line => YES.test(line.trim()))
+  if (yes < 0) return []
+  return moves(cursor, yes, 'Down', 'Up')
 }
 
 /** The question each start waits on. */
@@ -254,7 +281,7 @@ async function runLaunch(
     if (!capture.ok) return failed(report, `claude stopped before it was ready.\n\n${lastLines(screen)}`)
     screen = capture.output
     // A question already answered can stay on screen a moment: only a new one waits for the user.
-    const question = QUESTIONS.find(q => screen.includes(q.marker) && !answered.has(q.marker))
+    const question = questionOn(screen, answered)
     if (!question) {
       const sessionId = newSession(cwd, startedAt, options.run, belongs)
       if (sessionId) {
@@ -271,7 +298,7 @@ async function runLaunch(
     }
     // The answer can come minutes later: Enter only goes to the screen the user saw. If it changed, they are asked again.
     if (lastLines(tmux(['capture-pane', '-p', '-t', pane]).output) !== shown) continue
-    answered.add(question.marker)
+    answered.add(question.text)
     // Claude Code selects its no first on some questions ("No, exit"): the cursor goes to the yes, then Enter.
     const moves = keysToYes(shown)
     if (moves.length) {
