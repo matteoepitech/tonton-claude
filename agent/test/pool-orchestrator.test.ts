@@ -614,3 +614,122 @@ describe('a hackathon', () => {
     expect(relay.tasks.size).toBe(0)
   })
 })
+
+describe('working together', () => {
+  const ana = { account: 'acc_ana', session: 'ses_cc' }
+  const eve = { account: 'acc_eve', session: 'ses_eve' }
+  const S = 1000
+  /** A session of the pool as the relay sends it again, with a new status. */
+  const status = async (session: string, value: 'idle' | 'working' | 'permission') => {
+    const wire = relay.snapshot.sessions.find(s => s.session === session)
+    if (!wire) throw new Error(`no session ${session}`)
+    pools.apply({ t: 'pool_session', poolId: POOL, session: { ...wire, status: value } })
+    await settle()
+  }
+  const look = async (at: number) => {
+    work.lookForStalls(at)
+    await settle()
+  }
+  /** What the orchestrator's agent wrote to other sessions, opened. */
+  const sent = async () =>
+    Promise.all(
+      relay.posts
+        .filter(p => p.t === 'pool_message')
+        .map(p => vault.read((p as { blob: string }).blob, value => value as { text: string; to: { session: PoolSessionRef } })),
+    )
+
+  test('builds_on lets a task start at once; pool_overview shows it next to what it waits for', async () => {
+    await join()
+    await call('task_create', big('Items API'))
+    const api = [...relay.tasks.keys()][0]
+    expect(await call('task_create', { ...big('Screens'), builds_on: ['nope'] })).toContain('No such task to build on: nope')
+    await call('task_create', { ...big('Screens'), builds_on: [api] })
+    const screens = [...relay.tasks.keys()][1]
+    expect(await relay.read(screens)).toMatchObject({ buildsOn: [api] })
+    expect(JSON.parse(await call('pool_overview')).todo[1]).toMatchObject({ id: screens, waitsFor: [], buildsOn: [api] })
+    expect(await call('task_assign', { task: screens })).toStartWith('Assigned to')
+  })
+
+  test("a worker's brief names the tasks around its own, where each stands, and whose session to ask", async () => {
+    const lead = { account: 'acc_bob', session: 'ses_oc' }
+    await join(lead)
+    await relay.otherTask('tapi', { ...big('API'), state: 'in_progress', assignee: ana, branch: 'pool/tapi-api' }, ana)
+    await relay.otherTask('tdb', { ...big('Schema'), state: 'done', branch: 'pool/tdb-schema' }, ana)
+    await relay.otherTask('tadmin', { ...big('Admin'), state: 'in_progress', assignee: eve, dependsOn: ['t1'] }, eve)
+    await relay.otherTask(
+      't1',
+      { ...big('Screens'), state: 'assigned', assignee: { account: 'acc_me', session: ME }, dependsOn: ['tdb'], buildsOn: ['tapi'] },
+      lead,
+    )
+    await settle()
+    const brief = delivered.find(d => d.includes('kind="task"')) ?? ''
+    expect(brief).toContain(
+      'Waits for tdb (Schema): done on pool/tdb-schema, not in main yet: git merge origin/pool/tdb-schema if you need it now.',
+    )
+    expect(brief).toContain('Builds on tapi (API): in progress with Ana · back (session ses_cc), on pool/tapi-api.')
+    expect(brief).toContain('tadmin (Admin) builds on this task, with Eve · back (session ses_eve).')
+    expect(brief).toContain('ask its session with pool_send to_session')
+    // pool_tasks gives the session to ask too.
+    const tasks = JSON.parse(await call('pool_tasks'))
+    expect(tasks.find((t: { id: string }) => t.id === 'tapi')).toMatchObject({ session: 'ses_cc' })
+  })
+
+  test('a session that does nothing on its task is nudged first, and the orchestrator hears of it only after', async () => {
+    await join()
+    await relay.otherTask('t1', { ...big('Cart'), state: 'in_progress', assignee: ana }, ana)
+    await status('ses_cc', 'idle')
+    const t0 = Date.now()
+    await look(t0)
+    await look(t0 + 21 * S)
+    const nudges = (await sent()).filter(m => m?.text.includes('has had no work from you'))
+    expect(nudges).toHaveLength(1)
+    expect(nudges[0]?.to.session).toEqual(ana)
+    expect(delivered.some(d => d.includes('has done nothing on t1'))).toBe(false)
+    await look(t0 + 41 * S)
+    expect(delivered.filter(d => d.includes('has done nothing on t1 (Cart) for 1 minutes, even after a nudge'))).toHaveLength(1)
+    await look(t0 + 50 * S)
+    expect((await sent()).filter(m => m?.text.includes('has had no work from you'))).toHaveLength(1)
+    // Working again, then quiet again: a new nudge.
+    await status('ses_cc', 'working')
+    await look(t0 + 60 * S)
+    await status('ses_cc', 'idle')
+    await look(t0 + 61 * S)
+    await look(t0 + 90 * S)
+    expect((await sent()).filter(m => m?.text.includes('has had no work from you'))).toHaveLength(2)
+  })
+
+  test('a session waiting for a permission is not nudged: the orchestrator is told its owner must answer', async () => {
+    await join()
+    await relay.otherTask('t1', { ...big('Cart'), state: 'in_progress', assignee: ana }, ana)
+    await status('ses_cc', 'permission')
+    const t0 = Date.now()
+    await look(t0)
+    await look(t0 + 21 * S)
+    expect(await sent()).toEqual([])
+    expect(delivered.at(-1)).toContain('for a permission on its machine, holding t1 (Cart)')
+  })
+
+  test('a question between sessions with no answer: its session is nudged, then the orchestrator is told', async () => {
+    await join()
+    const t0 = Date.now()
+    const message = async (seq: number, from: PoolSessionRef, to: PoolSessionRef, text: string, at: number) =>
+      pools.apply({
+        t: 'pool_message',
+        poolId: POOL,
+        message: { id: `m${seq}`, seq, ts: new Date(at).toISOString(), blob: await vault.seal({ text, to: { session: to } }), ...from },
+      })
+    const bob = { account: 'acc_bob', session: 'ses_oc' }
+    await message(100, bob, ana, 'Which field holds the price, cents or euros?', t0)
+    await message(101, eve, ana, 'Is the cart API ready?', t0)
+    await message(102, ana, eve, 'In an hour.', t0 + 5 * S)
+    await settle()
+    await look(t0 + 21 * S)
+    const nudges = (await sent()).filter(m => m?.text.startsWith('Tonton: '))
+    expect(nudges).toHaveLength(1)
+    expect(nudges[0]?.to.session).toEqual(ana)
+    expect(nudges[0]?.text).toContain('wrote to you 0 minutes ago and has no answer yet: "Which field holds the price, cents or euros?"')
+    expect(nudges[0]?.text).toContain('pool_send to_session ses_oc')
+    await look(t0 + 41 * S)
+    expect(delivered.at(-1)).toContain('Ana · back has not answered Bob · front for 1 minutes')
+  })
+})

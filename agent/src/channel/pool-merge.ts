@@ -9,6 +9,7 @@ import { newPoolItemId, type PoolState, type PoolTaskItem } from '../../../share
 import type { PoolTask, PoolTaskMerge } from '../../../shared/pool-protocol'
 import type { LandOutcome, PoolGit } from './pool-git'
 import type { PoolOps } from './pool-orchestrator'
+import { waitingFor } from './pool-team'
 import type { PoolToolSpec } from './pool-work'
 
 const POOL = { type: 'string', description: 'The pool, by id or name. Only needed when the session is in more than one.' } as const
@@ -73,12 +74,7 @@ export const landed = (task: Pick<PoolTask, 'merge'> | null | undefined): boolea
  * open counts as not merged: what depends on it would be checked against a main without it.
  */
 export function unmerged(state: PoolState, task: Pick<PoolTask, 'dependsOn'>): string[] {
-  return (task.dependsOn ?? []).filter(id => {
-    const dependency = state.tasks.find(item => item.id === id)?.task
-    if (!dependency) return false
-    if (dependency.state !== 'done') return true
-    return Boolean(dependency.branch) && dependency.merge?.state !== 'merged'
-  })
+  return waitingFor(state, task)
 }
 
 /** The task that fixes its merge, when there is one on the board: one that is gone fixes nothing. */
@@ -242,6 +238,19 @@ export class PoolMerger {
     await this.ops.event(poolId, 'merged', item.id, `${task.branch} → ${outcome.base} ${short(outcome.commit)}`)
     // A fix task carries the branch of the task it fixes, maybe through other fixes: those are in main now too.
     for (const fixed of fixedBy(state, item.id)) await this.ops.putTask(poolId, fixed.id, fixed.rev, { ...(fixed.task as PoolTask), merge })
+    // The sessions working on what builds on it can use it now: they hear it from the orchestrator's agent.
+    if (!outcome.already) {
+      for (const other of state.tasks) {
+        const holder = other.task?.assignee
+        const builds = other.task?.buildsOn?.includes(item.id) || other.task?.dependsOn?.includes(item.id)
+        if (!holder || !builds || !ACTIVE.has(other.task?.state ?? '')) continue
+        await this.ops.message(
+          poolId,
+          holder,
+          `Tonton: ${item.id} (${task.title}), which ${other.id} builds on, is in ${outcome.base} now (${short(outcome.commit)}). Bring it into your branch to use it: ${outcome.pushed ? `git fetch, then git merge origin/${outcome.base}` : `git merge ${outcome.base}`}.`,
+        )
+      }
+    }
     const after = { ...state, tasks: state.tasks.map(t => (t.id === item.id ? { ...t, task: { ...task, merge } } : t)) }
     const freed = after.tasks.filter(
       t => t.task?.state === 'todo' && t.task.dependsOn?.includes(item.id) && !unmerged(after, t.task).length,

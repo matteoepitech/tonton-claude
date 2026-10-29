@@ -43,7 +43,7 @@ describe.skipIf(!canRunDemo())('the demo pool', () => {
     expect(task(done, 'Cart and checkout')?.task?.route).toMatchObject({ tier: 'balanced', confirmed: 'claude-sonnet-stand-in' })
   }, 200_000)
 
-  test('the cart waits for the catalog it is built on', () => {
+  test('the cart waits until the catalog it is built on is merged', () => {
     const current = state() as PoolState
     const catalog = task(current, 'Product catalog API')?.id
     const cart = task(current, 'Cart and checkout')
@@ -51,7 +51,9 @@ describe.skipIf(!canRunDemo())('the demo pool', () => {
     const at = (kind: string, id: string | undefined, text?: string) =>
       current.events.findIndex(e => e.body?.kind === kind && e.body.taskId === id && (text === undefined || e.body.text === text))
     expect(at('task_moved', catalog, 'done')).toBeGreaterThan(-1)
-    expect(at('dispatched', cart?.id)).toBeGreaterThan(at('task_moved', catalog, 'done'))
+    // It starts once the catalog is merged into main, not just done.
+    expect(at('merged', catalog)).toBeGreaterThan(at('task_moved', catalog, 'done'))
+    expect(at('dispatched', cart?.id)).toBeGreaterThan(at('merged', catalog))
   })
 
   test('each task is pushed on its own branch of the sample project, and the loop stops', async () => {

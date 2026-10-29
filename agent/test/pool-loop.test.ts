@@ -180,6 +180,61 @@ describe('the control loop', () => {
     loop.stop()
   })
 
+  test('a task waits until what it depends on is merged, not just done; what it builds on does not hold it', async () => {
+    const api = (merge?: PoolTask['merge']) =>
+      item('task0001api', big('API', { state: 'done', branch: 'pool/task0001api-api', ...(merge ? { merge } : {}) }))
+    const ui = item('task0002ui', big('UI', { size: 'large', dependsOn: ['task0001api'] }))
+    const fake = fakePools(pool([worker], [api(), ui]), () => T0)
+    const loop = new DispatchLoop(fake.pools, { now: () => T0 })
+    await look(fake, loop)
+    expect(fake.get().tasks.find(t => t.id === 'task0002ui')?.task?.state).toBe('todo')
+    // An open pull request holds it too, until task_merge with skip marks it merged.
+    fake.set({ tasks: [api({ state: 'pr', at: 'x', url: 'https://example.com/pr/1' }), ui] })
+    await look(fake, loop)
+    expect(fake.get().tasks.find(t => t.id === 'task0002ui')?.task?.state).toBe('todo')
+    fake.set({ tasks: [api({ state: 'merged', at: 'x', commit: 'abc1234' }), ui] })
+    await look(fake, loop)
+    expect(fake.get().tasks.find(t => t.id === 'task0002ui')?.task?.state).toBe('assigned')
+
+    const early = fakePools(
+      pool(
+        [worker],
+        [item('task0001api', big('API', { state: 'in_progress' })), item('task0003ui', big('UI', { buildsOn: ['task0001api'] }))],
+      ),
+      () => T0,
+    )
+    const second = new DispatchLoop(early.pools, { now: () => T0 })
+    await look(early, second)
+    expect(early.get().tasks.find(t => t.id === 'task0003ui')?.task?.state).toBe('assigned')
+    loop.stop()
+    second.stop()
+  })
+
+  test('machines left free while every task waits on another one: the orchestrator hears what would give them work', async () => {
+    const tasks = [
+      item('task0001api', big('API', { state: 'done', branch: 'pool/task0001api-api' })),
+      item('task0002db', big('Database', { state: 'in_progress' })),
+      item('task0003ui', big('UI', { dependsOn: ['task0001api'] })),
+      item('task0004ad', big('Admin', { dependsOn: ['task0002db'] })),
+    ]
+    const fake = fakePools(pool([worker], tasks), () => T0)
+    const loop = new DispatchLoop(fake.pools, { now: () => T0 })
+    await look(fake, loop)
+    expect(fake.events.map(e => e.kind)).toEqual(['dispatch_waiting'])
+    expect(fake.events[0].text).toBe(
+      '2 tasks (task0003ui, task0004ad) wait: they wait for task0001api to merge with task_merge and task0002db to be done, while machines have free slots: merge what is done, or split off work that can start now (task_create with builds_on rather than depends_on).',
+    )
+    // Said once; and not at all when no machine is free.
+    await look(fake, loop)
+    expect(fake.events).toHaveLength(1)
+    const busy = fakePools(pool([], tasks, { machines: [] }), () => T0)
+    const idle = new DispatchLoop(busy.pools, { now: () => T0 })
+    await look(busy, idle)
+    expect(busy.events).toEqual([])
+    loop.stop()
+    idle.stop()
+  })
+
   test('does nothing unless its machine is the orchestrator machine, the dispatch is on and the pool runs', async () => {
     for (const fields of [
       { orchestratorMachine: { account: ADMIN, machine: 'machineothr1' } },

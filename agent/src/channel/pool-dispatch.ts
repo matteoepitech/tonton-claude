@@ -46,10 +46,10 @@ export const LOOP_EVENTS: ReadonlySet<string> = new Set(['dispatched', 'retried'
 export const AUTOPILOT_GUIDE = [
   'This pool runs on autopilot: members put whole machines in it, and the control loop of your machine hands the tasks out.',
   "1. pool_overview lists the machines: their tool and their account's plan (Claude Max 20x, Max 5x, Pro, OpenCode), how many sessions each runs, its mode, its areas and what it runs now. Their owners said nothing more: size the work by what each one brings.",
-  '2. When the user says what to build, plan it at once, without asking them questions you can answer yourself: plan_create, then task_create for each task, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines and the largest plans.',
+  "2. When the user says what to build, plan it at once, without asking them questions you can answer yourself: plan_create, then task_create for each task, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines and the largest plans. Keep every machine busy from the start: depends_on only when a task cannot start before another is merged, builds_on when it just uses another one's work.",
   '3. Then call plan_propose with the plan in a few sentences. The user accepts it with a button and the dispatch starts on its own: you are told. Do not ask in the chat whether to go. If they ask for changes instead, change the tasks and call plan_propose again. When they say go here, call dispatch_start; when they say pause, dispatch_stop.',
-  '4. The loop hands each task whose dependencies are done to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most. Your own machine takes tasks too, in sessions of their own: you plan, merge and answer.',
-  '5. Notices tell you what the loop did. Answer the blocked tasks, merge the finished branches with task_merge, and re-plan when tasks fail.',
+  '4. The loop hands each task whose dependencies are merged to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most. Your own machine takes tasks too, in sessions of their own: you plan, merge and answer.',
+  '5. Notices tell you what the loop did, and when machines are free while every task waits: merge what is done, or split off work that can start now. Answer the blocked tasks and the questions nobody answers, merge the finished branches with task_merge, and re-plan when tasks fail.',
   '6. The user talks to you here: answer their questions about the pool from pool_overview.',
 ].join('\n')
 

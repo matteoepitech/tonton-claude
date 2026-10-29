@@ -2,16 +2,18 @@
 // a Kubernetes controller, that costs no tokens and never forgets. While the dispatch is on, every 10 seconds and on
 // every change of the pool, it looks at the pool and makes one change at a time, through the same revisions as
 // everything else: a task whose machine went away, never started it, or whose session ended or stalled goes back to the
-// board, three times at most, then is blocked; each task to do whose dependencies are done goes to the free slot of an
+// board, three times at most, then is blocked; each task to do whose dependencies are merged goes to the free slot of an
 // online machine that fits it (docs/pool-orchestrator.md: simple tasks to OpenCode first, large ones to Claude Code, the
 // task's area first, the account's limits and the pool's budgets). What it does goes to the pool as events, which the
-// orchestrator's agent turns into notices. When every task is done, it says so and stops.
+// orchestrator's agent turns into notices, machines left free while every task waits on another one included. When every
+// task is done, it says so and stops.
 
-import type { PoolMachine, PoolState, PoolTaskItem } from '../../../shared/pool'
+import { overBudget, type PoolMachine, type PoolState, type PoolTaskItem } from '../../../shared/pool'
 import type { PoolTask } from '../../../shared/pool-protocol'
 import { dispatching, machineCandidates, machineName, whyNoMachine } from '../channel/pool-dispatch'
 import { mergeQueue } from '../channel/pool-merge'
-import { STALL_MS, waitingFor } from '../channel/pool-orchestrator'
+import { STALL_MS } from '../channel/pool-orchestrator'
+import { waitingFor } from '../channel/pool-team'
 import { log } from '../log'
 import type { MachinePools } from './pool-machines'
 import { failedTask, freedTask, MAX_ATTEMPTS } from './pool-worker'
@@ -40,6 +42,30 @@ interface Trouble {
 
 /** Tasks a machine holds: they take its slots. */
 const ACTIVE = new Set(['assigned', 'in_progress', 'blocked'])
+
+/** Slots the pool's machines could fill now: online, ready, running, within their budgets. */
+function freeSlots(state: PoolState): number {
+  return (state.machines ?? [])
+    .filter(machine => machine.online && machine.ready && machine.profile && !machine.stopped && !overBudget(state, machine.account))
+    .reduce((sum, machine) => {
+      const held = state.tasks.filter(item => item.task?.machine?.machine === machine.machine && ACTIVE.has(item.task.state)).length
+      return sum + Math.max(0, (machine.profile?.capacity ?? 0) - held)
+    }, 0)
+}
+
+/**
+ * Why free machines get nothing, and what would give them work: the tasks waited for, those done first. Without the
+ * number of free slots, which changes with every dispatch: the orchestrator hears it again when the reasons change.
+ */
+function idleWhy(state: PoolState, held: string[]): string {
+  const done = held.filter(id => state.tasks.find(item => item.id === id)?.task?.state === 'done')
+  const going = held.filter(id => !done.includes(id))
+  const parts = [
+    done.length ? `${done.join(', ')} to merge with task_merge` : '',
+    going.length ? `${going.join(', ')} to be done` : '',
+  ].filter(Boolean)
+  return `they wait for ${parts.join(' and ')}, while machines have free slots: merge what is done, or split off work that can start now (task_create with builds_on rather than depends_on)`
+}
 
 export interface LoopOptions {
   now?: () => number
@@ -123,14 +149,25 @@ export class DispatchLoop {
     const tasks = state.tasks.filter(item => item.task)
     if (tasks.length && tasks.every(item => item.task?.state === 'done')) return this.finish(poolId, state)
     const waiting = new Map<string, string[]>()
+    const held = new Set<string>()
+    const blocked: string[] = []
     for (const item of tasks) {
       const task = item.task as PoolTask
-      if (task.state !== 'todo' || waitingFor(state, task).length) continue
+      if (task.state !== 'todo') continue
+      const waits = waitingFor(state, task)
+      if (waits.length) {
+        blocked.push(item.id)
+        for (const id of waits) held.add(id)
+        continue
+      }
       const machine = machineCandidates(state, task, now)[0]
       if (machine) return this.dispatch(poolId, state, item, machine)
       const why = whyNoMachine(state, task)
       waiting.set(why, [...(waiting.get(why) ?? []), item.id])
     }
+    // Machines with nothing to do while tasks wait on others: Claudes lost to the plan, unless the orchestrator merges
+    // what is done or splits off work that can start now.
+    if (blocked.length && freeSlots(state) && !waiting.size) waiting.set(idleWhy(state, [...held]), blocked)
     await this.waits(poolId, waiting)
     return false
   }

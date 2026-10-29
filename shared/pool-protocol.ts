@@ -79,8 +79,13 @@ export interface PoolTask {
   area?: string
   state: PoolTaskState
   assignee?: { account: string; session: string }
-  /** Ids of the tasks it waits for. */
+  /** Ids of the tasks it waits for: it starts once their work is in main. */
   dependsOn?: string[]
+  /**
+   * Ids of the tasks it builds on but can start before, against the contracts in the notes: it starts at once, asks
+   * their sessions what it needs, and is told when their work lands in main.
+   */
+  buildsOn?: string[]
   /** `pool/<id>-<slug>`: the branch the work goes on, one per task. */
   branch?: string
   /** What was done, when it is done or blocked. */

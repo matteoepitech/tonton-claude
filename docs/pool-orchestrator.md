@@ -16,10 +16,10 @@ This session is now the orchestrator of this pool: it plans the project and hand
 1. Read pool_overview and pool_notes_read first.
 2. Plan with plan_create before any task: the goal, then the contracts (API routes, data shapes, folder layout), the stack, the decisions, and the areas with the paths each one owns.
 3. Split the work into tasks one session owns from start to end: a feature, an area, hours of work, with criteria. Never single steps: a session that waits for orders every few minutes costs more than one session doing it all.
-4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit.
-5. Write the contracts first and mark depends_on, so the front and the back work at the same time against the contracts.
+4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit. Leave the model to each machine's assessment: set model only to raise a task, or to lower a mechanical one by a tier.
+5. Write the contracts first, so the front and the back work at the same time against them. Mark depends_on only for a task that cannot start at all before another one is merged. When it only uses another task's work (the front on the back's API), mark builds_on instead: both start at once, ask each other with pool_send, and are told when the other's work is in main.
 6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.
-7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left, or the plan of its session is about to run out. Answer blockers, reassign, split, or re-plan.
+7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left or does nothing even after a nudge, a question between sessions gets no answer, or the plan of its session is about to run out. Answer blockers and questions, reassign, split, or re-plan.
 8. Review what is done. When the pool has review sessions, a finished task goes to one of them first, and comes back to you accepted or to its author with notes; choose the reviewer with review_assign if you want. Without one, check each branch yourself.
 9. Merge each finished task with task_merge, in the order pool_overview lists under toMerge, with the commands that build and test the project as checks. It merges in this folder on top of the latest main, and main moves only when the checks pass; a conflict or a failing check goes back to its author, or to a new task for you to assign. Assign what depends on a task once it is merged. When main itself fails, have it fixed first.
 10. Do not do the tasks yourself: plan, unblock, review and merge.
@@ -34,7 +34,8 @@ This session is now the orchestrator of this pool: it plans the project and hand
   `simple` or `large`). A large task never goes to a session that takes simple tasks only, unless the orchestrator
   forces it.
 - **Area first.** Among the sessions that fit, one of the task's area comes first.
-- **Waits.** A task whose `depends_on` are not done is not handed out, unless forced.
+- **Waits.** A task whose `depends_on` are not in main yet (not done, or done on a branch not merged) is not handed
+  out, unless forced. A task it `builds_on` does not hold it: see Working together.
 - **Time left on the plan.** A task takes its `hours` (by default 1 for a small task, 3 for a large one). A Claude
   Code session whose 5-hour or weekly window is used up, or whose 5-hour window runs out at its current pace before
   that, does not get it, unless the orchestrator forces it. OpenCode sessions have no plan limit.
@@ -53,7 +54,36 @@ The orchestrator's agent watches the pool and tells its Claude, as a `<pool kind
   the tasks it frees once it is merged);
 - the session holding a task is near the end of its 5-hour window (it was told to hand the task over);
 - the session holding a task leaves the pool or goes offline;
-- a task in progress has not changed for 30 minutes.
+- a task in progress has not changed for 30 minutes;
+- the session holding a task has done nothing for 20 minutes, even after its agent nudged it, or has waited 10 minutes
+  for a permission on its machine (see Working together);
+- a message from one session to another has had no answer for 20 minutes.
+
+## Working together
+
+The sessions of a pool work at the same time and talk to each other, rather than wait for each other
+(`agent/src/channel/pool-team.ts`).
+
+- **Two kinds of link.** `depends_on` is for a task that cannot start at all before another one's work is in main.
+  `builds_on` is for a task that only uses another one's work, like the front on the back's API: it starts at once,
+  against the contracts in the notes. The guides ask the orchestrator to prefer `builds_on`, so that no machine waits.
+- **The brief.** A task's brief lists the tasks it waits for and builds on, where each one stands (in main, done on a
+  branch not merged yet with the command to bring it in, in a pull request, or in progress with which session), and the
+  tasks that build on it, with their sessions. It tells the session to build first what needs nobody, to ask the
+  session that holds what it needs with `pool_send to_session`, and to go on meanwhile; to answer what it is asked; and
+  to tell the sessions that build on its work when that work changes. `pool_tasks` gives each task's session too.
+- **Merged.** When `task_merge` brings a task into main, the sessions working on a task that builds on it or waits for
+  it get a message from the orchestrator's agent: it is in main, and how to bring it into their branch.
+- **Nudges.** The orchestrator's agent looks at the pool every minute, and talks to the sessions before it bothers the
+  orchestrator: plain code, no tokens. A session that holds a task and has done nothing for 10 minutes (idle or waiting
+  for input) gets a message: ask the session it waits for, mark the task blocked, or finish it. A message from one
+  session to another that has no answer after 10 minutes (nothing written back to the asker, its area or everyone)
+  gets the one asked a reminder with the question. Each comes once; the orchestrator hears of it at 20 minutes, when
+  nothing came of the nudge. A session waiting for a permission prompt is not nudged: the orchestrator is told its
+  owner must answer it.
+- **Free machines.** On autopilot, when machines have free slots while every task to do waits on another one, the
+  control loop says which tasks they wait for, those to merge first, and asks the orchestrator to merge what is done or
+  split off work that can start now.
 
 ## Review
 
@@ -121,10 +151,10 @@ top of its guide, in the same `<pool kind="role">` (`AUTOPILOT_GUIDE` in `agent/
 ```
 This pool runs on autopilot: members put whole machines in it, and the control loop of your machine hands the tasks out.
 1. pool_overview lists the machines: their tool and their account's plan (Claude Max 20x, Max 5x, Pro, OpenCode), how many sessions each runs, its mode, its areas and what it runs now. Their owners said nothing more: size the work by what each one brings.
-2. When the user says what to build, plan it at once, without asking them questions you can answer yourself: plan_create, then task_create for each task, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines and the largest plans.
+2. When the user says what to build, plan it at once, without asking them questions you can answer yourself: plan_create, then task_create for each task, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines and the largest plans. Keep every machine busy from the start: depends_on only when a task cannot start before another is merged, builds_on when it just uses another one's work.
 3. Then call plan_propose with the plan in a few sentences. The user accepts it with a button and the dispatch starts on its own: you are told. Do not ask in the chat whether to go. If they ask for changes instead, change the tasks and call plan_propose again. When they say go here, call dispatch_start; when they say pause, dispatch_stop.
-4. The loop hands each task whose dependencies are done to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most. Your own machine takes tasks too, in sessions of their own: you plan, merge and answer.
-5. Notices tell you what the loop did. Answer the blocked tasks, merge the finished branches with task_merge, and re-plan when tasks fail.
+4. The loop hands each task whose dependencies are merged to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most. Your own machine takes tasks too, in sessions of their own: you plan, merge and answer.
+5. Notices tell you what the loop did, and when machines are free while every task waits: merge what is done, or split off work that can start now. Answer the blocked tasks and the questions nobody answers, merge the finished branches with task_merge, and re-plan when tasks fail.
 6. The user talks to you here: answer their questions about the pool from pool_overview.
 ```
 
@@ -136,7 +166,7 @@ This pool runs on autopilot: members put whole machines in it, and the control l
 - **The loop's rules.** The same as the tools', for machines instead of sessions: a machine takes as many tasks as its
   capacity; by its tool or its owner's `takes`, simple tasks go to OpenCode machines first and large ones never to a
   machine that takes simple ones only; the task's area first; then by the account's plan, a large task to the largest
-  (Max 20x, then Max 5x, Team, Enterprise and API keys, then Pro) and a simple one to the smallest; a task waits for its `depends_on`; a Claude Code machine
+  (Max 20x, then Max 5x, Team, Enterprise and API keys, then Pro) and a simple one to the smallest; a task waits until its `depends_on` are merged; a Claude Code machine
   whose account's plan runs out before the task would be done does not get it; nothing goes past a member's or the
   pool's budget; a stopped machine gets nothing, and what it held goes back as it was, uncounted. One change at a time,
   over the task's revision.
@@ -147,7 +177,8 @@ This pool runs on autopilot: members put whole machines in it, and the control l
   orchestrator hears of it like any blocked task. While the dispatch is on, the orchestrator is not asked to reassign a
   machine's task that stalled or lost its session: the loop does it.
 - **Notices.** What the loop does it posts as events of its machine, which the relay attests: `dispatched`, `retried`,
-  `dispatch_waiting` (why the tasks to do wait, said again only when that changes) and `dispatch_done`. The
+  `dispatch_waiting` (why the tasks to do wait, free machines while every task waits on another one included, said
+  again only when that changes) and `dispatch_done`. The
   orchestrator's agent tells each one to its Claude as a `<pool kind="notice" from="Tonton">`, so the admin's chat
   shows it. When every task is done, the loop says so and stops the dispatch.
 

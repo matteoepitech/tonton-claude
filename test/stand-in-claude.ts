@@ -2,7 +2,8 @@
 // it instead of claude. It asks the two questions Claude Code asks on starting, links its session the way the hooks do,
 // and spawns the real Tonton channel over MCP, as Claude Code would. When a pool task arrives through the channel, it does
 // what Claude would: claims it, commits a file on the task's branch in its worktree, pushes it, and calls task_done. A
-// task whose title says "crash" makes it exit instead, like a session that ends before its task is done.
+// task whose title says "crash" makes it exit instead, like a session that ends before its task is done. As the
+// orchestrator, it merges each finished task when told to, so that what waits for it starts.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -89,6 +90,25 @@ async function planFrom(file: string) {
   await call('plan_propose', { summary: plan.goal })
 }
 
+let merging = false
+let again = false
+async function mergeAll() {
+  if (merging) {
+    again = true
+    return
+  }
+  merging = true
+  do {
+    again = false
+    for (let tries = 0; tries < 100; tries++) {
+      const said = await call('task_merge', { checks: [] })
+      if (said.startsWith('Another merge')) await Bun.sleep(300)
+      else if (!said.startsWith('Merged')) break
+    }
+  } while (again)
+  merging = false
+}
+
 claude.fallbackNotificationHandler = async notification => {
   const content = String((notification.params as { content?: unknown } | undefined)?.content ?? '')
   note(`delivered: ${content}`)
@@ -105,6 +125,9 @@ claude.fallbackNotificationHandler = async notification => {
     await call('plan_propose', { summary: 'A landing page first.' })
     return
   }
+  // A finished task to merge: what depends on it starts from a main that has it. Everything in line is merged, one
+  // after the other, and a merge running already is waited for, as Claude would.
+  if (/^<pool kind="notice"[^>]*>\s*Task \S+ \(.*\) is done by .* with task_merge/s.test(content)) return mergeAll()
   const task = /<pool kind="task"[^>]* task="([^"]+)"/.exec(content)?.[1]
   const branch = /Branch: (pool\/\S+)\./.exec(content)?.[1]
   if (!task) return

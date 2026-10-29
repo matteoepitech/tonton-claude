@@ -161,6 +161,26 @@ describe('task_merge', () => {
     expect(events).toEqual([{ kind: 'merged', taskId: 'a', text: `pool/a → main ${originMain(repos).slice(0, 10)}` }])
   })
 
+  test('the sessions working on what builds on it are told it is in main, and how to bring it in', async () => {
+    const repos = fresh()
+    pushBranch(repos.ana, 'pool/a', { 'a.txt': 'a\n' })
+    const bob = { account: 'acc_bob', session: 'ses_bob' }
+    const state = poolWith([
+      item('a', finished('A')),
+      item('f', { title: 'Front', state: 'in_progress', assignee: bob, buildsOn: ['a'] }),
+      item('x', { title: 'Docs', state: 'in_progress', assignee: { account: 'acc_lea', session: 'ses_doc' } }),
+      item('t', { title: 'Screens', state: 'todo', buildsOn: ['a'] }),
+    ])
+    const { merger: m, messages } = merger(state, repos.lead)
+    await m.call('pool1', state, { checks: CHECKS })
+    expect(messages).toEqual([
+      {
+        to: 'ses_bob',
+        text: `Tonton: a (A), which f builds on, is in main now (${originMain(repos).slice(0, 10)}). Bring it into your branch to use it: git fetch, then git merge origin/main.`,
+      },
+    ])
+  })
+
   test('a conflict sends the task back to its free author, with the files and the conflict', async () => {
     const repos = fresh()
     pushBranch(repos.ana, 'pool/a', { 'app.txt': 'mine\n' })

@@ -208,6 +208,7 @@ export function decodePoolTask(value: unknown): PoolTask | null {
     assignee: sessionRef(f.assignee),
     completion: decodeCompletion(f.completion),
     dependsOn: texts(f.dependsOn),
+    buildsOn: texts(f.buildsOn),
     branch: text(f.branch),
     summary: text(f.summary),
     size: isSize(f.size) ? f.size : undefined,

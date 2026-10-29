@@ -161,9 +161,10 @@ final class PoolMachineTests: XCTestCase {
         XCTAssertNil(try read("{\(base),\"models\":\"opus\"}").models)
 
         let json =
-            #"{"title":"API","state":"in_progress","model":"strong","setbacks":1,"route":{"tier":"strong","model":"opus","escalated":1}}"#
+            #"{"title":"API","state":"in_progress","model":"strong","setbacks":1,"route":{"tier":"strong","model":"opus","escalated":1},"buildsOn":["t1"]}"#
         let task = try JSONDecoder().decode(PoolTask.self, from: Data(json.utf8))
         XCTAssertEqual(task.model, "strong")
+        XCTAssertEqual(task.buildsOn, ["t1"])
         XCTAssertEqual(task.setbacks, 1)
         XCTAssertEqual(task.route?.escalated, 1)
         XCTAssertEqual(try JSONDecoder().decode(PoolTask.self, from: JSONEncoder().encode(task)), task)

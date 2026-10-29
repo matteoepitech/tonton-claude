@@ -208,7 +208,10 @@ public struct PoolTask: Codable, Equatable, Sendable {
     public var area: String?
     public var state: PoolTaskState
     public var assignee: PoolSessionRef?
+    /// Ids of the tasks it waits for: it starts once their work is in main.
     public var dependsOn: [String]?
+    /// Ids of the tasks it builds on but starts before, against the contracts. Kept when the app writes the task back.
+    public var buildsOn: [String]?
     /// `pool/<id>-<slug>`: one branch per task.
     public var branch: String?
     public var summary: String?

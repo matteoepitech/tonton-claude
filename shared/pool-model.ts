@@ -1,7 +1,9 @@
 // Which model a pool task runs on (#283): the least costly one that can reliably do it. A machine sorts its models into
 // three tiers its owner can configure: light for routine work, balanced for ordinary features, strong for the demanding
 // ones. Each task is assessed from what it says (goal, criteria, size, hours, dependencies, paths), not from the tool
-// that runs it, and climbs a tier only on evidence that a session could not do it, within the owner's limit. Pure code,
+// that runs it, never lower than the work needs (a feature is never routed to the light tier, and a tier the orchestrator
+// sets is at most one below the assessment), and climbs a tier on evidence that a session could not do it, within the
+// owner's limit. Pure code,
 // cheap enough to run for every task: no model is asked to classify. Runs in browsers, like the rest of the client core.
 
 import type { ModelTier, PoolModelPolicy, PoolTask, PoolTaskRoute } from './pool-protocol'
@@ -95,7 +97,9 @@ export interface TaskAssessment {
  * The tier a task needs. Each sign adds to or takes from a score: a large task, many criteria, many hours, several
  * dependencies or areas of the code, words for demanding work raise it; routine words and a short task lower it.
  */
-export function assessTask(task: Pick<PoolTask, 'title' | 'goal' | 'criteria' | 'size' | 'hours' | 'dependsOn' | 'paths'>): TaskAssessment {
+export function assessTask(
+  task: Pick<PoolTask, 'title' | 'goal' | 'criteria' | 'size' | 'hours' | 'dependsOn' | 'buildsOn' | 'paths'>,
+): TaskAssessment {
   const text = `${task.title} ${task.goal ?? ''} ${(task.criteria ?? []).join(' ')}`
   const signs: { points: number; why: string }[] = []
   const add = (points: number, why: string) => signs.push({ points, why })
@@ -105,17 +109,18 @@ export function assessTask(task: Pick<PoolTask, 'title' | 'goal' | 'criteria' | 
   if (criteria >= 5) add(1, `${criteria} criteria`)
   if (task.hours !== undefined && task.hours >= 6) add(1, `${task.hours} hours`)
   if (task.hours !== undefined && task.hours <= 1 && (task.size ?? 'large') === 'large') add(-1, 'under an hour')
-  if ((task.dependsOn?.length ?? 0) >= 2) add(1, 'built on several tasks')
+  if (new Set([...(task.dependsOn ?? []), ...(task.buildsOn ?? [])]).size >= 2) add(1, 'built on several tasks')
   const roots = new Set((task.paths ?? []).map(path => path.replace(/^\.?\/+/, '').split('/')[0]).filter(Boolean))
   if (roots.size >= 3) add(1, `${roots.size} parts of the code`)
   const demanding = DEMANDING.exec(text)?.[0]
+  const routine = demanding ? undefined : ROUTINE.exec(text)?.[0]
   if (demanding) add(2, `demanding work (${demanding.toLowerCase()})`)
-  else {
-    const routine = ROUTINE.exec(text)?.[0]
-    if (routine) add(-1, `routine work (${routine.toLowerCase()})`)
-  }
+  else if (routine) add(-1, `routine work (${routine.toLowerCase()})`)
   const score = signs.reduce((sum, sign) => sum + sign.points, 0)
-  const tier: ModelTier = score <= 0 ? 'light' : score >= 3 ? 'strong' : 'balanced'
+  // A feature is code a light model gets wrong more often than not, however short: only routine work and small tasks
+  // go to the light tier.
+  const feature = (task.size ?? 'large') === 'large' && !routine
+  const tier: ModelTier = score >= 3 ? 'strong' : score > 0 || feature ? 'balanced' : 'light'
   // The signs that pushed it where it is: up for a balanced or strong task, down for a light one.
   const telling = signs.filter(sign => (tier === 'light' ? sign.points <= 0 : sign.points > 0)).map(sign => sign.why)
   return { tier, reason: telling.join(', ') || 'an ordinary task' }
@@ -155,10 +160,11 @@ export function tierModel(policy: PoolModelPolicy | undefined, tier: ModelTier):
 }
 
 /**
- * The model the task runs on. In order: the owner's lock, which nothing overrides; else the task's own
- * tier, set by the orchestrator or an admin; else its assessment, one tier up per time a session failed it (bounded by
- * the owner's limit), one tier down from strong while the account spares its plan. Then the nearest tier the owner
- * allows: up first, since a weaker model would fail the task, down when there is none above.
+ * The model the task runs on. In order: the owner's lock, which nothing overrides; else the task's own tier, set by the
+ * orchestrator or an admin, but never more than one tier below its assessment; else its assessment, one tier down from
+ * strong while the account spares its plan. Either one climbs a tier per time a session failed the task (bounded by the
+ * owner's limit). Then the nearest tier the owner allows: up first, since a weaker model would fail the task, down when
+ * there is none above.
  */
 export function chooseModel({ task, policy, spare }: ModelChoiceInput): ModelChoice {
   const allowed = allowedTiers(policy)
@@ -168,31 +174,38 @@ export function chooseModel({ task, policy, spare }: ModelChoiceInput): ModelCho
     return { tier: lock, model: tierModel(policy, lock), reason: `locked to ${lock} by its owner`, escalated: 0 }
   }
   const reasons: string[] = []
+  const rank = (tier: ModelTier) => MODEL_TIERS.indexOf(tier)
+  const assessed = assessTask(task)
   let wanted: ModelTier
-  let escalated = 0
   if (isModelTier(task.model)) {
     wanted = task.model
     reasons.push(`set to ${wanted} for this task`)
+    // The orchestrator knows the task better than the words in it, not so much better: a mechanical feature may go one
+    // tier down, a redesign never to the light tier.
+    const floor = MODEL_TIERS[Math.max(0, rank(assessed.tier) - 1)]
+    if (rank(wanted) < rank(floor)) {
+      wanted = floor
+      reasons.push(`${floor} at least for ${assessed.reason}`)
+    }
   } else {
-    const assessed = assessTask(task)
     wanted = assessed.tier
     reasons.push(assessed.reason)
-    const limit = Math.min(MAX_ESCALATIONS, Math.max(0, policy?.escalations ?? DEFAULT_ESCALATIONS))
-    const setbacks = Math.max(0, task.setbacks ?? 0)
-    escalated = Math.min(setbacks, limit, MODEL_TIERS.length - 1 - MODEL_TIERS.indexOf(wanted))
-    if (escalated) {
-      wanted = MODEL_TIERS[MODEL_TIERS.indexOf(wanted) + escalated]
-      reasons.push(
-        `up ${escalated === 1 ? 'a tier' : `${escalated} tiers`} after ${setbacks === 1 ? 'a session' : `${setbacks} sessions`} failed it`,
-      )
-    } else if (setbacks && limit) reasons.push('already on the strongest tier')
-    else if (setbacks) reasons.push('its owner allows no escalation')
-    if (spare && wanted === 'strong' && !escalated) {
-      wanted = 'balanced'
-      reasons.push(`balanced while the account ${spare}`)
-    }
   }
-  const above = allowed.filter(tier => MODEL_TIERS.indexOf(tier) >= MODEL_TIERS.indexOf(wanted))
+  const limit = Math.min(MAX_ESCALATIONS, Math.max(0, policy?.escalations ?? DEFAULT_ESCALATIONS))
+  const setbacks = Math.max(0, task.setbacks ?? 0)
+  const escalated = Math.min(setbacks, limit, MODEL_TIERS.length - 1 - rank(wanted))
+  if (escalated) {
+    wanted = MODEL_TIERS[rank(wanted) + escalated]
+    reasons.push(
+      `up ${escalated === 1 ? 'a tier' : `${escalated} tiers`} after ${setbacks === 1 ? 'a session' : `${setbacks} sessions`} failed it`,
+    )
+  } else if (setbacks && limit) reasons.push('already on the strongest tier')
+  else if (setbacks) reasons.push('its owner allows no escalation')
+  if (spare && wanted === 'strong' && !escalated && !isModelTier(task.model)) {
+    wanted = 'balanced'
+    reasons.push(`balanced while the account ${spare}`)
+  }
+  const above = allowed.filter(tier => rank(tier) >= rank(wanted))
   const tier = above[0] ?? (allowed[allowed.length - 1] as ModelTier)
   if (tier !== wanted) reasons.push(`${tier} as its owner does not allow ${wanted}`)
   return { tier, model: tierModel(policy, tier), reason: reasons.join('; '), escalated }
