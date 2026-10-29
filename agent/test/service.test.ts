@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { withoutConsole } from '../src/install/system'
-import { launchAgentPlist, systemdUnit } from '../src/service/control'
+import { launchAgentPlist, relaunchAgent, systemdUnit } from '../src/service/control'
 import { loginShell, searchPath, usualFolders } from '../src/service/search-path'
 
 test('the windowless Windows copy only differs by its subsystem', () => {
@@ -58,4 +58,29 @@ test('Linux runs it as a user unit', () => {
   expect(unit).toContain('ExecStart="/home/me/.tonton/bin/tonton" service')
   expect(unit).toContain('Restart=on-failure')
   expect(unit).toContain('WantedBy=default.target')
+})
+
+test('reloading the LaunchAgent waits for the old job to go before loading the new one', () => {
+  const calls: string[] = []
+  // launchd still lists the old job twice after bootout, and refuses the first bootstrap.
+  let listed = 2
+  let refused = 1
+  const run = (command: string[]) => {
+    calls.push(command[1])
+    if (command[1] === 'print') return listed-- > 0
+    if (command[1] === 'bootstrap') return refused-- <= 0
+    return true
+  }
+  expect(relaunchAgent('gui/501/tech.d3l.tonton.agent', 'gui/501', '/x.plist', run, () => {})).toBe(true)
+  expect(calls).toEqual(['bootout', 'print', 'print', 'print', 'bootstrap', 'bootstrap'])
+  // It says so when the service never loads.
+  expect(
+    relaunchAgent(
+      'j',
+      'd',
+      'p',
+      command => command[1] !== 'bootstrap' && command[1] !== 'print',
+      () => {},
+    ),
+  ).toBe(false)
 })

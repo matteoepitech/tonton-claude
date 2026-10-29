@@ -16,6 +16,7 @@ import { type ReactNode, useState } from 'react'
 import { type PoolRole, poolAbilities } from '../../../shared'
 import { Empty, Loading, Problem } from '../common'
 import { plural } from '../format'
+import { Mosaic } from '../mosaic'
 import { useStore } from '../store'
 import { Button } from '../ui/button'
 import { cn } from '../ui/cn'
@@ -39,8 +40,8 @@ export function Pools() {
     )
   }
   return (
-    <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[260px_1fr]">
-      <nav className={cn('glass flex flex-col gap-1 overflow-y-auto rounded-2xl border p-2', view && 'hidden md:flex')}>
+    <div className="grid min-h-0 flex-1 md:grid-cols-[260px_1fr]">
+      <nav className={cn('rule-dashed flex flex-col gap-1 overflow-y-auto border-e bg-white p-2', view && 'hidden md:flex')}>
         <div className="flex gap-2 p-1">
           <Button size="sm" onClick={() => store.showPool({ kind: 'new' })}>
             <PlusIcon />
@@ -51,7 +52,7 @@ export function Pools() {
             Join
           </Button>
         </div>
-        <h2 className="mt-2 px-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Pools</h2>
+        <h2 className="eyebrow mt-3 px-2">Pools</h2>
         {!watch.pools.length && <Empty>No pools yet. Make one, or join with an invite from a teammate.</Empty>}
         {watch.pools.map(({ summary, info }) => (
           <PoolItem key={summary.id} id={summary.id} role={summary.role} name={info?.name ?? 'A pool'}>
@@ -59,21 +60,25 @@ export function Pools() {
               type="button"
               onClick={() => store.showPool({ kind: 'pool', id: summary.id })}
               className={cn(
-                'flex w-full flex-col rounded-xl px-3 py-2 text-left transition-colors hover:bg-accent',
-                view?.kind === 'pool' && view.id === summary.id && 'bg-accent',
+                'flex w-full items-center gap-3 rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors hover:bg-white',
+                view?.kind === 'pool' && view.id === summary.id && 'raised border-border bg-white',
               )}
             >
-              <strong className="truncate font-medium">{info?.name ?? 'A pool'}</strong>
-              <small className="text-xs text-muted-foreground">
-                {roleLabel(summary.role)} · {plural(summary.members, 'member')}
-                {summary.paused ? ' · paused' : ''}
-              </small>
+              <span className="icon-tile size-8 text-sm font-bold">{(info?.name ?? 'P').trim().charAt(0).toUpperCase()}</span>
+              <span className="flex min-w-0 flex-col">
+                <strong className="truncate font-medium">{info?.name ?? 'A pool'}</strong>
+                <small className="text-xs text-muted-foreground">
+                  {roleLabel(summary.role)} · {plural(summary.members, 'member')}
+                  {summary.paused ? ' · paused' : ''}
+                </small>
+              </span>
             </button>
           </PoolItem>
         ))}
         {watch.problem && <Problem>{watch.problem}</Problem>}
+        <Mosaic className="mt-auto ms-1 mb-1 opacity-90" />
       </nav>
-      <main className={cn('glass flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border', !view && 'hidden md:flex')}>
+      <main className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden', view && 'bg-white', !view && 'hidden md:flex')}>
         {view?.kind === 'pool' ? (
           <PoolPage poolId={view.id} />
         ) : view?.kind === 'new' ? (
@@ -81,7 +86,7 @@ export function Pools() {
         ) : view?.kind === 'join' ? (
           <JoinPool invite={view.invite} />
         ) : (
-          <Empty className="m-auto font-serif text-2xl text-muted-foreground">Pick a pool, or make one.</Empty>
+          <Empty className="eyebrow raised m-auto rounded-md border bg-white px-4 py-2.5">Pick a pool, or make one</Empty>
         )}
       </main>
     </div>

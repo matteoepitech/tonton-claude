@@ -1,74 +1,37 @@
-/* The website's style: Tailwind with shadcn/ui's tokens. Warm paper and glass over a slowly drifting aura, light by day
-   and dark by night as the system says; serif titles, rounded text, one orange for what matters. */
+/* The website's style: Tailwind with shadcn/ui's tokens, after Lightdash's pages: white paper, thin grey rules (dashed
+   where they only divide), ink buttons, bold tight titles, grey capitals over groups, one indigo for icons and what is
+   selected. Nothing glows, nothing floats. */
 @import "tailwindcss";
 @import "@xyflow/react/dist/style.css";
 
 @source "./";
 
 :root {
-  /* Daylight: warm paper, glass panels, one orange for what matters. */
-  --background: #fbf9f6;
-  --foreground: #1d1b20;
-  --card: rgba(255, 255, 255, 0.72);
-  --card-foreground: #1d1b20;
+  /* White paper, ink, and one indigo: thin grey rules, dashed where they only divide, nothing that glows. */
+  --background: #ffffff;
+  --foreground: #1e1d2b;
+  --card: #ffffff;
+  --card-foreground: #1e1d2b;
   --popover: #ffffff;
-  --popover-foreground: #1d1b20;
-  --primary: #ff5a1f;
+  --popover-foreground: #1e1d2b;
+  --primary: #5b4cf5;
   --primary-foreground: #ffffff;
-  --secondary: rgba(29, 27, 32, 0.05);
-  --secondary-foreground: #1d1b20;
-  --muted: rgba(29, 27, 32, 0.03);
-  --muted-foreground: #6c6872;
-  --faint: #a29ea8;
-  --accent: rgba(29, 27, 32, 0.055);
-  --accent-foreground: #1d1b20;
-  --destructive: #e5484d;
-  --success: #2fa46a;
-  --warning: #d99a00;
-  --orange: #ff7a3d;
-  --border: rgba(29, 27, 32, 0.08);
-  --input: rgba(29, 27, 32, 0.12);
-  --ring: #ff5a1f;
-  --radius: 0.875rem;
-  /* The aura behind everything: orange, pink, periwinkle and sun, drifting. */
-  --aura-orange: #ff7a3d;
-  --aura-pink: #ff6aa8;
-  --aura-blue: #9db2ff;
-  --aura-sun: #ffcf6a;
-  --aura-strength: 0.55;
-  --aura-core: rgba(255, 255, 255, 0.92);
-  --glass-shadow: 0 1px 2px rgba(29, 27, 32, 0.04), 0 12px 32px -12px rgba(29, 27, 32, 0.12);
+  --secondary: #f6f7f9;
+  --secondary-foreground: #1e1d2b;
+  --muted: #f8f9fb;
+  --muted-foreground: #6b6a7b;
+  --faint: #a7a6b4;
+  --accent: #f1f2f5;
+  --accent-foreground: #1e1d2b;
+  --destructive: #d93b45;
+  --success: #1f9d63;
+  --warning: #b7791f;
+  --orange: #e07b39;
+  --border: #e5e6eb;
+  --input: #dcdde4;
+  --ring: #5b4cf5;
+  --radius: 0.5rem;
   color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Night: the same aura, low, behind smoked glass. */
-    --background: #0c0b0e;
-    --foreground: #f4f2f6;
-    --card: rgba(24, 22, 28, 0.72);
-    --card-foreground: #f4f2f6;
-    --popover: #1a181e;
-    --popover-foreground: #f4f2f6;
-    --primary: #ff6a2b;
-    --secondary: rgba(255, 255, 255, 0.06);
-    --secondary-foreground: #f4f2f6;
-    --muted: rgba(255, 255, 255, 0.04);
-    --muted-foreground: #9a96a1;
-    --faint: #625e69;
-    --accent: rgba(255, 255, 255, 0.07);
-    --accent-foreground: #f4f2f6;
-    --destructive: #f2555a;
-    --success: #4cc38a;
-    --warning: #f5c04a;
-    --border: rgba(255, 255, 255, 0.08);
-    --input: rgba(255, 255, 255, 0.12);
-    --ring: #ff6a2b;
-    --aura-strength: 0.32;
-    --aura-core: rgba(12, 11, 14, 0.85);
-    --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.6);
-    color-scheme: dark;
-  }
 }
 
 @theme inline {
@@ -99,10 +62,8 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 10px);
-  --shadow-glass: var(--glass-shadow);
-  /* The system's own fonts, nothing downloaded: SF Pro Rounded and New York on Apple devices, close kin elsewhere. */
-  --font-sans: ui-rounded, "SF Pro Rounded", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-serif: ui-serif, "New York", "Iowan Old Style", "Charter", Georgia, serif;
+  /* Inter where it is installed, the system's sans otherwise: nothing downloaded. */
+  --font-sans: "Inter", "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -120,83 +81,50 @@
   }
 }
 
-/* The aura: four soft lights drifting behind every page, around a pale core, as on a calm morning. CSS only, and still
-   for those who ask for less motion. */
-.aura {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-  background: var(--background);
-}
-.aura::after {
-  /* The core: the page's middle stays readable. */
-  content: "";
-  position: absolute;
-  inset: -10%;
-  background: radial-gradient(closest-side at 50% 42%, var(--aura-core) 0%, var(--aura-core) 55%, transparent 100%);
-}
-.aura span {
-  position: absolute;
-  width: 62vmax;
-  height: 62vmax;
-  border-radius: 50%;
-  filter: blur(70px);
-  opacity: var(--aura-strength);
-  animation: aura-drift 38s ease-in-out infinite alternate;
-  will-change: transform;
-}
-.aura span:nth-child(1) {
-  background: var(--aura-orange);
-  top: -30vmax;
-  left: -18vmax;
-}
-.aura span:nth-child(2) {
-  background: var(--aura-pink);
-  top: -24vmax;
-  right: -22vmax;
-  animation-duration: 46s;
-  animation-delay: -12s;
-}
-.aura span:nth-child(3) {
-  background: var(--aura-blue);
-  bottom: -34vmax;
-  right: -10vmax;
-  animation-duration: 52s;
-  animation-delay: -20s;
-}
-.aura span:nth-child(4) {
-  background: var(--aura-sun);
-  bottom: -36vmax;
-  left: -20vmax;
-  opacity: calc(var(--aura-strength) * 0.7);
-  animation-duration: 44s;
-  animation-delay: -6s;
-}
-@keyframes aura-drift {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
-  }
-  50% {
-    transform: translate3d(6vmax, 4vmax, 0) scale(1.08) rotate(20deg);
-  }
-  100% {
-    transform: translate3d(-4vmax, 7vmax, 0) scale(0.94) rotate(-14deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .aura span {
-    animation: none;
-  }
+/* A rule that only divides, dashed and light. */
+.rule-dashed {
+  border-style: dashed;
+  border-color: #e1e2e8;
 }
 
-/* Glass: what floats over the aura. */
-.glass {
-  background: var(--card);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow: var(--glass-shadow);
+/* Small headings over a group: grey capitals, widely spaced. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* An icon on a solid indigo square, crossed by a fine grid, as Lightdash draws them. `.icon-tile-ink` is the small
+   black one, for what is only a thing among others. */
+.icon-tile,
+.icon-tile-ink {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: #fff;
+  background-size: 4px 4px;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+}
+.icon-tile {
+  background-color: var(--primary);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.13) 1px, transparent 1px);
+}
+.icon-tile-ink {
+  background-color: var(--foreground);
+  border-radius: 4px;
+}
+
+/* Relief: what sits on the dots stands a little off them. */
+.raised {
+  box-shadow:
+    0 1px 0 rgba(30, 29, 43, 0.04),
+    0 1px 3px rgba(30, 29, 43, 0.06),
+    0 8px 24px -16px rgba(30, 29, 43, 0.18);
 }
 
 /* What Claude writes, as web/markdown.ts builds it. */

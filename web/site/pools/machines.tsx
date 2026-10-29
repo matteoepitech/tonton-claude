@@ -3,7 +3,7 @@
 // and admins, or the session's owner, stop one, and its machine puts the task back on the board. A machine's owner, the
 // pool's owner and admins stop it or take it out; its owner chooses the models it runs on (#283) and, as an admin, makes
 // it run the orchestrator.
-import { BotIcon, EllipsisIcon, MessageSquareIcon, PowerIcon, PowerOffIcon, SparklesIcon, XIcon } from 'lucide-react'
+import { BotIcon, CpuIcon, EllipsisIcon, MessageSquareIcon, PowerIcon, PowerOffIcon, SparklesIcon, XIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   DEFAULT_TIER_MODELS,
@@ -140,6 +140,9 @@ function MachineRow({ card, pool, state }: { card: MachineCard; pool: OpenPool; 
       <ContextMenu actions={actions}>
         <div className="flex flex-col gap-2 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
+            <span className="icon-tile-ink size-6">
+              <CpuIcon className="size-3.5" />
+            </span>
             <StatusDot status={machine.stopped || !machine.online ? 'offline' : busy ? 'working' : 'idle'} />
             <strong className="truncate text-sm font-medium">{card.name}</strong>
             {card.orchestrator && (

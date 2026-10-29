@@ -9,6 +9,7 @@ import { ago } from '../format'
 import { useStore } from '../store'
 import { Button } from '../ui/button'
 import { Badge, Card } from '../ui/card'
+import { cn } from '../ui/cn'
 
 export function PlanCard({ pool, state, plan }: { pool: OpenPool; state: PoolState; plan: PendingPlan }) {
   const store = useStore()
@@ -22,10 +23,12 @@ export function PlanCard({ pool, state, plan }: { pool: OpenPool; state: PoolSta
     setBusy(false)
   }
   return (
-    <Card className="flex flex-col gap-3 border-primary/40 bg-primary/5 p-4">
-      <div className="flex items-center gap-2">
-        <SparklesIcon className="size-4 text-primary" />
-        <strong className="text-sm">The orchestrator's plan</strong>
+    <Card className="flex flex-col gap-3 border-primary/50 p-4">
+      <div className="flex items-center gap-2.5">
+        <span className="icon-tile size-7">
+          <SparklesIcon className="size-4" />
+        </span>
+        <strong className="text-[15px] font-semibold">The orchestrator's plan</strong>
         <span className="text-xs text-muted-foreground">
           {count} task{count === 1 ? '' : 's'} · {ago(plan.ts)}
         </span>
@@ -33,13 +36,11 @@ export function PlanCard({ pool, state, plan }: { pool: OpenPool; state: PoolSta
       {plan.body.text && <InlineText text={plan.body.text} className="text-sm" />}
       <div className="grid gap-2 sm:grid-cols-2">
         {lanes.map(lane => (
-          <div key={lane.machine?.machine ?? 'later'} className="flex flex-col gap-1.5 rounded-lg border bg-card px-3 py-2">
+          <div key={lane.machine?.machine ?? 'later'} className="flex flex-col gap-1.5 rounded-md border bg-card px-3 py-2.5">
             <div className="flex min-w-0 items-center gap-2">
-              {lane.machine ? (
-                <CpuIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              ) : (
-                <HourglassIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              )}
+              <span className={cn('size-5', lane.machine ? 'icon-tile-ink' : 'icon-tile')}>
+                {lane.machine ? <CpuIcon className="size-3" /> : <HourglassIcon className="size-3" />}
+              </span>
               <strong className="truncate text-sm font-medium">{lane.machine ? lane.name : 'Later'}</strong>
               {lane.owner && <span className="truncate text-xs text-muted-foreground">{lane.owner}</span>}
             </div>

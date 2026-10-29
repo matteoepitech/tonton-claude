@@ -2,6 +2,8 @@
 // page it opens take the screen one after the other.
 import { LogOutIcon } from 'lucide-react'
 import { Empty, Loading } from './common'
+import { DotField } from './dots'
+import { PixelLogo } from './logo'
 import { Pools } from './pools/pools'
 import { HeroPage } from './rpg'
 import { Chat } from './sessions/chat'
@@ -16,21 +18,9 @@ import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 export function App() {
   return (
     <>
-      <Aura />
+      <DotField />
       <Page />
     </>
-  )
-}
-
-/** The lights drifting behind every page (app.css). */
-function Aura() {
-  return (
-    <div className="aura" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-      <span />
-    </div>
   )
 }
 
@@ -42,11 +32,11 @@ function Page() {
   return <Shell />
 }
 
-/** The three places of the site, each with its own colored dot. */
+/** The three places of the site. */
 const MODES = [
-  { value: 'sessions', label: 'Sessions', dot: 'bg-[var(--aura-orange)]' },
-  { value: 'pools', label: 'Pools', dot: 'bg-[var(--aura-sun)]' },
-  { value: 'hero', label: 'Tonton', dot: 'bg-[var(--aura-pink)]' },
+  { value: 'sessions', label: 'Sessions' },
+  { value: 'pools', label: 'Pools' },
+  { value: 'hero', label: 'Tonton' },
 ] as const
 
 function Shell() {
@@ -55,20 +45,26 @@ function Shell() {
   const saved = store.saved
   if (!state || !saved) return null
   return (
-    <div className="flex h-full flex-col gap-3 p-3">
-      <header className="glass flex flex-wrap items-center gap-x-4 gap-y-2 rounded-full border px-4 py-2">
-        <strong className="font-serif text-lg whitespace-nowrap tracking-tight">Tonton Claude</strong>
-        <Tabs value={store.mode} onValueChange={value => store.setMode(value as typeof store.mode)} className="mx-auto">
-          <TabsList className="h-9 bg-transparent">
+    <div className="flex h-full flex-col">
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b bg-white px-5 py-2.5">
+        <span className="flex items-center gap-2">
+          <PixelLogo />
+          <strong className="text-base font-bold whitespace-nowrap tracking-tight">Tonton Claude</strong>
+        </span>
+        <Tabs value={store.mode} onValueChange={value => store.setMode(value as typeof store.mode)}>
+          <TabsList className="h-auto gap-1 border-0 bg-transparent p-0">
             {MODES.map(mode => (
-              <TabsTrigger key={mode.value} value={mode.value} className="data-[state=active]:bg-secondary data-[state=active]:shadow-none">
-                <span className={cn('size-1.5 rounded-full', mode.dot)} />
+              <TabsTrigger
+                key={mode.value}
+                value={mode.value}
+                className="h-8 px-2.5 focus-visible:bg-accent focus-visible:ring-0 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:font-semibold"
+              >
                 {mode.label}
               </TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
-        <span className="flex items-center gap-3">
+        <span className="ms-auto flex items-center gap-3">
           <Connection
             state={state.connection === 'connected' ? 'connected' : state.connection === 'connecting' ? 'connecting' : 'offline'}
           />
@@ -91,16 +87,16 @@ function Sessions() {
   const session = state.sessions.find(s => s.id === state.selectedId)
   const showChat = store.showingChat && session
   return (
-    <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[280px_1fr]">
-      <nav className={cn('glass overflow-y-auto rounded-2xl border p-2', showChat && 'hidden md:block')}>
+    <div className="grid min-h-0 flex-1 md:grid-cols-[280px_1fr]">
+      <nav className={cn('rule-dashed overflow-y-auto border-e bg-white p-2', showChat && 'hidden md:block')}>
         <SessionList state={state} folded={store.folded} onPick={picked => store.select(picked.id)} onFold={key => store.toggleFold(key)} />
       </nav>
-      <main className={cn('glass flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border', !showChat && 'hidden md:flex')}>
+      <main className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden', session && 'bg-white', !showChat && 'hidden md:flex')}>
         {session ? (
           // Keyed by the session: its own files view, its own draft.
           <Chat key={session.id} session={session} state={state} client={store.client} onBack={() => store.select(null)} />
         ) : (
-          <Empty className="m-auto font-serif text-2xl text-muted-foreground">Pick a session.</Empty>
+          <Empty className="eyebrow raised m-auto rounded-md border bg-white px-4 py-2.5">Pick a session</Empty>
         )}
         {state.error && <p className="border-t px-4 py-2 text-xs text-destructive">{state.error}</p>}
       </main>

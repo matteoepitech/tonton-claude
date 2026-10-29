@@ -16,7 +16,7 @@ export type Action = {
 } | null
 
 const item =
-  'relative flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none select-none focus:bg-accent data-[disabled]:opacity-50 [&_svg]:size-4'
+  'relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none focus:bg-accent data-[disabled]:opacity-50 [&_svg]:size-4'
 
 /** What it wraps opens the menu on a right-click (or a long press), instead of the browser's own. */
 export function ContextMenu({ actions, children }: { actions: Action[]; children: ReactNode }) {
@@ -26,7 +26,7 @@ export function ContextMenu({ actions, children }: { actions: Action[]; children
     <ContextPrimitive.Root>
       <ContextPrimitive.Trigger asChild>{children}</ContextPrimitive.Trigger>
       <ContextPrimitive.Portal>
-        <ContextPrimitive.Content className="z-50 min-w-[11rem] overflow-hidden rounded-xl border bg-popover/95 p-1 text-popover-foreground shadow-lg backdrop-blur">
+        <ContextPrimitive.Content className="z-50 min-w-[11rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
           {shown.map((action, index) =>
             action ? (
               <ContextPrimitive.Item

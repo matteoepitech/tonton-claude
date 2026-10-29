@@ -35,7 +35,7 @@ export function searchPath(
 export function loginShell(info: () => { shell: string | null } = userInfo): string | null {
   try {
     const shell = info().shell
-    return shell && shell.startsWith('/') && !shell.endsWith('/false') && !shell.endsWith('/nologin') ? shell : null
+    return shell?.startsWith('/') && !shell.endsWith('/false') && !shell.endsWith('/nologin') ? shell : null
   } catch {
     return null
   }

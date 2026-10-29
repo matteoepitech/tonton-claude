@@ -46,8 +46,9 @@ export function Members({ pool, state, machines }: TabProps & { machines: (accou
         const roles = assignableRoles(pool.role, member.role, self)
         return (
           <section key={member.account} className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <strong className="font-medium">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="icon-tile size-8 text-sm font-bold">{name.trim().charAt(0).toUpperCase() || 'M'}</span>
+              <strong className="font-semibold">
                 {name}
                 {self ? ' (you)' : ''}
               </strong>

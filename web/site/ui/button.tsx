@@ -5,13 +5,18 @@ import type { ComponentProps } from 'react'
 import { cn } from './cn'
 
 export const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full text-sm font-medium transition-all active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_var(--primary)] hover:brightness-110',
+        /** Ink: the action that matters. */
+        default:
+          'bg-foreground text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(30,29,43,0.2)] hover:bg-foreground/85',
+        /** Indigo, for the one action a page leads to. */
+        accent:
+          'bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(30,29,43,0.2)] hover:bg-primary/90',
         destructive: 'bg-destructive text-white hover:bg-destructive/90',
-        outline: 'border bg-card/60 backdrop-blur hover:bg-accent',
+        outline: 'border border-input bg-white shadow-[0_1px_0_rgba(30,29,43,0.05)] hover:bg-accent',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-accent',
         ghost: 'hover:bg-accent',
         link: 'text-primary underline-offset-4 hover:underline',

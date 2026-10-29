@@ -155,12 +155,12 @@ export function HeroPage() {
     const timer = setTimeout(() => setRevealed(true), 1200)
     return () => clearTimeout(timer)
   }, [opening])
-  if (!hero) return <div className="p-6">{error ?? 'Syncing Tonton…'}</div>
+  if (!hero) return <div className="flex-1 bg-white p-6">{error ?? 'Syncing Tonton…'}</div>
   const stats = rpgStats(hero)
   const receipt = opening ? hero.openings[opening] : null
   const drop = RPG_CATALOG.find(i => i.id === receipt?.item)
   return (
-    <main className="overflow-y-auto p-6">
+    <main className="flex-1 overflow-y-auto bg-white p-6">
       <div className="mx-auto flex max-w-3xl flex-col gap-6">
         <header className="flex items-center gap-5">
           <HeroAvatar equipped={{ ...hero.equipped, ...(preview ? { [preview.slot]: preview.id } : {}) }} size={96} />

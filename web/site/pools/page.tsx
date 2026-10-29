@@ -58,12 +58,13 @@ export function PoolPage({ poolId }: { poolId: string }) {
   const more = MORE.find(tab => tab.id === current.id)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-2.5 border-b px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-3 border-b bg-white px-4 py-3">
         <Button variant="ghost" size="icon" className="md:hidden" onClick={() => store.showPool(null)} aria-label="Back to the pools">
           <ArrowLeftIcon />
         </Button>
+        <span className="icon-tile size-10 text-lg font-bold">{name.trim().charAt(0).toUpperCase() || 'P'}</span>
         <span className="flex min-w-0 flex-col">
-          <strong className="truncate font-serif text-2xl font-normal tracking-tight">{name}</strong>
+          <strong className="truncate text-2xl leading-tight font-bold tracking-tight">{name}</strong>
           {state?.info?.goal && <small className="truncate text-xs text-muted-foreground">{state.info.goal}</small>}
         </span>
         {pool && <Badge variant="secondary">{roleLabel(pool.role)}</Badge>}
@@ -90,7 +91,7 @@ export function PoolPage({ poolId }: { poolId: string }) {
         )
       ) : (
         <>
-          <div className="flex items-center gap-2 border-b px-4 py-2">
+          <div className="flex items-center gap-2 border-b bg-white px-4 py-2">
             <Tabs value={more ? '' : current.id} onValueChange={tab => store.setPoolTab(tab)}>
               <TabsList className="max-w-full">
                 {TABS.map(tab => (
