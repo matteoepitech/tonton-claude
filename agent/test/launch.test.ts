@@ -20,6 +20,7 @@ import {
   openCodeMajor,
   openCodeModelFile,
   openCodeStarts,
+  questionOn,
   readOpenCodeService,
 } from '../src/launch'
 import { writeUsage } from '../src/usage'
@@ -318,20 +319,57 @@ describe("a pool task's model", () => {
 })
 
 describe("answering Claude Code's questions", () => {
-  // As Claude Code 2 draws its trust question, with "No, exit" selected first.
-  const trust = [
-    ' Quick safety check: Is this a project you created or one you trust?',
+  // As Claude Code 2.1 draws its trust question in a folder it does not trust yet, captured with tmux: both titles, the
+  // choices one per line, "No, exit" selected first.
+  const vertical = [
+    '────────────────────────────────────────',
+    ' Accessing workspace:',
+    '',
+    ' /Users/Shared/tonton-trust-probe',
+    '',
+    " Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what's in this",
+    ' folder first.',
+    '',
     " Claude Code'll be able to read, edit, and execute files here.",
+    '',
+    ' Security guide',
+    '',
     ' ❯ No, exit',
     '   Yes, I trust this folder',
+    '',
     ' Enter to confirm · Esc to cancel',
   ].join('\n')
+  // The same question with its choices side by side, as other versions draw it.
+  const oneLine = (choices: string) =>
+    [' Accessing workspace:', '', ' /home/me/pool/tasks/abc', '', ` ${choices}`, '', ' Enter to confirm · Esc to cancel'].join('\n')
 
-  test('the cursor goes to the yes before Enter', () => {
-    expect(keysToYes(trust)).toEqual(['Down'])
+  test('the cursor goes down to the yes before Enter, when the choices are one per line', () => {
+    expect(keysToYes(vertical)).toEqual(['Down'])
     expect(keysToYes(' ❯ 1. Yes, I trust this folder\n   2. No, exit')).toEqual([])
     expect(keysToYes('   1. Yes, continue\n   2. Maybe\n ❯ 3. No')).toEqual(['Up', 'Up'])
-    // No menu on screen, as older versions asked: Enter alone.
+  })
+
+  test('and right to it when they are side by side on one line', () => {
+    expect(keysToYes(oneLine('❯ No, exit | Yes, I trust this folder'))).toEqual(['Right'])
+    expect(keysToYes(oneLine('❯ No, exit    Yes, I trust this folder'))).toEqual(['Right'])
+    expect(keysToYes(oneLine('❯ 1. No, exit | 2. Maybe later | 3. Yes, I trust this folder'))).toEqual(['Right', 'Right'])
+    // Yes before the selected one, or selected already.
+    expect(keysToYes(oneLine('Yes, I trust this folder | ❯ No, exit'))).toEqual(['Left'])
+    expect(keysToYes(oneLine('No, exit | ❯ Yes, I trust this folder'))).toEqual([])
+  })
+
+  test('no menu on screen, as older versions asked: Enter alone', () => {
     expect(keysToYes('Quick safety check: Is this a project you created or one you trust?')).toEqual([])
+  })
+
+  test('the trust question is known by either title', () => {
+    const trust = 'Claude Code asks whether you trust the files in this folder.'
+    expect(questionOn(vertical)?.text).toBe(trust)
+    expect(questionOn(' Accessing workspace:\n\n /home/me/code\n\n ❯ No, exit | Yes, I trust this folder')?.text).toBe(trust)
+    expect(questionOn(' Quick safety check: Is this a project you created or one you trust?')?.text).toBe(trust)
+    expect(questionOn('WARNING: Loading development channels')?.text).toContain('channel')
+    // Once answered, the same question still on screen waits for nothing.
+    expect(questionOn(vertical, new Set([trust]))).toBeUndefined()
+    expect(questionOn('❯ Try "how do I log an error?"')).toBeUndefined()
   })
 })
