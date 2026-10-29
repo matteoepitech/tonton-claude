@@ -16,6 +16,7 @@ import {
   handleStartOrder,
   keysToYes,
   launchForPool,
+  moveToYes,
   newSession,
   openCodeMajor,
   openCodeModelFile,
@@ -358,6 +359,42 @@ describe("answering Claude Code's questions", () => {
     expect(keysToYes(oneLine('No, exit | ❯ Yes, I trust this folder'))).toEqual([])
   })
 
+  test('keys sent before Claude Code reads the keyboard are sent again until the screen shows the yes', async () => {
+    // It drops the first two Downs, as it does right after drawing the question.
+    const yesSelected = vertical.replace(' ❯ No, exit', '   No, exit').replace('   Yes, I trust', ' ❯ Yes, I trust')
+    let lost = 2
+    let screen = vertical
+    const sent: string[][] = []
+    const send = (keys: string[]) => {
+      sent.push(keys)
+      if (lost-- <= 0) screen = yesSelected
+    }
+    expect(
+      await moveToYes(
+        () => screen,
+        send,
+        async () => {},
+      ),
+    ).toBe(true)
+    expect(sent).toEqual([['Down'], ['Down'], ['Down']])
+    // No menu: nothing to move, Enter can go.
+    expect(
+      await moveToYes(
+        () => 'Quick safety check: trust it?',
+        send,
+        async () => {},
+      ),
+    ).toBe(true)
+    // A cursor that never moves: no Enter, the question waits.
+    expect(
+      await moveToYes(
+        () => vertical,
+        () => {},
+        async () => {},
+      ),
+    ).toBe(false)
+  })
+
   test('no menu on screen, as older versions asked: Enter alone', () => {
     expect(keysToYes('Quick safety check: Is this a project you created or one you trust?')).toEqual([])
   })
@@ -368,8 +405,10 @@ describe("answering Claude Code's questions", () => {
     expect(questionOn(' Accessing workspace:\n\n /home/me/code\n\n ❯ No, exit | Yes, I trust this folder')?.text).toBe(trust)
     expect(questionOn(' Quick safety check: Is this a project you created or one you trust?')?.text).toBe(trust)
     expect(questionOn('WARNING: Loading development channels')?.text).toContain('channel')
-    // Once answered, the same question still on screen waits for nothing.
-    expect(questionOn(vertical, new Set([trust]))).toBeUndefined()
+    // Once answered, the same question still on screen waits for nothing a moment, then is answered again: its Enter
+    // may have been lost.
+    expect(questionOn(vertical, new Map([[trust, 1000]]), 2000)).toBeUndefined()
+    expect(questionOn(vertical, new Map([[trust, 1000]]), 6000)?.text).toBe(trust)
     expect(questionOn('❯ Try "how do I log an error?"')).toBeUndefined()
   })
 })
