@@ -41,13 +41,42 @@ export const QUESTIONS = [
   },
 ]
 
-/** The question on screen, if any, among those not answered yet (by their text). */
-export function questionOn(screen: string, answered: ReadonlySet<string> = new Set()): (typeof QUESTIONS)[number] | undefined {
-  return QUESTIONS.find(q => !answered.has(q.text) && q.markers.some(marker => screen.includes(marker)))
+/** The question on screen, if any, among those not answered lately (by their text, with when). */
+export function questionOn(
+  screen: string,
+  answered: ReadonlyMap<string, number> = new Map(),
+  now = Date.now(),
+): (typeof QUESTIONS)[number] | undefined {
+  return QUESTIONS.find(
+    q => now - (answered.get(q.text) ?? Number.NEGATIVE_INFINITY) > ANSWER_AGAIN_MS && q.markers.some(marker => screen.includes(marker)),
+  )
 }
 
-/** Between moving the cursor of a question and Enter, for its screen to follow. */
-const KEY_SETTLE_MS = 200
+/** Between moving the cursor of a question and looking at it again, for its screen to follow. */
+const KEY_SETTLE_MS = 300
+/** How many times the cursor is moved before giving up on a question for now. */
+const MOVE_ATTEMPTS = 20
+/** A question answered but still on screen after this is answered again: its Enter was lost. */
+const ANSWER_AGAIN_MS = 4000
+
+/**
+ * Moves the cursor of the question on screen to its yes, and true once the screen shows it there (or shows no menu).
+ * Claude Code draws its question before it reads the keyboard: keys sent too early are lost, and an Enter that comes
+ * after them picks the No it selects first. So the cursor is moved again until the screen shows it on the yes.
+ */
+export async function moveToYes(
+  capture: () => string,
+  send: (keys: string[]) => void,
+  sleep: (ms: number) => Promise<unknown> = Bun.sleep,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < MOVE_ATTEMPTS; attempt++) {
+    const keys = keysToYes(capture())
+    if (!keys.length) return true
+    send(keys)
+    await sleep(KEY_SETTLE_MS)
+  }
+  return false
+}
 
 /** A choice that says yes: `Yes, I trust this folder`, `1. Yes`, with the cursor on it or not. */
 const YES = /^(❯\s*)?(\d+[.)]\s*)?Yes\b/i
@@ -272,7 +301,7 @@ async function runLaunch(
   if (!created.ok) return failed(report, `tmux could not start: ${created.output}`)
   const belongs = paneProcess(tmux(['display-message', '-p', '-t', pane, '#{pane_pid}']).output)
   report('starting')
-  const answered = new Set<string>()
+  const answered = new Map<string, number>()
   let screen = ''
   let deadline = startedAt + START_TIMEOUT_MS
   while (Date.now() < deadline) {
@@ -280,7 +309,8 @@ async function runLaunch(
     const capture = tmux(['capture-pane', '-p', '-t', pane])
     if (!capture.ok) return failed(report, `claude stopped before it was ready.\n\n${lastLines(screen)}`)
     screen = capture.output
-    // A question already answered can stay on screen a moment: only a new one waits for the user.
+    // A question already answered can stay on screen a moment: only a new one, or one still there a while after its
+    // answer, waits for the user.
     const question = questionOn(screen, answered)
     if (!question) {
       const sessionId = newSession(cwd, startedAt, options.run, belongs)
@@ -298,14 +328,14 @@ async function runLaunch(
     }
     // The answer can come minutes later: Enter only goes to the screen the user saw. If it changed, they are asked again.
     if (lastLines(tmux(['capture-pane', '-p', '-t', pane]).output) !== shown) continue
-    answered.add(question.text)
-    // Claude Code selects its no first on some questions ("No, exit"): the cursor goes to the yes, then Enter.
-    const moves = keysToYes(shown)
-    if (moves.length) {
-      tmux(['send-keys', '-t', pane, ...moves])
-      await Bun.sleep(KEY_SETTLE_MS)
-    }
+    // Claude Code selects its no first on some questions ("No, exit"): Enter only once the screen shows the yes selected.
+    const onYes = await moveToYes(
+      () => tmux(['capture-pane', '-p', '-t', pane]).output,
+      keys => tmux(['send-keys', '-t', pane, ...keys]),
+    )
+    if (!onYes) continue
     tmux(['send-keys', '-t', pane, 'Enter'])
+    answered.set(question.text, Date.now())
     deadline = Date.now() + START_TIMEOUT_MS
   }
   const left = tmux(['has-session', '-t', session]).ok
