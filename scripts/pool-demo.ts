@@ -108,6 +108,8 @@ export interface PoolDemoOptions {
    * website. Accepted there first, it goes on from there. 0: at once.
    */
   acceptAfterMs?: number
+  /** How long each stand-in works on its task before it finishes it. 0: at once. */
+  workMs?: number
 }
 
 /** True where the demo runs: its sessions live in tmux, as on any pool machine. */
@@ -162,6 +164,7 @@ export async function startPoolDemo(options: PoolDemoOptions = {}): Promise<Pool
         TONTON_HOME: home,
         TONTON_SERVICE: 'off',
         TONTON_STAND_IN_PLAN: plan,
+        TONTON_STAND_IN_WORK_MS: String(options.workMs ?? 0),
         TMUX_TMPDIR: tmux,
         SHELL: shell,
       }
@@ -288,7 +291,7 @@ if (import.meta.main) {
   }
   console.log('Starting a relay, three machines and a pool…')
   // Time to see the plan's card on the website and accept it there; the demo accepts it otherwise.
-  demo = await startPoolDemo({ port, onChange: show, acceptAfterMs: 60_000 })
+  demo = await startPoolDemo({ port, onChange: show, acceptAfterMs: 60_000, workMs: 15_000 })
   const running = demo
   console.log(`
 The pool runs on autopilot at ${running.relay}

@@ -1,0 +1,11 @@
+{
+  "version": "0.9.3",
+  "sha256": {
+    "tonton-linux-x64": "f5323d21f1b1a52f1e6a9101928943e5797b6b182140b930e2ca01bc463c9f65",
+    "tonton-linux-arm64": "12511bb84d1ad58751b5b14583825360cb4ebe928c3618a60b3d8686ca0779f3",
+    "tonton-darwin-x64": "79c182c0574760de9bbc6e6988893abea2b80d219328c999cfa6bc23e140b53b",
+    "tonton-darwin-arm64": "4bbb5068d012924f77bb926c50021a4110d6d072f8eeb74b7dcf2d9f3179c0db",
+    "tonton-relay-linux-x64": "e8117652c6b7dd72183fbdf462a86853b4b282cd6e478848e6d4fc6ed98420dd",
+    "tonton-relay-linux-arm64": "6c7b1869b09490048ac5842a84196226012dd2cea23ffd3635921fd46a610cfa"
+  }
+}

@@ -117,6 +117,17 @@ final class SessionStore: ObservableObject {
     /// Machines that got the current auto-approve rules since the app connected.
     private var rulesSentTo: Set<String> = []
 
+    #if DEBUG
+        /// Sample sessions, for drawing the notch to an image (the README's screenshots): no relay is asked anything.
+        func showSample(sessions: [SessionSummary], entries: [String: [Entry]], machines: [MachineInfo], selected: String) {
+            relaySessions = sessions
+            relayEntries = entries
+            self.machines = machines
+            connection = .connected
+            selectedId = selected
+        }
+    #endif
+
     init(settings: AppSettings) {
         self.settings = settings
         socket.onState = { [weak self] state in self?.socketStateChanged(state) }

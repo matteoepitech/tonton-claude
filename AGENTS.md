@@ -25,6 +25,7 @@ opencode ─ Tonton plugin ──────▶ agent
 | `web/` | The website (`web/site/`, React with shadcn/ui, Tailwind and React Flow): served by the relay at its address, and released as one HTML file (`bun run web`, `tonton-web.html`). Built on the client core in `shared/`, which decrypts in the browser. `views.ts` and `markdown.ts` are the island's. | TypeScript (React) |
 | `desktop/` | The island for Windows and Linux: an Electron window at the top of the screen with the web app's views (`web/views.ts`), a tray icon, and the account in the system's keyring. Its own `package.json`. | TypeScript (Electron) |
 | `scripts/` | Release builds and the install scripts published with each release (`install.sh`, `install.ps1`, `install-relay.sh`). | TS, sh, PowerShell |
+| `flake.nix`, `nix/` | The Nix flake: the release's agent and relay as packages, and NixOS modules for each ([docs/nix.md](docs/nix.md)). `nix/release.json` names the release: `bun scripts/nix-release.ts` after each one. | Nix |
 | `test/` | Tests that run a real relay with a real agent. Unit tests live next to each part (`agent/test`, `relay/test`, `app/Tests`). | TypeScript |
 
 ## Commands
