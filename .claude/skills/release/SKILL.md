@@ -44,3 +44,5 @@ scripts and `SHA256SUMS`.
 - With a Developer ID, the widget is in the gallery (right-click the desktop › **Edit Widgets…**, search Tonton) once
   the new app has started, and it lists the sessions of the notch. Ad-hoc releases have no widget.
 - If the relay changed, update the hosted relay with `install-relay.sh` (see `docs/self-hosting.md`).
+- Point the Nix flake at the new release: `bun scripts/nix-release.ts`, then commit `nix/release.json` on a branch and
+  open a PR (`docs/nix.md`). Until then, Nix users get the previous version.

@@ -110,6 +110,8 @@ claude.fallbackNotificationHandler = async notification => {
   if (!task) return
   if (/crash/i.test(content)) process.exit(1)
   await call('task_claim', { task })
+  // The demo lets each task take a while, to be watched: the tests, none.
+  await Bun.sleep(Number(process.env.TONTON_STAND_IN_WORK_MS ?? 0))
   writeFileSync(join(process.cwd(), `${task}.md`), 'Done by the stand-in.\n')
   git('add', '.')
   git('commit', '-m', `work on ${task}`)

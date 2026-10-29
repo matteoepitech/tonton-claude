@@ -63,6 +63,34 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
   <img src=".github/assets/settings.png" alt="Tonton Claude settings: machines connected to your account">
 </p>
 
+## Working as a team
+
+A pool puts the machines of several people on one project. On the relay's website (`https://<relay>/` › **Pools**),
+make one with the project's repository and send the invite link. Each teammate's machines join with what their account
+brings, Claude Max, Pro or OpenCode, and how many sessions they can run at once: nothing to fill in.
+
+Then tell the orchestrator what to build. It proposes a plan, who does what, and you accept it: every machine gets to
+work, each task in a session of its own on its own branch, merged into main once the checks pass. For a hackathon,
+give the pool a deadline: the orchestrator plans for the time left.
+
+<p align="center">
+  <img src=".github/assets/pool-website.png" alt="A pool on the relay's website: the orchestrator's plan, each machine with the tasks it starts, and Accept and start">
+</p>
+
+The notch shows the same plan above the orchestrator's conversation, and the pool of each session in its header.
+
+<p align="center">
+  <img src=".github/assets/pool-notch.png" alt="The notch: the orchestrator's plan with Accept and start, and a session's pool panel">
+</p>
+
+The control center draws the pool as a network: its machines, the sessions they run and the tasks those work on, live.
+
+<p align="center">
+  <img src=".github/assets/pool-network.png" alt="The control center: the pool in the middle, its machines, their sessions and the tasks in progress">
+</p>
+
+See [how pools work](docs/pools.md) and [the autopilot](docs/pool-autopilot.md).
+
 ## Good to know
 
 - **Do I need a server?** No. The hosted relay at `tonton.d3l.tech` works out of the box. You can also
@@ -88,13 +116,12 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 - **Allow for this session.** A permission card also offers to allow calls like the one it asks for until the session
   ends: a command's first words (`npm test`, never what is chained after it), a site for web pages, any call of the other
   tools. The agent keeps the rule and drops it when the session ends.
-- **Working as a team.** A pool puts the sessions of several people on one project: on the relay's website
-  (`https://<relay>/`), **Pools** makes one, invites with a link or a QR code, and shows its task board, live. For a
-  hackathon, give it the repository and the deadline: the orchestrator plans for the time left.
 - **Showing a teammate.** In a conversation, the share menu › **Share read-only** copies a key for one session, valid for
   an hour, a day or a week. Your teammate pastes it in `tonton-web.html` and follows that session live, without being
   able to write to it. It has its own key: your account key stays with you. **Settings › Relay** lists the shares and
   revokes them.
+- **NixOS?** The flake has the agent and the relay, with a module for each: `programs.tonton.enable` and
+  `services.tonton-relay.enable`. See [Nix and NixOS](docs/nix.md).
 - **OpenCode?** Yes: the installer adds a plugin to OpenCode when it finds it, and its sessions work in the notch like
   Claude Code's: messages, permissions, auto-approve rules, compact and interrupt. On this Mac, OpenCode 2's sessions
   show up and take messages even without the agent.
