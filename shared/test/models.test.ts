@@ -149,6 +149,14 @@ describe('sessions', () => {
     expect(displayStatusText(session({ statusText: 'Claude is waiting for your input' }))).toBe('Waiting for you')
     expect(displayStatusText(session({ statusText: 'rate_limit' }))).toBe('Usage limit reached')
     expect(displayStatusText(session({ status: 'permission' }))).toBe('Needs approval')
+    expect(displayStatusText(session({ statusText: 'OpenCode needs your permission to use bash' }))).toBe('Wants to use bash')
+  })
+
+  test('without the tool in the text, as from Claude Code 2.1.160, the pending request names it', () => {
+    const request = { requestId: 'r1', toolName: 'Edit', description: 'Edit a.ts', inputPreview: '{}', ts: '' }
+    const asking = { status: 'permission' as const, statusText: 'Claude needs your permission' }
+    expect(displayStatusText(session({ ...asking, pendingPermissions: [request] }))).toBe('Wants to use Edit')
+    expect(displayStatusText(session(asking))).toBe('Needs approval')
   })
 
   test('live sessions come first, then the most recent, and the one that needs the user is shown first', () => {

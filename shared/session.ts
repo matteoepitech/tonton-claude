@@ -127,11 +127,16 @@ export interface Machine {
 }
 
 /** Claude Code's notification texts, shortened like the notch does. */
-export function displayStatusText(session: Pick<Session, 'status' | 'statusText'>): string {
+export function displayStatusText(session: Pick<Session, 'status' | 'statusText' | 'pendingPermissions'>): string {
   const text = session.statusText
   if (!text) return STATUS_LABELS[session.status]
   const permission = text.indexOf('needs your permission to use ')
   if (permission >= 0) return `Wants to use ${text.slice(permission + 'needs your permission to use '.length)}`
+  // Claude Code 2.1.160 and later no longer name the tool: the request it waits on does.
+  if (text.includes('needs your permission')) {
+    const tool = session.pendingPermissions[0]?.toolName
+    return tool ? `Wants to use ${tool}` : STATUS_LABELS.permission
+  }
   if (text.includes('waiting for your input')) return 'Waiting for you'
   // StopFailure's error type when the plan's limit refuses a request.
   if (text === 'rate_limit') return 'Usage limit reached'

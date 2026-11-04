@@ -93,6 +93,7 @@ extension SessionVault {
         state.sessions.map { session in
             let info = open(session.info, as: SessionInfo.self)
             let detail = open(session.detail, as: StatusDetail.self)?.text
+            // The island's state carries no permission request: a text that does not name the tool shows the status.
             return IslandLine(
                 id: session.id, status: session.status, project: info?.project ?? "Session", machine: info?.machine,
                 text: SessionSummary.statusText(detail, status: session.status))

@@ -34,6 +34,8 @@ final class LocalizedTextTests: XCTestCase {
         let limit = UsageLimit(usedPercent: 42.4, resetsAt: now.addingTimeInterval(3600))
         XCTAssertEqual(Spoken.status(.working, limit: limit, at: now), "Au travail, limite de 5 heures utilisée à 42\u{A0}%")
         XCTAssertEqual(SessionSummary.statusText("Claude needs your permission to use Bash", status: .permission), "Veut utiliser Bash")
+        XCTAssertEqual(SessionSummary.statusText("Claude needs your permission", status: .permission, tool: "Edit"), "Veut utiliser Edit")
+        XCTAssertEqual(SessionSummary.statusText("Claude needs your permission", status: .permission), "Autorisation requise")
         XCTAssertEqual(AgentText.localized("Conversation compacted"), "Conversation compactée")
         XCTAssertEqual(AgentText.localized("Something Claude wrote"), "Something Claude wrote")
     }
