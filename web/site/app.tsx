@@ -1,6 +1,7 @@
 // The website: signing in, the account's sessions with their conversations, and the pools. On phones the list and the
 // page it opens take the screen one after the other.
 import { LogOutIcon } from 'lucide-react'
+import { Clusters } from './clusters/clusters'
 import { Empty, Loading } from './common'
 import { DotField } from './dots'
 import { PixelLogo } from './logo'
@@ -32,10 +33,11 @@ function Page() {
   return <Shell />
 }
 
-/** The three places of the site. */
+/** The places of the site. */
 const MODES = [
   { value: 'sessions', label: 'Sessions' },
   { value: 'pools', label: 'Pools' },
+  { value: 'clusters', label: 'Clusters' },
   { value: 'hero', label: 'Tonton' },
 ] as const
 
@@ -75,7 +77,15 @@ function Shell() {
           </Button>
         </span>
       </header>
-      {store.mode === 'pools' ? <Pools /> : store.mode === 'hero' ? <HeroPage key={saved.accountId ?? saved.relay} /> : <Sessions />}
+      {store.mode === 'pools' ? (
+        <Pools />
+      ) : store.mode === 'clusters' ? (
+        <Clusters />
+      ) : store.mode === 'hero' ? (
+        <HeroPage key={saved.accountId ?? saved.relay} />
+      ) : (
+        <Sessions />
+      )}
     </div>
   )
 }

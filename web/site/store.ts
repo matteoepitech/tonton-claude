@@ -1,5 +1,5 @@
 // What the website knows, outside React: the account it signed in with, the relay client and its state, a read-only
-// share, and the pools. React reads it through `useStore` and redraws when it changes. Built on the client core
+// share, the pools and the clusters. React reads it through `useStore` and redraws when it changes. Built on the client core
 // (shared/), which decrypts in the page: the account key never reaches the relay. Signing in takes the recovery key of
 // the Mac app, pasted or scanned; remembering it keeps the key as a CryptoKey that no script can read back.
 
@@ -8,11 +8,14 @@ import {
   bestOrchestrator,
   browserSocket,
   type ClientState,
+  ClusterApi,
+  ClusterWatch,
   importAccountKey,
   type MachinePick,
   PoolApi,
   PoolWatch,
   parseAccountToken,
+  parseClusterInvite,
   parsePoolInvite,
   parseRecoveryKey,
   parseShareLink,
@@ -37,6 +40,9 @@ export interface Saved {
 /** What the pools side shows: a pool on one of its pages, the form for a new pool, the one to join, or nothing yet. */
 export type PoolView = { kind: 'pool'; id: string } | { kind: 'new' } | { kind: 'join'; invite?: string } | null
 
+/** What the clusters side shows: a cluster on one of its tabs, the form for a new one, the one to join, or nothing yet. */
+export type ClusterView = { kind: 'cluster'; id: string } | { kind: 'new' } | { kind: 'join'; invite?: string } | null
+
 const FOLDED_KEY = 'tonton.foldedMachines'
 /** The notch's link to a pool (`PoolLinks.website` in the app): the id after the `#`, never sent to the relay. */
 const POOL_LINK = /^#pool=([A-Za-z0-9_-]{12})$/
@@ -52,7 +58,7 @@ export class Store {
   signInProblem: string | null = null
   /** Still reading what this browser remembers. */
   starting = true
-  mode: 'sessions' | 'pools' | 'hero' = 'sessions'
+  mode: 'sessions' | 'pools' | 'clusters' | 'hero' = 'sessions'
   /** On phones, the list or one conversation. */
   showingChat = false
   folded: ReadonlySet<string> = loadFolded()
@@ -64,6 +70,10 @@ export class Store {
   poolTab = 'overview'
   /** A hackathon just made: its Invites tab opens on the team's QR code, once. */
   teamQrFor: string | null = null
+  clusters: ClusterWatch | null = null
+  clustersProblem: string | null = null
+  clusterView: ClusterView = null
+  clusterTab = 'roster'
   /** A pool to open once the list has it, from the notch's link. */
   private wantedPool: string | null = null
 
@@ -92,7 +102,7 @@ export class Store {
     this.takeLink()
     // The notch opens a pool in a tab where the site may already be: only the address after the # changes.
     window.addEventListener('hashchange', () => {
-      if (this.takeLink() && this.saved) this.setMode('pools')
+      if (this.takeLink() && this.saved) this.setMode(this.mode)
     })
     const saved = await load().catch(() => null)
     this.starting = false
@@ -106,6 +116,12 @@ export class Store {
    */
   private takeLink(): boolean {
     const pool = POOL_LINK.exec(location.hash)?.[1]
+    if (parseClusterInvite(location.hash)) {
+      this.clusterView = { kind: 'join', invite: location.hash.slice(1) }
+      this.mode = 'clusters'
+      history.replaceState(null, '', location.pathname + location.search)
+      return true
+    }
     if (parsePoolInvite(location.hash)) this.poolView = { kind: 'join', invite: location.hash.slice(1) }
     else if (pool) this.wantedPool = pool
     else return false
@@ -144,6 +160,8 @@ export class Store {
     this.saved = account
     this.pools = null
     this.poolsProblem = null
+    this.clusters = null
+    this.clustersProblem = null
     this.signInProblem = null
     this.client = new RelayClient({
       vault: new Vault(account.key),
@@ -156,16 +174,28 @@ export class Store {
       },
       onSignedOut: () => void this.signOut('The relay signed this device out.'),
       onPoolUpdate: update => void this.pools?.handle(update),
+      onClusterUpdate: update => void this.clusters?.handle(update),
     })
     this.state = this.client.state
     this.client.start()
     if (this.mode === 'pools') void this.openPools()
+    if (this.mode === 'clusters') void this.openClusters()
     this.changed()
   }
 
   async signOut(problem?: string) {
     this.client?.stop()
-    Object.assign(this, { client: null, state: null, saved: null, pools: null, account: null, poolView: null, mode: 'sessions' })
+    Object.assign(this, {
+      client: null,
+      state: null,
+      saved: null,
+      pools: null,
+      clusters: null,
+      account: null,
+      poolView: null,
+      clusterView: null,
+      mode: 'sessions',
+    })
     this.signInProblem = problem ?? null
     await forget().catch(() => {})
     this.changed()
@@ -174,6 +204,7 @@ export class Store {
   setMode(mode: Store['mode']) {
     this.mode = mode
     if (mode === 'pools') void this.openPools()
+    if (mode === 'clusters') void this.openClusters()
     this.changed()
   }
 
@@ -198,22 +229,10 @@ export class Store {
   async openPools() {
     if (this.pools || !this.saved || !this.client) return
     const account = this.saved
-    if (!location.protocol.startsWith('http') || new URL(account.relay).origin !== location.origin) {
-      this.poolsProblem = `Pools are on your relay's website: open ${account.relay} and sign in there.`
-      return this.changed()
-    }
-    let accountId = account.accountId
-    if (!accountId) {
-      try {
-        const ping = await (await fetch(`${account.relay}/api/ping`, { headers: { authorization: `Bearer ${account.token}` } })).json()
-        accountId = typeof ping?.accountId === 'string' ? ping.accountId : undefined
-      } catch {}
-    }
-    if (!accountId) {
-      this.poolsProblem = 'The relay did not say which account this is: sign in again with the recovery key.'
-      return this.changed()
-    }
-    this.account = accountId
+    const accountId = await this.accountOn(account, 'Pools', problem => {
+      this.poolsProblem = problem
+    })
+    if (!accountId || this.pools) return
     this.pools = new PoolWatch({
       api: new PoolApi({ relay: account.relay, token: account.token }),
       accountKey: account.key,
@@ -225,6 +244,32 @@ export class Store {
     this.changed()
     await this.pools.refresh()
     this.openWanted()
+  }
+
+  /**
+   * This account's id, for pools and clusters, which use the relay's routes as well as its socket: the page's policy
+   * allows them on the relay's own website only. Null, with the problem said, elsewhere.
+   */
+  private async accountOn(account: Saved, what: string, problem: (text: string) => void): Promise<string | null> {
+    if (!location.protocol.startsWith('http') || new URL(account.relay).origin !== location.origin) {
+      problem(`${what} are on your relay's website: open ${account.relay} and sign in there.`)
+      this.changed()
+      return null
+    }
+    let accountId = account.accountId
+    if (!accountId) {
+      try {
+        const ping = await (await fetch(`${account.relay}/api/ping`, { headers: { authorization: `Bearer ${account.token}` } })).json()
+        accountId = typeof ping?.accountId === 'string' ? ping.accountId : undefined
+      } catch {}
+    }
+    if (!accountId) {
+      problem('The relay did not say which account this is: sign in again with the recovery key.')
+      this.changed()
+      return null
+    }
+    this.account = accountId
+    return accountId
   }
 
   showPool(view: PoolView, tab?: string) {
@@ -260,6 +305,43 @@ export class Store {
 
   setPoolTab(tab: string) {
     this.poolTab = tab
+    this.changed()
+  }
+
+  // MARK: Clusters
+
+  async openClusters() {
+    if (this.clusters || !this.saved || !this.client) return
+    const account = this.saved
+    const accountId = await this.accountOn(account, 'Clusters', problem => {
+      this.clustersProblem = problem
+    })
+    if (!accountId || this.clusters || !this.client) return
+    this.clusters = new ClusterWatch({
+      api: new ClusterApi({ relay: account.relay, token: account.token }),
+      accountKey: account.key,
+      account: accountId,
+      relay: account.relay,
+      link: this.client,
+      onChange: () => this.changed(),
+    })
+    this.changed()
+    await this.clusters.refresh()
+  }
+
+  showCluster(view: ClusterView, tab?: string) {
+    const current = this.clusterView
+    if (current?.kind === 'cluster' && (view?.kind !== 'cluster' || view.id !== current.id)) this.clusters?.close(current.id)
+    this.clusterView = view
+    if (view?.kind === 'cluster') {
+      if (current?.kind !== 'cluster' || current.id !== view.id) this.clusters?.open(view.id)
+      this.clusterTab = tab ?? 'roster'
+    }
+    this.changed()
+  }
+
+  setClusterTab(tab: string) {
+    this.clusterTab = tab
     this.changed()
   }
 
