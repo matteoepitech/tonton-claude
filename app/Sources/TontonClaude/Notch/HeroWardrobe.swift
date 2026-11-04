@@ -39,7 +39,7 @@ struct HeroWardrobe: View {
             case .unequip(let slot): if enabled { equip(nil, slot) }
             }
         } label: {
-            HeroSprite(hero: Self.wearing(item, hero), pose: .resting, size: 40, animated: false)
+            HeroSprite(hero: Self.wearing(item, hero), pose: .idle, size: 40, animated: false)
                 .opacity(owned ? 1 : 0.35)
                 .frame(width: 50, height: 50)
                 .background(RoundedRectangle(cornerRadius: 9).fill(Color(hex: item.color).opacity(trying ? 0.22 : tier >= 3 ? 0.1 : 0.04)))

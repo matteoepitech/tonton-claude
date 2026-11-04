@@ -49,7 +49,7 @@ struct RPGRewardsView: View {
                                 rpg.showOpening(id)
                             } label: {
                                 HStack {
-                                    HeroSprite(hero: wearing(item), pose: .resting, size: 36, animated: false)
+                                    HeroSprite(hero: wearing(item), pose: .idle, size: 36, animated: false)
                                     Text(item.rarity.label)
                                     Text(item.slot.label)
                                     Spacer()

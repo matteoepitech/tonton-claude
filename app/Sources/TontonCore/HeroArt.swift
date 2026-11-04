@@ -5,6 +5,8 @@ import Foundation
 /// HeroArtTests. The 12×12 `Mascot` stays for the small sizes, where 24 pixels would not stay sharp.
 public struct HeroArt: Decodable, Sendable {
     public enum Pose: String, CaseIterable, Sendable {
+        /// Awake and empty-handed, breathing: the wardrobe's tiles and other small previews.
+        case idle
         case working, resting, attention, cheer
 
         /// The same choice as `Mascot.pose(for:)`.

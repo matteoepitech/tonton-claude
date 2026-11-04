@@ -48,12 +48,13 @@ struct HeroSprite: View {
         switch pose {
         case .working: .working
         case .attention: .permission
-        case .resting, .cheer: .idle
+        case .idle, .resting, .cheer: .idle
         }
     }
 
     static func label(_ pose: HeroArt.Pose) -> String {
         switch pose {
+        case .idle: "Tonton"
         case .working: String(localized: "Tonton is working")
         case .resting: String(localized: "Tonton is resting")
         case .attention: String(localized: "Tonton needs you")

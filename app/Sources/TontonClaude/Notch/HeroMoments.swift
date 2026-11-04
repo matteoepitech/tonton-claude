@@ -58,8 +58,9 @@ struct LevelUpMoment: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // The burst starts behind him and flies out.
             HeroSprite(hero: hero, pose: .cheer, size: 48)
-                .overlay {
+                .background {
                     if !reduceMotion {
                         ForEach(0..<14, id: \.self) { index in
                             let angle = Double(index) / 14 * 2 * .pi

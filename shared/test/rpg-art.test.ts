@@ -10,7 +10,7 @@ const hex = /^#[0-9a-f]{6}$/
 
 test('every pose is whole 24×24 frames with its four anchors', () => {
   expect(art.size).toBe(24)
-  for (const pose of ['working', 'resting', 'attention', 'cheer'] as const) {
+  for (const pose of ['idle', 'working', 'resting', 'attention', 'cheer'] as const) {
     const { ms, frames } = art.poses[pose]
     expect(ms).toBeGreaterThan(100)
     expect(frames.length).toBeGreaterThan(1)
