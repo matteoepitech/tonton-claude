@@ -80,8 +80,8 @@ public enum OpenCodeLocal {
     }
 
     /// OpenCode's messages: prompts, answers and tool calls with their results, under the ids the agent's bridge gives
-    /// them (agent/src/opencode/events.ts), so both copies of a session line up.
-    public static func conversation(_ data: Data) -> Conversation {
+    /// them (agent/src/opencode/events.ts), so both copies of a session line up. `servers` are its folder's MCP servers.
+    public static func conversation(_ data: Data, servers: Set<String> = []) -> Conversation {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let messages = root["data"] as? [[String: Any]]
         else { return Conversation() }
         var conversation = Conversation()
@@ -101,7 +101,7 @@ public enum OpenCodeLocal {
                     let counts = tokens(usage)
                     conversation.contextTokens = counts.input + counts.cacheRead + counts.cacheWrite
                 }
-                conversation.entries += assistantEntries(id, ts, message["content"] as? [[String: Any]] ?? [])
+                conversation.entries += assistantEntries(id, ts, message["content"] as? [[String: Any]] ?? [], servers)
             default: break
             }
         }
@@ -110,7 +110,7 @@ public enum OpenCodeLocal {
         return conversation
     }
 
-    private static func assistantEntries(_ id: String, _ ts: String, _ content: [[String: Any]]) -> [Entry] {
+    private static func assistantEntries(_ id: String, _ ts: String, _ content: [[String: Any]], _ servers: Set<String>) -> [Entry] {
         var entries: [Entry] = []
         var ordinal = 0
         for item in content {
@@ -119,7 +119,7 @@ public enum OpenCodeLocal {
                 ordinal += 1
             } else if item["type"] as? String == "tool", let call = item["id"] as? String {
                 let state = item["state"] as? [String: Any] ?? [:]
-                let name = toolNames[item["name"] as? String ?? ""] ?? item["name"] as? String ?? "tool"
+                let name = toolName(item["name"] as? String ?? "tool", servers: servers)
                 let input = claudeInput(state["input"] as? [String: Any] ?? [:])
                 let edits = Transcript.fileEdits(name, input)
                 entries.append(
@@ -143,13 +143,13 @@ public enum OpenCodeLocal {
     }
 
     /// `GET /api/session/{id}/permission`, as the notch's request cards.
-    public static func permissions(_ data: Data) -> [PermissionRequest] {
+    public static func permissions(_ data: Data, servers: Set<String> = []) -> [PermissionRequest] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let list = root["data"] as? [[String: Any]]
         else { return [] }
         return list.compactMap { request in
             guard let id = request["id"] as? String else { return nil }
             let action = request["action"] as? String ?? request["permission"] as? String ?? "tool"
-            let name = toolNames[action] ?? action
+            let name = toolName(action, servers: servers)
             let subject = (request["resources"] as? [String] ?? request["patterns"] as? [String] ?? []).joined(separator: " ")
             let field = ruleFields[name] ?? "command"
             let preview = (try? JSONSerialization.data(withJSONObject: subject.isEmpty ? [:] : [field: subject])).map {
@@ -175,6 +175,37 @@ public enum OpenCodeLocal {
             context: conversation.contextTokens.map { ContextUsage(usedTokens: $0, windowTokens: nil) }, terminal: false,
             commands: [.compact], model: listed.model, tool: "opencode",
             tasks: TodoList.progress(TodoList.latest(in: conversation.entries)))
+    }
+
+    /// `GET /api/mcp` for a folder: OpenCode takes its location as a deep object.
+    public static func serversPath(directory: String) -> String {
+        "/api/mcp?location%5Bdirectory%5D=\(directory.addingPercentEncoding(withAllowedCharacters: unreserved) ?? "")"
+    }
+
+    /// What a query value keeps as it is (RFC 3986): every other byte is percent-encoded, accents included.
+    private static let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+
+    /// The MCP servers `GET /api/mcp` lists, connected or not, as OpenCode spells them in front of their tools.
+    public static func servers(_ data: Data) -> Set<String> {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let list = root["data"] as? [[String: Any]]
+        else { return [] }
+        return Set(list.compactMap { ($0["name"] as? String).flatMap { $0.isEmpty ? nil : serverName($0) } })
+    }
+
+    /// OpenCode names an MCP tool `<server>_<tool>`, each part with what is not a letter, a digit, `_` or `-` turned into
+    /// `_`. As the server's name holds `_` and `-` too, only the servers OpenCode lists are split off.
+    static func serverName(_ name: String) -> String {
+        name.replacing(#/[^a-zA-Z0-9_-]/#, with: "_")
+    }
+
+    /// A tool of OpenCode under Claude Code's name: its built-in tools, and an MCP server's as `mcp__<server>__<tool>`, so
+    /// the notch shows it as for Claude Code. The longest server wins. As the agent's bridge does (`claudeToolName`); both
+    /// check shared/test/opencode-tool-names.json.
+    static func toolName(_ tool: String, servers: Set<String>) -> String {
+        if let name = toolNames[tool] { return name }
+        let server = servers.filter { tool.count > $0.count + 1 && tool.hasPrefix("\($0)_") }.max { $0.count < $1.count }
+        guard let server else { return tool }
+        return "mcp__\(server)__\(tool.dropFirst(server.count + 1))"
     }
 
     /// OpenCode's tools under Claude Code's names, as the agent's bridge maps them.

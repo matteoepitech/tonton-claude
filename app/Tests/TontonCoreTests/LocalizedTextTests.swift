@@ -36,6 +36,9 @@ final class LocalizedTextTests: XCTestCase {
         XCTAssertEqual(SessionSummary.statusText("Claude needs your permission to use Bash", status: .permission), "Veut utiliser Bash")
         XCTAssertEqual(SessionSummary.statusText("Claude needs your permission", status: .permission, tool: "Edit"), "Veut utiliser Edit")
         XCTAssertEqual(SessionSummary.statusText("Claude needs your permission", status: .permission), "Autorisation requise")
+        XCTAssertEqual(
+            SessionSummary.statusText("Claude needs your permission", status: .permission, tool: "mcp__github__create_issue"),
+            "Veut utiliser github · create_issue")
         XCTAssertEqual(AgentText.localized("Conversation compacted"), "Conversation compactée")
         XCTAssertEqual(AgentText.localized("Something Claude wrote"), "Something Claude wrote")
     }

@@ -126,16 +126,36 @@ export interface Machine {
   health: MachineHealth | null
 }
 
+/**
+ * The server and the tool of an MCP tool, split as Claude Code does: `mcp__<server>__<tool>`, where the tool may hold `__`
+ * itself. The agent names OpenCode's MCP tools the same way. Null for any other name.
+ */
+export function mcpTool(name: string): { server: string; tool: string } | null {
+  const [prefix, server, ...rest] = name.split('__')
+  const tool = rest.join('__')
+  return prefix === 'mcp' && server && tool ? { server, tool } : null
+}
+
+/**
+ * A tool as a person reads it: `unreal-engine · spawn_actor` for `mcp__unreal-engine__spawn_actor`, any other name as it
+ * is. Only for showing: rules, icons and counts go by the name itself. Like `ToolLabel.text` in the Mac app; both check
+ * shared/test/tool-labels.json.
+ */
+export function toolLabel(name: string): string {
+  const mcp = mcpTool(name)
+  return mcp ? `${mcp.server} · ${mcp.tool}` : name
+}
+
 /** Claude Code's notification texts, shortened like the notch does. */
 export function displayStatusText(session: Pick<Session, 'status' | 'statusText' | 'pendingPermissions'>): string {
   const text = session.statusText
   if (!text) return STATUS_LABELS[session.status]
   const permission = text.indexOf('needs your permission to use ')
-  if (permission >= 0) return `Wants to use ${text.slice(permission + 'needs your permission to use '.length)}`
+  if (permission >= 0) return `Wants to use ${toolLabel(text.slice(permission + 'needs your permission to use '.length))}`
   // Claude Code 2.1.160 and later no longer name the tool: the request it waits on does.
   if (text.includes('needs your permission')) {
     const tool = session.pendingPermissions[0]?.toolName
-    return tool ? `Wants to use ${tool}` : STATUS_LABELS.permission
+    return tool ? `Wants to use ${toolLabel(tool)}` : STATUS_LABELS.permission
   }
   if (text.includes('waiting for your input')) return 'Waiting for you'
   // StopFailure's error type when the plan's limit refuses a request.

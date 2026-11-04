@@ -33,7 +33,7 @@ final class PermissionNotifications {
     func post(_ session: SessionSummary, request: PermissionRequest, store: SessionStore) {
         let content = UNMutableNotificationContent()
         content.title = "\(session.machine) · \(session.displayName)"
-        content.subtitle = String(localized: "Allow \(request.toolName)?")
+        content.subtitle = String(localized: "Allow \(ToolLabel.text(request.toolName))?")
         content.body = String(request.description.prefix(200))
         content.userInfo = PermissionNotification.userInfo(sessionId: session.id, requestId: request.requestId)
         content.threadIdentifier = session.id

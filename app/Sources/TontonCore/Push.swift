@@ -110,7 +110,8 @@ extension SessionVault {
 
     /// `Allow Bash? Run the tests`, then the start of the command.
     static func alertBody(_ request: PermissionRequest) -> String {
-        let question = request.description.isEmpty ? "Allow \(request.toolName)?" : "Allow \(request.toolName)? \(request.description)"
+        let tool = ToolLabel.text(request.toolName)
+        let question = request.description.isEmpty ? "Allow \(tool)?" : "Allow \(tool)? \(request.description)"
         let preview = request.inputPreview.trimmingCharacters(in: .whitespacesAndNewlines)
         return preview.isEmpty ? question : "\(question)\n\(preview.prefix(300))"
     }

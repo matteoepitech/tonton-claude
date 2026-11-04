@@ -1,4 +1,5 @@
 import type { Entry, FileEdit, ImageData, TodoItem, TokenCounts, TurnTime, UsageLimit } from '../../../shared/protocol'
+import { cutText, cutTextEnd } from '../../../shared/text'
 import { limit, modelName } from '../usage'
 import { entryImages } from './images'
 
@@ -259,9 +260,10 @@ function toolResult(id: string, ts: string, block: Block): Entry {
 /** A long tool result keeps its start and its end, for Claude Code's and OpenCode's sessions alike. */
 export function cutToolResult(text: string): string {
   if (text.length <= MAX_TOOL_RESULT_CHARS) return text
-  const head = MAX_TOOL_RESULT_CHARS - TOOL_RESULT_TAIL_CHARS
-  const cut = text.length - MAX_TOOL_RESULT_CHARS
-  return `${text.slice(0, head)}\n… (${cut} characters truncated)\n${text.slice(-TOOL_RESULT_TAIL_CHARS)}`
+  // Never half a character at either cut: the Mac and the iPhone could not decode the entry (shared/text.ts).
+  const head = cutText(text, MAX_TOOL_RESULT_CHARS - TOOL_RESULT_TAIL_CHARS)
+  const tail = cutTextEnd(text, TOOL_RESULT_TAIL_CHARS)
+  return `${head}\n… (${text.length - head.length - tail.length} characters truncated)\n${tail}`
 }
 
 /** The entry keeps the ones that fit (./images.ts). */
@@ -276,7 +278,7 @@ function addImage(images: ImageData[], block: Block) {
 export function fileEdits(name: string, input: unknown): FileEdit[] {
   const fields = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
   const raw = name === 'Edit' ? [fields] : name === 'MultiEdit' && Array.isArray(fields.edits) ? fields.edits : []
-  const cut = (text: string) => (text.length > MAX_EDIT_CHARS ? `${text.slice(0, MAX_EDIT_CHARS)}\n…` : text)
+  const cut = (text: string) => (text.length > MAX_EDIT_CHARS ? `${cutText(text, MAX_EDIT_CHARS)}\n…` : text)
   return raw
     .filter(
       (edit): edit is { old_string: string; new_string: string } =>
@@ -293,7 +295,7 @@ export function fileEdits(name: string, input: unknown): FileEdit[] {
 export function todoItems(name: string, input: unknown): TodoItem[] | null {
   const todos = name === 'TodoWrite' && input && typeof input === 'object' ? (input as Record<string, unknown>).todos : undefined
   if (!Array.isArray(todos)) return null
-  const cut = (text: string) => (text.length > MAX_TODO_CHARS ? `${text.slice(0, MAX_TODO_CHARS)}…` : text)
+  const cut = (text: string) => (text.length > MAX_TODO_CHARS ? `${cutText(text, MAX_TODO_CHARS)}…` : text)
   return todos
     .filter((todo): todo is Record<string, unknown> => typeof todo?.content === 'string' && todo.content.trim().length > 0)
     .slice(0, MAX_TODOS)
@@ -316,7 +318,7 @@ export function toolSummary(name: string, input: unknown): string {
   else summary = pick(SUMMARY_FIELDS[name] ?? FALLBACK_SUMMARY_FIELDS) ?? Object.values(fields).find(v => typeof v === 'string')
 
   const oneLine = (summary ?? '').replace(/\s+/g, ' ').trim()
-  return oneLine.length > MAX_SUMMARY_CHARS ? `${oneLine.slice(0, MAX_SUMMARY_CHARS)}…` : oneLine
+  return oneLine.length > MAX_SUMMARY_CHARS ? `${cutText(oneLine, MAX_SUMMARY_CHARS)}…` : oneLine
 }
 
 const compact = <T>(items: (T | null)[]): T[] => items.filter((item): item is T => item !== null)

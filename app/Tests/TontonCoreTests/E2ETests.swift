@@ -16,6 +16,16 @@ final class E2ETests: XCTestCase {
         XCTAssertEqual(entry.text, "Déployé ✅")
     }
 
+    /// The same, from an entry whose text ends on half an emoji: JSON.stringify would write it as a lone `\ud83c`, which
+    /// JSONDecoder refuses with the whole entry, so the agent seals U+FFFD in its place.
+    private let halfEmojiBlob =
+        "n5YUx58tefZX4BVTvCJLBESGzwfpJYYX3Nl4K7iIPwnGaXnqxqrw42w/DKl2f+z/TWUQZPCrUQjYKBP/y13A9veLF5jOYGGWVSJwM/dMBW/am/2weNl1FWgfwW9wpfAjvsuKqyhxdV4Nhc9+JmBEaA=="
+
+    func testOpensWhatTheAgentSealedFromHalfAnEmoji() throws {
+        let entry = try E2E.open(halfEmojiBlob, as: Entry.self, with: try E2E.key(fromBase64URL: agentKey))
+        XCTAssertEqual(entry.text, "Déployé \u{FFFD}")
+    }
+
     func testRoundTrip() throws {
         let key = try E2E.key(fromBase64URL: E2E.newKey())
         let sealed = try E2E.seal(["text": "hello"], with: key)

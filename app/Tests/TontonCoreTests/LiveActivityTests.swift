@@ -44,4 +44,15 @@ final class LiveActivityTests: XCTestCase {
             LiveActivity.text(session("a", .permission, text: "OpenCode needs your permission to use bash", asks: [edit])),
             "Wants to use bash")
     }
+
+    func testAnMCPToolReadsAsItsServerAndItsTool() {
+        let spawn = PermissionRequest(
+            requestId: "r1", toolName: "mcp__unreal-engine__spawn_actor", description: "", inputPreview: "{}", ts: "")
+        XCTAssertEqual(
+            LiveActivity.text(session("a", .permission, text: "Claude needs your permission", asks: [spawn])),
+            "Wants to use unreal-engine · spawn_actor")
+        XCTAssertEqual(
+            LiveActivity.text(session("a", .permission, text: "Claude needs your permission to use mcp__github__create_issue")),
+            "Wants to use github · create_issue")
+    }
 }
