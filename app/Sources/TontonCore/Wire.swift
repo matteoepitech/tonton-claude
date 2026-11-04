@@ -65,6 +65,8 @@ public enum RelayMessage: Decodable, Sendable {
     case diagnosis(machineId: String, requestId: String, reason: String?, diagnosis: String?)
     /// A pool's message (docs/pools.md), unopened: each pool has its own key. One the app cannot read is `unknown`.
     case pool(PoolUpdate)
+    /// A cluster's message (docs/cluster.md), unopened: each cluster has its own key. One the app cannot read is `unknown`.
+    case cluster(ClusterUpdate)
     case unknown
 
     private enum Keys: String, CodingKey {
@@ -79,6 +81,10 @@ public enum RelayMessage: Decodable, Sendable {
         let t = try container.decode(String.self, forKey: .t)
         if t.hasPrefix("pool_") {
             self = (try? PoolUpdate(from: decoder)).map(RelayMessage.pool) ?? .unknown
+            return
+        }
+        if t.hasPrefix("cluster_") {
+            self = (try? ClusterUpdate(from: decoder)).map(RelayMessage.cluster) ?? .unknown
             return
         }
         switch t {
