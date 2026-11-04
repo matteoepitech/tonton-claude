@@ -18,7 +18,7 @@ export interface HeroAvatarProps {
 export function HeroAvatar({
   equipped,
   size = 48,
-  pose = 'working',
+  pose = 'idle',
   moving = false,
   label = "Tonton's equipped appearance",
   className,

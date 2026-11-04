@@ -18,7 +18,8 @@ import {
 import type { SessionStatus } from '../shared/protocol'
 import sheet from '../shared/rpg-art.json'
 
-export type HeroPose = 'working' | 'resting' | 'attention' | 'cheer'
+/** Working, resting and attention follow the sessions; cheer is the level-up; idle, awake and empty-handed, dresses tiles. */
+export type HeroPose = 'working' | 'resting' | 'attention' | 'cheer' | 'idle'
 type Point = readonly number[]
 type Anchor = 'head' | 'eyes' | 'center' | 'feet'
 
@@ -347,6 +348,7 @@ const MASCOT: Record<HeroPose, readonly (readonly string[])[]> = {
     ['..........h.', '....####..h.', '...######.h.', '..########h.', ...EYES, ...EMPTY],
     ['............', '....####...h', '...######.h.', '..########h.', ...EYES, ...EMPTY],
   ],
+  idle: [[...HEAD, ...EYES, ...EMPTY]],
 }
 const MASCOT_COLORS: Record<string, string> = { o: '#ffffff', '-': '#1e1d2b', h: '#a5a4ff', k: '#777777', z: '#a5a4ff' }
 

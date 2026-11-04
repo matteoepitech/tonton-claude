@@ -87,7 +87,7 @@ describe('compositing', () => {
   })
 
   test('the real art draws Tonton in every pose, dressed or not', () => {
-    for (const pose of ['working', 'resting', 'attention', 'cheer'] as const) {
+    for (const pose of ['working', 'resting', 'attention', 'cheer', 'idle'] as const) {
       const bare = heroPixels({}, pose, 0)
       const dressed = heroPixels({ skin: 'skin-epic', hat: 'hat-legendary', accessory: 'accessory-rare', aura: 'aura-uncommon' }, pose, 0)
       expect(bare.length).toBeGreaterThan(50)

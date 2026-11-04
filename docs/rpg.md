@@ -132,10 +132,11 @@ scores from pool work receipts, excluding combat and solo work; it must not expo
 
 ## Play, open and upgrade
 
-On Mac, open Tonton's panel and choose **Boosters**, **Hero** or **Team**. The website has a **Tonton** tab for the
+On Mac, click the ring around Tonton in the notch's bottom bar: the hero screen opens in the right column, with
+**Journal**, **Wardrobe**, **Boosters**, **Upgrades** and **Team** behind its icons. The website has a **Tonton** tab for the
 same inventory, openings and upgrades, and pool leaderboards show contribution XP and shared goals. Its hero card shows
-the level ring, today's XP with the streak and a bar per hour, and the journal of the last gains; the wardrobe tries an
-item on the big Tonton at the first click and wears it at the second. On Windows and Linux, the island's closed bar
+the level ring, today's XP with the streak and a bar per hour; the journal of the last gains is the first page under it,
+and the wardrobe tries an item on the big Tonton at the first click and wears it at the second. On Windows and Linux, the island's closed bar
 shows the level ring and the last gain; a click on the ring opens the same hero page in the island. Both draw the
 24 × 24 art of `shared/rpg-art.json`, the notch's too, through `web/hero.ts`.
 

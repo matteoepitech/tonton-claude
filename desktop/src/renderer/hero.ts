@@ -426,7 +426,7 @@ export class HeroPage {
   private tile(hero: RPGState, item: RPGItem): HTMLElement {
     const owned = hero.owned.includes(item.id)
     const worn = hero.equipped[item.slot] === item.id
-    const picture = avatar(heroPixels({ ...hero.equipped, [item.slot]: item.id }, 'working', 0), HERO_ART.size, 48, '')
+    const picture = avatar(heroPixels({ ...hero.equipped, [item.slot]: item.id }, 'idle', 0), HERO_ART.size, 48, '')
     const tile = element('button', picture, element('small', RARITY_LABELS[item.rarity]))
     tile.dataset.focus = `tile-${item.id}`
     tile.className = ['tile', owned ? '' : 'locked', worn ? 'worn' : '', this.preview?.id === item.id ? 'trying' : ''].join(' ').trim()
