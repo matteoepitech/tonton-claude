@@ -4,7 +4,7 @@ import Foundation
 /// the user just allowed. A command allows its first words and what follows them, a web page its site, other tools any of
 /// their calls. Mirrors shared/session-rule.ts; both check shared/test/session-rules.json.
 public struct SessionRule: Equatable, Sendable {
-    /// `npm test`, `github.com`, `Edit`.
+    /// `npm test`, `github.com`, `Edit`, `github · create_issue`.
     public let label: String
     public let rules: [PermissionRule]
 
@@ -37,7 +37,7 @@ public struct SessionRule: Equatable, Sendable {
                 label: "\(host.lowercased())\(port)",
                 rules: [PermissionRule(tool: tool, pattern: origin), PermissionRule(tool: tool, pattern: "\(origin)/*")])
         }
-        return SessionRule(label: tool, rules: [PermissionRule(tool: tool, pattern: nil)])
+        return SessionRule(label: ToolLabel.text(tool), rules: [PermissionRule(tool: tool, pattern: nil)])
     }
 }
 

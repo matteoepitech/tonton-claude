@@ -9,6 +9,8 @@ import TontonMac
 final class OpenCodeLocalWatcher: @unchecked Sendable {
     private static let pollInterval: DispatchTimeInterval = .milliseconds(1500)
     private static let timeout: TimeInterval = 3
+    /// How long a folder's list of MCP servers is kept before it is asked again.
+    private static let serversLifetime: TimeInterval = 60
 
     /// Called on the main thread with every session and its entries, whenever something changed.
     var onChange: (@MainActor ([SessionSummary], [String: [Entry]]) -> Void)?
@@ -21,6 +23,8 @@ final class OpenCodeLocalWatcher: @unchecked Sendable {
         var permissions: [PermissionRequest]
     }
     private var reads: [String: Read] = [:]
+    /// The MCP servers of each folder, which name their tools.
+    private var servers: [String: (names: Set<String>, read: Date)] = [:]
     /// Messages sent from the notch, waiting to show up in the conversation, and the entries they became.
     private var fromNotch: [String: [String]] = [:]
     private var notchEntries: Set<String> = []
@@ -70,9 +74,10 @@ final class OpenCodeLocalWatcher: @unchecked Sendable {
             guard let context = request(service, "GET", "/api/session/\(session.id)/context"),
                 let pending = request(service, "GET", "/api/session/\(session.id)/permission")
             else { continue }
+            let names = mcpServers(service, session.directory)
             reads[session.id] = Read(
-                updated: session.updated, conversation: OpenCodeLocal.conversation(context), permissions: OpenCodeLocal.permissions(pending)
-            )
+                updated: session.updated, conversation: OpenCodeLocal.conversation(context, servers: names),
+                permissions: OpenCodeLocal.permissions(pending, servers: names))
         }
         let shown = Set(listed.map(\.id))
         reads = reads.filter { shown.contains($0.key) }
@@ -83,6 +88,14 @@ final class OpenCodeLocalWatcher: @unchecked Sendable {
             return OpenCodeLocal.summary(session, read.conversation, permissions: read.permissions)
         }
         publish(sessions, entries)
+    }
+
+    /// A folder's MCP servers, asked again once a minute: without them, their tools keep OpenCode's names.
+    private func mcpServers(_ service: OpenCodeLocal.Service, _ directory: String) -> Set<String> {
+        if let known = servers[directory], Date().timeIntervalSince(known.read) < Self.serversLifetime { return known.names }
+        let names = request(service, "GET", OpenCodeLocal.serversPath(directory: directory)).map(OpenCodeLocal.servers) ?? []
+        servers[directory] = (names, Date())
+        return names
     }
 
     /// The conversation says when a message came from the notch: the app takes its "sending…" bubble off.

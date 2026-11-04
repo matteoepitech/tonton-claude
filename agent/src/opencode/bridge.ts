@@ -56,6 +56,8 @@ export type PluginCommand =
   | { op: 'interrupt'; sessionID: string; directory?: string }
   | { op: 'history'; sessionID: string; directory?: string }
   | { op: 'models' }
+  /** The names of the folder's MCP servers (`tonton.mcp`), which OpenCode puts in front of their tools. */
+  | { op: 'mcp'; directory?: string }
   /** The answer to a pool or cluster tool OpenCode called (`tonton.tool`), or to an edit it is about to make (`tonton.guard`). */
   | { op: 'tool_result'; callID: string; output: string }
   /**
@@ -468,12 +470,15 @@ export async function runOpenCode() {
   // Status changes go out in order, each after the previous one.
   let statuses: Promise<void> = Promise.resolve()
   send({ op: 'models' })
+  send({ op: 'mcp' })
 
   const apply = (update: SessionUpdate) => {
     let link = links.get(update.sessionId)
     if (!link) {
       link = new Link(update.sessionId, config, tracker, send)
       links.set(update.sessionId, link)
+      // Each folder can have MCP servers of its own.
+      send({ op: 'mcp', directory: tracker.cwd(update.sessionId) })
       // A session met halfway, after a restart of OpenCode or of the bridge: its history comes from OpenCode.
       send({ op: 'history', sessionID: update.sessionId, directory: tracker.cwd(update.sessionId) })
     }

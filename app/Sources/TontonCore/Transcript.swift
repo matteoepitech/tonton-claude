@@ -34,7 +34,7 @@ public enum Transcript {
     static let maxEditChars = 4000
     static let maxEdits = 20
     /// Internal tools that would only add noise to the conversation.
-    static let hiddenTools: Set = ["ToolSearch"]
+    static let hiddenTools: Set = ["ToolSearch", "SubagentHandback"]
     /// Which input field describes a tool call best, per tool.
     static let summaryFields: [String: [String]] = [
         "Bash": ["command"], "Read": ["file_path"], "Write": ["file_path"], "Edit": ["file_path"], "MultiEdit": ["file_path"],

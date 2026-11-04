@@ -1,0 +1,15 @@
+{
+  "about": "How a tool's name reads in the notch, the island and the website. Checked by shared/test/tool-labels.test.ts and app/Tests/TontonCoreTests/ToolLabelTests.swift.",
+  "cases": [
+    { "name": "mcp__unreal-engine__spawn_actor", "label": "unreal-engine · spawn_actor" },
+    { "name": "mcp__unrealMCP__create_blueprint", "label": "unrealMCP · create_blueprint" },
+    { "name": "mcp__github__create_issue", "label": "github · create_issue" },
+    { "name": "mcp__srv__a__b", "label": "srv · a__b" },
+    { "name": "mcp__x", "label": "mcp__x" },
+    { "name": "mcp____y", "label": "mcp____y" },
+    { "name": "mcp__srv__", "label": "mcp__srv__" },
+    { "name": "Bash", "label": "Bash" },
+    { "name": "unreal-engine_spawn_actor", "label": "unreal-engine_spawn_actor" },
+    { "name": "", "label": "" }
+  ]
+}

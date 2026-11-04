@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { seal } from '../../../shared/crypto'
 import type { ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
+import { cutText } from '../../../shared/text'
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { EventDetector } from '../cluster/detect'
 import { type AgentConfig, paths } from '../config'
@@ -365,7 +366,7 @@ export class Conversation {
       costUSD: this.costUSD,
       tokens: this.tokens,
       context: this.context,
-      lastMessage: last && 'text' in last ? last.text.slice(0, 200) : undefined,
+      lastMessage: last && 'text' in last ? cutText(last.text, 200) : undefined,
       ...this.usage,
       terminal: Boolean(this.link.tmux),
       // Without tmux nothing can be typed: the notch offers no command.

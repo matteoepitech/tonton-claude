@@ -4,8 +4,9 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import namesTable from '../../shared/test/opencode-tool-names.json'
 import { lines } from '../src/opencode/bridge'
-import { OpenCodeTracker, type SessionUpdate } from '../src/opencode/events'
+import { claudeToolName, mcpServerName, OpenCodeTracker, type SessionUpdate } from '../src/opencode/events'
 import { pluginSource } from '../src/opencode/plugin'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-opencode-'))
@@ -497,12 +498,60 @@ describe('OpenCode 1', () => {
     ])
   })
 
+  test('a cut never splits an emoji in two, in a tool output or the last message of the meta', () => {
+    const output = `${'x'.repeat(2499)}🎉${'y'.repeat(5000)}🎉${'z'.repeat(1499)}`
+    const answer = `${'y'.repeat(199)}🎉 done`
+    const { entries, tracker } = replay([
+      { type: 'session.created', properties: { info: session } },
+      message('m1', 'assistant'),
+      part({ id: 'p1', messageID: 'm1', type: 'tool', callID: 'c1', tool: 'bash', state: { status: 'completed', input: {}, output } }),
+      part({ id: 'p2', messageID: 'm1', type: 'text', text: answer, time: { start: 1, end: 2 } }),
+    ])
+    expect(entries.find(entry => entry.id === 'p1:result')).toMatchObject({
+      text: `${'x'.repeat(2499)}\n… (${output.length - 2499 - 1499} characters truncated)\n${'z'.repeat(1499)}`,
+    })
+    expect(tracker.meta('ses_1')?.lastMessage).toBe('y'.repeat(199))
+    expect(JSON.stringify([entries, tracker.meta('ses_1')])).not.toMatch(/\\ud[89a-f]/)
+  })
+
+  test('an MCP tool takes the name Claude Code gives it once OpenCode listed its server, in the conversation and the requests', () => {
+    const tool = (servers: string[]) =>
+      replay([
+        { type: 'session.created', properties: { info: session } },
+        { type: 'tonton.mcp', data: { servers } },
+        message('m1', 'assistant'),
+        part({
+          id: 'p1',
+          messageID: 'm1',
+          type: 'tool',
+          callID: 'c1',
+          tool: 'unreal-engine_spawn_actor',
+          state: { status: 'running', input: { name: 'Cube' } },
+        }),
+        { type: 'permission.updated', properties: { id: 'per_1', type: 'unreal-engine_spawn_actor', sessionID: 'ses_1', metadata: {} } },
+      ])
+    const known = tool(['unreal-engine'])
+    expect(known.entries.find(entry => entry.kind === 'tool')).toMatchObject({ name: 'mcp__unreal-engine__spawn_actor', summary: 'Cube' })
+    expect(known.updates.find(update => update.permission)?.permission?.detail.toolName).toBe('mcp__unreal-engine__spawn_actor')
+    expect(known.statuses.at(-1)?.text).toBe('OpenCode needs your permission to use mcp__unreal-engine__spawn_actor')
+    // Without the list, `unreal-engine_spawn_actor` could as well be `unreal`'s `engine_spawn_actor`: it stays as it is.
+    expect(tool([]).entries.find(entry => entry.kind === 'tool')).toMatchObject({ name: 'unreal-engine_spawn_actor' })
+    expect(tool([3, null] as unknown as string[]).entries.find(entry => entry.kind === 'tool')).toMatchObject({
+      name: 'unreal-engine_spawn_actor',
+    })
+  })
+
   test('anything unexpected is skipped', () => {
     const tracker = new OpenCodeTracker()
     for (const event of [null, 3, 'x', {}, { type: 'message.updated' }, { type: 'message.part.updated', properties: { part: 5 } }]) {
       expect(tracker.handle(event)).toEqual([])
     }
   })
+})
+
+test("OpenCode's tools under Claude Code's names, as the Mac app reads them", () => {
+  const servers = new Set(namesTable.servers.map(mcpServerName))
+  for (const { tool, name } of namesTable.cases) expect([tool, claudeToolName(tool, servers)]).toEqual([tool, name])
 })
 
 describe('plugin', () => {
@@ -599,6 +648,54 @@ for await (const chunk of Bun.stdin.stream()) {
       hooked({ tool: 'apply_patch', sessionID: 'b', id: 'c5', input: { patchText: '*** Update File: a.ts' } }),
     ).resolves.toBeUndefined()
     ;(globalThis as { __tontonClaude?: { bridge?: { kill(): void } } }).__tontonClaude?.bridge?.kill()
+  })
+
+  test('tells the bridge the names of the MCP servers, from OpenCode 2 and 1 alike', async () => {
+    const received = join(dir, 'mcp.jsonl')
+    const bridge = join(dir, 'mcp-bridge.ts')
+    // A bridge that asks for the servers as it starts, then writes down what the plugin answers.
+    writeFileSync(
+      bridge,
+      `process.stdout.write('{"op":"mcp"}\\n')\nfor await (const chunk of Bun.stdin.stream()) require('node:fs').appendFileSync(${JSON.stringify(received)}, chunk)\n`,
+    )
+    const file = join(dir, 'tonton-claude-mcp.js')
+    writeFileSync(file, pluginSource([process.execPath, bridge]))
+    const plugin = (await import(file)).default
+    const state = (globalThis as { __tontonClaude?: { bridge?: { kill(): void }; inputs: Map<string, unknown> } }).__tontonClaude
+    const answers = () =>
+      existsSync(received)
+        ? readFileSync(received, 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map(line => JSON.parse(line))
+            .filter(event => event.type === 'tonton.mcp')
+            .map(event => event.data.servers)
+        : []
+    state?.bridge?.kill()
+
+    // OpenCode 2 answers with its location and the servers, connected or not.
+    async function* none() {}
+    const servers = [
+      { name: 'unreal-engine', status: { status: 'connected' } },
+      { name: 'github', status: { status: 'failed', error: 'x' } },
+    ]
+    const directory = join(dir, 'project')
+    await plugin.setup({
+      location: { directory },
+      event: { subscribe: () => none() },
+      mcp: { list: async () => ({ location: { directory }, data: servers }) },
+    })
+    await eventually(() => answers().length === 1, 'the servers of OpenCode 2')
+    expect(answers()).toEqual([['unreal-engine', 'github']])
+    state?.bridge?.kill()
+    state?.inputs.delete(directory)
+
+    // OpenCode 1's client answers with `{ data }`, the servers by name.
+    await plugin.server({ client: { mcp: { status: async () => ({ data: { linear: { status: 'connected' } } }) } } })
+    await eventually(() => answers().length === 2, 'the servers of OpenCode 1')
+    expect(answers()[1]).toEqual(['linear'])
+    state?.bridge?.kill()
+    ;(globalThis as { __tontonClaude?: unknown }).__tontonClaude = undefined
   })
 })
 

@@ -75,7 +75,10 @@ struct ToolRow: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: icon).font(.caption).frame(width: 16)
-                    Text(call.name ?? "Tool").font(.caption.weight(.semibold))
+                    Text(call.name.map(ToolLabel.text) ?? "Tool").font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(1)
                     Text(call.summary ?? "")
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)

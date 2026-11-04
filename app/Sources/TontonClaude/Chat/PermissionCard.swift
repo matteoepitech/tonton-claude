@@ -44,7 +44,7 @@ struct PermissionCard: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "lock.shield").foregroundStyle(Theme.accent).accessibilityHidden(true)
-                Text("Allow \(request.toolName)?").font(.notch(12, weight: .bold)).accessibilityAddTraits(.isHeader)
+                Text("Allow \(ToolLabel.text(request.toolName))?").font(.notch(12, weight: .bold)).accessibilityAddTraits(.isHeader)
                 Spacer()
             }
             // A tool's description can be its whole docstring: a few lines, all of it on hover.

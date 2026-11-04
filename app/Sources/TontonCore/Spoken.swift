@@ -12,12 +12,13 @@ public enum Spoken {
     /// Read out when a session asks for permissions, without moving the VoiceOver cursor.
     public static func permissions(_ requests: [PermissionRequest], session: String) -> String {
         guard requests.count == 1, let request = requests.first else {
-            let tools = requests.map(\.toolName).joined(separator: ", ")
+            let tools = requests.map { ToolLabel.spoken($0.toolName) }.joined(separator: ", ")
             return String(core: "\(session) asks for \(requests.count) permissions: \(tools)")
         }
         let description = request.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        if description.isEmpty { return String(core: "\(session) asks to use \(request.toolName)") }
-        return String(core: "\(session) asks to use \(request.toolName): \(description)")
+        let tool = ToolLabel.spoken(request.toolName)
+        if description.isEmpty { return String(core: "\(session) asks to use \(tool)") }
+        return String(core: "\(session) asks to use \(tool): \(description)")
     }
 
     /// The live sessions behind the closed notch's dots: "No live session", "1 live session", "3 live sessions".
