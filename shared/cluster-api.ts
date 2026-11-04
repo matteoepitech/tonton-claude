@@ -141,6 +141,20 @@ export class ClusterApi {
     return this.request('GET', `/api/${this.options.agent ? 'agent/' : ''}clusters/${clusterId}/members`)
   }
 
+  /** A file a session shares, sealed with the cluster key (`sealClusterFile`). Machines only, with `agent`. */
+  async putFile(clusterId: string, fileId: string, blob: string): Promise<void> {
+    await this.request('PUT', `/api/agent/clusters/${clusterId}/files/${fileId}`, { blob })
+  }
+
+  /** A shared file, still sealed: open it with `openClusterFile`. */
+  async file(clusterId: string, fileId: string): Promise<string> {
+    const { blob } = await this.request<{ blob: string }>(
+      'GET',
+      `/api/${this.options.agent ? 'agent/' : ''}clusters/${clusterId}/files/${fileId}`,
+    )
+    return blob
+  }
+
   /** The owner kicks a member and rotates the cluster key, so that it reads nothing written from now on. */
   kick(accountKey: AccountKey, account: string, clusterId: string, member: string) {
     return this.rotate(accountKey, account, clusterId, member)

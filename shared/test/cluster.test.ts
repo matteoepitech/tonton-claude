@@ -12,13 +12,17 @@ import {
   decodeClusterSessionProfile,
   grantClusterKey,
   newClusterKey,
+  openClusterFile,
   openClusterGrant,
   openClusterSessionOrder,
+  sealClusterFile,
   sealClusterSessionOrder,
+  sha256Hex,
 } from '../cluster'
 import { clusterInviteLink, formatClusterInvite, parseClusterInvite } from '../cluster-link'
 import type { ClusterSnapshot } from '../cluster-protocol'
 import { newAccountKey } from '../crypto'
+import { PoolKeyring } from '../pool-keys'
 import { parsePoolInvite } from '../pool-link'
 
 const invite = {
@@ -179,5 +183,20 @@ describe('the cluster state', () => {
     expect(second?.docs.map(d => d.rev)).toEqual([2])
     expect(second && (await vault.doc(second, 'notes', v => v as { text: string }))).toEqual({ text: 'v2' })
     expect(second && (await vault.apply(second, { t: 'cluster_member_left', clusterId: 'other', account: 'bob' }))).toBe(second)
+  })
+})
+
+describe('cluster files', () => {
+  test("a file's bytes open with the version that sealed them, and only with the cluster's keys", async () => {
+    const bytes = new Uint8Array([0, 1, 2, 250, 255])
+    const keyring = new PoolKeyring(newClusterKey(), 1)
+    const first = await sealClusterFile(keyring, bytes)
+    keyring.add(2, newClusterKey())
+    const second = await sealClusterFile(keyring, bytes)
+    expect(second).toStartWith('2:')
+    expect([...(await openClusterFile(keyring, first))]).toEqual([...bytes])
+    expect([...(await openClusterFile(keyring, second))]).toEqual([...bytes])
+    await expect(openClusterFile(new PoolKeyring(newClusterKey(), 1), first)).rejects.toThrow()
+    expect(await sha256Hex(new TextEncoder().encode('abc'))).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
   })
 })

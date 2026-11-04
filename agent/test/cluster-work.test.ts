@@ -1,6 +1,9 @@
 // Claude's cluster tools and how posts reach it, against a relay that answers like the real one: an order only the
 // account key opens, the snapshot after the acknowledgement, every post and document sent back to the members.
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join as joinPath } from 'node:path'
 import { ClusterVault, decodeClusterClaims, newClusterKey, sealClusterSessionOrder } from '../../shared/cluster'
 import type {
   ClusterDelivery,
@@ -83,6 +86,9 @@ let forgotten: string[]
 let busy: boolean
 let skipsPrompts: boolean
 let toolsChanged: number
+/** The session's project folder, and what the relay keeps of shared files. */
+let project: string
+let stored: Map<string, string>
 
 async function join(order: { delivery?: ClusterDelivery; liveWithoutPrompts?: boolean } = {}, sessionId = ME, key = accountKey) {
   relay.snapshot = {
@@ -153,6 +159,8 @@ beforeEach(() => {
   busy = false
   skipsPrompts = false
   toolsChanged = 0
+  project = mkdtempSync(joinPath(tmpdir(), 'tonton-cluster-project-'))
+  stored = new Map()
   work = new ClusterWork(
     clusters,
     () => ME,
@@ -163,6 +171,17 @@ beforeEach(() => {
       forget: clusterId => forgotten.push(clusterId),
       busy: () => busy,
       skipsPrompts: () => skipsPrompts,
+      cwd: () => project,
+      files: {
+        put: async (clusterId, fileId, blob) => {
+          stored.set(`${clusterId}/${fileId}`, blob)
+        },
+        get: async (clusterId, fileId) => {
+          const blob = stored.get(`${clusterId}/${fileId}`)
+          if (!blob) throw new Error('404 No such file.')
+          return blob
+        },
+      },
     },
     () => ({ tool: 'claude', model: 'claude-opus-5-5', project: 'api', branch: 'main', machine: 'mac' }),
     () => toolsChanged++,
@@ -597,5 +616,55 @@ describe("what the session's shell calls tell", () => {
     clusters.apply({ t: 'cluster_doc', clusterId: CLUSTER, doc: relay.claims })
     await settle()
     expect(readGuardState(ME)).toBeNull()
+  })
+})
+
+describe('sharing files', () => {
+  test('a file of the project is sealed, kept and announced; another session fetches it, checked', async () => {
+    await join()
+    mkdirSync(joinPath(project, 'Saved'), { recursive: true })
+    writeFileSync(joinPath(project, 'Saved', 'crash.log'), 'Assertion failed: Hero.cpp:42')
+    const shared = await call('cluster_share', { path: 'Saved/crash.log', text: 'The crash from the last build', to_member: 'Ana' })
+    expect(shared).toMatch(/^Shared Saved\/crash\.log \(29 bytes\) as file /)
+    const post = relay.sent.find(message => message.t === 'cluster_post') as { blob: string } | undefined
+    const body = post && (await vault.read(post.blob, value => value as ClusterPostBody))
+    expect(body).toMatchObject({ kind: 'file', text: 'The crash from the last build', to: [{ account: 'acc_ana' }] })
+    expect(body?.file).toMatchObject({ name: 'crash.log', size: 29, type: 'text/plain' })
+    // The relay holds sealed bytes only.
+    expect([...stored.values()].some(blob => blob.includes('Assertion'))).toBe(false)
+    // Fetched back, by its id: a short text comes inline.
+    expect(await call('cluster_file', { id: body?.file?.id })).toBe(
+      'crash.log (text/plain, 29 bytes), shared in the cluster:\nAssertion failed: Hero.cpp:42',
+    )
+  })
+
+  test('an image is saved on the machine for Claude to read; a file that does not match its post is not opened', async () => {
+    await join()
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3])
+    writeFileSync(joinPath(project, 'shot.png'), png)
+    await call('cluster_share', { path: 'shot.png' })
+    const post = relay.sent.find(message => message.t === 'cluster_post') as { blob: string }
+    const file = (await vault.read(post.blob, value => value as ClusterPostBody))?.file
+    const saved = await call('cluster_file', { id: file?.id })
+    const path = /to (.+)\. Open it with your Read tool to see the image\.$/.exec(saved)?.[1]
+    expect(path).toBeString()
+    expect([...readFileSync(path as string)]).toEqual([...png])
+    // Bytes swapped on the relay: the hash in the post catches it.
+    const key = [...stored.keys()][0]
+    stored.set(key, await (await import('../../shared/cluster')).sealClusterFile(vault.keyring, new Uint8Array([1, 2, 3])))
+    expect(await call('cluster_file', { id: file?.id })).toBe('The file is not the one its post names: it was not opened.')
+  })
+
+  test('only a file of the project is shared, and never one over 10 MB', async () => {
+    await join()
+    const outside = mkdtempSync(joinPath(tmpdir(), 'tonton-secret-'))
+    writeFileSync(joinPath(outside, 'id_rsa'), 'secret')
+    expect(await call('cluster_share', { path: joinPath(outside, 'id_rsa') })).toBe('Only a file of this project can be shared.')
+    expect(await call('cluster_share', { path: '../../etc/hosts' })).toMatch(/Only a file of this project|No file/)
+    expect(await call('cluster_share', { path: 'missing.txt' })).toBe('No file missing.txt in this project.')
+    writeFileSync(joinPath(project, 'big.bin'), new Uint8Array(10 * 1024 * 1024 + 1))
+    expect(await call('cluster_share', { path: 'big.bin' })).toMatch(/a cluster takes files of 10 MB at most/)
+    expect(relay.sent.filter(message => message.t === 'cluster_post')).toEqual([])
+    expect(stored.size).toBe(0)
   })
 })

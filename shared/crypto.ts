@@ -62,3 +62,24 @@ export async function open<T>(key: AccountKey, blob: Sealed): Promise<T> {
   )
   return JSON.parse(new TextDecoder().decode(plaintext)) as T
 }
+
+/** Bytes rather than a value: the same layout and additional data, without the JSON (a file shared in a cluster). */
+export async function sealBytes(key: AccountKey, bytes: Uint8Array<ArrayBuffer>): Promise<Sealed> {
+  const iv = crypto.getRandomValues(new Uint8Array(NONCE_BYTES))
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: AAD }, await cryptoKey(key), bytes)
+  const combined = new Uint8Array(NONCE_BYTES + ciphertext.byteLength)
+  combined.set(iv)
+  combined.set(new Uint8Array(ciphertext), NONCE_BYTES)
+  return bytesToBase64(combined)
+}
+
+/** Throws when the blob was not sealed with this key or was tampered with. */
+export async function openBytes(key: AccountKey, blob: Sealed): Promise<Uint8Array> {
+  const data = base64ToBytes(blob)
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: data.subarray(0, NONCE_BYTES), additionalData: AAD },
+    await cryptoKey(key),
+    data.subarray(NONCE_BYTES),
+  )
+  return new Uint8Array(plaintext)
+}

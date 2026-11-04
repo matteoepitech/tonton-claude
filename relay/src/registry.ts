@@ -340,6 +340,17 @@ const MIGRATIONS = [
      blob TEXT NOT NULL,
      PRIMARY KEY (cluster_id, name)
    );`,
+  // Small files a cluster session shares (relay/src/clusters.ts, docs/cluster.md, Files): sealed bytes, kept within a
+  // total per cluster, the oldest first to go.
+  `CREATE TABLE cluster_files (
+     cluster_id TEXT NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+     id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     size INTEGER NOT NULL,
+     created_at TEXT NOT NULL,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (cluster_id, id)
+   );`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */
