@@ -17,8 +17,10 @@ import {
 
 export interface ClusterApiOptions {
   relay: string
-  /** The account token, `ta_…`. */
+  /** The account token, `ta_…`; or a machine's token, `tm_…`, with `agent`. */
   token: string
+  /** An enrolled machine's agent: only `list` and `members` work, read only, under `/api/agent/clusters`. */
+  agent?: boolean
   fetch?: typeof fetch
 }
 
@@ -94,7 +96,7 @@ export class ClusterApi {
   }
 
   list(): Promise<ClusterSummary[]> {
-    return this.request('GET', '/api/clusters')
+    return this.request('GET', this.options.agent ? '/api/agent/clusters' : '/api/clusters')
   }
 
   /** The owner deletes the cluster for everyone. */
@@ -136,7 +138,7 @@ export class ClusterApi {
 
   /** The cluster's members, with their roles and their public keys, sealed. */
   members(clusterId: string): Promise<ClusterMemberWire[]> {
-    return this.request('GET', `/api/clusters/${clusterId}/members`)
+    return this.request('GET', `/api/${this.options.agent ? 'agent/' : ''}clusters/${clusterId}/members`)
   }
 
   /** The owner kicks a member and rotates the cluster key, so that it reads nothing written from now on. */

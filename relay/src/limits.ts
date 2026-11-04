@@ -68,6 +68,23 @@ export const POOL_SNAPSHOT_AUDIT = 300
 export const MAX_POOL_MACHINES = 50
 /** The sealed dispatch setting: on or off, and a few words. */
 export const MAX_POOL_DISPATCH_BYTES = 4096
+/** Clusters (docs/cluster.md): what one account and one cluster may hold. Posts go oldest first. */
+export const MAX_CLUSTERS_PER_ACCOUNT = 10
+export const MAX_CLUSTER_MEMBERS = 20
+export const MAX_CLUSTER_SESSIONS = 100
+export const MAX_CLUSTER_POSTS = 5000
+export const MAX_CLUSTER_INVITES = 20
+/** A sealed cluster name, a member's or a session's profile, a key grant, a session order. */
+export const MAX_CLUSTER_INFO_BYTES = 8192
+/** One sealed post. */
+export const MAX_CLUSTER_POST_BYTES = 32 * 1024
+/** One sealed document (the notes are the largest), and how many documents a cluster may have. */
+export const MAX_CLUSTER_DOC_BYTES = 1024 * 1024
+export const MAX_CLUSTER_DOCS = 16
+/** What a snapshot carries of the posts, the latest ones. */
+export const CLUSTER_SNAPSHOT_POSTS = 300
+/** Posts and documents one member may send to one cluster per minute. */
+export const MAX_CLUSTER_POSTS_PER_MINUTE = 120
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
 
 /** iPhones and iPads that get pushes, per account. The least recently registered goes first. */

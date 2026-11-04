@@ -2,6 +2,8 @@
 // the account key and folded into an immutable state. UI-agnostic, so the web, Windows and Linux apps only render it.
 // Mirrors RelaySocket.swift and SessionStore.swift.
 
+import type { ClusterAppMessage, ClusterUpdate } from './cluster-protocol'
+import { parseClusterUpdate } from './cluster-wire'
 import type { PoolAppMessage, PoolUpdate } from './pool-protocol'
 import { parsePoolUpdate } from './pool-wire'
 import type {
@@ -163,6 +165,8 @@ export interface RelayClientOptions {
   onSignedOut?: () => void
   /** The messages of the pools this client subscribed to, unopened: each pool has its own key (shared/pool.ts). */
   onPoolUpdate?: (update: PoolUpdate) => void
+  /** The messages of the clusters this client subscribed to, unopened: each cluster has its own key (shared/cluster.ts). */
+  onClusterUpdate?: (update: ClusterUpdate) => void
   /** The first delay before reconnecting, doubled after each failure up to 30 seconds. */
   retryMs?: number
 }
@@ -179,6 +183,8 @@ export class RelayClient {
   private retry: ReturnType<typeof setTimeout> | null = null
   /** The pools subscribed to, again on every connection. */
   private readonly pools = new Set<string>()
+  /** The clusters subscribed to, again on every connection. */
+  private readonly clusters = new Set<string>()
   /** Opening is asynchronous: messages go through this chain to be applied in the order they came. */
   private queue: Promise<void> = Promise.resolve()
 
@@ -282,6 +288,22 @@ export class RelayClient {
     return this.send(message)
   }
 
+  /** Asks for a cluster's snapshot, then its changes; again after every reconnection. */
+  subscribeCluster(clusterId: string) {
+    this.clusters.add(clusterId)
+    this.send({ t: 'cluster_subscribe', clusterId })
+  }
+
+  unsubscribeCluster(clusterId: string) {
+    this.clusters.delete(clusterId)
+    this.send({ t: 'cluster_unsubscribe', clusterId })
+  }
+
+  /** A session joining or leaving, a profile, a document. False when not connected: nothing was sent. */
+  sendCluster(message: ClusterAppMessage): boolean {
+    return this.send(message)
+  }
+
   private open() {
     const generation = this.generation
     let socket: SocketLike
@@ -321,7 +343,7 @@ export class RelayClient {
   }
 
   private async receive(raw: string, generation: number) {
-    if (this.receivePool(raw)) return
+    if (this.receivePool(raw) || this.receiveCluster(raw)) return
     const message = parseRelayMessage(raw)
     if (!message) return
     const event = await openMessage(this.options.vault, message, this.current.machines)
@@ -332,6 +354,7 @@ export class RelayClient {
       this.set({ ...this.current, connection: 'connected' })
       if (this.current.selectedId) this.send({ t: 'subscribe', sessionId: this.current.selectedId, latestFirst: true })
       for (const poolId of this.pools) this.send({ t: 'pool_subscribe', poolId })
+      for (const clusterId of this.clusters) this.send({ t: 'cluster_subscribe', clusterId })
     }
     this.set(reduce(this.current, event))
     this.options.onEvent?.(event)
@@ -349,6 +372,20 @@ export class RelayClient {
     }
     const update = parsePoolUpdate(value)
     if (update && this.current.connection === 'connected') this.options.onPoolUpdate?.(update)
+    return true
+  }
+
+  /** True when the message was a cluster's, handed to `onClusterUpdate`. */
+  private receiveCluster(raw: string): boolean {
+    if (!raw.slice(0, 24).includes('"t":"cluster_')) return false
+    let value: unknown
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      return true
+    }
+    const update = parseClusterUpdate(value)
+    if (update && this.current.connection === 'connected') this.options.onClusterUpdate?.(update)
     return true
   }
 

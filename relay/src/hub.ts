@@ -1,4 +1,5 @@
 import type { ServerWebSocket } from 'bun'
+import type { ClusterUpdate } from '../../shared/cluster-protocol'
 import type { PoolUpdate } from '../../shared/pool-protocol'
 import type { RelayToAgent, RelayToApp, RelayToViewer } from '../../shared/protocol'
 import { type Role, Traffic } from './metrics'
@@ -19,6 +20,8 @@ export interface SocketData {
   device?: string | null
   /** App: the pools it subscribed to. */
   pools?: Set<string>
+  /** App: the clusters it subscribed to. */
+  clusters?: Set<string>
 }
 
 export type Socket = ServerWebSocket<SocketData>
@@ -35,6 +38,10 @@ export class Hub {
   private readonly readyPoolSessions = new Set<string>()
   /** `pool/machine` of the pool machines whose service took its order since it connected. */
   private readonly readyPoolMachines = new Set<string>()
+  /** App sockets per cluster they subscribed to. */
+  private readonly clusterApps = new Map<string, Set<Socket>>()
+  /** `cluster/account/session` of the cluster sessions whose agent took its order since it connected. */
+  private readonly readyClusterSessions = new Set<string>()
   /** Every message goes through `send`, so that it is counted. */
   readonly traffic = new Traffic()
 
@@ -45,6 +52,61 @@ export class Hub {
   removeApp(socket: Socket) {
     removeFrom(this.apps, socket.data.accountId, socket)
     for (const poolId of socket.data.pools ?? []) removeFrom(this.poolApps, poolId, socket)
+    for (const clusterId of socket.data.clusters ?? []) removeFrom(this.clusterApps, clusterId, socket)
+  }
+
+  // MARK: Clusters (docs/cluster.md)
+
+  subscribeCluster(socket: Socket, clusterId: string) {
+    socket.data.clusters ??= new Set()
+    socket.data.clusters.add(clusterId)
+    addTo(this.clusterApps, clusterId, socket)
+  }
+
+  unsubscribeCluster(socket: Socket, clusterId: string) {
+    socket.data.clusters?.delete(clusterId)
+    removeFrom(this.clusterApps, clusterId, socket)
+  }
+
+  /** The account is no longer in the cluster: its apps stop getting it. */
+  dropClusterAccount(clusterId: string, accountId: string) {
+    for (const socket of [...(this.clusterApps.get(clusterId) ?? [])])
+      if (socket.data.accountId === accountId) this.unsubscribeCluster(socket, clusterId)
+  }
+
+  /** To the apps that subscribed to the cluster and the agents of `sessions`, the cluster's. */
+  sendToCluster(clusterId: string, message: ClusterUpdate, sessions: readonly { accountId: string; sessionId: string }[]) {
+    const raw = JSON.stringify(message)
+    const bytes = Buffer.byteLength(raw)
+    for (const socket of this.clusterApps.get(clusterId) ?? []) this.sendRaw(socket, raw, bytes)
+    for (const { accountId, sessionId } of sessions) {
+      const agent = this.agents.get(sessionKey(accountId, sessionId))
+      if (agent) this.sendRaw(agent, raw, bytes)
+    }
+  }
+
+  /** To one member of the cluster only: its apps that follow the cluster and the agents of its cluster sessions. */
+  sendToClusterMember(clusterId: string, accountId: string, message: ClusterUpdate, sessions: readonly string[]) {
+    const raw = JSON.stringify(message)
+    const bytes = Buffer.byteLength(raw)
+    for (const socket of this.clusterApps.get(clusterId) ?? []) if (socket.data.accountId === accountId) this.sendRaw(socket, raw, bytes)
+    for (const sessionId of sessions) {
+      const agent = this.agents.get(sessionKey(accountId, sessionId))
+      if (agent) this.sendRaw(agent, raw, bytes)
+    }
+  }
+
+  setClusterSessionReady(clusterId: string, accountId: string, sessionId: string, ready: boolean) {
+    const key = `${clusterId}/${sessionKey(accountId, sessionId)}`
+    if (ready) this.readyClusterSessions.add(key)
+    else this.readyClusterSessions.delete(key)
+  }
+
+  /** Online while its agent is connected, ready once that agent took the order; the machine its agent connected from. */
+  clusterSessionState(clusterId: string, accountId: string, sessionId: string): { online: boolean; ready: boolean; machine?: string } {
+    const agent = this.agents.get(sessionKey(accountId, sessionId))
+    const ready = agent !== undefined && this.readyClusterSessions.has(`${clusterId}/${sessionKey(accountId, sessionId)}`)
+    return { online: agent !== undefined, ready, ...(agent?.data.machineId ? { machine: agent.data.machineId } : {}) }
   }
 
   subscribePool(socket: Socket, poolId: string) {
@@ -187,7 +249,7 @@ export class Hub {
     }
   }
 
-  send(socket: Socket, message: RelayToAgent | RelayToApp | RelayToViewer | PoolUpdate) {
+  send(socket: Socket, message: RelayToAgent | RelayToApp | RelayToViewer | PoolUpdate | ClusterUpdate) {
     const raw = JSON.stringify(message)
     this.sendRaw(socket, raw, Buffer.byteLength(raw))
   }
@@ -239,7 +301,7 @@ export class Hub {
     for (const socket of this.machines.get(machineId) ?? []) this.sendRaw(socket, raw, bytes)
   }
 
-  sendToApps(accountId: string, message: RelayToApp | PoolUpdate, filter?: (socket: Socket) => boolean) {
+  sendToApps(accountId: string, message: RelayToApp | PoolUpdate | ClusterUpdate, filter?: (socket: Socket) => boolean) {
     const sockets = this.apps.get(accountId)
     if (!sockets?.size) return
     const raw = JSON.stringify(message)

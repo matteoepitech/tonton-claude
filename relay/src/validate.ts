@@ -58,3 +58,12 @@ export const isMachineRef = (value: unknown): value is { account: string; machin
   value !== null &&
   isAccountId((value as { account?: unknown }).account) &&
   isMachineId((value as { machine?: unknown }).machine)
+
+/** A cluster's id, chosen by the client that creates it: 12 base64url characters. */
+export const isClusterId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{12}$/.test(value)
+
+/** The id a client gives a cluster post. */
+export const isClusterItemId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(value)
+
+/** The name of a cluster's shared document: `notes`, `claims`, `clock`, or a later one of the same shape. */
+export const isClusterDocName = (value: unknown): value is string => typeof value === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(value)

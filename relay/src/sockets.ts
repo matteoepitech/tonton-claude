@@ -1,6 +1,8 @@
 import type { WebSocketHandler } from 'bun'
+import type { ClusterAgentMessage, ClusterAppMessage } from '../../shared/cluster-protocol'
 import type { PoolAgentMessage, PoolAppMessage, PoolMachineMessage } from '../../shared/pool-protocol'
 import type { AgentMessage, AppMessage, SealedEntry } from '../../shared/protocol'
+import { clusterSessionConnected, clusterSessionDisconnected, handleAgentClusterMessage, handleAppClusterMessage } from './cluster-sockets'
 import type { RelayContext } from './context'
 import type { Socket, SocketData } from './hub'
 import {
@@ -80,6 +82,7 @@ export function createWebSocketHandler(ctx: RelayContext): WebSocketHandler<Sock
       if (sessionId && ctx.hub.unbindAgent(socket, sessionId)) {
         ctx.sessions.agentDisconnected(accountId, sessionId)
         poolSessionDisconnected(ctx, accountId, sessionId)
+        clusterSessionDisconnected(ctx, accountId, sessionId)
       }
       ctx.hub.removeMachineSocket(socket)
       if (socket.data.service && socket.data.machineId && !ctx.hub.serviceSocket(socket.data.machineId)) {
@@ -128,6 +131,7 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
   // Once announced, a socket only speaks for its own session.
   if (message.t !== 'hello' && socket.data.sessionId !== sessionId) return
   if (handleAgentPoolMessage(ctx, socket, message as PoolAgentMessage, sessionId)) return
+  if (handleAgentClusterMessage(ctx, socket, message as ClusterAgentMessage, sessionId)) return
 
   switch (message.t) {
     case 'hello': {
@@ -143,6 +147,8 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
       }
       // And its pools, with the orders that put it there.
       poolSessionConnected(ctx, socket, sessionId)
+      // And its clusters.
+      clusterSessionConnected(ctx, socket, sessionId)
       break
     }
     case 'share_info': {
@@ -187,6 +193,7 @@ function handleAgentMessage(ctx: RelayContext, socket: Socket, message: AgentMes
 function handleAppMessage(ctx: RelayContext, socket: Socket, message: AppMessage) {
   const { accountId } = socket.data
   if (handleAppPoolMessage(ctx, socket, message as PoolAppMessage)) return
+  if (handleAppClusterMessage(ctx, socket, message as ClusterAppMessage)) return
   switch (message?.t) {
     case 'subscribe': {
       socket.data.sessionId = isSessionId(message.sessionId) ? message.sessionId : null
