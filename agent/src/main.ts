@@ -1,4 +1,5 @@
 import { runChannel } from './channel'
+import { CLUSTER_USAGE, runClusterCommand } from './cluster-cli'
 import { loadConfig, saveConfig, VERSION } from './config'
 import { runHook } from './hook'
 import { install, status, uninstall } from './install'
@@ -13,6 +14,7 @@ const USAGE = `Tonton Claude ${VERSION}
   tonton status              check the setup and the connection
   tonton token [token]       show the relay, or connect to the relay and account of a token from the app
   tonton tray on|off         show or hide the tray icon
+${CLUSTER_USAGE}
   tonton install             update this machine (TONTON_TOKEN=<token> to connect it)
   tonton uninstall`
 
@@ -41,6 +43,15 @@ switch (command) {
   case 'tray':
     tray(args[0])
     break
+  case 'cluster': {
+    const result = await runClusterCommand(args)
+    if (result.ok) console.log(result.text)
+    else {
+      console.error(result.text)
+      process.exit(1)
+    }
+    break
+  }
   case 'install':
     await install(args)
     break

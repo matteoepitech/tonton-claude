@@ -3,7 +3,7 @@ import { seal } from '../../../shared/crypto'
 import type { ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
 import { cutText } from '../../../shared/text'
 import { latestTodos, taskProgress } from '../../../shared/todos'
-import { paths } from '../config'
+import { type AgentConfig, paths } from '../config'
 import { gitBranch } from '../git'
 import type { AgentRPG } from '../rpg'
 import { setPoolMode, setPoolRules } from '../rules'
@@ -12,12 +12,16 @@ import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
+import { deferClusterPost, forgetClusterPosts } from './cluster-digest'
+import { ClusterAutoJoin } from './cluster-joins'
+import { ClusterWork } from './cluster-work'
+import { SessionClusters } from './clusters'
 import { PoolSafety } from './pool-safety'
 import { poolUsage } from './pool-usage'
 import { PoolWork } from './pool-work'
 import { SessionPools } from './pools'
 import { entriesMessages, type Outgoing } from './relay-connection'
-import type { SessionLink } from './session-link'
+import { hookState, type SessionLink } from './session-link'
 import { SessionShares } from './shares'
 import { COMMANDS, runCommand } from './terminal'
 
@@ -67,6 +71,12 @@ export class Conversation {
   readonly work: PoolWork
   /** Budgets, stops and the pool rules its owner accepted. */
   readonly safety: PoolSafety
+  /** The clusters this session is in, with their keys: apart from its pools, they never mix. */
+  readonly clusters: SessionClusters
+  /** Claude's cluster tools, and the posts the clusters send it. */
+  readonly cluster: ClusterWork
+  /** The clusters the machine owner put this session's folder in, with `tonton cluster join`. */
+  private readonly autoJoin: ClusterAutoJoin | null
 
   constructor(
     readonly link: SessionLink,
@@ -79,6 +89,10 @@ export class Conversation {
     /** This machine: a pool machine's mode applies to the sessions it started here only. */
     private readonly machineId = '',
     private readonly rpg?: AgentRPG,
+    /** Hands Claude what its clusters send it, and tells Claude Code the cluster tools changed. */
+    cluster: { live(text: string): void; toolsChanged(): void } = { live: () => {}, toolsChanged: () => {} },
+    /** The machine's setup, for the clusters its owner put this session's folder in; none in the tests. */
+    config?: AgentConfig,
   ) {
     this.shares = new SessionShares(
       () => link.sessionId,
@@ -129,6 +143,32 @@ export class Conversation {
     this.work.useSafety(this.safety)
     this.work.useRepository(() => this.cwd())
     this.work.useRewards((id, state) => this.rpg?.pool(id, state, this.link.sessionId, this.pools.vault(id)?.keyring))
+    this.clusters = new SessionClusters(() => link.sessionId, key, post)
+    this.cluster = new ClusterWork(
+      this.clusters,
+      () => link.sessionId,
+      post,
+      {
+        live: text => cluster.live(text),
+        // The UserPromptSubmit hook hands them to Claude with the next prompt (agent/src/channel/cluster-digest.ts).
+        defer: (clusterId, text) => deferClusterPost(link.sessionId, clusterId, text),
+        forget: clusterId => forgetClusterPosts(link.sessionId, clusterId),
+        busy: () => hookState().busy,
+        skipsPrompts: () => hookState().skipsPrompts,
+      },
+      () => this.clusterSelf(),
+      () => cluster.toolsChanged(),
+    )
+    this.autoJoin = config
+      ? new ClusterAutoJoin(
+          config,
+          () => link.sessionId,
+          () => this.cwd(),
+          this.clusters,
+          post,
+          () => this.clusterSelf(),
+        )
+      : null
     this.tailer = link.transcriptPath
       ? new Tailer(link.transcriptPath, {
           lines: (lines, initial) => this.onLines(lines, initial),
@@ -151,6 +191,7 @@ export class Conversation {
     if (this.tailer) this.tailer.start()
     else this.announce()
     this.usageTimer = setInterval(() => this.readUsage(), USAGE_POLL_MS)
+    this.autoJoin?.start()
   }
 
   stop() {
@@ -158,6 +199,13 @@ export class Conversation {
     this.subagents?.stop()
     if (this.usageTimer) clearInterval(this.usageTimer)
     this.work.stop()
+    this.autoJoin?.stop()
+  }
+
+  /** How this session shows in its clusters: the folder's name, never its path. */
+  private clusterSelf() {
+    const cwd = this.cwd()
+    return { tool: 'claude' as const, model: this.model, project: projectOf(cwd), machine: this.machine, ...branchOf(cwd) }
   }
 
   /** Everything the relay needs after a (re)connection. */
@@ -323,6 +371,7 @@ export class Conversation {
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd()), title: this.title })
     this.work.descriptionChanged()
+    this.cluster.descriptionChanged()
     this.safety.usageChanged()
   }
 

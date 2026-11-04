@@ -15,6 +15,26 @@ export interface SessionLink {
   cwd: string | null
   /** Where Claude Code runs, when it runs in tmux. Missing from links written by older hooks. */
   tmux?: TerminalPane | null
+  /** The last hook event, `Notification:<type>` for notifications. Missing from links written by older hooks. */
+  event?: string
+  /** Claude Code's permission mode, as the last hook said it. */
+  permissionMode?: string
+}
+
+/** Hook events after which Claude is in a turn: it took a prompt, or waits on a permission prompt within one. */
+const IN_TURN = ['UserPromptSubmit', 'PermissionRequest', 'Notification:permission_prompt']
+
+/**
+ * What the hooks last wrote of this channel's session, read again each time: whether Claude is in a turn, and whether it
+ * skips permission prompts. Cluster delivery asks (agent/src/channel/cluster-work.ts).
+ */
+export function hookState(file = join(paths.run, `${process.ppid}.json`)): { busy: boolean; skipsPrompts: boolean } {
+  try {
+    const link = JSON.parse(readFileSync(file, 'utf8')) as SessionLink
+    return { busy: IN_TURN.includes(link.event ?? ''), skipsPrompts: link.permissionMode === 'bypassPermissions' }
+  } catch {
+    return { busy: false, skipsPrompts: false }
+  }
 }
 
 /**

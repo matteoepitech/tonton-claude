@@ -14,6 +14,10 @@ import type {
 } from '../../../shared/protocol'
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { withAttachments } from '../channel'
+import { DIGEST_SIZE } from '../channel/cluster-digest'
+import { ClusterAutoJoin } from '../channel/cluster-joins'
+import { ClusterWork, clusterDigest, isClusterTool } from '../channel/cluster-work'
+import { SessionClusters } from '../channel/clusters'
 import { branchOf, isTodoWrite, projectOf } from '../channel/conversation'
 import { PoolSafety } from '../channel/pool-safety'
 import { poolUsage } from '../channel/pool-usage'
@@ -53,8 +57,13 @@ export type PluginCommand =
   | { op: 'models' }
   /** The names of the folder's MCP servers (`tonton.mcp`), which OpenCode puts in front of their tools. */
   | { op: 'mcp'; directory?: string }
-  /** The answer to a pool tool OpenCode called (`tonton.tool`), or to an edit it is about to make (`tonton.guard`). */
+  /** The answer to a pool or cluster tool OpenCode called (`tonton.tool`), or to an edit it is about to make (`tonton.guard`). */
   | { op: 'tool_result'; callID: string; output: string }
+  /**
+   * A cluster post for Claude, as a synthetic part, never as the user's text. `wake`: start a turn if the session is idle;
+   * otherwise it waits in the session for its running or next turn.
+   */
+  | { op: 'inject'; sessionID: string; directory?: string; text: string; wake: boolean; providerID?: string; modelID?: string }
 
 type Send = (command: PluginCommand) => void
 
@@ -78,6 +87,13 @@ class Link {
   readonly work: PoolWork
   /** Budgets, stops and the pool rules its owner accepted, as for Claude Code. */
   readonly safety: PoolSafety
+  /** The clusters this session is in, and Claude's cluster tools, as for Claude Code. */
+  readonly clusters: SessionClusters
+  readonly cluster: ClusterWork
+  private readonly autoJoin: ClusterAutoJoin
+  /** Cluster posts for the next prompt, by cluster: OpenCode has no hook that adds to the prompt, the bridge holds them. */
+  private deferred: { clusterId: string; text: string }[] = []
+  private dropped = 0
   /** Turns that ended, from the statuses OpenCode reports, for the time budgets: OpenCode writes no turn times. */
   private turns: TurnTime[] = []
   private turnStarted: number | null = null
@@ -93,6 +109,7 @@ class Link {
       connected: () => this.announce(),
       message: message => this.onRelay(message),
       pool: update => this.pools.apply(update),
+      cluster: update => this.clusters.apply(update),
     })
     this.shares = new SessionShares(
       () => sessionId,
@@ -135,7 +152,74 @@ class Link {
     this.work.useSafety(this.safety)
     this.work.useRepository(() => this.cwd())
     this.work.useRewards((id, state) => this.rpg.pool(id, state, this.sessionId, this.pools.vault(id)?.keyring))
+    this.clusters = new SessionClusters(
+      () => sessionId,
+      config.key,
+      build => this.relay.post(build),
+    )
+    this.cluster = new ClusterWork(
+      this.clusters,
+      () => sessionId,
+      build => this.relay.post(build),
+      {
+        live: text => this.inject(text, true),
+        defer: (clusterId, text) => this.defer(clusterId, text),
+        forget: clusterId => {
+          this.deferred = this.deferred.filter(post => post.clusterId !== clusterId)
+        },
+        busy: () => this.turnStarted !== null,
+        // OpenCode asks as its own config says: no mode the bridge sees skips every prompt.
+        skipsPrompts: () => false,
+      },
+      () => this.clusterSelf(),
+    )
+    this.autoJoin = new ClusterAutoJoin(
+      config,
+      () => sessionId,
+      () => this.cwd() ?? process.cwd(),
+      this.clusters,
+      build => this.relay.post(build),
+      () => this.clusterSelf(),
+    )
+    this.autoJoin.start()
     this.relay.connect()
+  }
+
+  private clusterSelf() {
+    const cwd = this.cwd() ?? process.cwd()
+    return {
+      tool: 'opencode' as const,
+      model: this.tracker.meta(this.sessionId).model,
+      project: projectOf(cwd),
+      machine: this.config.machine,
+      ...branchOf(cwd),
+    }
+  }
+
+  private inject(text: string, wake: boolean) {
+    this.send({ op: 'inject', sessionID: this.sessionId, directory: this.cwd(), text, wake, ...this.chosenModel })
+  }
+
+  private defer(clusterId: string, text: string) {
+    this.deferred.push({ clusterId, text })
+    const over = this.deferred.length - DIGEST_SIZE
+    if (over > 0) {
+      this.deferred.splice(0, over)
+      this.dropped += over
+    }
+  }
+
+  /** The posts that waited, as one digest, into the turn that starts: it does not start another. */
+  private handDigest() {
+    if (!this.deferred.length && !this.dropped) return
+    const digest = clusterDigest(
+      this.deferred.map(post => post.text),
+      this.dropped,
+    )
+    this.deferred = []
+    this.dropped = 0
+    log('cluster digest handed to the prompt', { tool: 'opencode' })
+    this.inject(digest, false)
   }
 
   add(entries: Entry[]) {
@@ -166,13 +250,16 @@ class Link {
     this.relay.post(async () => ({ t: 'meta', sessionId: this.sessionId, meta: await seal(this.config.key, meta) }))
     this.shares.setInfo({ project: projectOf(this.cwd() ?? process.cwd()), title: meta.title, tool: 'opencode' })
     this.work.descriptionChanged()
+    this.cluster.descriptionChanged()
     this.safety.usageChanged()
   }
 
   /** A status from OpenCode: a turn starts with the prompt and ends when OpenCode is done or fails. */
   turn(hook: string) {
-    if (hook === 'UserPromptSubmit') this.turnStarted ??= Date.now()
-    else if ((hook === 'Stop' || hook === 'StopFailure' || hook === 'SessionEnd') && this.turnStarted !== null) {
+    if (hook === 'UserPromptSubmit' && this.turnStarted === null) {
+      this.turnStarted = Date.now()
+      this.handDigest()
+    } else if ((hook === 'Stop' || hook === 'StopFailure' || hook === 'SessionEnd') && this.turnStarted !== null) {
       const seconds = Math.round((Date.now() - this.turnStarted) / 1000)
       this.turns = [...this.turns, { end: new Date().toISOString(), seconds }].slice(-20)
       this.turnStarted = null
@@ -207,6 +294,7 @@ class Link {
     this.rpg.stop()
     this.relay.stop()
     this.work.stop()
+    this.autoJoin.stop()
   }
 
   flushed(): Promise<void> {
@@ -240,6 +328,8 @@ class Link {
     else if (message.t === 'pool_left') this.pools.remove(message.poolId)
     else if (message.t === 'pool_stop') this.pools.stop(message.poolId)
     else if (message.t === 'pool_accept') this.pools.accept(message.poolId, message.acceptance)
+    else if (message.t === 'cluster_join') this.clusters.receive(message.clusterId, message.order)
+    else if (message.t === 'cluster_left') this.clusters.remove(message.clusterId)
     else if (message.t === 'verdict') {
       const permission = [...this.pending.values()].find(item => shortId(item.requestId) === message.requestId)
       if (!permission) return
@@ -432,9 +522,10 @@ export async function runOpenCode() {
     const tool = poolToolCall(event)
     if (tool) {
       const link = links.get(tool.sessionID)
-      void (link ? link.work.call(tool.name, tool.args) : Promise.resolve('This session is not in a pool.')).then(output =>
-        send({ op: 'tool_result', callID: tool.callID, output }),
-      )
+      const cluster = isClusterTool(tool.name)
+      const none = cluster ? 'This session is not in a cluster.' : 'This session is not in a pool.'
+      const call = link ? (cluster ? link.cluster.call(tool.name, tool.args) : link.work.call(tool.name, tool.args)) : Promise.resolve(none)
+      void call.then(output => send({ op: 'tool_result', callID: tool.callID, output }))
       continue
     }
     for (const update of tracker.handle(event)) apply(update)
@@ -455,7 +546,7 @@ export async function runOpenCode() {
   process.exit(0)
 }
 
-/** A pool tool OpenCode called through the plugin: `{ type: 'tonton.tool', data: { callID, sessionID, name, args } }`. */
+/** A pool or cluster tool OpenCode called through the plugin: `{ type: 'tonton.tool', data: { callID, sessionID, name, args } }`. */
 export function poolToolCall(event: unknown): { callID: string; sessionID: string; name: string; args: Record<string, unknown> } | null {
   const fields = event as { type?: unknown; data?: Record<string, unknown> } | null
   if (fields?.type !== 'tonton.tool' || !fields.data) return null
