@@ -2,8 +2,8 @@
 // status lines only, so this one records it for the session's channel, then shows the user's own status line, if any.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { claudeConfigDir } from './config'
 import { log } from './log'
 import { statusLineLimit, statusLineUsage, writeUsage } from './usage'
 
@@ -34,7 +34,7 @@ export async function runStatusLine() {
     log('status line: could not record usage', String(error))
   }
   const projectDir = text(input.workspace?.project_dir) ?? text(input.cwd)
-  const command = userStatusLine(projectDir, process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'))
+  const command = userStatusLine(projectDir, claudeConfigDir())
   process.stdout.write(command ? await runUserCommand(command, raw) : defaultLine(input))
 }
 
