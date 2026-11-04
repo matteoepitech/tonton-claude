@@ -27,6 +27,36 @@ describe('parseLine', () => {
     expect(entries[1]).toMatchObject({ toolUseId: 't1', name: 'Bash', summary: 'npm test' })
   })
 
+  test('the whole command of a shell call stays apart from its one-line summary, for Bash and PowerShell', () => {
+    const parsed = parseLine(
+      line({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'cd web\nbun test', description: 'Test the web' } },
+            { type: 'tool_use', id: 't2', name: 'PowerShell', input: { command: 'git push origin main', description: 'Push the branch' } },
+            { type: 'tool_use', id: 't3', name: 'Read', input: { file_path: '/a' } },
+          ],
+        },
+      }),
+    )
+    expect(parsed.commands).toEqual({ t1: 'cd web\nbun test', t2: 'git push origin main' })
+    expect(parsed.entries).toMatchObject([{ summary: 'cd web bun test' }, { summary: 'git push origin main' }, { summary: '/a' }])
+  })
+
+  test('a long tool result keeps its start and its end', () => {
+    const { entries } = parseLine(
+      line({
+        type: 'user',
+        message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: `start\n${'x'.repeat(9000)}\nBuild FAILED.` }] },
+      }),
+    )
+    const text = entries[0].kind === 'tool_result' ? entries[0].text : ''
+    expect(text.startsWith('start\n')).toBe(true)
+    expect(text.endsWith('\nBuild FAILED.')).toBe(true)
+    expect(text.length).toBeLessThan(4100)
+  })
+
   test('tool results are truncated and keep the error flag', () => {
     const { entries } = parseLine(
       line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'x'.repeat(5000), is_error: true }] } }),

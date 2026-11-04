@@ -424,13 +424,47 @@ describe('OpenCode 1', () => {
       bash('c5', 1),
     ])
     const results = entries.filter(entry => entry.kind === 'tool_result')
-    expect(results.map(entry => [entry.toolUseId, entry.kind === 'tool_result' && entry.isError])).toEqual([
-      ['c1', false],
-      ['c2', true],
-      ['c3', false],
-      ['c4', false],
-      ['c5', true],
+    // A failed command starts with its exit code, as in Claude Code; one stopped before it ended (null) is an error too.
+    expect(results.map(entry => entry.kind === 'tool_result' && [entry.toolUseId, entry.isError, entry.text])).toEqual([
+      ['c1', false, 'out'],
+      ['c2', true, 'Exit code 2\nout'],
+      ['c3', true, 'out'],
+      ['c4', false, 'out'],
+      ['c5', true, 'Exit code 1\nout'],
     ])
+  })
+
+  test('so does a failed command in the history OpenCode 2 keeps', () => {
+    const tool = (id: string, exit: unknown) => ({
+      type: 'tool',
+      id,
+      name: 'shell',
+      state: {
+        status: 'completed',
+        input: { command: 'make' },
+        content: [{ type: 'text', text: 'out' }],
+        metadata: { status: 'completed', exit },
+      },
+    })
+    const messages = [{ id: 'm1', type: 'assistant', time: { created: 1_793_032_549_195 }, content: [tool('c1', 0), tool('c2', 2)] }]
+    const tracker = new OpenCodeTracker()
+    const [update] = tracker.handle({ type: 'tonton.history', data: { sessionID: 'ses_1', messages } })
+    const results = (update?.history ?? []).filter(entry => entry.kind === 'tool_result')
+    expect(results.map(entry => entry.kind === 'tool_result' && [entry.toolUseId, entry.isError, entry.text])).toEqual([
+      ['c1', false, 'out'],
+      ['c2', true, 'Exit code 2\nout'],
+    ])
+    expect(tracker.command('ses_1', 'c2')).toBe('make')
+  })
+
+  test('a long result keeps its start and its end', () => {
+    const output = `start\n${'x'.repeat(10_000)}\nResult: Failed`
+    const { entries } = replay([
+      message('m1', 'assistant'),
+      part({ id: 'p1', messageID: 'm1', type: 'tool', callID: 'c1', tool: 'bash', state: { status: 'completed', input: {}, output } }),
+    ])
+    const result = entries.find(entry => entry.kind === 'tool_result')
+    expect(result?.kind === 'tool_result' && result.text).toMatch(/^start\n[\s\S]*characters truncated\)\n[\s\S]*Result: Failed$/)
   })
 
   test('anything unexpected is skipped', () => {

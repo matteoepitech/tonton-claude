@@ -4,6 +4,8 @@ import { limit, modelName } from '../usage'
 // Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
 
 const MAX_TOOL_RESULT_CHARS = 4000
+/** Of a longer result, the end is kept too: it says how a build or a test run ended. */
+const TOOL_RESULT_TAIL_CHARS = 1500
 const MAX_IMAGE_BASE64 = 4 * 1024 * 1024
 const MAX_SUMMARY_CHARS = 300
 /** Per side of an edit, and edits per call: enough to read the change, not to resend whole files. */
@@ -20,6 +22,7 @@ const INTERNAL_USER_TAGS = /^\s*<(local-command-stdout|local-command-caveat|comm
 /** Which input field describes a tool call best, per tool. */
 const SUMMARY_FIELDS: Record<string, string[]> = {
   Bash: ['command'],
+  PowerShell: ['command'],
   Read: ['file_path'],
   Write: ['file_path'],
   Edit: ['file_path'],
@@ -51,7 +54,12 @@ export interface ParsedLine {
   turn?: TurnTime
   /** The model that wrote this response, such as `claude-opus-4-5-20251101`. */
   model?: string
+  /** The whole command of each shell call, by tool use id: a summary is one line and cut. Stays on the machine. */
+  commands?: Record<string, string>
 }
+
+/** The tools that run commands, and the field that holds the command. */
+const SHELL_TOOLS = new Set(['Bash', 'PowerShell'])
 
 interface Block {
   type: string
@@ -126,8 +134,22 @@ export function parseLine(raw: string, { sidechain = false }: { sidechain?: bool
 
   const content = line.message.content
   if (line.type === 'user') result.entries.push(...userEntries(id, ts, content))
-  else if (Array.isArray(content)) result.entries.push(...assistantEntries(id, ts, content))
+  else if (Array.isArray(content)) {
+    result.entries.push(...assistantEntries(id, ts, content))
+    const commands = shellCommands(content)
+    if (commands) result.commands = commands
+  }
   return result
+}
+
+function shellCommands(content: Block[]): Record<string, string> | undefined {
+  const commands: Record<string, string> = {}
+  for (const block of content) {
+    const command = (block.input as { command?: unknown } | undefined)?.command
+    if (block.type === 'tool_use' && SHELL_TOOLS.has(String(block.name)) && typeof command === 'string')
+      commands[String(block.id)] = command
+  }
+  return Object.keys(commands).length ? commands : undefined
 }
 
 /** A turn's end needs its own time: a made-up one would differ at each read and count the turn again. */
@@ -229,11 +251,17 @@ function toolResult(id: string, ts: string, block: Block): Entry {
       else if (part.type === 'image') addImage(images, part)
     }
   }
-  if (text.length > MAX_TOOL_RESULT_CHARS) {
-    text = `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n… (${text.length - MAX_TOOL_RESULT_CHARS} characters truncated)`
-  }
+  text = cutToolResult(text)
   const toolUseId = String(block.tool_use_id)
   return { id, ts, kind: 'tool_result', toolUseId, text, isError: block.is_error === true, ...(images.length ? { images } : {}) }
+}
+
+/** A long tool result keeps its start and its end, for Claude Code's and OpenCode's sessions alike. */
+export function cutToolResult(text: string): string {
+  if (text.length <= MAX_TOOL_RESULT_CHARS) return text
+  const head = MAX_TOOL_RESULT_CHARS - TOOL_RESULT_TAIL_CHARS
+  const cut = text.length - MAX_TOOL_RESULT_CHARS
+  return `${text.slice(0, head)}\n… (${cut} characters truncated)\n${text.slice(-TOOL_RESULT_TAIL_CHARS)}`
 }
 
 function addImage(images: ImageData[], block: Block) {
