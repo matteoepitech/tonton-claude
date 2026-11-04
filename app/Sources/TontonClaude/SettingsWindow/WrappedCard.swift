@@ -25,7 +25,7 @@ struct WrappedCard: View {
                     figure(
                         String(localized: "Top project"), recap.topProject?.name, recap.topProject.map { WrappedLog.duration($0.value) })
                     figure(
-                        String(localized: "Most used tool"), recap.topTool?.name,
+                        String(localized: "Most used tool"), recap.topTool.map { ToolLabel.text($0.name) },
                         recap.topTool.map {
                             recap.toolCalls == 1
                                 ? String(localized: "1 call") : String(localized: "\(Int($0.value)) of \(recap.toolCalls) calls")

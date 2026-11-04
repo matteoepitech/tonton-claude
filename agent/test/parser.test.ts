@@ -10,7 +10,7 @@ describe('parseLine', () => {
     ])
   })
 
-  test('assistant text and tool calls, hiding ToolSearch', () => {
+  test('assistant text and tool calls, hiding ToolSearch and SubagentHandback', () => {
     const { entries } = parseLine(
       line({
         type: 'assistant',
@@ -19,6 +19,7 @@ describe('parseLine', () => {
             { type: 'text', text: 'On it.' },
             { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm   test' } },
             { type: 'tool_use', id: 't2', name: 'ToolSearch', input: { query: 'select:Write' } },
+            { type: 'tool_use', id: 't3', name: 'SubagentHandback', input: { message: 'Done' } },
           ],
         },
       }),

@@ -26,6 +26,9 @@ final class SpokenTests: XCTestCase {
             Spoken.permissions([request("r1", "Bash", "Run the tests")], session: "tonton-claude"),
             "tonton-claude asks to use Bash: Run the tests")
         XCTAssertEqual(Spoken.permissions([request("r1", "Edit", "  ")], session: "relay"), "relay asks to use Edit")
+        XCTAssertEqual(
+            Spoken.permissions([request("r1", "mcp__unreal-engine__spawn_actor")], session: "game"),
+            "game asks to use unreal-engine, spawn actor")
     }
 
     func testSeveralRequestsAreAnnouncedAtOnce() {

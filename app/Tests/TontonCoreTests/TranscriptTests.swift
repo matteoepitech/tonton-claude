@@ -17,11 +17,12 @@ final class TranscriptTests: XCTestCase {
             [Entry(id: "u1", ts: ts, kind: .user, text: "hello")])
     }
 
-    func testAssistantTextAndToolCallsHidingToolSearch() {
+    func testAssistantTextAndToolCallsHidingToolSearchAndSubagentHandback() {
         let content: [[String: Any]] = [
             ["type": "text", "text": "On it."],
             ["type": "tool_use", "id": "t1", "name": "Bash", "input": ["command": "npm   test"]],
             ["type": "tool_use", "id": "t2", "name": "ToolSearch", "input": ["query": "select:Write"]],
+            ["type": "tool_use", "id": "t3", "name": "SubagentHandback", "input": ["message": "Done"]],
         ]
         let entries = Transcript.parse(line(["type": "assistant", "message": ["content": content]])).entries
         XCTAssertEqual(entries.map(\.kind), [.assistant, .tool])
