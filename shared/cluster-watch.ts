@@ -17,6 +17,16 @@ import {
   sealClusterSessionOrder,
 } from './cluster'
 import { type ClusterApi, type ClusterInviteSummary, resolveClusterKeyring } from './cluster-api'
+import {
+  CLUSTER_LEADERBOARD,
+  type ClusterLeaderboard,
+  clusterHeroEntry,
+  clusterHeroFrom,
+  decodeClusterLeaderboard,
+  sameClusterHero,
+  sealedClusterLeaderboard,
+  withClusterHero,
+} from './cluster-heroes'
 import { clusterInviteLink, parseClusterInvite } from './cluster-link'
 import type {
   ClusterAppMessage,
@@ -34,6 +44,7 @@ import type {
 } from './cluster-protocol'
 import type { AccountKey } from './crypto'
 import { needsRepublish, type PoolKeyring, type PoolMemberSecret, sealPoolMemberKey, sealPoolMemberSecret } from './pool-keys'
+import type { RPGState } from './rpg'
 
 /** The part of a relay client clusters need: `RelayClient` fits it. */
 export interface ClusterLink {
@@ -53,6 +64,8 @@ export interface ClusterDocs {
   notes: ClusterNotes | null
   claims: ClusterClaims | null
   clock: ClusterClock | null
+  /** The members who share their Tonton (shared/cluster-heroes.ts). */
+  leaderboard: ClusterLeaderboard | null
 }
 
 export interface OpenCluster extends ClusterDocs {
@@ -71,6 +84,8 @@ interface Opened extends ClusterDocs {
   vault: ClusterVault | null
   state: ClusterState | null
   problem: string | null
+  /** What this member last asked here, its hero or null to leave: made again over a newer board after a conflict. */
+  sharing?: { hero: RPGState | null }
 }
 
 export interface ClusterWatchOptions {
@@ -90,7 +105,7 @@ export interface ClusterSessionChoice {
   liveWithoutPrompts?: boolean
 }
 
-const NO_DOCS: ClusterDocs = { notes: null, claims: null, clock: null }
+const NO_DOCS: ClusterDocs = { notes: null, claims: null, clock: null, leaderboard: null }
 /** What a relay from before clusters answers to every cluster route. */
 export const CLUSTERS_UNSUPPORTED = "This relay doesn't know clusters yet: it needs updating."
 
@@ -120,8 +135,8 @@ export class ClusterWatch {
   cluster(clusterId: string): OpenCluster | null {
     const opened = this.opened.get(clusterId)
     if (!opened) return null
-    const { summary, state, problem, notes, claims, clock } = opened
-    return { id: clusterId, role: summary.role, state, problem, notes, claims, clock }
+    const { summary, state, problem, notes, claims, clock, leaderboard } = opened
+    return { id: clusterId, role: summary.role, state, problem, notes, claims, clock, leaderboard }
   }
 
   /** The clusters of the account, each with its name opened with the member's keys. */
@@ -290,6 +305,38 @@ export class ClusterWatch {
     return this.send(clusterId, { t: 'cluster_doc', clusterId, name: 'clock', rev, blob: await opened.vault.seal(clock) })
   }
 
+  /** Whether this member's Tonton is on the cluster's leaderboard. */
+  sharesHero(clusterId: string): boolean {
+    return this.opened.get(clusterId)?.leaderboard?.heroes.some(hero => hero.account === this.options.account) ?? false
+  }
+
+  /**
+   * Puts this member's Tonton on the leaderboard, or keeps its entry up to date: its level, what it wears, its XP today
+   * and since the clock started or it joined. Null takes it off. Only its own entry changes; an entry that says the same
+   * is not written again. A write that crosses another member's is made again over the newer document.
+   */
+  async shareHero(clusterId: string, hero: RPGState | null, now: number = Date.now()): Promise<boolean> {
+    const opened = this.opened.get(clusterId)
+    if (!opened?.vault || !opened.state) return false
+    const account = this.options.account
+    const me = opened.state.members.find(member => member.account === account)
+    if (!me) return false
+    opened.sharing = { hero }
+    // A board that exists but does not open (a key this client lacks yet) is never written over: the others would go.
+    const doc = opened.state.docs.find(item => item.name === CLUSTER_LEADERBOARD)
+    if (doc && !opened.leaderboard) {
+      opened.problem = 'The leaderboard does not open with the keys you hold yet: nothing was changed.'
+      this.options.onChange()
+      return false
+    }
+    const previous = opened.leaderboard?.heroes.find(entry => entry.account === account) ?? null
+    const entry = hero ? clusterHeroEntry(hero, account, clusterHeroFrom(opened.clock?.startedAt, me.joinedAt), previous, now) : null
+    if (sameClusterHero(previous, entry)) return true
+    const board = withClusterHero(opened.leaderboard, account, entry)
+    const blob = await opened.vault.seal(sealedClusterLeaderboard(board))
+    return this.send(clusterId, { t: 'cluster_doc', clusterId, name: CLUSTER_LEADERBOARD, rev: doc?.rev ?? 0, blob })
+  }
+
   clearProblem(clusterId?: string) {
     if (clusterId) {
       const opened = this.opened.get(clusterId)
@@ -329,7 +376,10 @@ export class ClusterWatch {
         opened.state = await opened.vault.apply(opened.state, { t: 'cluster_doc', clusterId, doc: update.current })
         await this.openDocs(opened)
       }
-      opened.problem = `Someone changed the ${update.name} meanwhile: check it and try again.`
+      // Another member's client wrote its own entry first: this one is put in, or taken out of, the newer board.
+      if (update.name === CLUSTER_LEADERBOARD) {
+        if (opened.sharing) await this.shareHero(clusterId, opened.sharing.hero)
+      } else opened.problem = `Someone changed the ${update.name} meanwhile: check it and try again.`
     } else if (opened.state && opened.vault) {
       const next = await opened.vault.apply(opened.state, update)
       if (!next) {
@@ -338,7 +388,10 @@ export class ClusterWatch {
         return
       }
       opened.state = next
+      const startedAt = opened.clock?.startedAt
       if (update.t === 'cluster_doc') await this.openDocs(opened)
+      // A clock that starts (again) is where this member's count starts: its entry follows at once.
+      if (opened.sharing?.hero && opened.clock?.startedAt !== startedAt) await this.shareHero(clusterId, opened.sharing.hero)
       // The list says the name and how many members: both can change while the cluster is open.
       this.listed = this.listed.map(listed =>
         listed.summary.id === clusterId
@@ -365,12 +418,13 @@ export class ClusterWatch {
   private async openDocs(opened: Opened) {
     const { vault, state } = opened
     if (!vault || !state) return
-    const [notes, claims, clock] = await Promise.all([
+    const [notes, claims, clock, leaderboard] = await Promise.all([
       vault.doc(state, 'notes', decodeClusterNotes),
       vault.doc(state, 'claims', decodeClusterClaims),
       vault.doc(state, 'clock', decodeClusterClock),
+      vault.doc(state, CLUSTER_LEADERBOARD, decodeClusterLeaderboard),
     ])
-    Object.assign(opened, { notes, claims, clock })
+    Object.assign(opened, { notes, claims, clock, leaderboard })
   }
 
   /** After a rotation, publishes this member's public key under the new version, so the owner can wrap the next one. */

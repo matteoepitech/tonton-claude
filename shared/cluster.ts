@@ -344,7 +344,15 @@ export class ClusterVault {
   }
 
   seal(
-    value: ClusterInfo | ClusterMemberProfile | ClusterSessionProfile | ClusterPostBody | ClusterNotes | ClusterClaims | ClusterClock,
+    value:
+      | ClusterInfo
+      | ClusterMemberProfile
+      | ClusterSessionProfile
+      | ClusterPostBody
+      | ClusterNotes
+      | ClusterClaims
+      | ClusterClock
+      | { heroes: unknown[] },
   ): Promise<Sealed> {
     return this.keyring.seal(value)
   }

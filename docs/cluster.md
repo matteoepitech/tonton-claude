@@ -38,7 +38,7 @@ Claude.
 | Member | An account in the cluster: the owner, who created it, or a member. |
 | Cluster session | A session its owner put in the cluster, with a profile: name, project, machine, tool, model, branch, status line. |
 | Post | A sealed message from a session: `message`, `ask`, `answer`, `event`, `claim`, `file` or `notice`. |
-| Document | A sealed, shared document with a revision: `notes`, `claims`, `clock`, or a later one. |
+| Document | A sealed, shared document with a revision: `notes`, `claims`, `clock`, `leaderboard`, or a later one. |
 | Cluster key | An AES-256 key shared by the members. It seals everything that says what the cluster does. |
 
 ## What the relay keeps
@@ -203,6 +203,33 @@ back in the tool's result; anything else, an image included, is saved under the 
 Code and OpenCode alike. Members read files with `GET /api/clusters/:id/files/:file` too, for the website and the island.
 
 The relay keeps 200 MB of files per cluster, the oldest going first, and drops them with the cluster.
+
+## The leaderboard
+
+Members can put their Tonton on the cluster's leaderboard (#316). It is one sealed document, `leaderboard`, rather than
+one per member: a cluster holds 16 documents and 20 members. Each member who shares keeps one entry there: its level,
+what its Tonton wears, its XP of the UTC day, its XP since the clock started (or, without a clock, since it joined),
+and its last ten level-ups. Never its inventory, its receipts, its sparks or what the work was. Sharing is each
+member's own choice, on the website's **Leaderboard** tab: a member who does not share is listed without numbers.
+
+A member's own clients write its entry while they follow the cluster, from the hero they read. They write every other
+entry back exactly as they found it, unknown fields and entries they cannot read included, and never write over a board
+that does not open with the keys they hold. An entry that says the same is not written again. Two members who write at
+once cross revisions: the relay answers `cluster_conflict` and the client puts its entry in, or takes it out of, the
+newer board, without telling anyone. "Since" is the member's XP minus a base, its XP when the count started: worked
+out once from its timed gains (day-only receipts count from the next day), then kept, so it stays right after old gains
+are pruned. For one start, the level and the XP since and of the day never go down, so a client that read an older
+hero changes nothing. A new clock starts every count again; until a member's client catches up, its entry from the
+earlier clock ranks with no XP since. Ranks go by XP since the start, then level, then account id in code-unit
+order.
+
+Level-ups come to the feed from that document ("Alice's Tonton reached level 12"), not from posts: apps never post,
+and a post from the agent would need a session of that member in the cluster. A member's rank moves while one of its
+clients follows the cluster (the website now, the notch with #312); with none open, its entry waits for the next one.
+
+`shared/cluster-heroes.ts` and `TontonCore/ClusterHeroes.swift` build, merge and rank the entries the same way;
+`shared/test/cluster-heroes-vectors.json` is checked by both, and `test/cluster-watch.test.ts` runs two members and a
+third who does not share on a real relay, which keeps only the sealed blob.
 
 ## Threats
 
