@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defaultLine, isTontonStatusLine, userStatusLine } from '../src/statusline'
+import { defaultLine, gitBash, isTontonStatusLine, userStatusLine } from '../src/statusline'
 import { limit, newerLimit, statusLineLimit, statusLineUsage } from '../src/usage'
 
 const AGENT = join(import.meta.dir, '../src/main.ts')
@@ -90,7 +90,16 @@ describe('status line', () => {
   test('recognizes its own command on every platform', () => {
     expect(isTontonStatusLine("'/home/x/.tonton/bin/tonton' statusline")).toBe(true)
     expect(isTontonStatusLine('~/.tonton/bin/tonton.exe statusline')).toBe(true)
+    expect(isTontonStatusLine('"C:/Users/Jean Dupont/.tonton/bin/tonton.exe" statusline')).toBe(true)
+    expect(isTontonStatusLine("& 'C:\\Users\\Jean Dupont\\.tonton\\bin\\tonton.exe' statusline")).toBe(true)
     expect(isTontonStatusLine('~/.claude/statusline.sh')).toBe(false)
+  })
+
+  test('on Windows, the Git Bash Claude Code is pointed at, or else the one Git installs', () => {
+    const bash = 'D:\\Git\\bin\\bash.exe'
+    expect(gitBash({ CLAUDE_CODE_GIT_BASH_PATH: bash }, path => path === bash)).toBe(bash)
+    expect(gitBash({ ProgramFiles: 'C:\\Program Files' }, path => path.startsWith('C:\\Program Files'))).toEndWith('bash.exe')
+    expect(gitBash({}, () => false)).toBeNull()
   })
 
   test('without one of their own, users get a short line', () => {

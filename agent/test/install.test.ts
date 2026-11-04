@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { HOOK_EVENTS, launcherSettings, withoutTontonHooks, withTontonHooks } from '../src/install/claude-settings'
+import { HOOK_EVENTS, launcherSettings, type WindowsShell, withoutTontonHooks, withTontonHooks } from '../src/install/claude-settings'
 import { installOpenCodePlugin, openCodeConfigDir, removeOpenCodePlugin } from '../src/install/opencode'
 import { launcherBlock, removeLauncher, withLauncher } from '../src/install/shell-profile'
 
@@ -59,8 +59,8 @@ describe('shell launcher', () => {
 })
 
 describe('launcher settings', () => {
-  const command = (binary: string, home: string, windows: boolean) =>
-    (launcherSettings(binary, home, windows).statusLine as { command: string }).command
+  const command = (binary: string, home: string, windows: boolean, shell: Partial<WindowsShell> = {}) =>
+    (launcherSettings(binary, home, windows, () => ({ env: {}, gitBash: true, ...shell })).statusLine as { command: string }).command
 
   test('the status line runs this binary', () => {
     expect(launcherSettings(BINARY, '/home/user', false)).toEqual({
@@ -73,6 +73,44 @@ describe('launcher settings', () => {
       '~/.tonton/bin/tonton.exe statusline',
     )
     expect(command('D:\\tools\\tonton.exe', 'C:\\Users\\jean', true)).toBe('D:/tools/tonton.exe statusline')
+  })
+
+  const JEAN = 'C:\\Users\\Jean Dupont\\.tonton\\bin\\tonton.exe'
+  const powershell = { gitBash: false }
+
+  test('a path without spaces is written whole, so neither HOME nor a home drive moves it', () => {
+    for (const env of [{}, { HOME: 'H:\\' }, { HOMEDRIVE: 'H:', HOMEPATH: '\\' }])
+      expect(command('C:\\Users\\Jérôme\\.tonton\\bin\\tonton.exe', 'C:\\Users\\Jérôme', true, { env })).toBe(
+        'C:/Users/Jérôme/.tonton/bin/tonton.exe statusline',
+      )
+  })
+
+  test('~ only when it is the user folder, however HOME spells it', () => {
+    for (const HOME of ['C:\\Users\\Jean Dupont', 'c:/users/jean dupont/', '/c/Users/Jean Dupont'])
+      expect(command(JEAN, 'C:\\Users\\Jean Dupont', true, { env: { HOME } })).toBe('~/.tonton/bin/tonton.exe statusline')
+    const env = { HOMEDRIVE: 'C:', HOMEPATH: '\\Users\\Jean Dupont' }
+    expect(command(JEAN, 'C:\\Users\\Jean Dupont', true, { env })).toBe('~/.tonton/bin/tonton.exe statusline')
+  })
+
+  test('with HOME or the home drive elsewhere, the full path quoted for the shell Claude Code uses', () => {
+    for (const env of [{ HOME: 'H:\\' }, { HOMEDRIVE: 'H:', HOMEPATH: '\\' }]) {
+      expect(command(JEAN, 'C:\\Users\\Jean Dupont', true, { env })).toBe('"C:/Users/Jean Dupont/.tonton/bin/tonton.exe" statusline')
+      expect(command(JEAN, 'C:\\Users\\Jean Dupont', true, { env, ...powershell })).toBe(
+        "& 'C:\\Users\\Jean Dupont\\.tonton\\bin\\tonton.exe' statusline",
+      )
+    }
+  })
+
+  test('a path with spaces outside the home runs in PowerShell too', () => {
+    const binary = 'C:\\Program Files\\Tonton\\tonton.exe'
+    expect(command(binary, 'C:\\Users\\jean', true)).toBe('"C:/Program Files/Tonton/tonton.exe" statusline')
+    expect(command(binary, 'C:\\Users\\jean', true, powershell)).toBe("& 'C:\\Program Files\\Tonton\\tonton.exe' statusline")
+  })
+
+  test('quotes and dollars in the path stay literal in each shell', () => {
+    const binary = "D:\\O'Neil $x`\u2019s\\tonton.exe"
+    expect(command(binary, 'C:\\Users\\jean', true)).toBe(`"D:/O'Neil \\$x\\\`\u2019s/tonton.exe" statusline`)
+    expect(command(binary, 'C:\\Users\\jean', true, powershell)).toBe(`& 'D:\\O''Neil $x\`\u2019\u2019s\\tonton.exe' statusline`)
   })
 })
 

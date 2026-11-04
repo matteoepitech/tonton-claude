@@ -87,8 +87,17 @@ async function runUserCommand(command: string, input: string): Promise<string> {
 /** On Windows, Claude Code uses Git Bash when it is installed and PowerShell otherwise. */
 export function shell(): string[] {
   if (process.platform !== 'win32') return ['/bin/sh', '-c']
-  const gitBash = process.env.CLAUDE_CODE_GIT_BASH_PATH || join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
-  return existsSync(gitBash) ? [gitBash, '-c'] : ['powershell', '-NoProfile', '-Command']
+  const bash = gitBash()
+  return bash ? [bash, '-c'] : ['powershell', '-NoProfile', '-Command']
+}
+
+/** The Git Bash that Claude Code runs commands with on Windows, null when there is none. */
+export function gitBash(
+  env: Record<string, string | undefined> = process.env,
+  exists: (path: string) => boolean = existsSync,
+): string | null {
+  const bash = env.CLAUDE_CODE_GIT_BASH_PATH || join(env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+  return exists(bash) ? bash : null
 }
 
 function readSettings(file: string): Record<string, unknown> | null {
