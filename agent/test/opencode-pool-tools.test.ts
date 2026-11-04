@@ -4,6 +4,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { CLUSTER_TOOLS } from '../src/channel/cluster-work'
 import { ALL_POOL_TOOLS } from '../src/channel/pool-work'
 import { pluginSource } from '../src/opencode/plugin'
 
@@ -66,7 +67,9 @@ test('OpenCode 1 and 2 get the pool tools, and each call goes to the bridge and 
     event: { subscribe: () => none() },
     tool: { transform: (change: (r: typeof registry) => void) => change(registry) },
   })
-  expect(added.map(tool => tool.name)).toEqual(ALL_POOL_TOOLS.map(tool => tool.name))
+  // The cluster tools come with the pool tools: OpenCode's list does not change while it runs.
+  const names = [...ALL_POOL_TOOLS, ...CLUSTER_TOOLS].map(tool => tool.name)
+  expect(added.map(tool => tool.name)).toEqual(names)
   const send = added.find(tool => tool.name === 'pool_send')
   expect(send?.input.struct.text).toEqual({ kind: 'string' })
   expect(send?.input.struct.to_area).toEqual({ optional: { kind: 'string' } })
@@ -77,7 +80,7 @@ test('OpenCode 1 and 2 get the pool tools, and each call goes to the bridge and 
 
   // OpenCode 1: the tool hook.
   const hooks = await plugin.server({})
-  expect(Object.keys(hooks.tool)).toEqual(ALL_POOL_TOOLS.map(tool => tool.name))
+  expect(Object.keys(hooks.tool)).toEqual(names)
   expect(hooks.tool.task_done.args.summary).toMatchObject({ kind: 'string', description: 'What was done.' })
   expect(hooks.tool.task_done.args.branch).toMatchObject({ optional: true })
   expect(await hooks.tool.task_done.execute({ task: 't1', summary: 'done' }, { sessionID: 'ses_1' })).toBe(

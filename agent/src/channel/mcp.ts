@@ -4,6 +4,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { z } from 'zod'
 import type { PermissionDetail } from '../../../shared/protocol'
 import { VERSION } from '../config'
+import { CLUSTER_INSTRUCTIONS, isClusterTool } from './cluster-work'
 import { ALL_POOL_TOOLS, POOL_INSTRUCTIONS, type PoolToolSpec } from './pool-work'
 
 const INSTRUCTIONS = [
@@ -12,9 +13,10 @@ const INSTRUCTIONS = [
   'Answer normally: the user sees the whole conversation in the notch, so there is no reply tool to call.',
   'When a message mentions an attached image file path, open it with the Read tool to see it.',
   POOL_INSTRUCTIONS,
+  CLUSTER_INSTRUCTIONS,
 ].join(' ')
 
-/** The pool tools of the session, while it is in a pool (see pool-work.ts). */
+/** The pool and cluster tools of the session, while it is in a pool or a cluster (see pool-work.ts, cluster-work.ts). */
 export interface ChannelTools {
   list(): PoolToolSpec[]
   call(name: string, args: Record<string, unknown>): Promise<string>
@@ -60,7 +62,10 @@ export class ChannelServer {
     }))
     this.server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
       const listed = tools.list()
-      if (!listed.length) return { content: [{ type: 'text', text: 'This session is not in a pool.' }], isError: true }
+      if (!listed.length) {
+        const text = isClusterTool(params.name) ? 'This session is not in a cluster.' : 'This session is not in a pool.'
+        return { content: [{ type: 'text', text }], isError: true }
+      }
       // An orchestrator's tool called by another session gets its answer from the pool tools: who may call it.
       if (!listed.some(spec => spec.name === params.name) && !ALL_POOL_TOOLS.some(spec => spec.name === params.name)) {
         return { content: [{ type: 'text', text: `No such tool: ${params.name}.` }], isError: true }
@@ -83,12 +88,15 @@ export class ChannelServer {
     await this.server.connect(new StdioServerTransport())
   }
 
-  /** Delivers a message to Claude as if the user had typed it, or, from `pool`, as a message from the session's pool. */
-  async inject(content: string, sender: 'notch' | 'pool' = 'notch') {
+  /**
+   * Delivers a message to Claude as if the user had typed it, or, from `pool` or `cluster`, as a message from the
+   * session's pool or one of its clusters: Claude Code shows the sender, so that it is never taken for the user.
+   */
+  async inject(content: string, sender: 'notch' | 'pool' | 'cluster' = 'notch') {
     await this.server.notification({ method: 'notifications/claude/channel', params: { content, meta: { sender } } })
   }
 
-  /** The pool tools appeared or went away. */
+  /** The pool or cluster tools appeared or went away. */
   async toolsChanged() {
     await this.server.sendToolListChanged().catch(() => {})
   }

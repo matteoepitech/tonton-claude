@@ -1,3 +1,4 @@
+import { CLUSTER_TOOLS } from '../channel/cluster-work'
 import { ALL_POOL_TOOLS } from '../channel/pool-work'
 import { EDIT_TOOLS } from '../cluster/guard'
 import { FORWARDED_EVENTS } from './events'
@@ -22,11 +23,13 @@ import { spawn } from 'node:child_process'
 
 const COMMAND = ${JSON.stringify(command)}
 const FORWARDED = new Set(${JSON.stringify(FORWARDED_EVENTS)})
-const POOL_TOOLS = ${JSON.stringify(ALL_POOL_TOOLS)}
+const POOL_TOOLS = ${JSON.stringify([...ALL_POOL_TOOLS, ...CLUSTER_TOOLS])}
 const EDIT_TOOLS = new Set(${JSON.stringify(EDIT_TOOLS)})
 const TOOL_TIMEOUT_MS = 30000
 /** An edit waits this long at most for the bridge to say whether someone holds the file, then goes ahead. */
 const GUARD_TIMEOUT_MS = 3000
+/** Cluster posts go in as synthetic parts, marked as such: never as the user's text. */
+const CLUSTER_PART = { description: 'A post from a Tonton cluster', metadata: { tonton: 'cluster' } }
 const state = (globalThis.__tontonClaude ??= { bridge: null, inputs: new Map(), client: null, calls: new Map(), nextCall: 0 })
 state.calls ??= new Map()
 state.nextCall ??= 0
@@ -95,6 +98,12 @@ async function run(line) {
 
 async function runIn2(input, { op, sessionID, ...command }) {
   if (op === 'prompt') return input.session.prompt({ sessionID, text: command.text })
+  // Queued after the running turn and resumed when it wakes the session; otherwise steered into the running turn, or
+  // kept for the next one.
+  if (op === 'inject') {
+    const delivery = command.wake ? 'queue' : 'steer'
+    return input.session.synthetic({ sessionID, text: command.text, ...CLUSTER_PART, delivery, resume: command.wake })
+  }
   if (op === 'reply') return input.permission.reply({ sessionID, requestID: command.requestID, decision: command.decision })
   if (op === 'compact') return input.session.compact({ sessionID })
   if (op === 'interrupt') return input.session.interrupt({ sessionID })
@@ -120,6 +129,12 @@ async function runIn1(client, { op, sessionID, ...command }) {
   if (op === 'prompt') {
     const model = command.providerID && command.modelID ? { model: { providerID: command.providerID, modelID: command.modelID } } : {}
     return data(await client.session.prompt({ path, body: { ...model, parts: [{ type: 'text', text: command.text }] } }))
+  }
+  // A synthetic part; without a reply when it must not wake the session.
+  if (op === 'inject') {
+    const model = command.providerID && command.modelID ? { model: { providerID: command.providerID, modelID: command.modelID } } : {}
+    const part = { type: 'text', text: command.text, synthetic: true, metadata: CLUSTER_PART.metadata }
+    return data(await client.session.prompt({ path, body: { ...model, ...(command.wake ? {} : { noReply: true }), parts: [part] } }))
   }
   // OpenCode 1 takes the model with the next message, which the bridge adds.
   if (op === 'model') return
@@ -150,14 +165,15 @@ async function runIn1(client, { op, sessionID, ...command }) {
   }
 }
 
-/** A pool tool call, answered by the bridge. */
+/** A pool or cluster tool call, answered by the bridge. cluster_ask waits longer, for its answer. */
 function callTool(sessionID, name, args) {
   const callID = 'call-' + ++state.nextCall + '-' + Date.now()
+  const wait = POOL_TOOLS.find(spec => spec.name === name)?.waitMs ?? TOOL_TIMEOUT_MS
   return new Promise(resolve => {
     const timer = setTimeout(() => {
       state.calls.delete(callID)
       resolve('Tonton did not answer: the pool tools are not available right now.')
-    }, TOOL_TIMEOUT_MS)
+    }, wait)
     state.calls.set(callID, output => {
       clearTimeout(timer)
       resolve(output)

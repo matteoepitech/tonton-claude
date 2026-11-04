@@ -10,6 +10,7 @@ import { handleLogRequest } from '../logs'
 import { AgentRPG } from '../rpg'
 import { addSessionRules, openSessionRules, receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
+import { isClusterTool } from './cluster-work'
 import { Conversation } from './conversation'
 import { ChannelServer } from './mcp'
 import { RelayConnection } from './relay-connection'
@@ -24,9 +25,13 @@ const PARENT_CHECK_MS = 5000
  */
 export async function runChannel() {
   let conversation: Conversation | null = null
+  // The pool tools and the cluster tools, side by side: a session can be in a pool and a cluster at once.
   const mcp = new ChannelServer((requestId, detail) => conversation?.addPermission(requestId, detail), {
-    list: () => conversation?.work.tools() ?? [],
-    call: (name, args) => conversation?.work.call(name, args) ?? Promise.resolve('This session is not in a pool.'),
+    list: () => [...(conversation?.work.tools() ?? []), ...(conversation?.cluster.tools() ?? [])],
+    call: (name, args) =>
+      isClusterTool(name)
+        ? (conversation?.cluster.call(name, args) ?? Promise.resolve('This session is not in a cluster.'))
+        : (conversation?.work.call(name, args) ?? Promise.resolve('This session is not in a pool.')),
   })
   await mcp.connect()
   exitWithParent()
@@ -57,10 +62,13 @@ export async function runChannel() {
         else if (message.t === 'pool_left') conversation.pools.remove(message.poolId)
         else if (message.t === 'pool_stop') conversation.pools.stop(message.poolId)
         else if (message.t === 'pool_accept') conversation.pools.accept(message.poolId, message.acceptance)
+        else if (message.t === 'cluster_join') conversation.clusters.receive(message.clusterId, message.order)
+        else if (message.t === 'cluster_left') conversation.clusters.remove(message.clusterId)
         else if (message.t === 'prompt' || message.t === 'verdict') void onRelayMessage(message)
       }
     },
     pool: update => conversation?.pools.apply(update),
+    cluster: update => conversation?.clusters.apply(update),
   })
 
   const onRelayMessage = async (message: Extract<RelayToAgent, { t: 'prompt' | 'verdict' }>) => {
@@ -103,6 +111,8 @@ export async function runChannel() {
       { deliver: text => void mcp.inject(text, 'pool'), toolsChanged: () => void mcp.toolsChanged() },
       config.machineId,
       rpg,
+      { live: text => void mcp.inject(text, 'cluster'), toolsChanged: () => void mcp.toolsChanged() },
+      config,
     )
     conversation.start()
   }

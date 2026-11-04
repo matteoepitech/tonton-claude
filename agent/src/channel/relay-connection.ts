@@ -1,3 +1,5 @@
+import type { ClusterUpdate } from '../../../shared/cluster-protocol'
+import { isClusterMessageType, isClusterOrderType, parseClusterToAgent, parseClusterUpdate } from '../../../shared/cluster-wire'
 import type { PoolUpdate } from '../../../shared/pool-protocol'
 import { isPoolOrderType, parsePoolUpdate } from '../../../shared/pool-wire'
 import type { AgentMessage, RelayToAgent, SealedEntry } from '../../../shared/protocol'
@@ -25,6 +27,8 @@ export interface RelayConnectionEvents {
   message(message: RelayToAgent): void
   /** What changed in a pool this session is in (`pool_join` and `pool_left` come through `message`). */
   pool?(update: PoolUpdate): void
+  /** What changed in a cluster this session is in (`cluster_join` and `cluster_left` come through `message`). */
+  cluster?(update: ClusterUpdate): void
   disconnected?(): void
   revoked?(): void
 }
@@ -80,6 +84,14 @@ export class RelayConnection {
     socket.onmessage = event => {
       try {
         const message = JSON.parse(String(event.data)) as RelayToAgent | PoolUpdate
+        // A cluster's orders and changes, checked like anything else from the relay: a wrong shape is dropped.
+        if (isClusterMessageType(message.t)) {
+          const order = isClusterOrderType(message.t) ? parseClusterToAgent(message) : null
+          if (order) this.events.message(order)
+          const update = order ? null : parseClusterUpdate(message)
+          if (update) this.events.cluster?.(update)
+          return
+        }
         const order = isPoolOrderType(message.t)
         if (order || !message.t.startsWith('pool_')) this.events.message(message as RelayToAgent)
         else {

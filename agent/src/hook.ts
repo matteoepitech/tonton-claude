@@ -2,6 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { join } from 'node:path'
 import { seal } from '../../shared/crypto'
 import type { HookPost } from '../../shared/protocol'
+import { takeClusterDigest } from './channel/cluster-digest'
 import { terminalOf } from './channel/terminal'
 import { clearGuardState, guard, readGuardState } from './cluster/guard'
 import { type AgentConfig, loadConfig, paths } from './config'
@@ -24,6 +25,7 @@ interface HookInput {
   reason?: string
   tool_name?: string
   tool_input?: unknown
+  permission_mode?: string
 }
 
 /**
@@ -46,6 +48,7 @@ export async function runHook() {
       clearSessionRules(event.session_id)
       clearGuardState(event.session_id)
     }
+    if (event.hook_event_name === 'UserPromptSubmit') handDigest(event.session_id)
 
     const config = loadConfig()
     if (!config) return
@@ -121,11 +124,29 @@ function guardEdit(event: HookInput) {
   process.stdout.write(JSON.stringify({ hookSpecificOutput: output }))
 }
 
-/** Tells the channel of the same claude process which session and transcript it serves. */
+/** The cluster posts that waited for this prompt, added to it as context Claude reads with the prompt (docs/cluster.md). */
+function handDigest(sessionId: string) {
+  const digest = takeClusterDigest(sessionId)
+  if (!digest) return
+  log('cluster digest handed to the prompt')
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: digest } }))
+}
+
+/**
+ * Tells the channel of the same claude process which session and transcript it serves, and, for cluster delivery, the
+ * permission mode and the last hook event: whether Claude is in a turn, and whether it skips permission prompts.
+ */
 function linkSession(event: HookInput) {
   mkdirSync(paths.run, { recursive: true, mode: 0o700 })
   // Hooks get Claude Code's environment, so they know whether it runs in tmux; its channel may not.
-  const link = { sessionId: event.session_id, transcriptPath: event.transcript_path ?? null, cwd: event.cwd ?? null, tmux: terminalOf() }
+  const link = {
+    sessionId: event.session_id,
+    transcriptPath: event.transcript_path ?? null,
+    cwd: event.cwd ?? null,
+    tmux: terminalOf(),
+    event: event.hook_event_name === 'Notification' ? `Notification:${event.notification_type ?? ''}` : event.hook_event_name,
+    ...(event.permission_mode ? { permissionMode: event.permission_mode } : {}),
+  }
   writeFileSync(join(paths.run, `${process.ppid}.json`), JSON.stringify(link), { mode: 0o600 })
 }
 
