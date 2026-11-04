@@ -113,7 +113,11 @@ struct ToolRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.notch(10)).frame(width: 14).accessibilityHidden(true)
-                Text(call.name ?? "?").font(.notch(11, weight: .semibold))
+                // An MCP tool's server and name come before its summary, cut in the middle when even they are too long.
+                Text(call.name.map(ToolLabel.text) ?? "?").font(.notch(11, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .layoutPriority(1)
                 Text(AgentText.localized(call.summary ?? "")).font(.notch(11, design: .monospaced)).foregroundStyle(Theme.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -184,7 +188,10 @@ extension ToolRow {
                     HStack(spacing: 6) {
                         // The agent sends the first calls of a task, then a line without a tool saying there were more.
                         if let name = step.call.name, !name.isEmpty {
-                            Text(name).font(.notch(10, weight: .semibold))
+                            Text(ToolLabel.text(name)).font(.notch(10, weight: .semibold))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .layoutPriority(1)
                         }
                         Text(AgentText.localized(step.call.summary ?? ""))
                             .font(.notch(10, design: step.call.name?.isEmpty == false ? .monospaced : .default))

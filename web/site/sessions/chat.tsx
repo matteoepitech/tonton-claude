@@ -22,6 +22,7 @@ import {
   STATUS_LABELS,
   sessionRuleFor,
   shownPath,
+  toolLabel,
 } from '../../../shared'
 import type { SessionCommand, TodoItem } from '../../../shared/protocol'
 import { InlineText, Loading, Markdown, StatusDot } from '../common'
@@ -196,7 +197,7 @@ function Message({ item }: { item: ChatItem }) {
     <details className="rounded-lg border bg-secondary px-2.5 py-1.5 text-[13px]">
       <summary className="cursor-pointer truncate text-muted-foreground">
         <strong className={cn('font-semibold text-foreground', failed && 'text-destructive', running && 'text-primary')}>
-          {item.call.name}
+          {toolLabel(item.call.name)}
         </strong>{' '}
         {item.call.summary}
       </summary>
@@ -293,7 +294,7 @@ export function PermissionCard({
   const rule = keepsSessionRules(machine) ? sessionRuleFor(request.toolName, request.inputPreview) : null
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-orange/40 bg-orange/10 p-3">
-      <strong>{request.toolName} wants to run</strong>
+      <strong>{toolLabel(request.toolName)} wants to run</strong>
       {request.description && (
         <p className="line-clamp-3 text-sm wrap-anywhere text-muted-foreground" title={request.description}>
           {request.description}

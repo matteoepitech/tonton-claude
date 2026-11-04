@@ -103,6 +103,40 @@ final class OpenCodeLocalTests: XCTestCase {
         XCTAssertEqual(OpenCodeLocal.summary(failed, OpenCodeLocal.Conversation(), permissions: []).status, .error)
     }
 
+    /// The same table as the agent's bridge (agent/test/opencode.test.ts): both copies of a session name its tools alike.
+    func testAnMCPToolTakesClaudeCodesNameOnceItsServerIsListed() throws {
+        struct Table: Decodable {
+            struct Case: Decodable {
+                let tool: String
+                let name: String
+            }
+            let servers: [String]
+            let cases: [Case]
+        }
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../shared/test/opencode-tool-names.json")
+        let table = try JSONDecoder().decode(Table.self, from: Data(contentsOf: url))
+        let listed = try data([
+            "location": ["directory": "/x"], "data": table.servers.map { ["name": $0, "status": ["status": "connected"]] },
+        ])
+        let servers = OpenCodeLocal.servers(listed)
+        XCTAssertEqual(servers, Set(table.servers.map(OpenCodeLocal.serverName)))
+        XCTAssertGreaterThan(table.cases.count, 5)
+        for item in table.cases { XCTAssertEqual(OpenCodeLocal.toolName(item.tool, servers: servers), item.name, item.tool) }
+
+        let content: [[String: Any]] = [
+            ["type": "tool", "id": "call_1", "name": "unreal-engine_spawn_actor", "state": ["input": ["name": "Cube"]]]
+        ]
+        let context = try data(["data": [["id": "msg_1", "type": "assistant", "time": ["created": 1], "content": content]]])
+        XCTAssertEqual(
+            OpenCodeLocal.conversation(context, servers: ["unreal-engine"]).entries.first?.name, "mcp__unreal-engine__spawn_actor")
+        XCTAssertEqual(OpenCodeLocal.conversation(context).entries.first?.name, "unreal-engine_spawn_actor")
+        let pending = try data(["data": [["id": "per_1", "action": "unreal-engine_spawn_actor"]]])
+        XCTAssertEqual(OpenCodeLocal.permissions(pending, servers: ["unreal-engine"]).map(\.toolName), ["mcp__unreal-engine__spawn_actor"])
+        XCTAssertEqual(OpenCodeLocal.serversPath(directory: "/a b/é"), "/api/mcp?location%5Bdirectory%5D=%2Fa%20b%2F%C3%A9")
+        XCTAssertEqual(OpenCodeLocal.servers(Data("[]".utf8)), [])
+    }
+
     func testAnythingUnexpectedIsSkipped() {
         XCTAssertTrue(OpenCodeLocal.sessions(Data("nope".utf8)).isEmpty)
         XCTAssertEqual(OpenCodeLocal.conversation(Data(#"{"data":[{"type":"user"},3]}"#.utf8)), OpenCodeLocal.Conversation())

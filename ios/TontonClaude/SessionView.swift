@@ -132,7 +132,7 @@ struct PermissionCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Allow \(request.toolName)?", systemImage: "lock.shield.fill")
+            Label("Allow \(ToolLabel.text(request.toolName))?", systemImage: "lock.shield.fill")
                 .font(.headline)
                 .foregroundStyle(.orange)
             if !request.description.isEmpty {
