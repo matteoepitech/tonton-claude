@@ -10,10 +10,26 @@ if (-not $env:TONTON_TOKEN -and -not (Test-Path (Join-Path $HOME '.tonton\config
   throw 'Missing TONTON_TOKEN. Copy the install command from Tonton Claude > Machines.'
 }
 
-# The claude launcher lives in the PowerShell profile, which only loads if scripts are allowed.
-if ((Get-ExecutionPolicy) -in @('Restricted', 'AllSigned', 'Undefined')) {
-  Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
-  Write-Host 'PowerShell execution policy set to RemoteSigned (current user).'
+# The claude launcher lives in the PowerShell profiles, which only load if scripts are allowed. A Group Policy wins over
+# the user's policy and makes setting it fail: the install goes on, with a warning.
+$closed = @('Restricted', 'AllSigned', 'Undefined')
+$blocked = 'Scripts stay disabled in {0}, maybe by a Group Policy: claude started from it will not reach Tonton.'
+try {
+  if ((Get-ExecutionPolicy) -in $closed) {
+    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+    Write-Host 'PowerShell execution policy set to RemoteSigned (current user).'
+  }
+} catch { Write-Warning ($blocked -f 'PowerShell') }
+# PowerShell 7 allows scripts by default, but the launcher goes to the profile of Windows PowerShell too, which has its own
+# policy and is the default terminal of VS Code and Rider.
+if ($PSVersionTable.PSEdition -eq 'Core' -and (Get-Command powershell.exe -ErrorAction SilentlyContinue)) {
+  try {
+    if ((powershell.exe -NoProfile -Command 'Get-ExecutionPolicy') -in $closed) {
+      powershell.exe -NoProfile -Command 'Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force' 2>$null
+      if ($LASTEXITCODE -ne 0) { throw 'Set-ExecutionPolicy failed' }
+      Write-Host 'Windows PowerShell execution policy set to RemoteSigned (current user).'
+    }
+  } catch { Write-Warning ($blocked -f 'Windows PowerShell') }
 }
 
 $release = "https://github.com/$Repo/releases/download/v$Version"
@@ -23,10 +39,19 @@ New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $exe = Join-Path $dir 'tonton.exe'
 $download = "$exe.download"
 
-# Windows PowerShell 5.1 ignores HTTPS_PROXY, which curl, PowerShell 7 and the agent all read.
+# Windows PowerShell 5.1 ignores HTTPS_PROXY, which curl, PowerShell 7 and the agent all read: only 5.1 gets -Proxy, and
+# PowerShell 7 keeps its own handling, with passwords and NO_PROXY. -Proxy drops a user and password in the URL, so they
+# go in -ProxyCredential. NO_PROXY is not read for 5.1: every download goes to GitHub.
 $web = @{ UseBasicParsing = $true }
 $proxy = @($env:HTTPS_PROXY, $env:ALL_PROXY) | Where-Object { $_ } | Select-Object -First 1
-if ($proxy) { $web.Proxy = $(if ($proxy -match '://') { $proxy } else { "http://$proxy" }) }
+if ($proxy -and $PSVersionTable.PSEdition -ne 'Core') {
+  $uri = [Uri]$(if ($proxy -match '://') { $proxy } else { "http://$proxy" })
+  $web.Proxy = "$($uri.Scheme)://$($uri.Authority)"
+  if ($uri.UserInfo) {
+    $user, $password = $uri.UserInfo -split ':', 2 | ForEach-Object { [Uri]::UnescapeDataString($_) }
+    $web.ProxyCredential = New-Object PSCredential($user, (New-Object Net.NetworkCredential($user, "$password")).SecurePassword)
+  }
+}
 
 Write-Host "Downloading Tonton Claude $Version (windows-x64)..."
 $sums = (Invoke-WebRequest @web "$release/SHA256SUMS").Content
