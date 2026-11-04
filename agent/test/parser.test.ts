@@ -65,6 +65,27 @@ describe('parseLine', () => {
     expect(entries[0].kind === 'tool_result' && entries[0].text).toContain('characters truncated')
   })
 
+  test('a cut never splits an emoji in two, which the Mac and the iPhone could not decode', () => {
+    // A long result keeps its first 2500 characters and its last 1500. An emoji sits on each cut: cut there, the JSON
+    // would hold a lone `\ud83c` or `\udf89`.
+    const output = `${'x'.repeat(2499)}🎉${'y'.repeat(5000)}🎉${'z'.repeat(1499)}`
+    const { entries } = parseLine(
+      line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: output }] } }),
+    )
+    expect(entries[0].kind === 'tool_result' && entries[0].text).toBe(
+      `${'x'.repeat(2499)}\n… (${output.length - 2499 - 1499} characters truncated)\n${'z'.repeat(1499)}`,
+    )
+    const edge = `${'a'.repeat(299)}🎉`
+    const cuts = [
+      entries,
+      fileEdits('Edit', { old_string: `${'a'.repeat(3999)}🎉`, new_string: '' }),
+      todoItems('TodoWrite', { todos: [{ content: edge, status: 'pending', activeForm: edge }] }),
+      toolSummary('Bash', { command: edge }),
+    ]
+    expect(JSON.stringify(cuts)).not.toMatch(/\\ud[89a-f]/)
+    expect(toolSummary('Bash', { command: edge })).toBe(`${'a'.repeat(299)}…`)
+  })
+
   test('images pasted with a prompt are kept', () => {
     const image = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0' } }
     const { entries } = parseLine(line({ type: 'user', message: { content: [{ type: 'text', text: '[Image #1] like this' }, image] } }))

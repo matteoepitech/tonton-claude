@@ -1,4 +1,5 @@
 import type { Entry, ImageData, PermissionDetail, SessionCommand, SessionMeta, TokenCounts } from '../../../shared/protocol'
+import { cutText } from '../../../shared/text'
 import { entryImages } from '../transcript/images'
 import { cutToolResult, fileEdits, todoItems, toolSummary } from '../transcript/parser'
 
@@ -756,7 +757,7 @@ export class OpenCodeTracker {
     session.sent.add(entry.id)
     session.order.push(entry)
     if (session.order.length > BACKLOG_SIZE) session.order = session.order.slice(-BACKLOG_SIZE)
-    if (entry.kind === 'user' || entry.kind === 'assistant') session.lastMessage = entry.text.slice(0, MAX_LAST_MESSAGE_CHARS)
+    if (entry.kind === 'user' || entry.kind === 'assistant') session.lastMessage = cutText(entry.text, MAX_LAST_MESSAGE_CHARS)
     return true
   }
 
