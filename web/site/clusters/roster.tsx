@@ -17,16 +17,8 @@ import { useStore } from '../store'
 import { Button } from '../ui/button'
 import { Badge, Card } from '../ui/card'
 import { NativeSelect } from '../ui/select'
-import { roster, sessionName, TOOL_LABELS } from './model'
+import { DELIVERIES, profileOf, rememberDelivery, rememberedDelivery, roster, sessionName, TOOL_LABELS } from './model'
 import type { ClusterTabProps } from './page'
-
-const DELIVERY_KEY = 'tonton.clusterDelivery'
-
-export const DELIVERIES: { value: ClusterDelivery; label: string; detail: string }[] = [
-  { value: 'live', label: 'Live', detail: 'Posts reach it as they come' },
-  { value: 'digest', label: 'Digest', detail: 'Gathered for its next prompt' },
-  { value: 'muted', label: 'Muted', detail: 'Nothing reaches it' },
-]
 
 export function Roster({ cluster, state }: ClusterTabProps) {
   const store = useStore()
@@ -67,7 +59,8 @@ function SessionRow({ clusterId, session, mine }: { clusterId: string; session: 
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
       <StatusDot status={session.online ? session.status : 'offline'} />
-      <span className="flex min-w-0 flex-1 flex-col">
+      {/* On a phone the actions go under the session rather than squeezing what it says. */}
+      <span className="flex min-w-[min(16rem,100%)] flex-1 flex-col">
         <span className="flex items-center gap-2">
           <strong className="truncate font-medium">{sessionName(session)}</strong>
           <small className="text-xs text-muted-foreground">
@@ -182,35 +175,4 @@ function DeliverySelect({ value, onChange }: { value: ClusterDelivery; onChange(
       ))}
     </NativeSelect>
   )
-}
-
-/** What the cluster sees of one of this account's sessions: names and labels, never a full path. */
-export function profileOf(session: Session): ClusterSessionProfile {
-  const tool: ClusterTool = session.tool === 'opencode' ? 'opencode' : 'claude'
-  return Object.fromEntries(
-    Object.entries({
-      name: session.name ?? session.title ?? undefined,
-      project: session.project || undefined,
-      machine: session.machine || undefined,
-      tool,
-      model: session.model ?? undefined,
-      branch: session.branch ?? undefined,
-    }).filter(([, value]) => value !== undefined),
-  ) as ClusterSessionProfile
-}
-
-function rememberedDelivery(clusterId: string, sessionId: string): ClusterDelivery {
-  try {
-    const saved = JSON.parse(localStorage.getItem(DELIVERY_KEY) ?? '{}')[`${clusterId}/${sessionId}`]
-    return DELIVERIES.some(choice => choice.value === saved) ? saved : 'live'
-  } catch {
-    return 'live'
-  }
-}
-
-function rememberDelivery(clusterId: string, sessionId: string, delivery: ClusterDelivery) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(DELIVERY_KEY) ?? '{}')
-    localStorage.setItem(DELIVERY_KEY, JSON.stringify({ ...saved, [`${clusterId}/${sessionId}`]: delivery }))
-  } catch {}
 }

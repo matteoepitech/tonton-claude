@@ -71,6 +71,39 @@ async function run() {
   const kept = path.join(home, 'account')
   if (fs.existsSync(kept)) check(!fs.readFileSync(kept, 'latin1').includes('"token"'), 'the account is kept encrypted')
   await shot(win, 'signed-in')
+  // CI bundles test/smoke/cluster.ts next to this file: another account's cluster, which the island joins.
+  const helper = path.join(__dirname, 'cluster.cjs')
+  if (fs.existsSync(helper)) {
+    const link = await require(helper).makeCluster(relay)
+    await eventually(() => js(`!!document.querySelector('.clusters .link')`), 'the clusters strip')
+    await js(`document.querySelector('.clusters .link').click()`)
+    await js(`
+      const field = document.querySelector('.cluster-join textarea')
+      field.value = ${JSON.stringify(link)}
+      document.querySelector('.cluster-join input').value = 'Island'
+      document.querySelector('.cluster-join button').click()
+    `)
+    const strip = await eventually(
+      () =>
+        js(
+          `(document.querySelector('.cluster')?.textContent ?? '').includes('Arena blockout') && document.querySelector('.cluster').textContent`,
+        ),
+      'the joined cluster with its last post',
+    )
+    check(strip.includes('Smoke jam'), `joined a cluster and shows its last post (${strip})`)
+    await shot(win, 'cluster-strip')
+    await js(`document.querySelector('.cluster').click()`)
+    const page = await eventually(
+      () =>
+        js(
+          `(document.querySelector('.cluster-page')?.textContent ?? '').includes('blocking out the arena') && document.querySelector('.cluster-page').textContent`,
+        ),
+      'the cluster page',
+    )
+    check(page.includes('level design') && page.includes('Owner'), 'the cluster page shows the roster and the feed')
+    await shot(win, 'cluster-page')
+    await js(`document.querySelector('.chat-header .back').click()`)
+  }
   await js(`document.querySelector('.bar').click()`)
   await eventually(() => win.getBounds().height < 100, 'the closed island')
   check(true, 'closed to its bar')

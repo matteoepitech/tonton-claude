@@ -4,12 +4,15 @@
 import type {
   ClusterClaim,
   ClusterClock,
+  ClusterDelivery,
   ClusterPostItem,
   ClusterPostKind,
   ClusterRole,
   ClusterSession,
+  ClusterSessionProfile,
   ClusterState,
   ClusterTool,
+  Session,
 } from '../../../shared'
 
 export interface RosterMachine {
@@ -169,4 +172,43 @@ export function timeLeft(ms: number): string {
   const days = Math.floor(hours / 24)
   const restHours = hours % 24
   return `${days} day${days === 1 ? '' : 's'}${restHours ? ` ${restHours} h` : ''} left`
+}
+
+export const DELIVERIES: { value: ClusterDelivery; label: string; detail: string }[] = [
+  { value: 'live', label: 'Live', detail: 'Posts reach it as they come' },
+  { value: 'digest', label: 'Digest', detail: 'Gathered for its next prompt' },
+  { value: 'muted', label: 'Muted', detail: 'Nothing reaches it' },
+]
+
+const DELIVERY_KEY = 'tonton.clusterDelivery'
+
+/** What the cluster sees of one of this account's sessions: names and labels, never a full path. */
+export function profileOf(session: Session): ClusterSessionProfile {
+  const tool: ClusterTool = session.tool === 'opencode' ? 'opencode' : 'claude'
+  return Object.fromEntries(
+    Object.entries({
+      name: session.name ?? session.title ?? undefined,
+      project: session.project || undefined,
+      machine: session.machine || undefined,
+      tool,
+      model: session.model ?? undefined,
+      branch: session.branch ?? undefined,
+    }).filter(([, value]) => value !== undefined),
+  ) as ClusterSessionProfile
+}
+
+export function rememberedDelivery(clusterId: string, sessionId: string): ClusterDelivery {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DELIVERY_KEY) ?? '{}')[`${clusterId}/${sessionId}`]
+    return DELIVERIES.some(choice => choice.value === saved) ? saved : 'live'
+  } catch {
+    return 'live'
+  }
+}
+
+export function rememberDelivery(clusterId: string, sessionId: string, delivery: ClusterDelivery) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DELIVERY_KEY) ?? '{}')
+    localStorage.setItem(DELIVERY_KEY, JSON.stringify({ ...saved, [`${clusterId}/${sessionId}`]: delivery }))
+  } catch {}
 }

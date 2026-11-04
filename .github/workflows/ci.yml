@@ -94,6 +94,7 @@ jobs:
           (cd .. && PORT=7799 TONTON_DATA_DIR="$RUNNER_TEMP/relay" bun relay/src/main.ts > "$RUNNER_TEMP/relay.log" 2>&1 &)
           for _ in $(seq 30); do curl -sf http://127.0.0.1:7799/health && break; sleep 1; done
           mkdir -p "$RUNNER_TEMP/smoke" && cp test/smoke/* "$RUNNER_TEMP/smoke/" && cp -r dist "$RUNNER_TEMP/smoke/dist"
+          bun build test/smoke/cluster.ts --target=node --format=cjs --outfile="$RUNNER_TEMP/smoke/cluster.cjs"
           TONTON_SMOKE_RELAY=http://127.0.0.1:7799 TONTON_SMOKE_OUT=out/screens bun x electron "$RUNNER_TEMP/smoke"
       - name: Build the installer, unsigned
         run: bun x electron-builder --win --x64 --publish never
@@ -128,6 +129,7 @@ jobs:
           (cd .. && PORT=7799 TONTON_DATA_DIR="$RUNNER_TEMP/relay" bun relay/src/main.ts > "$RUNNER_TEMP/relay.log" 2>&1 &)
           for _ in $(seq 30); do curl -sf http://127.0.0.1:7799/health && break; sleep 1; done
           mkdir -p "$RUNNER_TEMP/smoke" && cp test/smoke/main.cjs test/smoke/package.json "$RUNNER_TEMP/smoke/" && cp -r dist "$RUNNER_TEMP/smoke/dist"
+          bun build test/smoke/cluster.ts --target=node --format=cjs --outfile="$RUNNER_TEMP/smoke/cluster.cjs"
           bun x electron --version
           export TONTON_SMOKE_RELAY=http://127.0.0.1:7799 TONTON_SMOKE_OUT="$PWD/out/screens"
           xvfb-run -a -s "-screen 0 1600x1000x24" node_modules/electron/dist/electron "$RUNNER_TEMP/smoke"

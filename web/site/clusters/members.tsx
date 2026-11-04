@@ -59,7 +59,8 @@ export function Members({ cluster, state }: ClusterTabProps) {
         </Problem>
       )}
       <YourName clusterId={cluster.id} current={state.members.find(m => m.account === store.account)?.profile?.name ?? ''} />
-      {owner && <OpenInvites clusterId={cluster.id} />}
+      {/* A removal gives the cluster a new key and revokes the open invites: the list is read again with each key. */}
+      {owner && <OpenInvites key={state.keyVersion} clusterId={cluster.id} />}
       <div>
         <Button variant="outline" size="sm" onClick={() => setLeaving(true)}>
           {owner ? <Trash2Icon /> : <LogOutIcon />}

@@ -14,6 +14,7 @@ const bridge: IslandBridge = {
   onCommand: listener => {
     ipcRenderer.on(CHANNELS.command, (_event, command: IslandCommand) => listener(command))
   },
+  clusters: call => ipcRenderer.invoke(CHANNELS.clusters, call),
 }
 
 contextBridge.exposeInMainWorld('tonton', bridge)

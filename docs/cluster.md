@@ -107,6 +107,31 @@ Served to Claude Code by the MCP channel and to OpenCode by the bridge, with the
 | `cluster_event`, `cluster_wait` | Post an event; wait until one matches (#311) |
 | `cluster_share`, `cluster_file` | Send and fetch a small file (#314) |
 
+## The website and the island
+
+The website has a **Clusters** page (`web/site/clusters/`), on the relay's own address like pools, built on
+`ClusterWatch` (`shared/cluster-watch.ts`), which opens everything in the browser:
+
+- the list, a new cluster, and joining with an invite link (pasted, or opened: it stays after the `#` and leaves the
+  address bar);
+- a cluster's tabs: **Roster** (each member, its machines and their sessions: state, status line, project, branch, tool
+  and model), **Feed** (every post, newest first, with who wrote it as sessions see it: `name · machine · tool`),
+  **Claims**, **Notes**, **Clock** (the owner sets the deadline and the milestones) and **Members** (the owner's
+  invites with their QR code, removing a member, which rotates the key; each member's own name);
+- under the roster, the account's running sessions with **Put in**, and on each of its sessions in the cluster how it
+  takes the posts (live, digest, muted) and **Take out**. The relay sends a session's order only to its agent, so a
+  browser shows the delivery it chose last itself.
+
+People never post from the website: their own Claudes do.
+
+The Windows and Linux island (`desktop/`) shows a strip of the account's clusters above its sessions, each with its
+clock, how many sessions work and the last posts, and a cluster's page in its window: the roster, the account's sessions
+with Put in and Take out, the claims and the feed. It joins with an invite; making clusters, inviting and removing
+members are on the website. Its page has no token: the main process makes its three cluster calls (listing, members,
+joining) and refuses any other (`clusterCall` in `desktop/src/main/relay-api.ts`).
+
+An older relay answers 404: both say "This relay doesn't know clusters yet".
+
 ## Threats
 
 | Threat | Answer |

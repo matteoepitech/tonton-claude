@@ -26,7 +26,7 @@ import { IslandWindow } from './island-window'
 import { relaunchesInXWayland } from './linux'
 import { loginItem } from './login-item'
 import { menuTemplate } from './menu'
-import { createAccount, installCommand, joinSecret, machineToken, RelayError, verifyAccount } from './relay-api'
+import { clusterCall, createAccount, installCommand, joinSecret, machineToken, RelayError, verifyAccount } from './relay-api'
 import { authorizeRelaySocket } from './relay-auth'
 
 // Tests and development runs keep their account apart from the installed island's.
@@ -142,6 +142,7 @@ function handlePage() {
     return signIn(() => createAccount(base, net.fetch), remember === true)
   })
   handle(CHANNELS.signOut, () => signOut(false))
+  handle(CHANNELS.clusters, call => (account ? clusterCall(account, call, net.fetch) : { status: 401, body: null }))
   listen(CHANNELS.mode, mode => {
     if (mode === 'collapsed' || mode === 'expanded') island?.setMode(mode)
   })
@@ -165,7 +166,11 @@ function listen(channel: string, run: (...args: unknown[]) => void) {
   })
 }
 
-const pageAccount = (signedIn: RecoveredAccount): IslandAccount => ({ relay: signedIn.relay, key: signedIn.key })
+const pageAccount = (signedIn: RecoveredAccount): IslandAccount => ({
+  relay: signedIn.relay,
+  account: signedIn.accountId,
+  key: signedIn.key,
+})
 
 const failure = (error: string): SignInResult => ({ ok: false, error })
 

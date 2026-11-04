@@ -158,6 +158,84 @@ body {
   display: none;
 }
 
+/* The clusters strip above the sessions, and a cluster's page (web/cluster-views.ts). */
+.clusters:empty {
+  display: none;
+}
+.clusters h2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.clusters .link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font-size: 12px;
+}
+.cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+.cluster-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cluster small {
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cluster .clock.urgent {
+  color: var(--danger, #ff6b6b);
+}
+.cluster-join {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 8px 8px;
+}
+.cluster-page h2 {
+  margin: 14px 0 4px;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cluster-page > p {
+  margin: 4px 0;
+  color: var(--dim);
+}
+.cluster-page .session {
+  align-items: center;
+}
+.cluster-page .session span {
+  flex: 1;
+}
+.cluster-post {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.cluster-post small {
+  color: var(--dim);
+}
+.cluster-post p {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

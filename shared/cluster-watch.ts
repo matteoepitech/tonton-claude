@@ -307,6 +307,11 @@ export class ClusterWatch {
     if (update.t === 'cluster_snapshot') {
       await this.unlock(opened, update.cluster.members, update.cluster.own)
       opened.state = opened.vault ? await opened.vault.snapshot(update.cluster) : null
+      const members = opened.state?.members.length
+      if (members !== undefined)
+        this.listed = this.listed.map(listed =>
+          listed.summary.id === clusterId ? { ...listed, summary: { ...listed.summary, members } } : listed,
+        )
       await this.republish(clusterId, opened)
       await this.openDocs(opened)
     } else if (update.t === 'cluster_key') {
@@ -334,10 +339,12 @@ export class ClusterWatch {
       }
       opened.state = next
       if (update.t === 'cluster_doc') await this.openDocs(opened)
-      if (update.t === 'cluster_info') {
-        const listed = this.listed.find(cluster => cluster.summary.id === clusterId)
-        if (listed) listed.info = next.info
-      }
+      // The list says the name and how many members: both can change while the cluster is open.
+      this.listed = this.listed.map(listed =>
+        listed.summary.id === clusterId
+          ? { summary: { ...listed.summary, members: next.members.length }, info: next.info ?? listed.info }
+          : listed,
+      )
     }
     this.options.onChange()
   }
