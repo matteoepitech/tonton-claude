@@ -1,13 +1,24 @@
 import type { PoolUpdate } from '../../../shared/pool-protocol'
 import { isPoolOrderType, parsePoolUpdate } from '../../../shared/pool-wire'
-import type { AgentMessage, RelayToAgent } from '../../../shared/protocol'
+import type { AgentMessage, RelayToAgent, SealedEntry } from '../../../shared/protocol'
 import { type AgentConfig, installedVersion } from '../config'
 import { log } from '../log'
 import { proxyFor, shownProxy } from '../proxy'
 
+const FIRST_BACKOFF_MS = 1000
 const MAX_BACKOFF_MS = 30_000
+/**
+ * The backoff starts over once a connection held this long. A socket the relay closes right away, after a message over its
+ * limit say, would otherwise be opened again every second, and sent the same message each time.
+ */
+const STABLE_MS = 30_000
 /** Close code the relay uses when the machine was revoked or the account deleted. */
 const REVOKED = 4001
+/** The relay closes a socket whose message is over 32 MB (MAX_WS_MESSAGE_BYTES in relay/src/limits.ts). */
+export const MAX_MESSAGE_BYTES = 24 * 1024 * 1024
+
+/** What a builder hands `post`: one message, several to send in order, or nothing. */
+export type Outgoing = AgentMessage | AgentMessage[] | null
 
 export interface RelayConnectionEvents {
   connected(): void
@@ -25,7 +36,9 @@ export interface RelayConnectionEvents {
  */
 export class RelayConnection {
   private socket: WebSocket | null = null
-  private backoff = 1000
+  private readonly firstBackoff: number
+  private readonly stableMs: number
+  private backoff: number
   private outbox: Promise<void> = Promise.resolve()
   private stopped = false
 
@@ -33,7 +46,13 @@ export class RelayConnection {
     private readonly config: AgentConfig,
     private readonly role: 'channel' | 'service',
     private readonly events: RelayConnectionEvents,
-  ) {}
+    /** Shorter in tests. */
+    timing: { backoffMs?: number; stableMs?: number } = {},
+  ) {
+    this.firstBackoff = timing.backoffMs ?? FIRST_BACKOFF_MS
+    this.stableMs = timing.stableMs ?? STABLE_MS
+    this.backoff = this.firstBackoff
+  }
 
   connect() {
     if (this.stopped) return
@@ -51,9 +70,10 @@ export class RelayConnection {
       return
     }
     this.socket = socket
+    let openedAt: number | null = null
 
     socket.onopen = () => {
-      this.backoff = 1000
+      openedAt = Date.now()
       log(`${this.role}: relay connected`, proxy ? { proxy: shownProxy(proxy.url) } : undefined)
       this.events.connected()
     }
@@ -73,6 +93,7 @@ export class RelayConnection {
     }
     socket.onclose = event => {
       if (this.socket === socket) this.socket = null
+      if (openedAt !== null && Date.now() - openedAt >= this.stableMs) this.backoff = this.firstBackoff
       if (this.stopped) return
       if (event.code === REVOKED) {
         log('machine revoked, not reconnecting')
@@ -96,11 +117,13 @@ export class RelayConnection {
     this.socket?.close()
   }
 
-  post(build: () => Promise<AgentMessage | null>) {
+  post(build: () => Promise<Outgoing>) {
     this.outbox = this.outbox
       .then(async () => {
-        const message = await build()
-        if (message && this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message))
+        const built = await build()
+        for (const message of Array.isArray(built) ? built : built ? [built] : []) {
+          if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message))
+        }
       })
       .catch(error => log('failed to send to the relay', String(error)))
   }
@@ -109,4 +132,37 @@ export class RelayConnection {
   flushed(): Promise<void> {
     return this.outbox
   }
+}
+
+/**
+ * Sealed entries in batches that each make a message under `maxBytes`, in order, and always one batch for a reset to go
+ * out. An entry too big for a message of its own is left out: sent, it would close the socket.
+ */
+export function entryBatches(entries: SealedEntry[], maxBytes = MAX_MESSAGE_BYTES): SealedEntry[][] {
+  // What the message around the entries takes, its session or share id included.
+  const room = maxBytes - 1024
+  const batches: SealedEntry[][] = [[]]
+  let size = 0
+  for (const entry of entries) {
+    const bytes = entry.blob.length + Buffer.byteLength(JSON.stringify({ id: entry.id, ts: entry.ts })) + 12
+    if (bytes > room) {
+      log('left out an entry too big for a relay message', { bytes })
+      continue
+    }
+    if (size + bytes > room && size > 0) {
+      batches.push([])
+      size = 0
+    }
+    batches[batches.length - 1].push(entry)
+    size += bytes
+  }
+  return batches
+}
+
+/**
+ * Sealed entries as `entries` messages under the relay's limit. With `reset`, only the first replaces the session's
+ * history and the next ones add to it: the relay ends up with the history one message would have left it.
+ */
+export function entriesMessages(sessionId: string, entries: SealedEntry[], reset: boolean, maxBytes = MAX_MESSAGE_BYTES): AgentMessage[] {
+  return entryBatches(entries, maxBytes).map((batch, index) => ({ t: 'entries', sessionId, entries: batch, reset: reset && index === 0 }))
 }

@@ -373,6 +373,45 @@ describe('OpenCode through the relay', () => {
     )
   })
 
+  test("OpenCode's history keeps its newest screenshots within the backlog's budget, the relay all of it, as for Claude Code", async () => {
+    const shots = 'ses_screenshots01'
+    app.send(JSON.stringify({ t: 'subscribe', sessionId: shots }))
+    // Five 3 MB screenshots: 20 MB sealed, more than the relay keeps of a session, which would drop the oldest entries.
+    const history = ['A', 'B', 'C', 'D', 'E'].map((fill, index) => ({
+      info: { id: `msg_${fill}`, role: 'assistant', time: { created: 1_700_000_000_000 + index, completed: 1_700_000_000_100 + index } },
+      parts: [
+        {
+          id: `prt_${fill}`,
+          messageID: `msg_${fill}`,
+          type: 'tool',
+          callID: `call_${fill}`,
+          tool: 'read',
+          state: {
+            status: 'completed',
+            input: { filePath: `/tmp/${fill}.png` },
+            output: `shot ${fill}`,
+            attachments: [{ type: 'file', mime: 'image/png', url: `data:image/png;base64,${fill.repeat(3 * 1024 * 1024)}` }],
+          },
+        },
+      ],
+    }))
+    emit('tonton.history', { sessionID: shots, messages: history })
+    const received = await eventually(() => {
+      const found = messages.findLast(m => m.t === 'history' && m.sessionId === shots)
+      return found?.t === 'history' && found.entries.length === 10 && found
+    }, 'the history')
+    if (received.t !== 'history') throw new Error('unexpected message')
+    const entries = await Promise.all(received.entries.map(entry => open<Entry>(key, entry.blob)))
+    const results = entries.flatMap(entry => (entry.kind === 'tool_result' ? [[entry.text, (entry.images ?? []).map(i => i.data[0])]] : []))
+    expect(results).toEqual([
+      ['shot A\n[1 image not loaded]', []],
+      ['shot B\n[1 image not loaded]', []],
+      ['shot C', ['C']],
+      ['shot D', ['D']],
+      ['shot E', ['E']],
+    ])
+  }, 20_000)
+
   test('its sessions end with OpenCode', async () => {
     bridge.stdin.end()
     await eventually(() => latest()?.status === 'ended', 'the session to end')

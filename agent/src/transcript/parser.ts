@@ -1,12 +1,12 @@
 import type { Entry, FileEdit, ImageData, TodoItem, TokenCounts, TurnTime, UsageLimit } from '../../../shared/protocol'
 import { limit, modelName } from '../usage'
+import { entryImages } from './images'
 
 // Claude Code transcripts (.jsonl) are not a public format: anything unexpected is skipped, never thrown.
 
 const MAX_TOOL_RESULT_CHARS = 4000
 /** Of a longer result, the end is kept too: it says how a build or a test run ended. */
 const TOOL_RESULT_TAIL_CHARS = 1500
-const MAX_IMAGE_BASE64 = 4 * 1024 * 1024
 const MAX_SUMMARY_CHARS = 300
 /** Per side of an edit, and edits per call: enough to read the change, not to resend whole files. */
 const MAX_EDIT_CHARS = 4000
@@ -218,7 +218,7 @@ function assistantEntries(id: string, ts: string, content: Block[]): Entry[] {
 
 function userMessage(id: string, ts: string, raw: string, images: ImageData[]): Entry | null {
   const channel = /<channel source="[^"]*tonton[^"]*"[^>]*>([\s\S]*?)<\/channel>/.exec(raw)
-  if (channel) return { id, ts, kind: 'user', text: channel[1].trim(), viaNotch: true, ...(images.length ? { images } : {}) }
+  if (channel) return { id, ts, kind: 'user', ...entryImages(channel[1].trim(), images), viaNotch: true }
   if (INTERNAL_USER_TAGS.test(raw)) return null
   if (/^\s*<task-notification>/.test(raw)) {
     const summary = /<summary>([\s\S]*?)<\/summary>/.exec(raw)?.[1]?.trim()
@@ -231,7 +231,7 @@ function userMessage(id: string, ts: string, raw: string, images: ImageData[]): 
 
   const text = raw.replace(/<pasted_content[^>]*>|<\/pasted_content>/g, '')
   if (!text.trim() && images.length === 0) return null
-  return { id, ts, kind: 'user', text, ...(images.length ? { images } : {}) }
+  return { id, ts, kind: 'user', ...entryImages(text, images) }
 }
 
 /** ToolSearch results only load tool schemas. */
@@ -253,7 +253,7 @@ function toolResult(id: string, ts: string, block: Block): Entry {
   }
   text = cutToolResult(text)
   const toolUseId = String(block.tool_use_id)
-  return { id, ts, kind: 'tool_result', toolUseId, text, isError: block.is_error === true, ...(images.length ? { images } : {}) }
+  return { id, ts, kind: 'tool_result', toolUseId, ...entryImages(text, images), isError: block.is_error === true }
 }
 
 /** A long tool result keeps its start and its end, for Claude Code's and OpenCode's sessions alike. */
@@ -264,9 +264,10 @@ export function cutToolResult(text: string): string {
   return `${text.slice(0, head)}\n… (${cut} characters truncated)\n${text.slice(-TOOL_RESULT_TAIL_CHARS)}`
 }
 
+/** The entry keeps the ones that fit (./images.ts). */
 function addImage(images: ImageData[], block: Block) {
   const source = block.source as { type?: string; data?: unknown; media_type?: string } | undefined
-  if (source?.type === 'base64' && typeof source.data === 'string' && source.data.length <= MAX_IMAGE_BASE64) {
+  if (source?.type === 'base64' && typeof source.data === 'string') {
     images.push({ mediaType: source.media_type ?? 'image/png', data: source.data })
   }
 }

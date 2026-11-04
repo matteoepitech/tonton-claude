@@ -96,6 +96,24 @@ describe('SessionStore', () => {
     expect(history.reduce((sum, e) => sum + e.blob.length, 0)).toBeLessThanOrEqual(MAX_SESSION_BYTES)
   })
 
+  test('a backlog sent in several messages, only the first a reset, leaves the history one message would', () => {
+    // How an agent sends a backlog too big for one socket message (agent/src/channel/relay-connection.ts).
+    const big = Math.floor(MAX_SESSION_BYTES / 3)
+    const backlog = ['1', '2', '3', '4', '5'].map(id => entry(id, big))
+    const whole = createStore().store
+    const split = createStore().store
+    for (const store of [whole, split]) {
+      store.agentConnected('acc', 'm1', 's1', 'info', true)
+      store.addEntries('acc', 's1', [entry('old')], false)
+    }
+    whole.addEntries('acc', 's1', backlog, true)
+    split.addEntries('acc', 's1', backlog.slice(0, 2), true)
+    split.addEntries('acc', 's1', backlog.slice(2, 4), false)
+    split.addEntries('acc', 's1', backlog.slice(4), false)
+    expect(split.history('acc', 's1').map(e => e.id)).toEqual(['3', '4', '5'])
+    expect(split.history('acc', 's1')).toEqual(whole.history('acc', 's1'))
+  })
+
   test('a verdict closes the permission and resumes work', () => {
     const { store } = createStore()
     store.agentConnected('acc', 'm1', 's1', 'info', true)
