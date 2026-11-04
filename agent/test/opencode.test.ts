@@ -497,6 +497,22 @@ describe('OpenCode 1', () => {
     ])
   })
 
+  test('a cut never splits an emoji in two, in a tool output or the last message of the meta', () => {
+    const output = `${'x'.repeat(2499)}🎉${'y'.repeat(5000)}🎉${'z'.repeat(1499)}`
+    const answer = `${'y'.repeat(199)}🎉 done`
+    const { entries, tracker } = replay([
+      { type: 'session.created', properties: { info: session } },
+      message('m1', 'assistant'),
+      part({ id: 'p1', messageID: 'm1', type: 'tool', callID: 'c1', tool: 'bash', state: { status: 'completed', input: {}, output } }),
+      part({ id: 'p2', messageID: 'm1', type: 'text', text: answer, time: { start: 1, end: 2 } }),
+    ])
+    expect(entries.find(entry => entry.id === 'p1:result')).toMatchObject({
+      text: `${'x'.repeat(2499)}\n… (${output.length - 2499 - 1499} characters truncated)\n${'z'.repeat(1499)}`,
+    })
+    expect(tracker.meta('ses_1')?.lastMessage).toBe('y'.repeat(199))
+    expect(JSON.stringify([entries, tracker.meta('ses_1')])).not.toMatch(/\\ud[89a-f]/)
+  })
+
   test('anything unexpected is skipped', () => {
     const tracker = new OpenCodeTracker()
     for (const event of [null, 3, 'x', {}, { type: 'message.updated' }, { type: 'message.part.updated', properties: { part: 5 } }]) {

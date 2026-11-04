@@ -8,7 +8,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { agentBinaryName, TRAY_HELPER_NAME } from '../agent/src/update'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
-import { open, seal } from '../shared/crypto'
+import { importAccountKey, open, seal } from '../shared/crypto'
 import type { AgentLog, Diagnosis, RelayToApp, SessionMeta, SessionSummary } from '../shared/protocol'
 import { RPGClient } from '../shared/rpg-client'
 
@@ -73,6 +73,15 @@ function connectApp(token: string): Promise<App> {
     client.messages.push(JSON.parse(String(event.data)))
   }
   return new Promise(resolve => (socket.onopen = () => resolve(client)))
+}
+
+/** The JSON in a blob, before any parser sees it: what the Mac app's JSONDecoder reads. */
+async function plaintext(blob: string): Promise<string> {
+  const data = Buffer.from(blob, 'base64')
+  const additionalData = new TextEncoder().encode('tonton/v1')
+  const cryptoKey = await importAccountKey(key)
+  const opened = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: data.subarray(0, 12), additionalData }, cryptoKey, data.subarray(12))
+  return new TextDecoder().decode(opened)
 }
 
 const latestSession = (client: App): SessionSummary | undefined => {
@@ -399,6 +408,28 @@ describe('end to end', () => {
     const live = await eventually(() => app.messages.slice(before).find(m => m.t === 'entries'), 'the queued message')
     if (live.t !== 'entries') throw new Error('unexpected message')
     expect(await open(key, live.entries[0].blob)).toMatchObject({ kind: 'user', text: 'Also run the linter', viaNotch: true })
+  })
+
+  test('an emoji cut for the meta, or half of one in the transcript, reaches the app in blobs Swift can decode', async () => {
+    const before = app.messages.length
+    // The meta keeps 200 characters of the last message: the emoji's first half would be the last one.
+    const text = `${'z'.repeat(199)}🎉 then half of one alone: \ud83d`
+    appendFileSync(transcript, line({ type: 'assistant', uuid: 'emoji', message: { content: [{ type: 'text', text }] } }))
+    const live = await eventually(
+      () => app.messages.slice(before).find(m => m.t === 'entries' && m.entries.some(e => e.id.startsWith('emoji'))),
+      'the entry',
+    )
+    if (live.t !== 'entries') throw new Error('unexpected message')
+    const meta = await eventually(async () => {
+      const blob = latestSession(app)?.meta
+      const json = blob ? await plaintext(blob) : ''
+      return json.includes('zzz') && json
+    }, 'the meta')
+    // JSON.stringify writes a lone half as `\ud83d`, which Swift's JSONDecoder refuses with the whole blob.
+    const loneEscape = /(?<!\\)(?:\\\\)*\\ud[89a-f]/
+    expect(await plaintext(live.entries[0].blob)).not.toMatch(loneEscape)
+    expect(meta).not.toMatch(loneEscape)
+    expect(JSON.parse(meta).lastMessage).toBe('z'.repeat(199))
   })
 
   test('the cost Claude Code saved for the session reaches the app', async () => {
