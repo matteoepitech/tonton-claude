@@ -281,6 +281,7 @@ final class SessionStore: ObservableObject {
         diagnoses = [:]
         repairing = [:]
         PoolStore.shared.reset()
+        ClusterStore.shared.reset()
         RPGStore.shared.use(settings.connectionEnabled ? settings.account : nil)
         guard settings.connectionEnabled else {
             socket.disconnect(to: .paused)
@@ -305,6 +306,7 @@ final class SessionStore: ObservableObject {
             subscribe()
             if let account = settings.account, let vault {
                 PoolStore.shared.connected(account: account, vault: vault) { [weak self] message in self?.socket.send(message) }
+                ClusterStore.shared.connected(account: account, vault: vault) { [weak self] message in self?.socket.send(message) }
             }
             // Histories asked for the archive before the connection dropped: asked again.
             for sessionId in archiveOnHistory {
@@ -363,6 +365,8 @@ final class SessionStore: ObservableObject {
             diagnosisReceived(machineId: machineId, requestId: requestId, reason: reason, diagnosis: vault.diagnosis(diagnosis))
         case .pool(let update):
             PoolStore.shared.apply(update)
+        case .cluster(let update):
+            ClusterStore.shared.apply(update)
         case .unknown:
             break
         }

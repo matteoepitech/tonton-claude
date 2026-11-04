@@ -38,6 +38,10 @@ final class NotchState: ObservableObject {
     @Published var filesOf: String?
     /// The session whose pool popover is open in the chat header, from its button or "Join pool…" in the list.
     @Published var poolOf: String?
+    /// The clusters panel shows in the right column instead of the chat, from the bottom bar's button.
+    @Published var showClusters = false
+    /// The session whose cluster popover is open in the chat header, from its button or "Cluster…" in the list.
+    @Published var clusterOf: String?
     /// Live sessions as pills under the collapsed notch (Settings › Notch › Session pills).
     @Published var pills = PillRow([])
     /// The pill whose session shows in a card under it, while the pointer rests on it.

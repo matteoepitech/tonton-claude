@@ -36,7 +36,7 @@ import { log } from '../log'
 import { handleLogRequest } from '../logs'
 import { AgentRPG } from '../rpg'
 import { matchingRule, modeAllows, openSessionRules, readRules, receiveRules } from '../rules'
-import { backlogImages } from '../transcript/images'
+import { backlogImages, forgetOldImages } from '../transcript/images'
 import { OPENCODE_COMMANDS, type OpenCodePermission, OpenCodeTracker, type SessionUpdate } from './events'
 
 const BACKLOG_SIZE = 400
@@ -227,7 +227,7 @@ class Link {
 
   add(entries: Entry[]) {
     const marked = entries.map(entry => this.markFromNotch(entry))
-    this.entries = [...this.entries, ...marked].slice(-BACKLOG_SIZE)
+    this.entries = forgetOldImages([...this.entries, ...marked].slice(-BACKLOG_SIZE))
     this.rpg.observe(this.sessionId, this.entries, this.pools.ids().length > 0, marked)
     // Live entries only: OpenCode's own history, after a restart, comes through `reset`.
     this.detector ??= new EventDetector(this.cwd() ?? process.cwd())
@@ -240,7 +240,7 @@ class Link {
   /** OpenCode's own history arrived: it replaces what the relay holds, its images within the backlog's budget. */
   reset(history: Entry[]) {
     const known = new Map(this.entries.map(entry => [entry.id, entry]))
-    this.entries = history.map(entry => known.get(entry.id) ?? entry).slice(-BACKLOG_SIZE)
+    this.entries = forgetOldImages(history.map(entry => known.get(entry.id) ?? entry).slice(-BACKLOG_SIZE))
     const entries = backlogImages(this.entries)
     this.postEntries(entries, true)
     this.shares.entries(entries, true)

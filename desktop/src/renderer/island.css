@@ -158,6 +158,362 @@ body {
   display: none;
 }
 
+/* Tonton: his level ring in the bar, his page in the open island (src/renderer/hero.ts). */
+.hero-ring {
+  flex: none;
+  margin-left: -8px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+}
+.ring {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.ring > svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.ring .track {
+  stroke: rgba(255, 255, 255, 0.14);
+}
+.ring .fill {
+  stroke: var(--accent);
+  transition: stroke-dasharray 0.6s ease-out;
+}
+.ring-inside {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ring .badge {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 9px;
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.bar .gain {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.bar .gain.fresh {
+  animation: gain-in 0.9s ease-out;
+}
+@keyframes gain-in {
+  from {
+    opacity: 0;
+    transform: translate(-28px, 8px);
+  }
+}
+.hero-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.panel[data-view="hero"] .shell,
+.panel:not([data-view="hero"]) .hero-page {
+  display: none;
+}
+.hero-page .back {
+  align-self: flex-start;
+  margin: 8px 10px 0;
+  padding: 2px 6px;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+.hero-page .note {
+  margin: 16px;
+  color: var(--dim);
+}
+.hero-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 16px;
+}
+.hero-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.row-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.row-card .side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.side > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.side h1 {
+  margin: 0;
+  font-size: 17px;
+}
+.title-capsule {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(113, 112, 255, 0.18);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.side p {
+  margin: 0;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+.side p.today {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--text);
+}
+.days {
+  display: inline-flex;
+  gap: 2px;
+}
+.days i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.days i.lit {
+  background: #f0883e;
+}
+.hero-card .preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+}
+.preview > span {
+  margin-right: auto;
+}
+.level-up {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+}
+.level-up small {
+  color: var(--dim);
+}
+.level-up.moving {
+  animation: level-up 0.35s ease-out;
+}
+@keyframes level-up {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.hero-panel h3 {
+  margin: 0 0 6px;
+  color: var(--dim);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 26px;
+}
+.bars i {
+  flex: 1;
+  border-radius: 1px 1px 0 0;
+  background: rgba(255, 255, 255, 0.12);
+}
+.bars i.on {
+  background: var(--accent);
+  opacity: 0.55;
+}
+.bars i.now {
+  opacity: 1;
+}
+.journal {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.journal li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12.5px;
+}
+.journal li + li {
+  border-top: 1px dashed var(--border);
+}
+.journal li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.journal li strong {
+  color: var(--accent);
+}
+.journal small {
+  color: var(--faint);
+}
+.hero-tabs {
+  display: flex;
+  gap: 4px;
+}
+.hero-tabs button {
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+.hero-tabs button[aria-selected="true"] {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+.hero-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hero-panel > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hero-panel p {
+  margin: 0;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+.hero-panel h3 {
+  margin: 4px 0 0;
+}
+.hero-panel progress {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.hero-panel button {
+  align-self: flex-start;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.hero-panel .tile {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-style: solid;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.tile small {
+  color: var(--dim);
+  font-size: 10px;
+}
+.tile.locked svg {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+.tile.trying {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tile.worn::after {
+  content: "✓";
+  position: absolute;
+  top: 2px;
+  right: 5px;
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 700;
+}
+.reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  border: 3px solid;
+  border-radius: 12px;
+}
+.hero-panel .reveal button {
+  align-self: center;
+}
+.reveal small,
+.row small {
+  color: var(--dim);
+}
+.hero-panel .row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.hero-panel .row button {
+  align-self: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar .gain.fresh,
+  .level-up.moving {
+    animation: none;
+  }
+  .ring .fill {
+    transition: none;
+  }
+}
+
 /* The clusters strip above the sessions, and a cluster's page (web/cluster-views.ts). */
 .clusters:empty {
   display: none;

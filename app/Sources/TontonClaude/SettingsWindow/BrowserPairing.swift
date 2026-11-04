@@ -86,6 +86,8 @@ struct BrowserPairingCard: View {
 struct QRCodeView: View {
     let code: QRCode
     var module: CGFloat = 3
+    /// What VoiceOver says of it.
+    var label: LocalizedStringKey = "QR code to sign in on another device"
     /// Modules of white around the code, as the standard asks.
     private let quietZone = 4
 
@@ -104,6 +106,6 @@ struct QRCodeView: View {
         }
         .frame(width: side, height: side)
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        .accessibilityLabel("QR code to sign in on another device")
+        .accessibilityLabel(label)
     }
 }
