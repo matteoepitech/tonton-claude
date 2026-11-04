@@ -10,7 +10,8 @@ import {
   rpgStandings,
   syncRPGPool,
 } from '../../../shared'
-import { HeroAvatar, useHero } from '../rpg'
+import { HeroAvatar } from '../hero/avatar'
+import { useHero } from '../rpg'
 import { useStore } from '../store'
 import { Button } from '../ui/button'
 import type { TabProps } from './page'
