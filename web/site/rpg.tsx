@@ -1,26 +1,28 @@
-// The account's private hero, decrypted in the browser. The arena renderer is currently native macOS.
+// The account's private hero, decrypted in the browser: the hero card with its level ring, today and the journal, then
+// the wardrobe, boosters, upgrades, arena, team and achievements behind one icon bar. The arena itself is the Mac app's.
+import { ChevronsUpIcon, GiftIcon, ListIcon, ShirtIcon, SwordsIcon, TrophyIcon, UsersIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import {
-  claimRPGMilestones,
-  equipRPG,
-  openRPGBooster,
-  RPG_CATALOG,
-  RPG_ODDS,
-  RPG_RARITIES,
-  RPG_SLOTS,
-  RPG_UPGRADES,
-  RPGClient,
-  type RPGItem,
-  type RPGState,
-  randomRPGItem,
-  rpgLevel,
-  rpgMilestones,
-  rpgStats,
-  upgradeRPG,
-} from '../../shared'
+import { equipRPG, RPGClient, type RPGItem, type RPGState, RPGUnavailable } from '../../shared'
+import { heroGain, heroPose, levelTitle } from '../hero'
+import { Loading } from './common'
+import { HeroAvatar } from './hero/avatar'
+import { Boosters } from './hero/boosters'
+import { HeroCard, type ShownGain } from './hero/card'
+import { Journal } from './hero/journal'
+import { useReducedMotion } from './hero/motion'
+import { Achievements, Arena, Team, Upgrades } from './hero/panels'
+import { Wardrobe } from './hero/wardrobe'
 import { useStore } from './store'
 import { Button } from './ui/button'
+import { cn } from './ui/cn'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 
+export { HeroAvatar }
+
+/**
+ * The account's hero, read every five seconds, and `change` to save a transaction. Only a save makes it busy: a
+ * background reading never disables a button, and a reading that started before a save never shows the older hero.
+ */
 export function useHero() {
   const { saved } = useStore()
   const [value, setValue] = useState<{ identity: object; hero: RPGState } | null>(null)
@@ -28,29 +30,33 @@ export function useHero() {
   const [busy, setBusy] = useState(false)
   const active = useRef(saved)
   active.current = saved
-  const pending = useRef(false)
+  const saving = useRef(false)
+  const saves = useRef(0)
   useEffect(() => {
     let cancelled = false
+    let reading = false
     setError(null)
     setBusy(false)
-    pending.current = false
+    saving.current = false
     const refresh = async () => {
-      if (!saved || pending.current) return
-      pending.current = true
-      setBusy(true)
+      if (!saved || reading || saving.current) return
+      reading = true
+      const before = saves.current
       try {
         const result = await new RPGClient(`${saved.relay}/api/rpg`, saved.token, saved.key).read()
-        if (!cancelled) {
+        if (!cancelled && before === saves.current && !saving.current) {
           setValue({ identity: saved, hero: result.state })
           setError(null)
         }
-      } catch {
-        if (!cancelled) setError('Could not sync Tonton. Check the connection and relay version.')
+      } catch (problem) {
+        if (!cancelled)
+          setError(
+            problem instanceof RPGUnavailable
+              ? "Tonton's progression needs a newer relay. Sessions keep working meanwhile."
+              : 'Could not sync Tonton. Check the connection and relay version.',
+          )
       } finally {
-        if (!cancelled) {
-          pending.current = false
-          setBusy(false)
-        }
+        reading = false
       }
     }
     void refresh()
@@ -61,11 +67,12 @@ export function useHero() {
     }
   }, [saved])
   const change = async (apply: (hero: RPGState) => RPGState): Promise<RPGState | null> => {
-    if (!saved || pending.current) return null
-    pending.current = true
+    if (!saved || saving.current) return null
+    saving.current = true
     setBusy(true)
     try {
       const hero = await new RPGClient(`${saved.relay}/api/rpg`, saved.token, saved.key).change(apply)
+      saves.current++
       if (active.current !== saved) return null
       setValue({ identity: saved, hero })
       setError(null)
@@ -75,7 +82,7 @@ export function useHero() {
       return null
     } finally {
       if (active.current === saved) {
-        pending.current = false
+        saving.current = false
         setBusy(false)
       }
     }
@@ -83,243 +90,185 @@ export function useHero() {
   return { hero: value?.identity === saved ? value.hero : null, busy, error, change }
 }
 
-const frame = [
-  '............',
-  '....####....',
-  '...######...',
-  '..########..',
-  '..#oo##oo#..',
-  '..#oo##oo#..',
-  '..########..',
-  '...######...',
-  '..h......h..',
-  'kkkkkkkkkkkk',
-  '............',
-  '............',
-]
-export function HeroAvatar({ equipped, size = 48 }: { equipped: Record<string, string | undefined>; size?: number }) {
-  const item = (slot: string) => RPG_CATALOG.find(i => i.id === equipped[slot] && i.slot === slot)
-  const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`
-  const pixels: { x: number; y: number; color: string }[] = []
-  frame.forEach((row, y) => {
-    ;[...row].forEach((c, x) => {
-      const color =
-        c === '#' ? hex(item('skin')?.color ?? 0xffbc83) : c === 'o' ? '#fff' : c === 'h' ? '#a5a4ff' : c === 'k' ? '#777' : null
-      if (color) pixels.push({ x, y: y + 1, color })
-    })
-  })
-  const layer = (slot: string, points: number[][]) => {
-    const chosen = item(slot)
-    if (chosen) for (const [x, y] of points) pixels.push({ x, y, color: hex(chosen.color) })
-  }
-  const hat = item('hat')
-  if (hat)
-    layer('hat', [
-      ...Array.from({ length: 6 }, (_, i) => [i + 3, 1]),
-      ...Array.from({ length: 2 + RPG_RARITIES.indexOf(hat.rarity) }, (_, i) => [i + 4, 0]),
-    ])
-  layer('accessory', [
-    [0, 5],
-    [1, 4],
-    [1, 5],
-    [1, 6],
-  ])
-  layer('aura', [
-    [0, 1],
-    [11, 3],
-    [0, 9],
-    [11, 10],
-  ])
-  layer('trail', [
-    [2, 11],
-    [4, 11],
-    [6, 11],
-  ])
-  return (
-    <svg viewBox="0 0 12 12" width={size} height={size} role="img" aria-label="Tonton's equipped appearance" shapeRendering="crispEdges">
-      {[...new Map(pixels.map(p => [`${p.x}-${p.y}`, p])).values()].map(p => (
-        <rect key={`${p.x}-${p.y}`} x={p.x} y={p.y} width="1" height="1" fill={p.color} />
-      ))}
-    </svg>
-  )
-}
+/** The icon bar under the card, as in the notch; the arena sits apart, on the right. */
+const PANELS = [
+  { value: 'journal', label: 'Journal', Icon: ListIcon },
+  { value: 'wardrobe', label: 'Wardrobe', Icon: ShirtIcon },
+  { value: 'boosters', label: 'Boosters', Icon: GiftIcon },
+  { value: 'upgrades', label: 'Upgrades', Icon: ChevronsUpIcon },
+  { value: 'team', label: 'Team', Icon: UsersIcon },
+  { value: 'achievements', label: 'Achievements', Icon: TrophyIcon },
+] as const
+type Panel = (typeof PANELS)[number]['value'] | 'arena'
+
+/** How long "+XP" floats, and how long the level-up holds the top of the page. */
+const GAIN_MS = 1600
+const LEVEL_UP_MS = 4000
+
 export function HeroPage() {
+  const store = useStore()
   const { hero, busy, error, change } = useHero()
+  const [panel, setPanel] = useState<Panel>('journal')
   const [preview, setPreview] = useState<RPGItem | null>(null)
-  const [opening, setOpening] = useState<string | null>(null)
-  const [revealed, setRevealed] = useState(false)
-  const [slot, setSlot] = useState<(typeof RPG_SLOTS)[number]>('skin')
+  const { gain, levelUp, endLevelUp } = useLiveGain(hero)
+  const now = useNow()
   useEffect(() => {
-    if (!opening) return
-    setRevealed(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-    const timer = setTimeout(() => setRevealed(true), 1200)
-    return () => clearTimeout(timer)
-  }, [opening])
-  if (!hero) return <div className="flex-1 bg-white p-6">{error ?? 'Syncing Tonton…'}</div>
-  const stats = rpgStats(hero)
-  const receipt = opening ? hero.openings[opening] : null
-  const drop = RPG_CATALOG.find(i => i.id === receipt?.item)
+    if (!preview) return
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPreview(null)
+    }
+    window.addEventListener('keydown', cancel)
+    return () => window.removeEventListener('keydown', cancel)
+  }, [preview])
+  if (!hero) return <main className="flex-1 bg-white p-6">{error ? <p role="alert">{error}</p> : <Loading>Syncing Tonton…</Loading>}</main>
+  const statuses = store.state?.sessions.map(session => session.status) ?? []
+  const pose = levelUp ? 'cheer' : heroPose(statuses)
+  const wear = async (item: RPGItem) => {
+    if (!hero.owned.includes(item.id)) return
+    const worn = hero.equipped[item.slot] === item.id
+    if (await change(h => equipRPG(h, item.slot, worn ? null : item.id))) setPreview(null)
+  }
+  const pick = (item: RPGItem) => {
+    if (preview?.id === item.id) void wear(item)
+    else setPreview(item)
+  }
   return (
-    <main className="flex-1 overflow-y-auto bg-white p-6">
-      <div className="mx-auto flex max-w-3xl flex-col gap-6">
-        <header className="flex items-center gap-5">
-          <HeroAvatar equipped={{ ...hero.equipped, ...(preview ? { [preview.slot]: preview.id } : {}) }} size={96} />
-          <div>
-            <h1 className="text-2xl font-bold">Tonton · Level {rpgLevel(hero.xp)}</h1>
-            <p>
-              {hero.xp} XP · {hero.sparks} sparks · {hero.boosters.length} boosters
-            </p>
-          </div>
-        </header>
+    <main className="flex-1 overflow-y-auto bg-white px-4 py-5 sm:px-6">
+      <div className="mx-auto flex max-w-3xl flex-col gap-4">
+        {levelUp && (
+          <LevelUp
+            level={levelUp}
+            equipped={hero.equipped}
+            onOpen={() => {
+              setPanel('boosters')
+              endLevelUp()
+            }}
+          />
+        )}
         {error && (
-          <p role="alert" className="text-destructive">
+          <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         )}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Wardrobe</h2>
-          <div className="flex flex-wrap gap-2">
-            {RPG_SLOTS.map(s => (
-              <Button
-                key={s}
-                variant={s === slot ? 'default' : 'outline'}
-                onClick={() => {
-                  setSlot(s)
-                  setPreview(null)
-                }}
-              >
-                {s}
-              </Button>
+        <HeroCard
+          hero={hero}
+          pose={pose}
+          preview={preview}
+          gain={gain}
+          now={now}
+          busy={busy}
+          onWear={() => preview && void wear(preview)}
+          onCancelPreview={() => setPreview(null)}
+        />
+        <Tabs value={panel} onValueChange={value => setPanel(value as Panel)} className="flex flex-col gap-4">
+          <TabsList aria-label="Tonton" className="h-auto w-full justify-between gap-1 sm:justify-start">
+            {PANELS.map(({ value, label, Icon }) => (
+              <TabsTrigger key={value} value={value} aria-label={label} title={label} className="relative h-8 px-2.5">
+                <Icon aria-hidden="true" />
+                <span className="hidden sm:inline">{label}</span>
+                {value === 'boosters' && hero.boosters.length > 0 && (
+                  <span
+                    className={cn(
+                      'absolute -end-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-[10px] font-bold leading-4 text-white',
+                      levelUp && 'motion-safe:animate-pulse',
+                    )}
+                  >
+                    {hero.boosters.length}
+                  </span>
+                )}
+              </TabsTrigger>
             ))}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {RPG_CATALOG.filter(i => i.slot === slot).map(item => (
-              <div key={item.id} className="flex items-center gap-3 rounded-lg border p-3">
-                <button type="button" aria-label={`Preview ${item.rarity} ${item.slot}`} onClick={() => setPreview(item)}>
-                  <HeroAvatar equipped={{ ...hero.equipped, [slot]: item.id }} />
-                </button>
-                <span className="flex-1">
-                  {item.rarity} {item.slot}
-                </span>
-                <Button
-                  size="sm"
-                  disabled={busy || !hero.owned.includes(item.id) || hero.equipped[slot] === item.id}
-                  onClick={() => void change(h => equipRPG(h, slot, item.id))}
-                >
-                  {hero.equipped[slot] === item.id ? 'Equipped' : hero.owned.includes(item.id) ? 'Equip' : 'Locked'}
-                </Button>
-              </div>
-            ))}
-          </div>
-          <Button variant="outline" disabled={busy || !hero.equipped[slot]} onClick={() => void change(h => equipRPG(h, slot, null))}>
-            Unequip {slot}
-          </Button>
-        </section>
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Boosters</h2>
-          <p className="text-sm text-muted-foreground">
-            One cosmetic. {RPG_RARITIES.map((r, i) => `${r} ${RPG_ODDS[i]}%`).join(' · ')}. Duplicates become 1 / 3 / 8 / 20 / 50 sparks.
-          </p>
-          {drop && receipt && (
-            <div
-              className={`rounded-xl p-6 text-center ${
-                {
-                  common: 'border border-emerald-300',
-                  uncommon: 'border-2 border-sky-300',
-                  rare: 'border-2 border-violet-300',
-                  epic: 'border-4 border-pink-300',
-                  legendary: 'border-4 border-amber-300 motion-safe:animate-pulse',
-                }[drop.rarity]
-              }`}
-              aria-live="polite"
+            <TabsTrigger
+              value="arena"
+              aria-label="Play arena"
+              title="Play arena"
+              className="h-7 shrink-0 rounded-full border border-primary/30 px-2.5 text-primary sm:ms-auto data-[state=active]:border-foreground"
             >
-              {revealed ? (
-                <>
-                  <div className="flex justify-center">
-                    <HeroAvatar equipped={{ ...hero.equipped, [drop.slot]: drop.id }} size={96} />
-                  </div>
-                  <p className="my-3 text-xl">
-                    {drop.rarity} {drop.slot}
-                  </p>
-                  {receipt.duplicateSparks > 0 && <p>Duplicate converted to {receipt.duplicateSparks} sparks.</p>}
-                  <Button disabled={busy} onClick={() => void change(h => equipRPG(h, drop.slot, drop.id))}>
-                    Equip
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p className="motion-safe:animate-pulse">Revealing your cosmetic…</p>
-                  <Button onClick={() => setRevealed(true)}>Skip animation</Button>
-                </>
-              )}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {hero.boosters.map(id => (
-              <Button
-                key={id}
-                disabled={busy}
-                onClick={async () => {
-                  const candidate = randomRPGItem()
-                  if (await change(h => openRPGBooster(h, id, candidate.id))) setOpening(id)
-                }}
-              >
-                Open earned booster
-              </Button>
-            ))}
-          </div>
-          <details>
-            <summary>Previous openings</summary>
-            {Object.entries(hero.openings).map(([id, result]) => (
-              <Button key={id} variant="ghost" onClick={() => setOpening(id)}>
-                {result.item} · {result.duplicateSparks} duplicate sparks
-              </Button>
-            ))}
-          </details>
-        </section>
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Hero upgrades</h2>
-          {RPG_UPGRADES.map(stat => {
-            const rank = hero.upgrades[stat] ?? 0
-            const increment = stat === 'health' ? 15 : stat === 'attack' ? 3 : 6
-            return (
-              <div key={stat} className="flex items-center justify-between rounded-lg border p-3">
-                <span>
-                  {stat}: {stats[stat]}
-                  {rank < 10 && ` → ${stats[stat] + increment}`} · rank {rank}/10
-                </span>
-                <Button
-                  disabled={busy || rank === 10 || hero.sparks < (rank + 1) * 10}
-                  onClick={() => void change(h => upgradeRPG(h, stat, rank + 1))}
-                >
-                  {rank === 10 ? 'Maximum rank' : `Upgrade · ${(rank + 1) * 10} sparks`}
-                </Button>
-              </div>
-            )
-          })}
-          <p className="text-sm text-muted-foreground">
-            Play the arena in the Mac app: Tonton → Hero → Play arena. Combat rewards and upgrades sync here.
-          </p>
-        </section>
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Achievements</h2>
-          {rpgMilestones(hero).map(m => (
-            <div key={m.id}>
-              <p>
-                {m.id === 'rpgWorker'
-                  ? 'Team player · 10 work rewards'
-                  : m.id === 'rpgVeteran'
-                    ? 'Veteran Tonton · 1,000 XP'
-                    : 'Boss slayer · first victory'}
-              </p>
-              <progress className="w-full" aria-label={m.id} value={Math.min(m.done, m.target)} max={m.target} />
-            </div>
-          ))}
-          <Button disabled={busy} onClick={() => void change(claimRPGMilestones)}>
-            Claim achievement boosters
-          </Button>
-        </section>
+              <SwordsIcon aria-hidden="true" />
+              <span className="hidden sm:inline">Play arena</span>
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="journal">
+            <Journal hero={hero} now={now} />
+          </TabsContent>
+          <TabsContent value="wardrobe">
+            <Wardrobe hero={hero} preview={preview} onPick={pick} />
+          </TabsContent>
+          <TabsContent value="boosters">
+            <Boosters hero={hero} busy={busy} change={change} />
+          </TabsContent>
+          <TabsContent value="upgrades">
+            <Upgrades hero={hero} busy={busy} change={change} />
+          </TabsContent>
+          <TabsContent value="arena">
+            <Arena hero={hero} />
+          </TabsContent>
+          <TabsContent value="team">
+            <Team />
+          </TabsContent>
+          <TabsContent value="achievements">
+            <Achievements hero={hero} busy={busy} change={change} />
+          </TabsContent>
+        </Tabs>
       </div>
     </main>
   )
+}
+
+/** One short moment across the page, Tonton cheering, then the booster waits behind its icon. */
+function LevelUp({ level, equipped, onOpen }: { level: number; equipped: RPGState['equipped']; onOpen: () => void }) {
+  const reduced = useReducedMotion()
+  return (
+    <div role="status" className={cn('flex items-center gap-3 rounded-lg bg-foreground px-4 py-3 text-white', !reduced && 'hero-level-up')}>
+      <HeroAvatar equipped={equipped} pose="cheer" moving size={48} label="" />
+      <p className="min-w-0 flex-1">
+        <strong className="block text-base">
+          Level {level} · {levelTitle(level)}
+        </strong>
+        <span className="text-sm text-white/75">A booster is waiting.</span>
+      </p>
+      <Button variant="accent" size="sm" onClick={onOpen}>
+        Open it
+      </Button>
+    </div>
+  )
+}
+
+/** The XP to float and the level reached, from one committed reading of the hero to the next. The first reading is not news. */
+function useLiveGain(hero: RPGState | null) {
+  const before = useRef<RPGState | null>(null)
+  const [gain, setGain] = useState<ShownGain | null>(null)
+  const [levelUp, setLevelUp] = useState<number | null>(null)
+  useEffect(() => {
+    if (!hero) {
+      before.current = null
+      return
+    }
+    const next = heroGain(before.current, hero)
+    before.current = hero
+    if (!next) return
+    setGain({ ...next, key: Date.now() })
+    if (next.level) setLevelUp(next.level)
+  }, [hero])
+  useEffect(() => {
+    if (!gain) return
+    const timer = setTimeout(() => setGain(null), GAIN_MS)
+    return () => clearTimeout(timer)
+  }, [gain])
+  useEffect(() => {
+    if (!levelUp) return
+    const timer = setTimeout(() => setLevelUp(null), LEVEL_UP_MS)
+    return () => clearTimeout(timer)
+  }, [levelUp])
+  return { gain, levelUp, endLevelUp: () => setLevelUp(null) }
+}
+
+/** The clock today's numbers and the journal's times are read against, a minute at a time. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  return now
 }

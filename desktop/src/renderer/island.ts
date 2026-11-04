@@ -1,5 +1,6 @@
-// The island: a black pill at the top of the screen that says what the sessions are doing, and opens on their list, a
-// conversation and its permission requests. It renders the web app's views (web/views.ts) on the client core (shared/).
+// The island: a black pill at the top of the screen that says what the sessions are doing, with Tonton's level ring, and
+// opens on their list, a conversation and its permission requests, or on Tonton's page (src/renderer/hero.ts). It renders
+// the web app's views (web/views.ts) on the client core (shared/).
 // The main process puts the relay token on this page's socket, so the page only holds the end-to-end key, as a CryptoKey
 // it cannot read back.
 
@@ -20,10 +21,13 @@ import {
   Vault,
 } from '../../../shared'
 import { renderClusterPage, renderClusterStrip } from '../../../web/cluster-views'
+import { heroGain, levelTitle } from '../../../web/hero'
 import { element } from '../../../web/markdown'
 import { dot, renderChat, renderList } from '../../../web/views'
 import { DEFAULT_RELAY, type IslandAccount, type IslandBridge, type IslandMode } from '../bridge'
 import { IslandClusters } from './clusters'
+import { compactHero, HeroPage } from './hero'
+import { HeroSync } from './hero-sync'
 
 declare global {
   interface Window {
@@ -35,6 +39,8 @@ declare global {
 const PEEK_MS = 6000
 /** The window loses focus for a moment when a dialog or the menu opens: only a real switch to another app closes it. */
 const BLUR_GRACE_MS = 150
+/** How long a new gain stands out in the bar, and a level-up holds it. */
+const GAIN_MS = 6000
 
 const bridge = window.tonton
 const app = document.getElementById('app') as HTMLElement
@@ -54,6 +60,14 @@ let peekTimer: ReturnType<typeof setTimeout> | undefined
 /** Shown above the list once, after creating an account. */
 let notice: string | null = null
 const parts: { list?: HTMLElement; strip?: HTMLElement; sessions?: HTMLElement; chat?: HTMLElement; shell?: HTMLElement } = {}
+let hero: HeroSync | null = null
+let heroPage: HeroPage | null = null
+/** The open island shows the sessions or Tonton's page. */
+let view: 'sessions' | 'hero' = 'sessions'
+/** The XP just earned, while the bar shows it as new. */
+let freshGain: number | null = null
+let levelUp: number | null = null
+let gainTimer: ReturnType<typeof setTimeout> | undefined
 let clusters: IslandClusters | null = null
 /** A cluster's page in the window, instead of a conversation. */
 let openCluster: string | null = null
@@ -68,7 +82,9 @@ async function start() {
   panel.className = 'panel'
   app.replaceChildren(bar, panel)
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && mode === 'expanded') collapse()
+    if (event.key !== 'Escape' || mode !== 'expanded') return
+    if (view === 'hero' && heroPage?.cancelPreview()) return
+    collapse()
   })
   bridge.onCommand(command => {
     if (command === 'expand') expand()
@@ -81,14 +97,15 @@ async function start() {
   else void signInScreen()
 }
 
-function expand() {
+function expand(on: 'sessions' | 'hero' = 'sessions') {
   if (mode === 'expanded') return
   mode = 'expanded'
   endPeek()
+  view = on
   void clusters?.refresh()
   // Straight to the session that waits for the user, like clicking the notch's banner.
   const urgent = state ? liveActivity(state.sessions) : null
-  if (urgent && needsAttention(urgent.status)) {
+  if (on === 'sessions' && urgent && needsAttention(urgent.status)) {
     showingChat = true
     client?.select(urgent.id)
   }
@@ -173,6 +190,7 @@ async function signInScreen(problem?: string) {
   client?.stop()
   client = null
   state = null
+  stopHero()
   panel.replaceChildren(form)
   render()
   if (mode === 'collapsed') expand()
@@ -211,11 +229,56 @@ async function connect(account: IslandAccount) {
     onSignedOut: () => void signOut('The relay signed this computer out.'),
     onClusterUpdate: update => clusters?.handle(update),
   })
+  startHero(key)
   // Older main processes don't say the account's id: clusters then stay on the website.
   if (account.account) clusters = new IslandClusters(bridge, account.relay, key, account.account, client, () => render())
   layout()
   client.start()
   void clusters?.refresh()
+}
+
+/** Tonton follows the account: a new one starts from its own hero. */
+function startHero(key: CryptoKey) {
+  stopHero()
+  const sync = new HeroSync(key, bridge, before => {
+    const gain = sync.hero ? heroGain(before, sync.hero) : null
+    if (gain) {
+      freshGain = (freshGain ?? 0) + gain.xp
+      if (gain.level) levelUp = gain.level
+      clearTimeout(gainTimer)
+      gainTimer = setTimeout(() => {
+        freshGain = null
+        levelUp = null
+        render()
+      }, GAIN_MS)
+    }
+    render()
+  })
+  hero = sync
+  heroPage = new HeroPage(sync, () => {
+    view = 'sessions'
+    render()
+  })
+  sync.start()
+}
+
+function stopHero() {
+  hero?.stop()
+  heroPage?.stop()
+  hero = null
+  heroPage = null
+  view = 'sessions'
+  freshGain = null
+  levelUp = null
+  clearTimeout(gainTimer)
+}
+
+function openHero() {
+  if (mode === 'collapsed') expand('hero')
+  else {
+    view = view === 'hero' ? 'sessions' : 'hero'
+    render()
+  }
 }
 
 async function signOut(problem: string | null, tellMain = true) {
@@ -225,6 +288,7 @@ async function signOut(problem: string | null, tellMain = true) {
   clusters = null
   openCluster = null
   state = null
+  stopHero()
   notice = null
   if (tellMain) await bridge.signOut()
   await signInScreen(problem ?? undefined)
@@ -241,7 +305,7 @@ function layout() {
   const shell = element('div', list, chat)
   shell.className = 'shell'
   Object.assign(parts, { list, strip, sessions, chat, shell })
-  const children: HTMLElement[] = [shell]
+  const children: HTMLElement[] = [shell, ...(heroPage ? [heroPage.root] : [])]
   if (notice) {
     const close = element('button', 'OK')
     const box = element('div', element('p', notice), close)
@@ -259,7 +323,19 @@ function render() {
   app.dataset.mode = mode
   app.dataset.alert = peek ? 'peek' : ''
   bar.replaceChildren(...barContent())
-  if (!state || mode !== 'expanded' || !parts.sessions || !parts.chat || !parts.shell) return
+  if (!state || mode !== 'expanded' || !parts.sessions || !parts.chat || !parts.shell) {
+    heroPage?.hide()
+    return
+  }
+  panel.dataset.view = view
+  if (view === 'hero' && heroPage) {
+    heroPage.show(
+      state.sessions.map(s => s.status),
+      levelUp,
+    )
+    return
+  }
+  heroPage?.hide()
   renderClusters()
   const cluster = openCluster ? clusters?.watch.cluster(openCluster) : null
   parts.shell.dataset.view = (showingChat && state.selectedId) || cluster ? 'chat' : 'list'
@@ -324,6 +400,21 @@ function barContent(): (HTMLElement | string)[] {
   const count = element('span', String(live.length))
   count.className = attention ? 'count attention' : 'count'
   count.title = attention ? `${attention} waiting for you` : `${live.length} live`
+  const [ring, gain] = hero?.hero
+    ? compactHero(
+        hero.hero,
+        state.sessions.map(s => s.status),
+        freshGain,
+        openHero,
+      )
+    : []
+  return [...(ring ? [ring] : []), ...sessionsBar(title, live, count, gain)]
+}
+
+/** The bar after the ring: what the sessions do, the last gain, and how many are live. */
+function sessionsBar(title: HTMLElement, live: Session[], count: HTMLElement, gain: HTMLElement | undefined): (HTMLElement | string)[] {
+  if (!state) return [title]
+  const tail = gain ? [gain, count] : [count]
   if (mode === 'expanded') {
     const more = element('button', '⋯')
     more.className = 'more'
@@ -334,18 +425,23 @@ function barContent(): (HTMLElement | string)[] {
     }
     const connection = state.connection === 'connected' ? host : state.connection === 'connecting' ? 'Connecting…' : 'Offline'
     const urgent = mostUrgent(live.map(s => s.status))
-    title.append(element('strong', 'Tonton Claude'), element('small', connection))
-    return [...(urgent ? [dot(urgent)] : []), title, count, more]
+    title.append(element('strong', view === 'hero' ? 'Tonton' : 'Tonton Claude'), element('small', connection))
+    return [...(urgent ? [dot(urgent)] : []), title, ...tail, more]
   }
   if (peek) {
     // Like the notch's banner: where it runs, and its status.
     title.append(element('strong', `${peek.machine} · ${peek.name ?? peek.project}`), element('small', STATUS_LABELS[peek.status]))
-    return [dot(peek.status), title, count]
+    return [dot(peek.status), title, ...tail]
+  }
+  if (levelUp) {
+    // One short moment, then the booster waits on Tonton's page.
+    title.append(element('strong', `Level ${levelUp} · ${levelTitle(levelUp)}`), element('small', 'A booster is waiting'))
+    return [title, ...tail]
   }
   const activity = liveActivity(state.sessions)
   if (activity) {
     title.append(element('strong', activity.name ?? activity.project), element('small', liveActivityText(activity)))
-    return [dot(activity.status), title, count]
+    return [dot(activity.status), title, ...tail]
   }
   const quiet =
     state.connection === 'connected'
@@ -356,7 +452,7 @@ function barContent(): (HTMLElement | string)[] {
         ? 'Connecting…'
         : 'Offline'
   title.append(element('strong', 'Tonton Claude'), element('small', quiet))
-  return [...(live.length ? [dot('idle')] : []), title, count]
+  return [...(live.length ? [dot('idle')] : []), title, ...tail]
 }
 
 function startPeek(session: Session) {

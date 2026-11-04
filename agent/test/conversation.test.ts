@@ -8,7 +8,7 @@ import { newAccountKey, open } from '../../shared/crypto'
 import type { AgentMessage, Entry, SealedEntry } from '../../shared/protocol'
 import { Conversation } from '../src/channel/conversation'
 import { entriesMessages, MAX_MESSAGE_BYTES } from '../src/channel/relay-connection'
-import { backlogImages } from '../src/transcript/images'
+import { BACKLOG_IMAGES, backlogImages, forgetOldImages } from '../src/transcript/images'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-conversation-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
@@ -55,6 +55,21 @@ describe('the backlog', () => {
     expect(entries[0]).toMatchObject({ images: [{ data: 'A'.repeat(3 * MB) }] })
   })
 
+  test('lets go of the images no reconnection sends again, and sends the same as with them', () => {
+    const entries = Array.from({ length: BACKLOG_IMAGES + 5 }, (_, index) => result(`r${index}`, [shot('x', 8), shot('y', 8)]))
+    const kept = forgetOldImages(entries)
+    expect(kept.map(entry => 'images' in entry && entry.images?.length)).toEqual([
+      ...Array(5).fill(false),
+      ...Array(BACKLOG_IMAGES).fill(2),
+    ])
+    expect(texts(kept)).toEqual(texts(entries))
+    expect(backlogImages(kept)).toEqual(backlogImages(entries))
+    expect(texts(backlogImages(kept))[0]).toBe('shot r0\n[2 images not loaded]')
+    // Again on what it already let go: nothing changes.
+    expect(forgetOldImages(kept)).toEqual(kept)
+    expect(backlogImages(forgetOldImages(kept))).toEqual(backlogImages(entries))
+  })
+
   test('too big for one message, it goes in several under the limit, only the first a reset', () => {
     const sealed = (id: string, size: number): SealedEntry => ({ id, ts, blob: 'x'.repeat(size) })
     const entries = ['a', 'b', 'c', 'd', 'e'].map(id => sealed(id, 3000))
@@ -74,6 +89,60 @@ describe('the backlog', () => {
 })
 
 describe('a Claude Code session that reconnects', () => {
+  test('holds images only on its latest entries, and announces and names its last message as before', async () => {
+    const key = newAccountKey()
+    const transcript = join(dir, 'screenshots.jsonl')
+    const line = (uuid: string, content: unknown) => `${JSON.stringify({ type: 'user', uuid, timestamp: ts, message: { content } })}\n`
+    const image = (fill: string) => ({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: fill.repeat(64) } })
+    const results = Array.from({ length: BACKLOG_IMAGES + 5 }, (_, index) =>
+      line(`r${index}`, [
+        { type: 'tool_result', tool_use_id: `t${index}`, content: [{ type: 'text', text: `shot ${index}` }, image('s')] },
+      ]),
+    )
+    writeFileSync(transcript, line('u0', [{ type: 'text', text: 'Look at this' }, image('u')]) + results.join(''))
+
+    const sent: AgentMessage[] = []
+    let outbox = Promise.resolve()
+    const post = (build: () => Promise<AgentMessage | AgentMessage[] | null>) => {
+      outbox = outbox.then(async () => {
+        const message = await build()
+        if (message) sent.push(...[message].flat())
+      })
+    }
+    const conversation = new Conversation({ sessionId: 'ses_held', transcriptPath: transcript, cwd: dir }, 'Mac', key, true, post)
+    conversation.start()
+    try {
+      await eventually(() => sent.some(message => message.t === 'entries' && message.reset), 'the backlog')
+      await outbox
+      // What the session holds, read past its privacy: the point is what stays in memory.
+      const held = (conversation as unknown as { entries: Entry[] }).entries
+      expect(held).toHaveLength(BACKLOG_IMAGES + 6)
+      expect(held.map(entry => 'images' in entry && Boolean(entry.images?.length))).toEqual([
+        ...Array(6).fill(false),
+        ...Array(BACKLOG_IMAGES).fill(true),
+      ])
+
+      const opened = async () => {
+        const messages = sent.flatMap(message => (message.t === 'entries' && message.reset ? [message] : []))
+        const backlog = await Promise.all(messages.flatMap(message => message.entries).map(entry => open<Entry>(key, entry.blob)))
+        const meta = sent.findLast(message => message.t === 'meta')
+        return { backlog, meta: meta?.t === 'meta' ? await open<{ lastMessage?: string }>(key, meta.meta) : undefined }
+      }
+      const { backlog, meta } = await opened()
+      expect(texts(backlog).slice(0, 2)).toEqual(['Look at this\n[1 image not loaded]', 'shot 0\n[1 image not loaded]'])
+      expect(backlog.filter(entry => 'images' in entry && entry.images?.length)).toHaveLength(BACKLOG_IMAGES)
+      expect(meta?.lastMessage).toBe('Look at this')
+
+      // A reconnection sends it all the same.
+      sent.length = 0
+      conversation.announce()
+      await outbox
+      expect(await opened()).toEqual({ backlog, meta })
+    } finally {
+      conversation.stop()
+    }
+  }, 20_000)
+
   test('sends its backlog in messages the relay takes, its newest images kept within the budget', async () => {
     const key = newAccountKey()
     const transcript = join(dir, 'session.jsonl')

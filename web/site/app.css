@@ -182,3 +182,51 @@
   --xy-controls-button-border-color-default: var(--border);
   --xy-attribution-background-color-default: transparent;
 }
+
+/* The hero screen's few motions (web/site/hero): a gain rising into the level ring, eight pixels thrown out of it at a
+   level-up, the level-up sliding in. None of them play with reduced motion; the components leave them out too. */
+.hero-float {
+  animation: hero-float 1.6s ease-out forwards;
+}
+@keyframes hero-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 80px);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -24px);
+  }
+}
+.hero-burst {
+  animation: hero-burst 0.9s ease-out forwards;
+}
+@keyframes hero-burst {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--angle)) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateY(-72px);
+  }
+}
+.hero-level-up {
+  animation: hero-level-up 0.35s ease-out;
+}
+@keyframes hero-level-up {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-float,
+  .hero-burst,
+  .hero-level-up {
+    animation: none;
+  }
+}

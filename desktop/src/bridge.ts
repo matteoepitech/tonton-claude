@@ -20,6 +20,12 @@ export type SignInResult =
     }
   | { ok: false; error: string }
 
+/** The hero's sealed document, read or written by the main process with the relay token (src/main/relay-api.ts). */
+export type RPGRequest = { method: 'GET' } | { method: 'PUT'; body: string }
+
+/** The relay's answer as it came, or null when it could not be reached or nobody is signed in. */
+export type RPGResponse = { status: number; body: string } | null
+
 /** From the main process: the tray's items, the window losing focus, signing out from the menu. */
 export type IslandCommand = 'expand' | 'collapse' | 'blur' | 'signed-out'
 
@@ -50,6 +56,8 @@ export interface IslandBridge {
   setMode(mode: IslandMode): void
   /** The tray's menu, under the island's button. */
   showMenu(): void
+  /** `GET` or `PUT /api/rpg` of the signed-in account. The page seals and opens the blob; the token stays in main. */
+  rpg(request: RPGRequest): Promise<RPGResponse>
   onCommand(listener: (command: IslandCommand) => void): void
   clusters(call: ClusterCall): Promise<ClusterAnswer>
 }
@@ -62,6 +70,7 @@ export const CHANNELS = {
   signOut: 'island:sign-out',
   mode: 'island:mode',
   menu: 'island:menu',
+  rpg: 'island:rpg',
   command: 'island:command',
   clusters: 'island:clusters',
 } as const

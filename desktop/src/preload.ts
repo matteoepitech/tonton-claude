@@ -11,6 +11,7 @@ const bridge: IslandBridge = {
   signOut: () => ipcRenderer.invoke(CHANNELS.signOut),
   setMode: mode => ipcRenderer.send(CHANNELS.mode, mode),
   showMenu: () => ipcRenderer.send(CHANNELS.menu),
+  rpg: request => ipcRenderer.invoke(CHANNELS.rpg, request),
   onCommand: listener => {
     ipcRenderer.on(CHANNELS.command, (_event, command: IslandCommand) => listener(command))
   },
