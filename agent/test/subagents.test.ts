@@ -81,13 +81,13 @@ describe('subEntries', () => {
 })
 
 describe('Subagents', () => {
-  test('what subagents wrote before is backlog, what comes after is news, and finished ones are let go', async () => {
+  test('what subagents wrote before is backlog, what comes after is news, and quiet ones are read again once they move', async () => {
     const transcript = join(dir, 'session.jsonl')
     const folder = join(dir, 'session', 'subagents')
     mkdirSync(folder, { recursive: true })
     writeFileSync(join(folder, 'agent-a1.meta.json'), JSON.stringify({ toolUseId: 'toolu_task1', description: 'Review' }))
     writeFileSync(join(folder, 'agent-a1.jsonl'), call('c1', 'toolu_1', 'ls'))
-    // Done an hour ago: read once with the backlog.
+    // Quiet for an hour: read once with the backlog, then paused.
     writeFileSync(join(folder, 'agent-old.meta.json'), JSON.stringify({ toolUseId: 'toolu_task0' }))
     writeFileSync(join(folder, 'agent-old.jsonl'), call('c0', 'toolu_0', 'pwd'))
     const anHourAgo = new Date(Date.now() - 3600_000)
@@ -104,10 +104,44 @@ describe('Subagents', () => {
         { id: 'old:c0:0', backlog: true },
       ])
       appendFileSync(join(folder, 'agent-a1.jsonl'), call('c3', 'toolu_3', 'cat README.md'))
-      appendFileSync(join(folder, 'agent-old.jsonl'), call('c4', 'toolu_4', 'never read'))
-      for (let i = 0; i < 40 && seen.length < 3; i++) await Bun.sleep(50)
-      await Bun.sleep(500)
-      expect(seen.slice(2)).toEqual([{ id: 'a1:c3:0', backlog: false }])
+      appendFileSync(join(folder, 'agent-old.jsonl'), call('c4', 'toolu_4', 'at work again'))
+      // The next scan sees the paused one move; the other one's tailer reads on its own.
+      subagents.scan()
+      for (let i = 0; i < 40 && seen.length < 4; i++) await Bun.sleep(50)
+      expect(seen.slice(2).sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+        { id: 'a1:c3:0', backlog: false },
+        { id: 'old:c4:0', backlog: false },
+      ])
+    } finally {
+      subagents.stop()
+    }
+  })
+
+  test('a subagent quiet longer than a pause, a long build, goes on under its Task without sending its calls again', async () => {
+    const folder = join(dir, 'build', 'subagents')
+    mkdirSync(folder, { recursive: true })
+    writeFileSync(join(folder, 'agent-b1.meta.json'), JSON.stringify({ toolUseId: 'toolu_build' }))
+    const file = join(folder, 'agent-b1.jsonl')
+    writeFileSync(file, call('b1', 'toolu_1', 'RunUAT BuildCookRun'))
+    const seen: { id: string; backlog: boolean }[] = []
+    const subagents = new Subagents(join(dir, 'build.jsonl'), (entries, backlog) =>
+      seen.push(...entries.map(entry => ({ id: entry.id, backlog }))),
+    )
+    // Scanned by hand, with a clock 25 minutes ahead, rather than every two seconds.
+    subagents.scan()
+    try {
+      expect(seen).toEqual([{ id: 'b1:b1:0', backlog: true }])
+      const later = Date.now() + 25 * 60_000
+      subagents.scan(later)
+      appendFileSync(file, result('r1', 'toolu_1', 'BUILD SUCCESSFUL') + call('b2', 'toolu_2', 'ls Saved/Cooked'))
+      // Paused: its tailer no longer polls, so nothing is read before a scan sees the file move.
+      await Bun.sleep(600)
+      expect(seen).toHaveLength(1)
+      subagents.scan(later + 2000)
+      expect(seen).toEqual([
+        { id: 'b1:b1:0', backlog: true },
+        { id: 'b1:b2:0', backlog: false },
+      ])
     } finally {
       subagents.stop()
     }
