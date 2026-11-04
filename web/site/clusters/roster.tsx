@@ -3,14 +3,7 @@
 // sessions can be put in or taken out, and each chooses how it takes the posts (docs/cluster.md, The rule).
 import { LogInIcon, LogOutIcon } from 'lucide-react'
 import { useState } from 'react'
-import {
-  type ClusterDelivery,
-  type ClusterSession,
-  type ClusterSessionProfile,
-  type ClusterTool,
-  type Session,
-  STATUS_LABELS,
-} from '../../../shared'
+import { type ClusterDelivery, type ClusterSession, type Session, STATUS_LABELS } from '../../../shared'
 import { Empty, StatusDot } from '../common'
 import { ago, plural } from '../format'
 import { useStore } from '../store'

@@ -6,14 +6,14 @@ import { ClusterApi } from '../../../shared/cluster-api'
 import { clusterInviteLink } from '../../../shared/cluster-link'
 import { newAccountKey, seal } from '../../../shared/crypto'
 
-async function post(relay: string, path: string, body: object, token?: string) {
+async function post(relay: string, path: string, body: object, token?: string): Promise<Record<string, string>> {
   const response = await fetch(relay + path, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body),
   })
   if (!response.ok) throw new Error(`${path}: ${response.status}`)
-  return response.json()
+  return (await response.json()) as Record<string, string>
 }
 
 /** Returns the invite link; the owner's session stays connected, in the cluster, for the rest of the run. */

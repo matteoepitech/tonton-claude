@@ -1,19 +1,17 @@
 // What the cluster pages show, worked out from the cluster's state alone: the roster by member and machine, who wrote a
 // post, what a post says in a line, and the clock. Shared by the website and the island (web/views.ts), tested in
 // web/test/clusters.test.ts.
+import type { ClusterPostItem, ClusterSession, ClusterState } from '../../../shared/cluster'
 import type {
   ClusterClaim,
   ClusterClock,
   ClusterDelivery,
-  ClusterPostItem,
   ClusterPostKind,
   ClusterRole,
-  ClusterSession,
   ClusterSessionProfile,
-  ClusterState,
   ClusterTool,
-  Session,
-} from '../../../shared'
+} from '../../../shared/cluster-protocol'
+import type { Session } from '../../../shared/session'
 
 export interface RosterMachine {
   /** The machine's id when the relay attests it, else its name. */

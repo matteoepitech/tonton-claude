@@ -2,7 +2,11 @@
 // process, which holds the token (src/main/relay-api.ts, `clusterCall`), and whose live updates come on the page's own
 // socket. The island lists, opens and joins clusters; making them and inviting are on the website.
 
-import { ClusterApi, type ClusterDelivery, type ClusterUpdate, ClusterWatch, type RelayClient, type Session } from '../../../shared'
+import type { RelayClient } from '../../../shared/client'
+import { ClusterApi } from '../../../shared/cluster-api'
+import type { ClusterDelivery, ClusterUpdate } from '../../../shared/cluster-protocol'
+import { ClusterWatch } from '../../../shared/cluster-watch'
+import type { Session } from '../../../shared/session'
 import { profileOf, rememberDelivery } from '../../../web/site/clusters/model'
 import type { ClusterCall, IslandBridge } from '../bridge'
 
