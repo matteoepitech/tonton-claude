@@ -280,8 +280,12 @@ describe('pool tools end to end', () => {
     }, 'the task done for the other account')
     expect(done).toMatchObject({ summary: 'Page done\n\nTests: bun test', branch: 'feat/login', assignee: { session: OPENCODE } })
     expect(done.completion?.assignee).toEqual({ account: front.accountId, session: OPENCODE })
+    // The pool task's own receipt: the session's turns earn work XP next to it.
     await eventually(
-      async () => (await new RPGClient(`${base}/api/rpg`, front.token, front.key).read()).state.xp === 50,
+      async () =>
+        (await new RPGClient(`${base}/api/rpg`, front.token, front.key).read()).state.receipts.some(
+          r => r.kind === 'poolTask' && r.xp === 50,
+        ),
       'OpenCode task XP',
     )
   })
@@ -306,7 +310,13 @@ describe('pool tools end to end', () => {
       'Done: the pool sees it.',
     )
     await eventually(async () => (await stateOf(front))?.tasks.find(t => t.id === id)?.task?.state === 'done', 'the task done')
-    await eventually(async () => (await new RPGClient(`${base}/api/rpg`, back.token, back.key).read()).state.xp === 50, 'Claude task XP')
+    await eventually(
+      async () =>
+        (await new RPGClient(`${base}/api/rpg`, back.token, back.key).read()).state.receipts.some(
+          r => r.kind === 'poolTask' && r.xp === 50,
+        ),
+      'Claude task XP',
+    )
   })
 
   test("the website's control center, activity and leaderboard read the same pool from its events", async () => {

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentRPG } from '../agent/src/rpg'
+import { TranscriptWork } from '../agent/src/transcript/work'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { newAccountKey, seal } from '../shared/crypto'
@@ -83,19 +84,21 @@ for (const [index, person] of people.entries()) {
     join(directory, `agent-${index}`),
   )
   agents.push(agent)
+  // Recent: a session read again earns nothing older than the backfill's two weeks.
+  const now = Date.now()
   const entries: Entry[] = [
     {
       id: 'tool',
-      ts: '2026-10-28T10:00:00Z',
+      ts: new Date(now - 60_000).toISOString(),
       kind: 'tool',
       name: 'TodoWrite',
       toolUseId: 'call',
       summary: '',
       todos: Array.from({ length: 12 }, (_, i) => ({ content: `Fixture task ${i}`, status: 'completed' })),
     },
-    { id: 'result', ts: '2026-10-28T10:00:01Z', kind: 'tool_result', toolUseId: 'call', text: 'done', isError: false },
+    { id: 'result', ts: new Date(now - 59_000).toISOString(), kind: 'tool_result', toolUseId: 'call', text: 'done', isError: false },
   ]
-  agent.observe(index ? 'opencode' : 'claude', entries, false)
+  agent.work(index ? 'opencode' : 'claude', new TranscriptWork().line({ entries }), false)
   await agent.settled()
   const client = new RPGClient(`${url}/api/rpg`, person.token, person.key)
   const boss = await rpgReward('boss', 'arena-v1/demo-boss/3', '2026-10-28')

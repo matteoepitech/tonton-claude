@@ -57,6 +57,30 @@ export interface ParsedLine {
   model?: string
   /** The whole command of each shell call, by tool use id: a summary is one line and cut. Stays on the machine. */
   commands?: Record<string, string>
+  /** Only for the agent's XP (agent/src/transcript/work.ts), never sent: what this line tells about the turns. */
+  work?: LineWork
+}
+
+/** What a line says about the work of the session. */
+export interface LineWork {
+  /** A line that can start a turn: by its user (terminal, notch, website), a pool post, or Claude Code itself. */
+  start?: { id: string; from: 'user' | 'pool' | 'auto'; queued: boolean }
+  /** The user pressed Escape, or an API error ended the turn. */
+  broken?: boolean
+  /** The id of the line that ended a turn: it names the turn. */
+  turnId?: string
+  /** The folder the session ran in when it wrote this line. */
+  cwd?: string
+  /** TaskCreate and TaskUpdate calls: their entry has no field for the task. */
+  tasks?: TaskCall[]
+}
+
+export interface TaskCall {
+  toolUseId: string
+  name: 'TaskCreate' | 'TaskUpdate'
+  taskId?: string
+  subject?: string
+  status?: string
 }
 
 /** The tools that run commands, and the field that holds the command. */
@@ -74,6 +98,9 @@ interface TranscriptLine {
   timestamp?: string
   isSidechain?: boolean
   isMeta?: boolean
+  isCompactSummary?: boolean
+  isApiErrorMessage?: boolean
+  cwd?: string
   origin?: { kind?: string }
   aiTitle?: string
   totalCostUSD?: number
@@ -113,7 +140,12 @@ export function parseLine(raw: string, { sidechain = false }: { sidechain?: bool
 
   const id = line.uuid ?? `${line.type}-${line.timestamp}`
   const ts = line.timestamp ?? new Date().toISOString()
-  if (line.type === 'system' && line.subtype === 'turn_duration') result.turn = turnTime(line)
+  if (line.type === 'system' && line.subtype === 'turn_duration') {
+    result.turn = turnTime(line)
+    if (result.turn) addWork(result, { turnId: id })
+  }
+  if (line.type === 'system' && line.subtype === 'scheduled_task_fire') addWork(result, { start: { id, from: 'auto', queued: false } })
+  if (typeof line.cwd === 'string' && line.cwd) addWork(result, { cwd: line.cwd })
   if (line.type === 'system' && line.subtype === 'compact_boundary') {
     result.compacted = true
     result.entries.push({ id, ts, kind: 'system', text: 'Conversation compacted' })
@@ -126,19 +158,27 @@ export function parseLine(raw: string, { sidechain = false }: { sidechain?: bool
     const entries = userEntries(id, ts, queued.prompt)
     const viaNotch = queued.origin?.kind === 'channel'
     result.entries.push(...entries.map(entry => (viaNotch && entry.kind === 'user' ? { ...entry, viaNotch: true } : entry)))
+    addWork(result, { start: { id, from: startedBy(queued.origin?.kind, entries), queued: true } })
     return result
   }
+  if (queued?.type === 'queued_command') addWork(result, { start: { id, from: 'auto', queued: true } })
 
   // Messages sent from the notch arrive through the channel and are stored as meta user messages.
   const fromChannel = line.origin?.kind === 'channel'
   if ((line.type !== 'user' && line.type !== 'assistant') || (line.isMeta && !fromChannel) || !line.message) return result
 
   const content = line.message.content
-  if (line.type === 'user') result.entries.push(...userEntries(id, ts, content))
-  else if (Array.isArray(content)) {
+  if (line.type === 'user') {
+    const entries = userEntries(id, ts, content)
+    result.entries.push(...entries)
+    lineWork(result, line, id, entries)
+  } else if (Array.isArray(content)) {
     result.entries.push(...assistantEntries(id, ts, content))
     const commands = shellCommands(content)
     if (commands) result.commands = commands
+    const tasks = taskCalls(content)
+    if (tasks.length) addWork(result, { tasks })
+    if (line.isApiErrorMessage === true) addWork(result, { broken: true })
   }
   return result
 }
@@ -151,6 +191,56 @@ function shellCommands(content: Block[]): Record<string, string> | undefined {
       commands[String(block.id)] = command
   }
   return Object.keys(commands).length ? commands : undefined
+}
+
+function addWork(result: ParsedLine, work: LineWork) {
+  result.work = { ...result.work, ...work }
+}
+
+/** What a user line says about turns: a prompt, or an interruption. */
+function lineWork(result: ParsedLine, line: TranscriptLine, id: string, entries: Entry[]) {
+  const content = line.message?.content
+  const blocks = Array.isArray(content) ? content : []
+  if (entries.some(entry => entry.kind === 'system' && entry.text === 'Interrupted by user')) addWork(result, { broken: true })
+  if (line.isCompactSummary || blocks.some(block => block.type === 'tool_result')) return
+  const notification = entries.some(entry => entry.kind === 'system') && /^\s*<task-notification>/.test(textOf(content))
+  const command = /<command-name>/.test(textOf(content))
+  if (notification || command || entries.some(entry => entry.kind === 'user'))
+    addWork(result, { start: { id, from: notification ? 'auto' : startedBy(line.origin?.kind, entries), queued: false } })
+}
+
+/**
+ * Who started a turn. Claude Code names it in `origin`: `human` for a prompt typed in the terminal, `channel` for the
+ * notch or a pool, anything else (`task-notification`, `peer`) for Claude Code or another session. Older versions name
+ * nothing: a prompt is then its user's. A pool post is its envelope (agent/src/channel/pool-work.ts), wherever it came from.
+ */
+function startedBy(origin: string | undefined, entries: Entry[]): 'user' | 'pool' | 'auto' {
+  if (entries.some(entry => entry.kind === 'user' && isPoolPost(entry.text))) return 'pool'
+  if (origin === undefined || origin === 'human' || origin === 'channel') return 'user'
+  return 'auto'
+}
+
+export const isPoolPost = (text: string) => /^\s*<pool kind="/.test(text)
+
+function textOf(content: string | Block[] | undefined): string {
+  if (typeof content === 'string') return content
+  return (Array.isArray(content) ? content : [])
+    .filter(block => block.type === 'text' && typeof block.text === 'string')
+    .map(block => block.text)
+    .join('\n')
+}
+
+function taskCalls(content: Block[]): TaskCall[] {
+  return content.flatMap(block => {
+    if (block.type !== 'tool_use' || (block.name !== 'TaskCreate' && block.name !== 'TaskUpdate')) return []
+    const input = (block.input && typeof block.input === 'object' ? block.input : {}) as Record<string, unknown>
+    const field = (name: string) => (typeof input[name] === 'string' && input[name] ? (input[name] as string) : undefined)
+    const call: TaskCall = { toolUseId: String(block.id), name: block.name }
+    const taskId = field('taskId')
+    const subject = field('subject')
+    const status = field('status')
+    return [{ ...call, ...(taskId ? { taskId } : {}), ...(subject ? { subject } : {}), ...(status ? { status } : {}) }]
+  })
 }
 
 /** A turn's end needs its own time: a made-up one would differ at each read and count the turn again. */

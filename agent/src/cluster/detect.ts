@@ -28,9 +28,21 @@ export interface Detected {
   event: DetectedEvent
 }
 
+/**
+ * What the agent's XP (agent/src/rpg-work.ts) names a push or a submit by, never posted: the commits a push sent, as git
+ * printed them, and the Perforce server a submit named. The same entries give the same names, live or weeks later.
+ */
+export type VcsWork =
+  | { kind: 'push'; ts: string; branch: string; commits: string[] }
+  | { kind: 'submit'; ts: string; change: string; port?: string }
+
 /** What the text says and the fields don't. */
 interface Found {
   event: DetectedEvent
+  /** The commits a push sent to a branch: this session's since its last push, else the head the push names. */
+  commits?: string[]
+  /** The Perforce server the command named, with `-p` or `P4PORT=`. */
+  port?: string
   /** The local branch of a commit, or the one a push sent. */
   branch?: string
   /** The first line of a commit, the description of a submit. */
@@ -58,7 +70,7 @@ export class EventDetector {
   private readonly pending = new Map<string, string>()
   private readonly done = new Set<string>()
   /** Per local branch, the commits this session made and has not pushed yet, and the last one's first line. */
-  private readonly unpushed = new Map<string, { count: number; subject?: string }>()
+  private readonly unpushed = new Map<string, { count: number; subject?: string; commits: string[] }>()
 
   /** `root`: the session's project folder, for paths relative to it. */
   constructor(private readonly root?: string) {}
@@ -68,7 +80,23 @@ export class EventDetector {
    * summary is one line, cut at 300 characters, and for some tools not the command at all.
    */
   read(entries: Entry[], commandOf: (toolUseId: string) => string | undefined = () => undefined): Detected[] {
-    const detected: Detected[] = []
+    return this.found(entries, commandOf).map(({ found, ts }) => ({ ...post(found), ts }))
+  }
+
+  /** Pushes that reached a branch and submits that went in, for XP. Use a detector of its own: each reads an entry once. */
+  work(entries: Entry[], commandOf: (toolUseId: string) => string | undefined = () => undefined): VcsWork[] {
+    return this.found(entries, commandOf).flatMap(({ found, ts }): VcsWork[] => {
+      const { event } = found
+      if (event.type === 'push' && event.ok && event.ref && found.commits?.length)
+        return [{ kind: 'push', ts, branch: event.ref, commits: found.commits }]
+      if (event.type === 'submit' && event.ok && event.ref)
+        return [{ kind: 'submit', ts, change: event.ref, ...(found.port ? { port: found.port } : {}) }]
+      return []
+    })
+  }
+
+  private found(entries: Entry[], commandOf: (toolUseId: string) => string | undefined): { found: Found; ts: string }[] {
+    const detected: { found: Found; ts: string }[] = []
     for (const entry of entries) {
       if ((entry.kind === 'tool' || entry.kind === 'sub_tool') && SHELL_TOOLS.has(entry.name)) {
         if (this.done.has(entry.toolUseId)) continue
@@ -81,7 +109,7 @@ export class EventDetector {
         this.done.add(entry.toolUseId)
         if (this.done.size > MAX_DONE) this.done.delete(this.done.values().next().value ?? '')
         for (const found of findEvents(command, entry.text, entry.isError, this.root)) {
-          detected.push({ ...post(this.count(found)), ts: entry.ts })
+          detected.push({ found: this.count(found), ts: entry.ts })
         }
       }
     }
@@ -93,14 +121,21 @@ export class EventDetector {
     const { event, branch } = found
     if (event.type === 'commit' && branch) {
       // An amended commit takes the place of the last one: one more only when that one was pushed already.
-      const before = this.unpushed.get(branch)?.count ?? 0
-      this.unpushed.set(branch, { count: found.amend ? Math.max(before, 1) : before + 1, subject: found.subject })
+      const before = this.unpushed.get(branch)
+      const count = before?.count ?? 0
+      const kept = found.amend ? (before?.commits ?? []).slice(0, -1) : (before?.commits ?? [])
+      const commits = [...kept, ...(event.ref ? [event.ref] : [])].slice(-MAX_PENDING)
+      this.unpushed.set(branch, { count: found.amend ? Math.max(count, 1) : count + 1, subject: found.subject, commits })
     }
     if (event.type === 'push' && event.ok && event.ref) {
       const commits = (branch ? this.unpushed.get(branch) : undefined) ?? this.unpushed.get(event.ref)
       if (branch) this.unpushed.delete(branch)
       this.unpushed.delete(event.ref)
-      if (commits) return { ...found, event: { ...event, count: commits.count }, subject: commits.subject }
+      if (commits) {
+        // Only a push to a branch sends commits for XP. A review ref sends none, and still ends the count, as posts have it.
+        const sent = found.commits === undefined ? undefined : commits.commits.length ? commits.commits : found.commits
+        return { ...found, event: { ...event, count: commits.count }, subject: commits.subject, ...(sent ? { commits: sent } : {}) }
+      }
     }
     return found
   }
@@ -349,8 +384,22 @@ function vcsEvents(commands: Command[], line: string, output: string, isError: b
     if (!tagsOnly) found.push(...pushes(output, names.includes('push') || line.endsWith('…')))
   }
   if (lfs) found.push(...lfsLocks(output, root))
-  if (commands.some(command => command.program === 'p4')) found.push(...perforce(output, isError, p4, root))
+  if (commands.some(command => command.program === 'p4')) {
+    const port = p4Port(line, commands)
+    found.push(...perforce(output, isError, p4, root).map(item => (port && item.event.type === 'submit' ? { ...item, port } : item)))
+  }
   return found
+}
+
+/** The server a p4 command names: `-p` before its subcommand, or `P4PORT=` in front of it. */
+function p4Port(line: string, commands: Command[]): string | undefined {
+  for (const command of commands.filter(command => command.program === 'p4')) {
+    for (let i = 0; i < command.args.length && command.args[i].startsWith('-'); i++) {
+      if (command.args[i] === '-p') return command.args[i + 1]
+      if (P4_VALUED.has(command.args[i])) i++
+    }
+  }
+  return /\bP4PORT=("?)([^\s"]+)\1/.exec(line)?.[2]
 }
 
 /**
@@ -383,10 +432,14 @@ function pushes(output: string, pushed: boolean): Found[] {
     // Up to date, a tag, or a rejection read from a command that may not have pushed.
     if (flag === '=' || summary === '[new tag]' || /^refs\/tags\//.test(source) || (!ok && !pushed)) continue
     const branch = (ref: string) => cut(ref.replace(/^refs\/heads\//, ''), MAX_REF_CHARS)
+    // `1a2b3c4..5d6e7f8`, or `...` when forced: the branch's new head. A review ref (`refs/for/main`) is no branch.
+    const head = /^[0-9a-f]{4,64}\.\.\.?([0-9a-f]{4,64})$/.exec(summary)?.[1]
+    const onBranch = !target.replace(/^refs\/heads\//, '').startsWith('refs/')
     found.push({
       event: { type: 'push', ok, ref: branch(target) },
       branch: branch(source),
       ...(ok ? {} : { reason: cut(reason ?? summary.replace(/[[\]]/g, ''), MAX_REF_CHARS) }),
+      ...(ok && onBranch ? { commits: head ? [head] : [] } : {}),
     })
   }
   return found

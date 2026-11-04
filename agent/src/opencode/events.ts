@@ -1,7 +1,8 @@
 import type { Entry, ImageData, PermissionDetail, SessionCommand, SessionMeta, TokenCounts } from '../../../shared/protocol'
 import { cutText } from '../../../shared/text'
 import { entryImages, forgetOldImages } from '../transcript/images'
-import { cutToolResult, fileEdits, todoItems, toolSummary } from '../transcript/parser'
+import { cutToolResult, fileEdits, isPoolPost, todoItems, toolSummary } from '../transcript/parser'
+import type { TurnFact } from '../transcript/work'
 
 // OpenCode's plugin events, turned into what the notch shows for a Claude Code session: entries, a status and the meta.
 // They are not a format Tonton controls either: anything unexpected is skipped, never thrown. Two families exist:
@@ -150,6 +151,8 @@ export interface SessionUpdate {
   permissionClosed?: string
   /** The whole conversation, from OpenCode's own history: it replaces what the relay holds. */
   history?: Entry[]
+  /** Turns that ended, for the agent's XP. */
+  turns?: TurnFact[]
 }
 
 type Fields = Record<string, unknown>
@@ -182,6 +185,14 @@ interface MessageInfo {
   role: 'user' | 'assistant'
   created: number
   completed: boolean
+  /** An answer: the user message it answers, which names its turn. */
+  parentID?: string
+  completedAt?: number
+  finish?: string
+  /** Failed, or aborted by Escape. */
+  error: boolean
+  /** A user message that is a pool post. */
+  pool?: boolean
 }
 
 interface Usage {
@@ -194,6 +205,12 @@ class TrackedSession {
   title: string | undefined
   /** Subagent sessions belong to the task that started them, not to the list. */
   child = false
+  /** User messages whose turn was reported. */
+  readonly turnsDone = new Set<string>()
+  /** OpenCode 2 sends no messages: a turn runs from busy to idle, named by the prompt that started it. */
+  busySince: number | undefined
+  prompt: { id: string; pool: boolean } | undefined
+  broken = false
   /** OpenCode 1. */
   readonly messages = new Map<string, MessageInfo>()
   /** The parts that can still make an entry: the rest, once sent, is let go (`hold`). */
@@ -460,13 +477,15 @@ export class OpenCodeTracker {
   private status(sessionId: unknown, status: StatusChange): SessionUpdate[] {
     const session = this.session(sessionId)
     if (!session) return []
+    if (status.hook === 'UserPromptSubmit') session.busySince ??= this.eventTime
+    const turns = status.hook === 'Stop' || status.hook === 'StopFailure' || status.hook === 'SessionEnd' ? this.endTurns(session) : []
     // OpenCode 1 sends both `session.status` idle and `session.idle`: say it once.
     const key = `${status.hook}:${status.text ?? ''}`
-    if (key === session.lastStatus && status.hook !== 'Notification') return []
+    if (key === session.lastStatus && status.hook !== 'Notification') return this.update(session, [], undefined, false, turns)
     // An error is followed by idle: the error stays until the next prompt.
-    if (status.hook === 'Stop' && session.lastStatus?.startsWith('StopFailure:')) return []
+    if (status.hook === 'Stop' && session.lastStatus?.startsWith('StopFailure:')) return this.update(session, [], undefined, false, turns)
     session.lastStatus = key
-    return this.update(session, [], status, false)
+    return this.update(session, [], status, false, turns)
   }
 
   /** Escape in OpenCode stops the turn: the session waits for the next prompt, like an interrupted Claude Code. */
@@ -475,7 +494,58 @@ export class OpenCodeTracker {
     if (!session) return []
     const entry: Entry = { id: `interrupted-${this.eventTime}`, ts: this.time(), kind: 'system', text: 'Interrupted by user' }
     session.lastStatus = 'Stop:'
-    return this.update(session, [entry], { hook: 'Stop' }, false)
+    session.broken = true
+    return this.update(session, [entry], { hook: 'Stop' }, false, this.endTurns(session))
+  }
+
+  /**
+   * The turns that ended with this stop. OpenCode 1: a user message and the answers that name it as their parent, from
+   * the prompt to the last answer, the same in the backfill. OpenCode 2: from busy to idle.
+   */
+  private endTurns(session: TrackedSession): TurnFact[] {
+    const turns = this.finished(session)
+    if (session.busySince !== undefined && session.messages.size === 0 && !session.child) {
+      const prompt = session.prompt
+      turns.push({
+        id: prompt?.id ?? `${session.id}:${session.busySince}`,
+        at: this.time(),
+        seconds: Math.max(0, (this.eventTime - session.busySince) / 1000),
+        prompted: prompt !== undefined && !prompt.pool && !session.broken && !session.lastStatus?.startsWith('StopFailure:'),
+      })
+    }
+    session.busySince = undefined
+    session.prompt = undefined
+    session.broken = false
+    return turns
+  }
+
+  /** The finished turns of OpenCode 1 not reported yet: every answer done, and the last one not waiting on a tool. */
+  private finished(session: TrackedSession): TurnFact[] {
+    if (session.child) return []
+    const answers = [...session.messages.values()].filter(message => message.role === 'assistant')
+    const users = [...session.messages].filter(([id, message]) => message.role === 'user' && !session.turnsDone.has(id))
+    const turns: TurnFact[] = []
+    for (const [id, user] of users.sort(([, a], [, b]) => a.created - b.created)) {
+      const replies = answers.filter(answer => answer.parentID === id).sort((a, b) => a.created - b.created)
+      const last = replies.at(-1)
+      if (!last || replies.some(reply => reply.completedAt === undefined)) continue
+      if (last.finish === 'tool-calls' && !last.error) continue
+      session.turnsDone.add(id)
+      const end = Math.max(...replies.map(reply => reply.completedAt ?? 0))
+      turns.push({
+        id,
+        at: new Date(end).toISOString(),
+        seconds: Math.max(0, (end - user.created) / 1000),
+        prompted: !user.pool && !replies.some(reply => reply.error),
+      })
+    }
+    return turns
+  }
+
+  /** The turns OpenCode 1's history holds, for the backfill: it sends no status. */
+  finishedTurns(sessionId: string): TurnFact[] {
+    const session = this.sessions.get(sessionId)
+    return session ? this.finished(session) : []
   }
 
   private error(sessionId: unknown, error: unknown): SessionUpdate[] {
@@ -485,7 +555,8 @@ export class OpenCodeTracker {
     if (!session) return []
     const message = text(fields.data?.message) ?? text(fields.message) ?? text(fields.name) ?? 'OpenCode stopped with an error'
     session.lastStatus = `StopFailure:${message}`
-    return this.update(session, [], { hook: 'StopFailure', text: message }, false)
+    session.broken = true
+    return this.update(session, [], { hook: 'StopFailure', text: message }, false, this.endTurns(session))
   }
 
   // OpenCode 2
@@ -497,6 +568,7 @@ export class OpenCodeTracker {
     const body = text(item?.payload?.text) ?? ''
     const images = imagesOf(item?.payload?.files)
     if (!session || !id || item?.type !== 'user' || (!body && !images.length)) return []
+    session.prompt ??= { id, pool: isPoolPost(body) }
     return this.add(session, { id, ts: this.time(), kind: 'user', ...entryImages(body, images) })
   }
 
@@ -550,10 +622,16 @@ export class OpenCodeTracker {
     const id = text(fields.id)
     if (!session || !id || (fields.role !== 'user' && fields.role !== 'assistant')) return []
     const time = (fields.time ?? {}) as { created?: unknown; completed?: unknown }
+    const known = session.messages.get(id)
     session.messages.set(id, {
       role: fields.role,
-      created: number(time.created) || Date.now(),
+      created: number(time.created) || known?.created || Date.now(),
       completed: typeof time.completed === 'number',
+      ...(text(fields.parentID) ? { parentID: fields.parentID as string } : {}),
+      ...(typeof time.completed === 'number' ? { completedAt: time.completed } : {}),
+      ...(text(fields.finish) ? { finish: fields.finish as string } : {}),
+      error: fields.error !== undefined && fields.error !== null,
+      ...(known?.pool ? { pool: true } : {}),
     })
     let usageChanged = false
     if (fields.role === 'assistant') {
@@ -570,7 +648,9 @@ export class OpenCodeTracker {
     const waiting = [...session.parts.values()].filter(part => part.messageID === id)
     const entries = waiting.flatMap(part => this.partEntries(session, part))
     for (const part of waiting) this.hold(session, part)
-    return this.update(session, entries, undefined, usageChanged)
+    // An answer that completes after the session went idle ends its turn then.
+    const idle = fields.role === 'assistant' && typeof time.completed === 'number' && session.lastStatus?.startsWith('Stop')
+    return this.update(session, entries, undefined, usageChanged, idle ? this.finished(session) : [])
   }
 
   private part(raw: unknown): SessionUpdate[] {
@@ -617,6 +697,7 @@ export class OpenCodeTracker {
       const done = message.role === 'user' || part.time?.end !== undefined || message.completed
       const body = part.text || session.deltas.get(part.id) || ''
       if (!done || !body.trim()) return []
+      if (message.role === 'user' && isPoolPost(body)) message.pool = true
       session.deltas.delete(part.id)
       entries.push(
         message.role === 'user' ? { id: part.id, ts, kind: 'user', text: body } : { id: part.id, ts, kind: 'assistant', text: body },
@@ -742,6 +823,8 @@ export class OpenCodeTracker {
       }
     }
     if (session.child) return []
+    // Turns that ended before the bridge followed the session are the past: only the one still running is reported.
+    this.finished(session)
     const history = [...session.order].sort((a, b) => a.ts.localeCompare(b.ts))
     return [{ sessionId: session.id, entries: [], metaChanged: true, history }]
   }
@@ -815,11 +898,17 @@ export class OpenCodeTracker {
     return true
   }
 
-  private update(session: TrackedSession, entries: Entry[], status: StatusChange | undefined, metaChanged: boolean): SessionUpdate[] {
+  private update(
+    session: TrackedSession,
+    entries: Entry[],
+    status: StatusChange | undefined,
+    metaChanged: boolean,
+    turns: TurnFact[] = [],
+  ): SessionUpdate[] {
     if (session.child) return []
-    if (!entries.length && !status && !metaChanged) return []
+    if (!entries.length && !status && !metaChanged && !turns.length) return []
     const textual = entries.some(entry => entry.kind === 'user' || entry.kind === 'assistant')
-    return [{ sessionId: session.id, entries, status, metaChanged: metaChanged || textual }]
+    return [{ sessionId: session.id, entries, status, metaChanged: metaChanged || textual, ...(turns.length ? { turns } : {}) }]
   }
 }
 

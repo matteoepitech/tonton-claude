@@ -1,9 +1,12 @@
-// Reproducible isolated demo: two accounts, two coding tools, loot, upgrades, durable standings and team rewards.
+// Reproducible isolated demo: two accounts, two coding tools, loot, upgrades, durable standings and team rewards. Then XP
+// version 2 against a real relay: the welcome backfill, restarts, an older app rewriting the hero, and an older relay.
 import { expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentRPG } from '../agent/src/rpg'
+import { TranscriptWork } from '../agent/src/transcript/work'
+import { CLAUDE_SESSION, claude } from '../agent/test/rpg-fixtures'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { newAccountKey, seal } from '../shared/crypto'
@@ -67,19 +70,20 @@ test('isolated work → boss reward → booster → upgrade → team loop surviv
         join(dir, `agent-${index}`),
       )
       agents.push(agent)
+      const at = (seconds: number) => new Date(Date.now() - 600_000 + seconds * 1000).toISOString()
       const entries: Entry[] = [
         {
           id: 'tool',
-          ts: '2026-10-28T10:01:00Z',
+          ts: at(0),
           kind: 'tool',
           name: 'TodoWrite',
           summary: '',
           toolUseId: 'call',
           todos: [{ content: 'Private fixture task', status: 'completed' }],
         },
-        { id: 'result', ts: '2026-10-28T10:01:01Z', kind: 'tool_result', toolUseId: 'call', isError: false, text: 'done' },
+        { id: 'result', ts: at(1), kind: 'tool_result', toolUseId: 'call', isError: false, text: 'done' },
       ]
-      agent.observe(index === 0 ? 'claude' : 'opencode', entries, false)
+      agent.work(index === 0 ? 'claude' : 'opencode', new TranscriptWork().line({ entries }), false)
       await agent.settled()
       const client = new RPGClient(`${url}/api/rpg`, who.token, who.key)
       expect((await client.read()).state.xp).toBe(10)
@@ -164,6 +168,98 @@ test('isolated work → boss reward → booster → upgrade → team loop surviv
     agents.forEach(agent => {
       agent.stop()
     })
+    relay.stop()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('XP version 2: the backfill once, a restart, an older app and an older relay never pay twice nor lose a reward', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tonton-rpg-v2-'))
+  const relay = startRelay(loadConfig({ PORT: '0', TONTON_DATA_DIR: join(dir, 'relay') }))
+  const url = `http://127.0.0.1:${relay.server.port}`
+  // The machine's relay, older at first: no RPG route at all. Then updated, at the same address.
+  let older = true
+  const front = Bun.serve({
+    port: 0,
+    fetch: async request => {
+      if (older) return new Response('Not found', { status: 404 })
+      const { pathname, search } = new URL(request.url)
+      const body = request.method === 'GET' ? undefined : await request.text()
+      return fetch(url + pathname + search, { method: request.method, headers: request.headers, body })
+    },
+  })
+  const agents: AgentRPG[] = []
+  try {
+    const request = async (path: string, body: unknown, token = '') =>
+      (
+        await fetch(url + path, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      ).json()
+    const account = await request('/api/accounts', {})
+    const key = newAccountKey()
+    const { secret } = await request('/api/account/token', {}, account.token)
+    const machine = await request('/api/machines/join', { account: account.accountId, secret, name: await seal(key, { name: 'v2' }) })
+    const config = {
+      server: front.url.origin,
+      key,
+      account: account.accountId,
+      machineId: machine.machineId,
+      token: machine.token,
+      machine: 'v2',
+    }
+    const home = join(dir, 'agent')
+    const start = () => {
+      const agent = new AgentRPG(config, home)
+      agents.push(agent)
+      return agent
+    }
+    const hero = new RPGClient(`${url}/api/rpg`, account.token, key)
+
+    // The transcript the backfill finds, and nothing from OpenCode.
+    const project = join(dir, 'claude', 'projects', '-work-hero')
+    mkdirSync(project, { recursive: true })
+    const session = '7d1e2f3a-4b5c-4d6e-8f70-81a2b3c4d5e6'
+    writeFileSync(join(project, `${session}.jsonl`), CLAUDE_SESSION.map(line => JSON.stringify(line)).join('\n'))
+    const sources = { claude: join(dir, 'claude', 'projects'), opencode: join(dir, 'none.db') }
+
+    // An older relay: the backfill's rewards wait on disk, sealed.
+    const offline = start()
+    expect(await offline.backfill(sources)).toBe(true)
+    await offline.settled()
+    offline.stop()
+    const folder = join(home, 'rpg', readdirSync(join(home, 'rpg')).find(name => !name.startsWith('.')) ?? '')
+    const pending = readdirSync(folder).filter(name => /^[a-f0-9]{64}$/.test(name))
+    expect(pending.length).toBeGreaterThan(0)
+
+    // The updated relay: they drain, oldest first. The pool post's session keeps its checklist out.
+    older = false
+    const online = start()
+    await online.settled()
+    const once = (await hero.read()).state
+    expect(once.xp).toBe(8 + 20 + 15 + 2)
+    expect(readdirSync(folder).filter(name => /^[a-f0-9]{64}$/.test(name))).toEqual([])
+    expect(await online.backfill(sources)).toBe(false)
+
+    // The session read again after a restart, live: nothing new.
+    const restarted = start()
+    restarted.work(session, claude(CLAUDE_SESSION), true)
+    await restarted.settled()
+    expect((await hero.read()).state.xp).toBe(once.xp)
+
+    // An app older than rules version 2 drops the gains when it rewrites the hero: the agent's own record still knows.
+    await hero.change(state => ({ ...state, gains: undefined, boosters: [...state.boosters, 'older-app'] }))
+    const again = start()
+    again.work(session, claude(CLAUDE_SESSION), true)
+    await again.settled()
+    const after = (await hero.read()).state
+    expect(after.xp).toBe(once.xp)
+    expect(after.gains).toBeUndefined()
+  } finally {
+    for (const agent of agents) agent.stop()
+    front.stop(true)
     relay.stop()
     rmSync(dir, { recursive: true, force: true })
   }

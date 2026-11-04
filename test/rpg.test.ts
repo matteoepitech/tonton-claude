@@ -4,6 +4,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentRPG } from '../agent/src/rpg'
+import { TranscriptWork } from '../agent/src/transcript/work'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { newAccountKey, open, seal } from '../shared/crypto'
@@ -69,16 +70,17 @@ test('agent keeps sealed pending awards on failure and replays once after restar
   const entries: Entry[] = [
     {
       id: 'a',
-      ts: '2026-10-28T12:00:00Z',
+      ts: new Date(Date.now() - 120_000).toISOString(),
       kind: 'tool',
       name: 'TodoWrite',
       summary: '',
       toolUseId: 'call',
       todos: [{ content: 'Private task', status: 'completed' }],
     },
-    { id: 'b', ts: '2026-10-28T12:01:00Z', kind: 'tool_result', toolUseId: 'call', text: 'ok', isError: false },
+    { id: 'b', ts: new Date(Date.now() - 60_000).toISOString(), kind: 'tool_result', toolUseId: 'call', text: 'ok', isError: false },
   ]
-  agent.observe('session', entries, false)
+  const work = new TranscriptWork().line({ entries })
+  agent.work('session', work, false)
   await agent.settled()
   agent.stop()
   const folder = join(home, 'rpg', readdirSync(join(home, 'rpg'))[0])
@@ -87,11 +89,13 @@ test('agent keeps sealed pending awards on failure and replays once after restar
   expect(readFileSync(join(folder, pending[0]), 'utf8')).not.toContain('Private task')
   agent = new AgentRPG({ ...config, token: machine.token }, home)
   await agent.settled()
-  agent.observe('session', entries, false)
+  agent.work('session', work, false)
   await agent.settled()
   agent.stop()
   expect((await new RPGClient(`${base}/api/rpg`, account.token, key).read()).state.xp).toBe(10)
-  expect(readdirSync(folder)).toEqual([])
+  // Only the sealed record of what was committed stays.
+  expect(readdirSync(folder)).toEqual(['committed'])
+  expect(readFileSync(join(folder, 'committed'), 'utf8')).not.toContain(pending[0])
   await api('/api/account/token', account.token, 'POST', { regenerate: true })
   expect((await api('/api/agent/rpg', machine.token)).status).toBe(401)
   expect((await new RPGClient(`${base}/api/rpg`, account.token, newAccountKey()).read()).state.xp).toBe(0)

@@ -13,7 +13,7 @@ tasks and pushes. Version 1 rewarded only checklist items and pool tasks, and Cl
 | Answered prompt: a turn its user typed (terminal, notch or website) that ends without failure | 5 | — | Session and turn; 1 XP if the turn worked less than 5 seconds |
 | Work time | 1 per minute the turn worked | — | Same receipt as the prompt; 60 minutes per turn at most, waits on a permission prompt excluded where the agent can tell |
 | First prompted turn of the UTC day | 20, plus 10 per day of streak | — | Account and UTC day; 50 at most, once a day for the whole account |
-| Commit pushed, or Perforce changelist submitted | 15 | — | Repository and commit, or server and changelist; once each |
+| Commit pushed, or Perforce changelist submitted | 15 | — | Commit hash, or server and changelist; once each, whichever remote |
 | Completed checklist task (`TodoWrite`, `TaskUpdate` to completed, OpenCode's `todowrite`) | 10 | 1 | Session and normalized task text; once, even after reopening |
 | Completed pool task | 50 | 5 | Pool and task id; once for the assignee at completion |
 | Accepted review | 20 | 2 | Pool and task id; once for the reviewer at acceptance |
@@ -37,11 +37,9 @@ are the larger unit of work; a pool session's checklist does not also earn solo 
 
 The agent sends facts, never amounts: a turn's length, whether its user typed it, a commit's identity. The rules
 above turn them into XP when the reward is applied, so every client computes the same hero. Pending rewards already
-saved by the agent survive restarts. On its first run, the updated agent also backfills the last 14 days of this
-machine's Claude Code transcripts and OpenCode history at version 2 rates, each day under its own cap. Backfilled
-rewards have the same identities as live ones, so nothing counts twice. Local-only sessions shown by the Mac without
-an agent do not produce rewards. Pool completions store their original assignee, reviewer and completion time in the
-sealed task, so a later reassignment cannot move an existing reward.
+saved by the agent survive restarts. They are applied oldest first, so each day's streak and cap see the days before
+it. Pool completions store their original assignee, reviewer and completion time in the sealed task, so a later
+reassignment cannot move an existing reward.
 
 Level 1 starts at zero XP. Reaching level L needs 50 × L × (L − 1) lifetime XP: level 2 needs 100, level 3 needs 300,
 level 4 needs 600. The curve is the same as in version 1, so no hero loses a level. The maximum level is 100; XP can
@@ -54,6 +52,34 @@ In version 1 terms, the first completed task still earns 10 XP and one spark, an
 level 3 and two boosters. A fight and a boss earn 90 XP and 12 sparks before the daily combat cap. Sparks buy permanent
 upgrades: the next rank costs 10 × (current rank + 1), up to ten ranks each in health, attack and movement. The combat
 implementation owns the resulting stat multipliers.
+
+### How the agent finds the work
+
+The agent reads Claude Code's transcripts and OpenCode's events as they come. A Claude Code turn is named by the
+`turn_duration` line that ends it. The `origin` of the line that starts it says who did: `human` and the notch are its
+user, while task notifications, scheduled wakeups and other sessions' messages are not. An OpenCode 1 turn is a user message and
+the answers that name it as their parent, from the prompt to the last answer. An OpenCode 2 turn runs from busy to
+idle and is named by its prompt. A pool post is its `<pool kind=…>` envelope in both tools. Time waiting on a
+permission prompt comes off the turn when the agent sees the answer: OpenCode's prompts, and Claude Code's answered
+from the notch, the website or the phone. A Claude Code prompt answered in its own terminal can't be timed.
+`TodoWrite`, OpenCode's `todowrite` and `TaskUpdate` to completed are tasks. `TaskUpdate` uses the subject it gives,
+or the one `TaskCreate` gave that task. Pushes and submits come from what a shell call printed
+(`agent/src/cluster/detect.ts`). A push counts the session's own commits on that branch since its last push, else
+the head the push names. Each commit counts once by its hash, so pushing it again or to another remote earns nothing
+more. Tags, review refs, rejected pushes and a new branch with no known commit earn nothing. A submit is named by its
+change and the server its command gives with `-p` or `P4PORT=`. The agent runs neither git nor p4. Pool sessions earn
+their turns and pushes: minutes only for a turn a pool post started, and never their checklist.
+
+Only new work earns live. When the agent starts following a session (a new channel, `claude --resume`, the OpenCode
+bridge meeting a session halfway), what it reads first only tells it where the session is. The welcome backfill pays
+the past once. A minute after the background service starts with an updated agent, it reads this machine's last 14
+days, once per relay and account. That covers every Claude Code transcript, including sessions started without
+Tonton's channel, and OpenCode 1's database, read-only. It uses the same code as the live agent, so every reward has
+the identity the live agent would give it and nothing counts twice. A marker and a lock in the agent's `rpg` folder
+keep it to one run. It runs again at the next start if a reward could not be kept. Subagents' transcripts and
+sessions are left out, as live: their work is inside their parent's turn. OpenCode 2 history is not backfilled, and a
+machine with `TONTON_SERVICE=off` gets no backfill. Local-only sessions shown by the Mac without an agent never earn
+live.
 
 ### Receipts and gains
 
