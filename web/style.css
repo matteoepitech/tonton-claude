@@ -358,10 +358,27 @@ main > p {
   flex-direction: column;
   gap: 6px;
 }
+.messages > .permission .about {
+  margin: 0;
+  color: var(--dim);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+/* What the call will run: about eight lines, then it scrolls. */
 .messages > .permission pre {
   margin: 0;
   white-space: pre-wrap;
-  color: var(--dim);
+  overflow-wrap: anywhere;
+  max-height: 150px;
+  overflow: auto;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
 }
 .messages > .permission div {
   display: flex;

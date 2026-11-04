@@ -47,7 +47,12 @@ struct PermissionCard: View {
                 Text("Allow \(request.toolName)?").font(.notch(12, weight: .bold)).accessibilityAddTraits(.isHeader)
                 Spacer()
             }
-            Text(request.description).font(.notch(11)).foregroundStyle(Theme.secondary)
+            // A tool's description can be its whole docstring: a few lines, all of it on hover.
+            Text(request.description)
+                .font(.notch(11))
+                .foregroundStyle(Theme.secondary)
+                .lineLimit(3)
+                .help(request.description)
             if !request.inputPreview.isEmpty {
                 Text(request.inputPreview)
                     .font(.notch(10, design: .monospaced))

@@ -136,7 +136,8 @@ struct PermissionCardView: View {
                 .font(.headline)
                 .foregroundStyle(.orange)
             if !request.description.isEmpty {
-                Text(request.description).font(.subheadline)
+                // A tool's description can be its whole docstring: the arguments below say what it will run.
+                Text(request.description).font(.subheadline).lineLimit(3)
             }
             if !request.inputPreview.isEmpty {
                 Text(request.inputPreview)
