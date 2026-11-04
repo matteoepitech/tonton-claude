@@ -5,6 +5,8 @@ export type IslandMode = 'collapsed' | 'expanded'
 
 export interface IslandAccount {
   relay: string
+  /** The account's id, which clusters bind its keys to. Missing from older main processes. */
+  account?: string
   /** Base64url AES-256 key. The page imports it as a CryptoKey it cannot read back, and drops the text. */
   key: string
 }
@@ -21,6 +23,21 @@ export type SignInResult =
 /** From the main process: the tray's items, the window losing focus, signing out from the menu. */
 export type IslandCommand = 'expand' | 'collapse' | 'blur' | 'signed-out'
 
+/**
+ * A cluster route the page calls through the main process, which holds the token: only listing the clusters, their
+ * members, and joining with an invite (src/main/relay-api.ts). Making clusters and inviting are on the website.
+ */
+export interface ClusterCall {
+  method: 'GET' | 'POST'
+  path: string
+  body?: unknown
+}
+
+export interface ClusterAnswer {
+  status: number
+  body: unknown
+}
+
 export interface IslandBridge {
   /** The account this computer remembers, or the one signed in since the island started. */
   account(): Promise<IslandAccount | null>
@@ -34,6 +51,7 @@ export interface IslandBridge {
   /** The tray's menu, under the island's button. */
   showMenu(): void
   onCommand(listener: (command: IslandCommand) => void): void
+  clusters(call: ClusterCall): Promise<ClusterAnswer>
 }
 
 export const CHANNELS = {
@@ -45,6 +63,7 @@ export const CHANNELS = {
   mode: 'island:mode',
   menu: 'island:menu',
   command: 'island:command',
+  clusters: 'island:clusters',
 } as const
 
 /** Where the island opens at first: the hosted relay, like the Mac app. */

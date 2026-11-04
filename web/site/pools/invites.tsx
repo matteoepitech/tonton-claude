@@ -181,7 +181,7 @@ function NewInvite({ poolId, role, onMade }: { poolId: string; role: PoolRole; o
   )
 }
 
-function InviteResult({ link }: { link: string }) {
+export function InviteResult({ link }: { link: string }) {
   const [copied, setCopied] = useState(false)
   const field = useRef<HTMLTextAreaElement>(null)
   return (

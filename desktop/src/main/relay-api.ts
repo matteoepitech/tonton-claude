@@ -1,10 +1,12 @@
-// The relay's HTTP calls the island makes, from the main process: creating an account, checking a recovery key, and the
-// join secret of the account token. Like RelayAPI.swift. The end-to-end key is made here and never sent.
+// The relay's HTTP calls the island makes, from the main process: creating an account, checking a recovery key, the
+// join secret of the account token, and the few cluster routes the page needs. Like RelayAPI.swift. The end-to-end key is
+// made here and never sent.
 
 import { encodeAccountToken } from '../../../shared/account-token'
 import { newAccountKey } from '../../../shared/crypto'
 import type { RecoveredAccount } from '../../../shared/recovery-key'
 import { RELEASES_URL } from '../../../shared/version'
+import type { ClusterAnswer, ClusterCall } from '../bridge'
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -43,6 +45,40 @@ export function installCommand(platform: 'windows' | 'unix', token: string): str
   return platform === 'windows'
     ? `$env:TONTON_TOKEN='${token}'; irm ${releases}/install.ps1 | iex`
     : `curl -fsSL ${releases}/install.sh | TONTON_TOKEN='${token}' sh`
+}
+
+const CLUSTER_MEMBERS = /^\/api\/clusters\/[A-Za-z0-9_-]{12}\/members$/
+/** The largest join the page may send: an invite token, the key sealed for the account, a profile and a key pair. */
+const MAX_CLUSTER_BODY = 64 * 1024
+
+/** The page may list its clusters and their members, and join one with an invite: nothing else goes out with the token. */
+export function isClusterCall(value: unknown): value is ClusterCall {
+  if (typeof value !== 'object' || value === null) return false
+  const { method, path, body } = value as Record<string, unknown>
+  if (method === 'GET') return body === undefined && (path === '/api/clusters' || (typeof path === 'string' && CLUSTER_MEMBERS.test(path)))
+  return (
+    method === 'POST' &&
+    path === '/api/clusters/join' &&
+    typeof body === 'object' &&
+    body !== null &&
+    !Array.isArray(body) &&
+    JSON.stringify(body).length <= MAX_CLUSTER_BODY
+  )
+}
+
+/** A cluster call of the page, with the account's token. The relay's answer goes back as it is, errors included. */
+export async function clusterCall(account: RecoveredAccount, call: unknown, fetcher: Fetch): Promise<ClusterAnswer> {
+  if (!isClusterCall(call)) return { status: 400, body: { error: 'The island does not make this call.' } }
+  try {
+    const response = await fetcher(account.relay + call.path, {
+      method: call.method,
+      headers: { authorization: `Bearer ${account.token}`, ...(call.body ? { 'content-type': 'application/json' } : {}) },
+      body: call.body ? JSON.stringify(call.body) : undefined,
+    })
+    return { status: response.status, body: await response.json().catch(() => null) }
+  } catch {
+    return { status: 502, body: { error: `Could not reach ${new URL(account.relay).host}.` } }
+  }
 }
 
 async function call<T>(fetcher: Fetch, method: string, relay: string, path: string, token: string | null, body?: object): Promise<T> {

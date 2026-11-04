@@ -19,9 +19,11 @@ import {
   sessionAlert,
   Vault,
 } from '../../../shared'
+import { renderClusterPage, renderClusterStrip } from '../../../web/cluster-views'
 import { element } from '../../../web/markdown'
 import { dot, renderChat, renderList } from '../../../web/views'
 import { DEFAULT_RELAY, type IslandAccount, type IslandBridge, type IslandMode } from '../bridge'
+import { IslandClusters } from './clusters'
 
 declare global {
   interface Window {
@@ -51,7 +53,11 @@ let peek: Session | null = null
 let peekTimer: ReturnType<typeof setTimeout> | undefined
 /** Shown above the list once, after creating an account. */
 let notice: string | null = null
-const parts: { list?: HTMLElement; chat?: HTMLElement; shell?: HTMLElement } = {}
+const parts: { list?: HTMLElement; strip?: HTMLElement; sessions?: HTMLElement; chat?: HTMLElement; shell?: HTMLElement } = {}
+let clusters: IslandClusters | null = null
+/** A cluster's page in the window, instead of a conversation. */
+let openCluster: string | null = null
+let accountId: string | null = null
 
 async function start() {
   // Always dark, like the notch.
@@ -79,6 +85,7 @@ function expand() {
   if (mode === 'expanded') return
   mode = 'expanded'
   endPeek()
+  void clusters?.refresh()
   // Straight to the session that waits for the user, like clicking the notch's banner.
   const urgent = state ? liveActivity(state.sessions) : null
   if (urgent && needsAttention(urgent.status)) {
@@ -181,6 +188,10 @@ async function connect(account: IslandAccount) {
   }
   host = new URL(account.relay).host
   client?.stop()
+  clusters?.stop()
+  clusters = null
+  openCluster = null
+  accountId = account.account ?? null
   known = new Map()
   client = new RelayClient({
     vault: new Vault(key),
@@ -198,14 +209,21 @@ async function connect(account: IslandAccount) {
       if (alert && mode === 'collapsed') startPeek(event.session)
     },
     onSignedOut: () => void signOut('The relay signed this computer out.'),
+    onClusterUpdate: update => clusters?.handle(update),
   })
+  // Older main processes don't say the account's id: clusters then stay on the website.
+  if (account.account) clusters = new IslandClusters(bridge, account.relay, key, account.account, client, () => render())
   layout()
   client.start()
+  void clusters?.refresh()
 }
 
 async function signOut(problem: string | null, tellMain = true) {
   client?.stop()
   client = null
+  clusters?.stop()
+  clusters = null
+  openCluster = null
   state = null
   notice = null
   if (tellMain) await bridge.signOut()
@@ -215,11 +233,14 @@ async function signOut(problem: string | null, tellMain = true) {
 // MARK: Layout
 
 function layout() {
-  const list = element('nav')
+  const strip = element('section')
+  strip.className = 'clusters'
+  const sessions = element('div')
+  const list = element('nav', strip, sessions)
   const chat = element('main')
   const shell = element('div', list, chat)
   shell.className = 'shell'
-  Object.assign(parts, { list, chat, shell })
+  Object.assign(parts, { list, strip, sessions, chat, shell })
   const children: HTMLElement[] = [shell]
   if (notice) {
     const close = element('button', 'OK')
@@ -238,17 +259,56 @@ function render() {
   app.dataset.mode = mode
   app.dataset.alert = peek ? 'peek' : ''
   bar.replaceChildren(...barContent())
-  if (!state || mode !== 'expanded' || !parts.list || !parts.chat || !parts.shell) return
-  parts.shell.dataset.view = showingChat && state.selectedId ? 'chat' : 'list'
-  renderList(parts.list, state, session => {
+  if (!state || mode !== 'expanded' || !parts.sessions || !parts.chat || !parts.shell) return
+  renderClusters()
+  const cluster = openCluster ? clusters?.watch.cluster(openCluster) : null
+  parts.shell.dataset.view = (showingChat && state.selectedId) || cluster ? 'chat' : 'list'
+  renderList(parts.sessions, state, session => {
     showingChat = true
+    openCluster = null
     client?.select(session.id)
     render()
   })
+  if (cluster?.state && openCluster) {
+    const id = openCluster
+    renderClusterPage(parts.chat, cluster, cluster.state, accountId, state.sessions, {
+      back: () => {
+        openCluster = null
+        render()
+      },
+      putIn: (session, delivery) => clusters?.putIn(id, session, delivery),
+      takeOut: sessionId => clusters?.takeOut(id, sessionId),
+    })
+    return
+  }
   renderChat(parts.chat, state, client, () => {
     showingChat = false
     render()
   })
+}
+
+/** The strip of clusters above the sessions: empty, and hidden, for an account in none. */
+function renderClusters() {
+  const strip = parts.strip
+  const watch = clusters?.watch
+  if (!strip) return
+  if (!watch || (!watch.clusters.length && watch.supported === false)) {
+    strip.replaceChildren()
+    return
+  }
+  renderClusterStrip(
+    strip,
+    watch.clusters.map(listed => ({ listed, open: watch.cluster(listed.summary.id) })),
+    {
+      open: id => {
+        openCluster = id
+        showingChat = false
+        render()
+      },
+      join: (invite, name) => clusters?.join(invite, name) ?? Promise.resolve(null),
+    },
+    watch.problem,
+  )
 }
 
 /** Closed: the session to look at and what it does, or what all of them do. Open: the account and the menu. */
