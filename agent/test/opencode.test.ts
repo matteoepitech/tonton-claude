@@ -1,8 +1,10 @@
-// OpenCode's events as the plugin hands them over: a real OpenCode 2.0.32 run, OpenCode 1's shapes, and the plugin file.
+// OpenCode's events as the plugin hands them over: a real OpenCode 2.0.32 run, OpenCode 1's shapes, the plugin file, and
+// the bridge's reading of the plugin's stream.
 import { afterAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { lines } from '../src/opencode/bridge'
 import { OpenCodeTracker, type SessionUpdate } from '../src/opencode/events'
 import { pluginSource } from '../src/opencode/plugin'
 
@@ -569,5 +571,39 @@ for await (const chunk of Bun.stdin.stream()) {
       hooked({ tool: 'apply_patch', sessionID: 'b', id: 'c5', input: { patchText: '*** Update File: a.ts' } }),
     ).resolves.toBeUndefined()
     ;(globalThis as { __tontonClaude?: { bridge?: { kill(): void } } }).__tontonClaude?.bridge?.kill()
+  })
+})
+
+describe("the bridge's lines", () => {
+  /** The stream the plugin writes to the bridge, in the chunks given. */
+  async function read(chunks: (string | Uint8Array)[]) {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk)
+        controller.close()
+      },
+    })
+    const read: string[] = []
+    for await (const line of lines(stream)) read.push(line)
+    return read
+  }
+
+  test('a long line in many chunks, then the next one', async () => {
+    const long = JSON.stringify({ type: 'message.part.updated', output: 'x'.repeat(4 * 1024 * 1024) })
+    const data = new TextEncoder().encode(`${long}\n{"type":"session.idle"}\n`)
+    const chunks = Array.from({ length: Math.ceil(data.length / 4096) }, (_, index) => data.subarray(index * 4096, (index + 1) * 4096))
+    expect(await read(chunks)).toEqual([long, '{"type":"session.idle"}'])
+  })
+
+  test('several lines in one chunk, blank ones skipped, and a line cut across chunks', async () => {
+    expect(await read(['a\nb\n\n  \nc\n'])).toEqual(['a', 'b', 'c'])
+    expect(await read(['a\nb', 'c', 'd\ne\n'])).toEqual(['a', 'bcd', 'e'])
+    expect(await read(['\n', '\n', 'a', '\n'])).toEqual(['a'])
+  })
+
+  test('the last line without a newline, and a character cut between chunks', async () => {
+    expect(await read(['a\nlast'])).toEqual(['a', 'last'])
+    const word = new TextEncoder().encode('réponse\nfin')
+    expect(await read([word.subarray(0, 2), word.subarray(2)])).toEqual(['réponse', 'fin'])
   })
 })

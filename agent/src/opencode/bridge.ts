@@ -487,18 +487,26 @@ export function takeStarts(run: string): { sessionId: string; cwd: string; model
   })
 }
 
-async function* lines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+/**
+ * The lines of the plugin's stream. Only what each chunk adds is searched for a newline: an event that carries a long
+ * output comes in thousands of chunks, and searching the whole line again after each one took seconds.
+ */
+export async function* lines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const decoder = new TextDecoder()
   let buffer = ''
+  // The buffer has no newline before this.
+  let scanned = 0
   for await (const chunk of stream) {
     buffer += decoder.decode(chunk, { stream: true })
-    let newline = buffer.indexOf('\n')
-    while (newline >= 0) {
-      const line = buffer.slice(0, newline).trim()
-      buffer = buffer.slice(newline + 1)
+    let start = 0
+    for (let newline = buffer.indexOf('\n', scanned); newline >= 0; newline = buffer.indexOf('\n', start)) {
+      const line = buffer.slice(start, newline).trim()
+      start = newline + 1
       if (line) yield line
-      newline = buffer.indexOf('\n')
     }
+    if (start) buffer = buffer.slice(start)
+    scanned = buffer.length
   }
+  buffer += decoder.decode()
   if (buffer.trim()) yield buffer.trim()
 }
