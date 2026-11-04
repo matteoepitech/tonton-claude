@@ -3,6 +3,7 @@ import { seal } from '../../../shared/crypto'
 import type { ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
 import { cutText } from '../../../shared/text'
 import { latestTodos, taskProgress } from '../../../shared/todos'
+import { EventDetector } from '../cluster/detect'
 import { type AgentConfig, paths } from '../config'
 import { gitBranch } from '../git'
 import type { AgentRPG } from '../rpg'
@@ -77,6 +78,8 @@ export class Conversation {
   readonly cluster: ClusterWork
   /** The clusters the machine owner put this session's folder in, with `tonton cluster join`. */
   private readonly autoJoin: ClusterAutoJoin | null
+  /** Reads the session's shell calls as they come, for its clusters. Made at the first live lines, in the session's folder. */
+  private detector: EventDetector | null = null
 
   constructor(
     readonly link: SessionLink,
@@ -253,10 +256,12 @@ export class Conversation {
 
   private onLines(lines: string[], initial: boolean) {
     const fresh: Entry[] = []
+    const commands: Record<string, string> = {}
     let metaChanged = false
     for (const line of lines) {
       const parsed = parseLine(line)
       fresh.push(...parsed.entries)
+      Object.assign(commands, parsed.commands)
       if (parsed.title !== undefined && parsed.title !== this.title) {
         this.title = parsed.title
         metaChanged = true
@@ -286,6 +291,9 @@ export class Conversation {
     this.remember(fresh)
     if (!initial) this.rpg?.observe(this.link.sessionId, this.entries, this.pools.ids().length > 0, fresh)
     if (initial) return this.announce()
+    // What its shell calls tell its clusters: commits, pushes, submits, builds, files opened (agent/src/cluster/detect.ts).
+    this.detector ??= new EventDetector(this.cwd())
+    this.cluster.observe(this.detector.read(fresh, id => commands[id]))
 
     const { sessionId } = this.link
     if (fresh.length) this.postEntries(fresh, false)
