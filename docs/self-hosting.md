@@ -67,6 +67,9 @@ and timing.
 - Adds hooks to `~/.claude/settings.json` (a backup is kept next to it).
 - Registers the `tonton` MCP server for Claude Code.
 - Adds a `claude` launcher to your zsh, bash or PowerShell profile, which starts Claude Code with the Tonton Claude channel.
+  On Windows, PowerShell only loads its profile if scripts are allowed: the installer sets the execution policy to
+  `RemoteSigned` for you, in Windows PowerShell and PowerShell 7, when it allows none. When a Group Policy forbids it, the
+  install goes on with a warning, and `claude` from that PowerShell starts without the channel.
 - When OpenCode is set up, adds `tonton-claude.js` to its plugins folder (`~/.config/opencode/plugins`). OpenCode loads it
   on its next start (`opencode service restart` with OpenCode 2), and its sessions show up next to Claude Code's.
 
@@ -120,9 +123,11 @@ curl -fsSL https://github.com/matteoepitech/tonton-claude/releases/latest/downlo
   sees into the LaunchAgent or the systemd unit. After changing proxy, run the install line again. Sessions get the
   variables of the terminal claude starts from, so keep them in your shell profile.
 - **Windows.** The service gets your user environment variables, not those of a PowerShell window: set them with
-  `setx HTTPS_PROXY http://proxy.corp:3128`, then sign out and back in. Windows PowerShell does not read `HTTPS_PROXY`
-  itself, so download the install script through the proxy:
+  `setx HTTPS_PROXY http://proxy.corp:3128`, then sign out and back in. PowerShell 7 reads `HTTPS_PROXY` itself. Windows
+  PowerShell does not, so download the install script through the proxy:
   `$env:HTTPS_PROXY='http://proxy.corp:3128'; $env:TONTON_TOKEN='<token>'; irm -Proxy $env:HTTPS_PROXY https://github.com/matteoepitech/tonton-claude/releases/latest/download/install.ps1 | iex`
+  `-Proxy` ignores a user and password in the address: when the proxy asks for one, add `-ProxyCredential (Get-Credential)`.
+  The script then downloads the agent through the same proxy, with the user and password of `HTTPS_PROXY`.
 
 `tonton status` shows the proxy in use, without its password, and whether the relay answers through it.
 
