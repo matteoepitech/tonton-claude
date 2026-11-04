@@ -30,19 +30,22 @@ extension RPG.JournalEntry {
 }
 
 extension RPG.Today {
-    /// `hours` moved from UTC to the clock of a zone `offset` seconds ahead of it, so the bar under "3 PM" is the user's
-    /// 3 PM. Half-hour zones round down to the hour.
-    public func localHours(offset: Int) -> [Int] {
-        guard hours.count == 24 else { return Array(repeating: 0, count: 24) }
-        let shift = Int((Double(offset) / 3600).rounded(.down))
-        return (0..<24).map { local in hours[((local - shift) % 24 + 24) % 24] }
+    /// Midnight UTC of the day, where its first hour bar starts. The bars stay in UTC order, as the website draws them,
+    /// so time runs left to right; each one is labelled with the local time it starts at.
+    public var start: Date? { ISO8601DateFormatter().date(from: day + "T00:00:00Z") }
+
+    /// The bar `date` falls in, if it is in this day.
+    public func hour(of date: Date) -> Int? {
+        guard let start else { return nil }
+        let hour = Int((date.timeIntervalSince(start) / 3600).rounded(.down))
+        return (0..<24).contains(hour) ? hour : nil
     }
 }
 
 extension RPG.State {
     /// Whether today's first turn has been counted, so the streak lights today rather than ending yesterday.
     public func playedToday(now: Date = Date()) -> Bool {
-        let day = String(ISO8601DateFormatter().string(from: now).prefix(10))
+        let day = RPG.day(now)
         return gains.contains { $0.kind == .day && $0.day == day }
     }
 }

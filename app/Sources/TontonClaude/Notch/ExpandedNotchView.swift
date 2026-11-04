@@ -13,7 +13,9 @@ struct ExpandedView: View {
             Color.clear.frame(height: max(state.notchSize.height, 30))
             Group {
                 // Sessions of this Mac show up without an account, so the list comes first.
-                if !settings.isConfigured && store.visibleSessions.isEmpty {
+                if store.visibleSessions.isEmpty && state.showHero {
+                    HeroScreen().padding(.horizontal, 14).padding(.top, 6)
+                } else if !settings.isConfigured && store.visibleSessions.isEmpty {
                     CenteredMessage(
                         icon: "sparkles", title: "No sessions running",
                         detail: "Start claude in a terminal on this Mac and it shows up here. For your other machines, set up an account.",
@@ -29,7 +31,9 @@ struct ExpandedView: View {
                     HStack(spacing: 0) {
                         SessionListView().frame(width: 236)
                         Rectangle().fill(Theme.line(0.08)).frame(width: 1)
-                        if let s = store.selected {
+                        if state.showHero {
+                            HeroScreen().padding(.horizontal, 14).padding(.top, 6)
+                        } else if let s = store.selected {
                             ChatPanel(session: s).id(s.id)
                         } else {
                             CenteredMessage(
@@ -42,6 +46,21 @@ struct ExpandedView: View {
             bottomBar
         }
         .padding(.horizontal, 6)
+        // Picking a session goes back to its conversation.
+        .onChange(of: store.selectedId) { _, _ in state.showHero = false }
+        .overlayPreferenceValue(HeroAnchors.self) { anchors in
+            GeometryReader { proxy in
+                if let float = state.xpFloat, let ring = anchors.ring {
+                    let end = proxy[ring]
+                    let start = float.session.flatMap { anchors.rows[$0] }.map { proxy[$0] }
+                    XPFloatView(
+                        xp: float.xp, from: start.map { CGPoint(x: $0.midX, y: $0.midY) } ?? CGPoint(x: end.midX + 24, y: end.minY - 48),
+                        to: CGPoint(x: end.midX, y: end.midY)
+                    )
+                    .id(float.id)
+                }
+            }
+        }
         .overlay(alignment: .top) {
             if state.showPalette {
                 CommandPalette().padding(.top, max(state.notchSize.height, 30) + 24)

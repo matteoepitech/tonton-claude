@@ -567,6 +567,22 @@
         }
       }
     },
+    "%@: %lld XP" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$lld XP"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ : %2$lld XP"
+          }
+        }
+      }
+    },
     "%@: calls like this one are allowed without asking until the session ends." : {
       "localizations" : {
         "fr" : {
@@ -583,6 +599,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld"
+          }
+        }
+      }
+    },
+    "%lld XP to level %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld XP to level %2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld XP avant le niveau %2$lld"
           }
         }
       }
@@ -699,6 +731,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld j %2$lld h"
+          }
+        }
+      }
+    },
+    "%lld days in a row" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld day in a row"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld days in a row"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld jour d’affilée"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld jours d’affilée"
+                }
+              }
+            }
           }
         }
       }
@@ -869,6 +941,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld minutes"
+          }
+        }
+      }
+    },
+    "%lld minutes of work" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld minute of work"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld minutes of work"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld minute de travail"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld minutes de travail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld minutes of work in %@" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld minute of work in %@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld minutes of work in %@"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld minute de travail dans %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld minutes de travail dans %2$@"
+                }
+              }
+            }
           }
         }
       }
@@ -1157,22 +1309,6 @@
         }
       }
     },
-    "%lld sparks · %lld boosters" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld sparks · %2$lld boosters"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld étincelles · %lld boosters"
-          }
-        }
-      }
-    },
     "%lld tasks" : {
       "localizations" : {
         "fr" : {
@@ -1189,6 +1325,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld à vérifier"
+          }
+        }
+      }
+    },
+    "%lld to open" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld à ouvrir"
           }
         }
       }
@@ -1387,6 +1533,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "+%lld XP"
+          }
+        }
+      }
+    },
+    "+%lld XP today" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld XP aujourd’hui"
           }
         }
       }
@@ -1623,6 +1779,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un mode de concentration est activé."
+          }
+        }
+      }
+    },
+    "A booster is waiting" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un booster vous attend"
           }
         }
       }
@@ -2143,16 +2309,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Toutes les machines sont déconnectées et le relais oublie tout de ce compte. Cette action est irréversible."
-          }
-        }
-      }
-    },
-    "All rarities" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toutes les raretés"
           }
         }
       }
@@ -2978,6 +3134,16 @@
         }
       }
     },
+    "Click to try it on, click again to wear it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cliquez pour l’essayer, cliquez encore pour le porter."
+          }
+        }
+      }
+    },
     "Climb one tier" : {
       "localizations" : {
         "fr" : {
@@ -3421,16 +3587,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copier les lignes"
-          }
-        }
-      }
-    },
-    "Cosmetic slot" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Emplacement cosmétique"
           }
         }
       }
@@ -4073,16 +4229,6 @@
         }
       }
     },
-    "Equipped" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Équipé"
-          }
-        }
-      }
-    },
     "Error" : {
       "localizations" : {
         "fr" : {
@@ -4279,6 +4425,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fichiers modifiés dans cette session"
+          }
+        }
+      }
+    },
+    "Finish a turn with Claude Code or OpenCode and Tonton earns his first XP." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminez un tour avec Claude Code ou OpenCode et Tonton gagne ses premiers XP."
           }
         }
       }
@@ -4486,6 +4642,16 @@
         }
       }
     },
+    "Goes back to the conversation" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revient à la conversation"
+          }
+        }
+      }
+    },
     "HTML page…" : {
       "localizations" : {
         "fr" : {
@@ -4669,6 +4835,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Élevée : les approbations et les réponses sembleront lentes. Un relais plus proche de vous ou de vos machines aide."
+          }
+        }
+      }
+    },
+    "Highest level" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau maximum"
           }
         }
       }
@@ -5127,6 +5303,16 @@
         }
       }
     },
+    "Journal" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journal"
+          }
+        }
+      }
+    },
     "Juggler" : {
       "localizations" : {
         "fr" : {
@@ -5348,38 +5534,12 @@
         }
       }
     },
-    "Level %lld · %lld XP" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Level %1$lld · %2$lld XP"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Niveau %lld · %lld XP"
-          }
-        }
-      }
-    },
-    "Level up!" : {
+    "Level %lld!" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Niveau supérieur !"
-          }
-        }
-      }
-    },
-    "Levels 2–6 unlock starter cosmetics. Open boosters and play the arena to grow Tonton." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les niveaux 2 à 6 débloquent les premiers cosmétiques. Ouvrez des boosters et jouez dans l’arène pour améliorer Tonton."
+            "value" : "Niveau %lld !"
           }
         }
       }
@@ -5665,6 +5825,22 @@
         }
       }
     },
+    "Most at %@, %lld XP" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Most at %1$@, %2$lld XP"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le plus à %1$@, %2$lld XP"
+          }
+        }
+      }
+    },
     "Most used tool" : {
       "localizations" : {
         "fr" : {
@@ -5755,16 +5931,6 @@
         }
       }
     },
-    "Needs attention" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Votre attention est requise"
-          }
-        }
-      }
-    },
     "Never" : {
       "localizations" : {
         "fr" : {
@@ -5831,6 +5997,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couche-tard"
+          }
+        }
+      }
+    },
+    "No XP yet" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore d’XP"
           }
         }
       }
@@ -6476,6 +6652,16 @@
         }
       }
     },
+    "Opens Tonton's hero screen" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre l’écran du héros de Tonton"
+          }
+        }
+      }
+    },
     "Opens and closes the notch from anywhere." : {
       "localizations" : {
         "fr" : {
@@ -6526,12 +6712,12 @@
         }
       }
     },
-    "Owned only" : {
+    "Owned" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Objets possédés"
+            "value" : "Possédé"
           }
         }
       }
@@ -6809,26 +6995,6 @@
         }
       }
     },
-    "Preview" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aperçu"
-          }
-        }
-      }
-    },
-    "Preview pose" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pose de l’aperçu"
-          }
-        }
-      }
-    },
     "Previous / next session" : {
       "localizations" : {
         "fr" : {
@@ -7036,16 +7202,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rare"
-          }
-        }
-      }
-    },
-    "Rarity" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rareté"
           }
         }
       }
@@ -7376,16 +7532,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réinitialiser"
-          }
-        }
-      }
-    },
-    "Resting" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Au repos"
           }
         }
       }
@@ -8723,16 +8869,6 @@
         }
       }
     },
-    "Syncing Tonton…" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Synchronisation de Tonton…"
-          }
-        }
-      }
-    },
     "Synthwave" : {
       "comment" : "A theme",
       "localizations" : {
@@ -8800,6 +8936,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Prend"
+          }
+        }
+      }
+    },
+    "Takes it off" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le retire"
           }
         }
       }
@@ -9570,6 +9716,56 @@
         }
       }
     },
+    "Tonton is cheering" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton fait la fête"
+          }
+        }
+      }
+    },
+    "Tonton is resting" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton se repose"
+          }
+        }
+      }
+    },
+    "Tonton is working" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton travaille"
+          }
+        }
+      }
+    },
+    "Tonton needs you" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton a besoin de vous"
+          }
+        }
+      }
+    },
+    "Tonton reached level %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton a atteint le niveau %lld"
+          }
+        }
+      }
+    },
     "Tonton's arena" : {
       "localizations" : {
         "fr" : {
@@ -9580,12 +9776,48 @@
         }
       }
     },
-    "Tonton's progression and wardrobe" : {
+    "Tonton's arena opens in its own window" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Progression et garde-robe de Tonton"
+            "value" : "L’arène de Tonton s’ouvre dans sa propre fenêtre"
+          }
+        }
+      }
+    },
+    "Tonton's hero screen" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’écran du héros de Tonton"
+          }
+        }
+      }
+    },
+    "Tonton, level %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton, niveau %lld"
+          }
+        }
+      }
+    },
+    "Tonton, level %lld: %lld XP to level %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tonton, level %1$lld: %2$lld XP to level %3$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton, niveau %1$lld : %2$lld XP avant le niveau %3$lld"
           }
         }
       }
@@ -9626,6 +9858,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Transparence"
+          }
+        }
+      }
+    },
+    "Tries it on Tonton" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’essaie sur Tonton"
           }
         }
       }
@@ -9676,16 +9918,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annuler l’envoi"
-          }
-        }
-      }
-    },
-    "Unequip" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Retirer"
           }
         }
       }
@@ -9836,6 +10068,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Améliorer pour %lld étincelles"
+          }
+        }
+      }
+    },
+    "Upgrades" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Améliorations"
           }
         }
       }
@@ -10050,6 +10292,16 @@
         }
       }
     },
+    "Wears it" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le porte"
+          }
+        }
+      }
+    },
     "Webhooks" : {
       "localizations" : {
         "fr" : {
@@ -10250,6 +10502,16 @@
         }
       }
     },
+    "Worn" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porté"
+          }
+        }
+      }
+    },
     "Wrapped" : {
       "localizations" : {
         "fr" : {
@@ -10290,6 +10552,16 @@
         }
       }
     },
+    "XP per hour today" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XP par heure aujourd’hui"
+          }
+        }
+      }
+    },
     "Your note on this session" : {
       "localizations" : {
         "fr" : {
@@ -10320,6 +10592,16 @@
         }
       }
     },
+    "accepted review" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relecture acceptée"
+          }
+        }
+      }
+    },
     "and %lld more" : {
       "localizations" : {
         "fr" : {
@@ -10330,12 +10612,42 @@
         }
       }
     },
+    "answered prompt" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "réponse à un message"
+          }
+        }
+      }
+    },
     "any call" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "tout appel"
+          }
+        }
+      }
+    },
+    "arena boss" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "boss de l’arène"
+          }
+        }
+      }
+    },
+    "arena fight" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "combat dans l’arène"
           }
         }
       }
@@ -10396,6 +10708,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "budgets, succès et résumé du jour"
+          }
+        }
+      }
+    },
+    "checklist task" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tâche cochée"
           }
         }
       }
@@ -10476,6 +10798,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "tâches terminées"
+          }
+        }
+      }
+    },
+    "first turn of the day" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "premier tour de la journée"
           }
         }
       }
@@ -10652,6 +10984,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "pool"
+          }
+        }
+      }
+    },
+    "pool task" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tâche du pool"
+          }
+        }
+      }
+    },
+    "pushed %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "push de %@"
+          }
+        }
+      }
+    },
+    "pushed commits" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "commits poussés"
           }
         }
       }

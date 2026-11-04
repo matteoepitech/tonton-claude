@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 
 @testable import TontonCore
@@ -86,6 +87,33 @@ final class HeroArtTests: XCTestCase {
             art.pixels(hero: hero, pose: .resting, tick: tick).filter { $0.color == 0x5a1d44 }.map(\.y).min()
         }
         XCTAssertEqual(try XCTUnwrap(hatTop(1)) - (try XCTUnwrap(hatTop(0))), 1)
+    }
+
+    /// shared/test/rpg-art-vectors.json, also checked by the website's compositor: both draw the same pixels.
+    func testTheWebsiteDrawsTheSamePixels() throws {
+        struct Vector: Decodable {
+            let equipped: [String: String]
+            let pose: String
+            let tick: Int
+            let pixels: Int
+            let sha256: String
+        }
+        let art = try XCTUnwrap(art)
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent(
+            "../../../shared/test/rpg-art-vectors.json")
+        let vectors = try JSONDecoder().decode([Vector].self, from: Data(contentsOf: url))
+        XCTAssertGreaterThanOrEqual(vectors.count, 5)
+        for vector in vectors {
+            var hero = RPG.State()
+            hero.owned = Array(vector.equipped.values)
+            for (slot, id) in vector.equipped { try hero.equip(id, in: try XCTUnwrap(RPG.Slot(rawValue: slot))) }
+            let pose = try XCTUnwrap(HeroArt.Pose(rawValue: vector.pose))
+            let pixels = art.pixels(hero: hero, pose: pose, tick: vector.tick)
+            let text = pixels.map { "\($0.x),\($0.y),#\(String(format: "%06x", $0.color))" }.joined(separator: ";")
+            let digest = SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+            XCTAssertEqual(pixels.count, vector.pixels, "\(vector.pose) \(vector.equipped)")
+            XCTAssertEqual(digest, vector.sha256, "\(vector.pose) \(vector.equipped)")
+        }
     }
 
     func testThePoseFollowsTheSession() {

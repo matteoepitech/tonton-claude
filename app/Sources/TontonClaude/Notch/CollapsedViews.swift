@@ -19,7 +19,14 @@ struct ActivityDots: View {
                 LiveActivityWings(session: activity, mascot: settings.showMascot, width: state.currentWingWidth)
             } else if state.showWings {
                 Group {
-                    if settings.showMascot {
+                    if settings.showMascot && rpg.ready {
+                        // A thin ring of his level's XP; the camera housing is always dark, whatever the theme.
+                        LevelRing(progress: rpg.hero.progress, lineWidth: 1.5, track: .white.opacity(0.18)) {
+                            MascotView(status: urgent ?? .idle, hero: rpg.hero)
+                        }
+                        .frame(width: NotchState.wingWidth, height: NotchState.wingWidth)
+                        .help(Text("Level \(rpg.hero.level)"))
+                    } else if settings.showMascot {
                         MascotView(status: urgent ?? .idle, hero: rpg.hero)
                     } else if let urgent {
                         StatusDot(status: urgent, size: 7, limit: limit)

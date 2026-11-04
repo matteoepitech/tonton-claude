@@ -59,6 +59,15 @@ struct NotchRootView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: state.achievement)
+        .overlay(alignment: .top) {
+            if let level = state.levelUp {
+                // Under an achievement unlocked at the same time, rather than over it.
+                LevelUpMoment(level: level, hero: RPGStore.shared.hero, width: min(NotchState.expandedSize.width - 48, 560))
+                    .padding(.top, size.height + 8 + (state.achievement == nil ? 0 : 56))
+                    .transition(.scale(scale: 0.8, anchor: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: state.levelUp)
         .overlay {
             if let seed = state.confetti { ConfettiBurst(seed: seed, from: CGPoint(x: NotchState.expandedSize.width / 2, y: size.height)) }
         }

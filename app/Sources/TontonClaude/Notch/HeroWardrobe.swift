@@ -49,7 +49,8 @@ struct HeroWardrobe: View {
                 }
                 .overlay(alignment: .topTrailing) {
                     if worn {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Theme.success, Theme.bg).offset(x: 4, y: -4)
+                        Image(systemName: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Theme.success, Theme.bg).offset(
+                            x: 4, y: -4)
                     } else if !owned {
                         Image(systemName: "lock.fill").font(.system(size: 9)).foregroundStyle(Theme.secondary).padding(4)
                     }
@@ -57,8 +58,9 @@ struct HeroWardrobe: View {
                 .contentShape(RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
-        .help(Text("\(item.rarity.label) \(item.slot.label.lowercased())"))
-        .accessibilityLabel(Text("\(item.rarity.label) \(item.slot.label.lowercased())"))
+        // Both names come translated; their order and case stay the same in every language.
+        .help(Text(verbatim: "\(item.slot.label) · \(item.rarity.label)"))
+        .accessibilityLabel(Text(verbatim: "\(item.slot.label) · \(item.rarity.label)"))
         .accessibilityValue(worn ? Text("Worn") : owned ? Text("Owned") : Text("Locked"))
         .accessibilityHint(trying && owned ? (worn ? Text("Takes it off") : Text("Wears it")) : Text("Tries it on Tonton"))
         .accessibilityAddTraits(trying ? .isSelected : [])

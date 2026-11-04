@@ -1,0 +1,49 @@
+[
+  {
+    "equipped": {},
+    "pose": "working",
+    "tick": 0,
+    "pixels": 302,
+    "sha256": "57f2578e8864d7306997da6175258d92737530b525840165e7c2d210e1579e2c"
+  },
+  {
+    "equipped": {},
+    "pose": "resting",
+    "tick": 1,
+    "pixels": 250,
+    "sha256": "9f23c2e63ea6119ee3f0e6a0c668dde24ce0f35cf20320090781fa9c84f62566"
+  },
+  {
+    "equipped": {
+      "skin": "skin-legendary",
+      "hat": "hat-legendary",
+      "accessory": "accessory-legendary",
+      "aura": "aura-legendary",
+      "trail": "trail-legendary"
+    },
+    "pose": "cheer",
+    "tick": 1,
+    "pixels": 402,
+    "sha256": "1251271308e34ba6e8d0a239dc7d7ef260bed471922a806dc4961ac8d58c3778"
+  },
+  {
+    "equipped": {
+      "hat": "hat-rare",
+      "accessory": "accessory-rare"
+    },
+    "pose": "attention",
+    "tick": 0,
+    "pixels": 309,
+    "sha256": "b293dad3ef8e6c2a971e0be75a5e9acd60cd061e5eb333f4fca92ffa0af14be0"
+  },
+  {
+    "equipped": {
+      "aura": "aura-epic",
+      "trail": "trail-epic"
+    },
+    "pose": "working",
+    "tick": 3,
+    "pixels": 317,
+    "sha256": "0b78838bbaa2084081d3dfb1ccc6fb20979b8faa3ec3d20276c780e2306665b1"
+  }
+]

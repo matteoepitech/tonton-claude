@@ -39,6 +39,8 @@ final class NotchWindowController {
     private let panel: NotchPanel
     private var monitors: [Any] = []
     private var subscriptions = Set<AnyCancellable>()
+    /// The session whose turn ended last: the XP that follows floats from its row.
+    private var lastTurn: (id: String, at: Date)?
     private var collapseTask: Task<Void, Never>?
     private var overlapTask: Task<Void, Never>?
     private var behindFloatingWindow = false
@@ -255,6 +257,28 @@ final class NotchWindowController {
         }
     }
 
+    /// XP floats from the session's row into Tonton's ring, and a new level shows for a moment across the notch. Like the
+    /// bottom bar's "+XP" before them: not during quiet hours, not without the mascot, and a level-up waits for no session
+    /// to need the user. Reduce Motion keeps the float away and the moment still.
+    private func earned(_ xp: Int, level: Int?) {
+        guard settings.showMascot, settings.showAlerts, !settings.isQuiet(.other) else { return }
+        if state.mode == .expanded, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let float = XPFloat(xp: xp, session: lastTurn.flatMap { Date().timeIntervalSince($0.at) < 60 ? $0.id : nil })
+            state.xpFloat = float
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(XPFloatView.duration + 0.2))
+                if self?.state.xpFloat == float { self?.state.xpFloat = nil }
+            }
+        }
+        guard let level, store.attentionCount == 0 else { return }
+        state.levelUp = level
+        announce(String(localized: "Tonton reached level \(level)"))
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(LevelUpMoment.duration))
+            if self?.state.levelUp == level { self?.state.levelUp = nil }
+        }
+    }
+
     private func signal(_ event: SoundEvent, project: String? = nil) {
         let sound = project.map { settings.sound(for: event, project: $0) } ?? settings.sound(for: event)
         if settings.soundOnAttention { SoundPlayer.play(sound) }
@@ -336,6 +360,12 @@ final class NotchWindowController {
             .store(in: &subscriptions)
         store.launchStarted
             .sink { [weak self] _ in if self?.store.launches.isEmpty == true { self?.state.showNewSession = false } }
+            .store(in: &subscriptions)
+        store.taskDone
+            .sink { [weak self] session, _ in self?.lastTurn = (session.id, Date()) }
+            .store(in: &subscriptions)
+        RPGStore.shared.earned
+            .sink { [weak self] earned in self?.earned(earned.xp, level: earned.level) }
             .store(in: &subscriptions)
         store.taskDone
             .filter { [settings] _, worked in settings.confettiAfterMinutes > 0 && worked >= Double(settings.confettiAfterMinutes) * 60 }

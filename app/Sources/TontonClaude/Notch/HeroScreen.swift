@@ -60,7 +60,8 @@ struct HeroScreenContent: View {
         TimelineView(.everyMinute) { context in
             let now = now ?? context.date
             VStack(alignment: .leading, spacing: 12) {
-                HeroCard(hero: HeroWardrobe.wearing(preview, hero), pose: pose, day: day(now), hour: Calendar.current.component(.hour, from: now))
+                let today = hero.today(now: now)
+                HeroCard(hero: HeroWardrobe.wearing(preview, hero), pose: pose, day: day(today, now: now), hour: today.hour(of: now))
                     .padding(.top, 4)
                 if let error { Text(error).font(.notch(11)).foregroundStyle(Theme.warning) }
                 tabs
@@ -71,11 +72,8 @@ struct HeroScreenContent: View {
         .onChange(of: page) { _, _ in preview = nil }
     }
 
-    private func day(_ now: Date) -> HeroDay {
-        let today = hero.today(now: now)
-        return HeroDay(
-            xp: today.xp, streak: today.streak, hours: today.localHours(offset: TimeZone.current.secondsFromGMT(for: now)),
-            counted: hero.playedToday(now: now))
+    private func day(_ today: RPG.Today, now: Date) -> HeroDay {
+        HeroDay(xp: today.xp, streak: today.streak, hours: today.hours, start: today.start, counted: hero.playedToday(now: now))
     }
 
     private var tabs: some View {

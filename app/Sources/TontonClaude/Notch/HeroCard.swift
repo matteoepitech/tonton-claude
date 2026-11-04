@@ -1,49 +1,38 @@
 import SwiftUI
 import TontonCore
 
-/// What the card says about today: XP earned, the streak of days, XP per local hour.
+/// What the card says about today: XP earned, the streak of days, XP per hour of the UTC day.
 struct HeroDay: Equatable {
     var xp = 0
     var streak = 0
-    /// 24 values, index 0 is midnight here.
+    /// 24 values from midnight UTC, the day the XP caps count.
     var hours = [Int](repeating: 0, count: 24)
+    /// Midnight UTC, to label the bars in local time.
+    var start: Date?
     /// Whether today already counts in the streak; until then the streak ends yesterday.
     var counted = false
 }
 
-/// Tonton large in his level ring, the level, his title, what is left to the next level and today.
+/// Tonton large in his level ring, and beside him his title, what is left to the next level and today. A row rather than
+/// a centered card (docs/images/rpg-hero-directions.png): at the notch's height it leaves room for the pages under it.
 struct HeroCard: View {
-    enum Layout { case centered, row }
-    var layout: Layout = .row
     /// What he wears: the hero, or the hero trying on the wardrobe's preview.
     let hero: RPG.State
     let pose: HeroArt.Pose
     var day = HeroDay()
-    /// The current hour, highlighted in the bars; nil in the renderer's fixed images.
+    /// The bar of the current hour, highlighted.
     var hour: Int?
 
     var body: some View {
-        switch layout {
-        case .row:
-            HStack(alignment: .center, spacing: 16) {
-                ring(side: 112, sprite: 72)
-                VStack(alignment: .leading, spacing: 6) {
-                    names
-                    toNext
-                    todayLine
-                    HourBars(hours: day.hours, current: hour).frame(height: 22)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        case .centered:
-            VStack(spacing: 8) {
-                ring(side: 148, sprite: 96)
+        HStack(alignment: .center, spacing: 16) {
+            ring(side: 112, sprite: 72)
+            VStack(alignment: .leading, spacing: 6) {
                 names
                 toNext
                 todayLine
-                HourBars(hours: day.hours, current: hour).frame(width: 220, height: 24)
+                HourBars(hours: day.hours, start: day.start, current: hour).frame(height: 22)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -101,7 +90,7 @@ struct HeroCard: View {
                 todayXP
                 streak
             }
-            VStack(alignment: layout == .centered ? .center : .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
                 todayXP
                 streak
             }
@@ -151,9 +140,10 @@ struct StreakDays: View {
     }
 }
 
-/// XP per hour today: one bar an hour, the current one in the accent.
+/// XP per hour today: one bar an hour of the UTC day, the current one in the accent, each labelled in local time.
 struct HourBars: View {
     let hours: [Int]
+    var start: Date?
     var current: Int?
 
     var body: some View {
@@ -167,17 +157,25 @@ struct HourBars: View {
                         .fill(hour == current ? Theme.accent : value > 0 ? Theme.accent.opacity(0.55) : Theme.line(0.12))
                         .frame(width: max(1, step - 2), height: value > 0 ? max(3, proxy.size.height * CGFloat(value) / CGFloat(top)) : 2)
                         .frame(width: step, height: proxy.size.height, alignment: .bottom)
+                        .contentShape(Rectangle())
+                        .help(Text("\(Self.time(hour, from: start)): \(value) XP"))
                 }
             }
         }
         .accessibilityElement()
         .accessibilityLabel("XP per hour today")
-        .accessibilityValue(Text(Self.spoken(hours)))
+        .accessibilityValue(Text(Self.spoken(hours, from: start)))
+    }
+
+    /// When a bar starts, on this Mac's clock.
+    static func time(_ hour: Int, from start: Date?) -> String {
+        guard let start else { return "\(hour):00" }
+        return start.addingTimeInterval(Double(hour) * 3600).formatted(date: .omitted, time: .shortened)
     }
 
     /// The busiest hour, said rather than drawn.
-    static func spoken(_ hours: [Int]) -> String {
+    static func spoken(_ hours: [Int], from start: Date?) -> String {
         guard let top = hours.max(), top > 0, let hour = hours.firstIndex(of: top) else { return String(localized: "No XP yet") }
-        return String(localized: "Most at \(hour):00, \(top) XP")
+        return String(localized: "Most at \(time(hour, from: start)), \(top) XP")
     }
 }

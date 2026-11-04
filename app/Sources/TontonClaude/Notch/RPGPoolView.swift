@@ -14,7 +14,7 @@ struct RPGPoolView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Team progression").font(.title2.bold())
+                Text("Team progression").font(.notch(15, weight: .semibold))
                 if pools.ordered.isEmpty {
                     Text("Join a pool to share Tonton's level and equipped look with your team.")
                 } else {
@@ -76,9 +76,9 @@ struct RPGPoolView: View {
                             }
                     }
                 }
-            }.padding(18)
+            }.padding(.vertical, 4)
         }
-        .background(Theme.bg).foregroundStyle(Theme.text)
+        .foregroundStyle(Theme.text)
         .task(id: board?.id) {
             ledger = nil
             while !Task.isCancelled {
