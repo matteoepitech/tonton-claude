@@ -9,7 +9,14 @@ export interface IslandAccount {
   key: string
 }
 
-export type SignInResult = { ok: true; account: IslandAccount } | { ok: false; error: string }
+export type SignInResult =
+  | {
+      ok: true
+      account: IslandAccount
+      /** True when Remember on this computer was ticked but the account could not be saved: it lasts until the island quits. */
+      unsaved: boolean
+    }
+  | { ok: false; error: string }
 
 /** From the main process: the tray's items, the window losing focus, signing out from the menu. */
 export type IslandCommand = 'expand' | 'collapse' | 'blur' | 'signed-out'

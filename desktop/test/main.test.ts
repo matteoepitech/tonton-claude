@@ -1,7 +1,7 @@
 // The island's main process, without Electron: where the window goes, the menu, the token on the relay socket, and the
 // account kept in the keyring.
 import { afterAll, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RecoveredAccount } from '../../shared/recovery-key'
@@ -9,6 +9,7 @@ import { AccountStore, type Keyring } from '../src/main/account-store'
 import { islandBounds } from '../src/main/geometry'
 import { type MenuActions, menuTemplate } from '../src/main/menu'
 import { socketHeaders } from '../src/main/relay-auth'
+import { nextStep } from '../src/main/visibility'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-island-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
@@ -29,6 +30,27 @@ describe('the window', () => {
 
   test('fits small screens', () => {
     expect(islandBounds({ x: 0, y: 0, width: 400, height: 500 }, 'expanded')).toEqual({ x: 12, y: 0, width: 376, height: 488 })
+  })
+})
+
+describe('showing the island', () => {
+  test('hidden, the tray icon, the menu and opening the app again all show it open', () => {
+    for (const trigger of ['tray', 'menu', 'launch'] as const) {
+      expect(nextStep(trigger, false, 'collapsed')).toBe('show')
+      expect(nextStep(trigger, false, 'expanded')).toBe('show')
+    }
+  })
+
+  test('with its bar showing, the tray icon and opening the app again open it: only the menu hides it', () => {
+    expect(nextStep('tray', true, 'collapsed')).toBe('expand')
+    expect(nextStep('launch', true, 'collapsed')).toBe('expand')
+    expect(nextStep('menu', true, 'collapsed')).toBe('hide')
+  })
+
+  test('open, the tray icon closes it to its bar, and opening the app again brings it forward', () => {
+    expect(nextStep('tray', true, 'expanded')).toBe('collapse')
+    expect(nextStep('launch', true, 'expanded')).toBe('focus')
+    expect(nextStep('menu', true, 'expanded')).toBe('hide')
   })
 })
 
@@ -122,6 +144,50 @@ describe('the account', () => {
     expect(store.canRemember).toBe(false)
     expect(store.save(account)).toBe(false)
     expect(existsSync(file)).toBe(false)
+  })
+
+  const failing = (code: string, times: number) => {
+    const tries: string[] = []
+    const rename = (from: string, to: string) => {
+      tries.push(code)
+      if (tries.length <= times) throw Object.assign(new Error(`${code}: rename`), { code })
+      renameSync(from, to)
+    }
+    return { tries, rename }
+  }
+  const other: RecoveredAccount = { ...account, accountId: 'acct87654321', token: 'ta_ZyXwVu9876543210' }
+
+  test('is moved in place once Windows lets go of the file', () => {
+    const file = join(dir, 'busy', 'account')
+    const { tries, rename } = failing('EBUSY', 2)
+    expect(new AccountStore(file, keyring(), rename).save(account)).toBe(true)
+    expect(tries).toHaveLength(3)
+    expect(new AccountStore(file, keyring()).load()).toEqual(account)
+    expect(existsSync(`${file}.next`)).toBe(false)
+  })
+
+  test('that cannot be saved leaves the account saved before, and tries a few times only', () => {
+    const file = join(dir, 'locked', 'account')
+    expect(new AccountStore(file, keyring()).save(account)).toBe(true)
+    const { tries, rename } = failing('EPERM', Number.POSITIVE_INFINITY)
+    const store = new AccountStore(file, keyring(), rename)
+    expect(store.keep(other, true)).toBe(false)
+    expect(tries).toHaveLength(5)
+    expect(store.load()).toEqual(account)
+    expect(existsSync(`${file}.next`)).toBe(false)
+    // Not a file in use: no point in trying again.
+    const full = failing('ENOSPC', Number.POSITIVE_INFINITY)
+    expect(new AccountStore(file, keyring(), full.rename).save(other)).toBe(false)
+    expect(full.tries).toHaveLength(1)
+  })
+
+  test('not remembered, the account saved before is forgotten', () => {
+    const file = join(dir, 'unticked', 'account')
+    const store = new AccountStore(file, keyring())
+    expect(store.keep(account, true)).toBe(true)
+    expect(store.keep(other, false)).toBe(false)
+    expect(existsSync(file)).toBe(false)
+    expect(store.load()).toBeNull()
   })
 
   test('that no longer opens is removed', () => {

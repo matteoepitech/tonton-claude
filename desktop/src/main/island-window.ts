@@ -1,9 +1,10 @@
-// The island's window: frameless, transparent, above other windows and out of the taskbar, the size of what its page
-// shows, and kept at the top of the primary screen as displays come and go.
+// The island's window: frameless, transparent, above other windows and out of the taskbar and the window switcher, the
+// size of what its page shows, and kept at the top of the primary screen as displays come and go.
 
 import { app, BrowserWindow, type Menu, screen } from 'electron'
 import { CHANNELS, type IslandCommand, type IslandMode } from '../bridge'
 import { islandBounds } from './geometry'
+import { nextStep, type Trigger } from './visibility'
 
 export class IslandWindow {
   readonly window: BrowserWindow
@@ -26,15 +27,17 @@ export class IslandWindow {
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
-      // Electron skips the taskbar on Windows only. On Linux, a toolbar window is kept out of the taskbar and the window
-      // switcher by GNOME and KDE, and still takes the keyboard.
-      ...(process.platform === 'linux' ? { type: 'toolbar' } : {}),
+      // On Windows skipTaskbar only takes the taskbar button away: Alt+Tab would still list an empty "Tonton Claude", and
+      // setVisibleOnAllWorkspaces does nothing there. A tool window (WS_EX_TOOLWINDOW) is out of the taskbar and Alt+Tab. On Linux, GNOME and KDE keep a toolbar window out of the taskbar and the window
+      // switcher. Both still take the keyboard.
+      ...(process.platform === 'darwin' ? {} : { type: 'toolbar' }),
       alwaysOnTop: true,
       title: 'Tonton Claude',
       webPreferences: { preload, sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false },
     })
     // Above the taskbar and other always-on-top windows, like a notification.
     this.window.setAlwaysOnTop(true, 'screen-saver')
+    // Linux's workspaces. On Windows it does nothing.
     this.window.setVisibleOnAllWorkspaces(true)
     this.window.on('blur', () => {
       if (!this.menuOpen) this.send('blur')
@@ -50,7 +53,7 @@ export class IslandWindow {
     this.window.on('close', event => {
       if (this.quitting) return
       event.preventDefault()
-      this.toggle()
+      this.hide()
     })
     const place = () => this.place()
     screen.on('display-added', place)
@@ -71,15 +74,25 @@ export class IslandWindow {
     if (mode === 'expanded') this.window.focus()
   }
 
-  /** From the tray or the menu: shown open, or hidden closed. */
-  toggle() {
-    if (this.visible) {
-      this.send('collapse')
-      this.window.hide()
-    } else {
-      this.place()
-      this.window.show()
-      this.send('expand')
+  /** From the tray icon, the menu or the app opened again: see nextStep. */
+  reveal(trigger: Trigger) {
+    switch (nextStep(trigger, this.visible, this.mode)) {
+      case 'show':
+        this.place()
+        this.window.show()
+        this.send('expand')
+        break
+      case 'expand':
+        this.send('expand')
+        break
+      case 'focus':
+        this.window.focus()
+        break
+      case 'collapse':
+        this.send('collapse')
+        break
+      case 'hide':
+        this.hide()
     }
   }
 
@@ -96,6 +109,11 @@ export class IslandWindow {
 
   send(command: IslandCommand) {
     if (!this.window.isDestroyed()) this.window.webContents.send(CHANNELS.command, command)
+  }
+
+  private hide() {
+    this.send('collapse')
+    this.window.hide()
   }
 
   private bounds() {
