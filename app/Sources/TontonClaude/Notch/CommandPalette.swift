@@ -77,12 +77,16 @@ struct CommandPalette: View {
             Item(
                 id: "session-\(session.id)", icon: "bubble.left", title: session.displayName,
                 detail: "\(session.machine) · \(session.title ?? session.status.label)"
-            ) { store.selectedId = session.id }
+            ) {
+                store.selectedId = session.id
+                state.showHero = false
+            }
         }
         let machines = Dictionary(grouping: store.orderedSessions, by: \.machine).keys.sorted().map { machine in
             Item(id: "machine-\(machine)", icon: "desktopcomputer", title: machine, detail: String(localized: "Machine")) {
                 // Its first session in the list, the one ⌘1…9 would pick among its own.
                 store.selectedId = store.orderedSessions.first { $0.machine == machine }?.id
+                state.showHero = false
             }
         }
         let panes = SettingsPane.allCases.map { pane in

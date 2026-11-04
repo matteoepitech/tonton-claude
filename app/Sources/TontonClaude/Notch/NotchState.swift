@@ -53,6 +53,9 @@ final class NotchState: ObservableObject {
     @Published var liveActivity: SessionSummary?
     /// The hero screen fills the right column, from Tonton's ring in the bottom bar.
     @Published var showHero = false
+    /// Its page and the item tried on, kept here so they survive the column being rebuilt, as when a first session shows up.
+    @Published var heroPage = HeroPage.journal
+    @Published var heroPreview: RPG.Item?
     /// The level Tonton just reached, shown for a moment across the notch.
     @Published var levelUp: Int?
     /// "+XP" on its way from a session's row to Tonton's ring.

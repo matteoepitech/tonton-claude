@@ -6,14 +6,13 @@ import TontonCore
 struct HeroScreen: View {
     @ObservedObject private var rpg = RPGStore.shared
     @EnvironmentObject var store: SessionStore
-    @State private var page = HeroPage.journal
-    @State private var preview: RPG.Item?
+    @EnvironmentObject var state: NotchState
 
     var body: some View {
         let live = store.visibleSessions.filter(\.status.isLive).map(\.status)
         HeroScreenContent(
             hero: rpg.hero, ready: rpg.ready, busy: rpg.busy, error: rpg.error,
-            pose: SessionStatus.mostUrgent(live).map(HeroArt.Pose.init) ?? .resting, page: $page, preview: $preview,
+            pose: SessionStatus.mostUrgent(live).map(HeroArt.Pose.init) ?? .resting, page: $state.heroPage, preview: $state.heroPreview,
             equip: rpg.equip, arena: rpg.startArena)
     }
 }

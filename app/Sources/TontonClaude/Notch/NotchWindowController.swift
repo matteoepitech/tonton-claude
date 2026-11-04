@@ -218,6 +218,7 @@ final class NotchWindowController {
         }
         if settings.openOnPermission && session.status == .permission {
             store.selectedId = session.id
+            state.showHero = false
             expand()
         } else {
             peek(session)
@@ -511,7 +512,10 @@ final class NotchWindowController {
 
     /// Always nil: the click is used up.
     private func openPill(_ index: Int) -> NSEvent? {
-        if index < state.pills.sessions.count { store.selectedId = state.pills.sessions[index].id }
+        if index < state.pills.sessions.count {
+            store.selectedId = state.pills.sessions[index].id
+            state.showHero = false
+        }
         expand()
         return nil
     }
@@ -596,7 +600,10 @@ final class NotchWindowController {
         let sessions = store.navigableSessions
         guard !sessions.isEmpty else { return false }
         if let digit = event.charactersIgnoringModifiers.flatMap(Int.init), (1...9).contains(digit) {
-            if digit <= sessions.count { store.selectedId = sessions[digit - 1].id }
+            if digit <= sessions.count {
+                store.selectedId = sessions[digit - 1].id
+                state.showHero = false
+            }
             return true
         }
         let index = sessions.firstIndex { $0.id == store.selectedId } ?? 0

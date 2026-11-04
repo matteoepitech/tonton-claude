@@ -46,20 +46,27 @@ struct ExpandedView: View {
             bottomBar
         }
         .padding(.horizontal, 6)
-        // Picking a session goes back to its conversation.
-        .onChange(of: store.selectedId) { _, _ in state.showHero = false }
+        // Picking another session goes back to the conversation. The store also moves the selection by itself when the
+        // selected session goes away; that leaves the hero screen open.
+        .onChange(of: store.selectedId) { old, _ in
+            if let old, store.visibleSessions.contains(where: { $0.id == old }) { state.showHero = false }
+        }
         .overlayPreferenceValue(HeroAnchors.self) { anchors in
             GeometryReader { proxy in
                 if let float = state.xpFloat, let ring = anchors.ring {
                     let end = proxy[ring]
                     let start = float.session.flatMap { anchors.rows[$0] }.map { proxy[$0] }
+                    // A row scrolled out of sight still has its place: the float starts at the edge of the list instead.
+                    let from = start.map {
+                        CGPoint(x: min(max($0.midX, 0), proxy.size.width), y: min(max($0.midY, 0), proxy.size.height))
+                    }
                     XPFloatView(
-                        xp: float.xp, from: start.map { CGPoint(x: $0.midX, y: $0.midY) } ?? CGPoint(x: end.midX + 24, y: end.minY - 48),
-                        to: CGPoint(x: end.midX, y: end.midY)
+                        xp: float.xp, from: from ?? CGPoint(x: end.midX + 24, y: end.minY - 48), to: CGPoint(x: end.midX, y: end.midY)
                     )
                     .id(float.id)
                 }
             }
+            .allowsHitTesting(false)
         }
         .overlay(alignment: .top) {
             if state.showPalette {

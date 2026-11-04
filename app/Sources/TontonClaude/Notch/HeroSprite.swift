@@ -13,7 +13,8 @@ struct HeroSprite: View {
     var body: some View {
         Group {
             if let art = HeroArt.shared, size >= 32 {
-                let interval = Double(art.animation(pose)?.ms ?? 500) / 1000
+                // A newer file's odd timing cannot make a frame shorter than 50 ms.
+                let interval = Double(max(50, art.animation(pose)?.ms ?? 500)) / 1000
                 if animated && !reduceMotion {
                     TimelineView(.periodic(from: .now, by: interval)) { context in
                         canvas(art, tick: Int(context.date.timeIntervalSinceReferenceDate / interval))
