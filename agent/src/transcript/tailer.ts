@@ -3,6 +3,8 @@ import { closeSync, openSync, readSync, statSync } from 'node:fs'
 const POLL_MS = 400
 /** A long session can weigh hundreds of MB: only its end is read on start. */
 const INITIAL_READ_BYTES = 8 * 1024 * 1024
+/** How far back the start goes for a line longer than that end, a tool result of tens of MB. */
+const MAX_INITIAL_READ_BYTES = 64 * 1024 * 1024
 
 export interface TailerEvents {
   /** Complete lines appended since the last call. `initial` is true for the first read. */
@@ -51,8 +53,8 @@ export class Tailer {
       this.events.reset()
     }
     if (initial && size > INITIAL_READ_BYTES) {
-      this.offset = size - INITIAL_READ_BYTES
-      skipPartialLine = true
+      this.offset = this.initialOffset(size)
+      skipPartialLine = this.offset > 0
     }
     if (size === this.offset) {
       if (initial) this.events.lines([], true)
@@ -72,6 +74,30 @@ export class Tailer {
       lines.filter(line => line.trim()),
       initial,
     )
+  }
+
+  /**
+   * Where the first read of a large file starts. Its end can be inside one long line, which would leave nothing to show
+   * but the end of that line: the start goes back, twice as far each time, until a whole line comes before the last one,
+   * or the file's start, or `MAX_INITIAL_READ_BYTES`.
+   */
+  private initialOffset(size: number): number {
+    // Newlines between `scanned` and the last byte: the first ends a line cut by the start, the second a whole one.
+    let newlines = 0
+    let scanned = size - 1
+    for (let window = INITIAL_READ_BYTES; window < size; window *= 2) {
+      const start = size - window
+      const chunk = this.readFrom(start, scanned - start)
+      let at = chunk.length
+      while (newlines < 2 && at > 0) {
+        at = chunk.lastIndexOf(0x0a, at - 1)
+        if (at === -1) break
+        newlines++
+      }
+      scanned = start
+      if (newlines >= 2 || window >= MAX_INITIAL_READ_BYTES) return start
+    }
+    return 0
   }
 
   private readFrom(position: number, length: number): Buffer {
