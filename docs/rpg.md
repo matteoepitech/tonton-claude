@@ -82,6 +82,34 @@ Choose uniformly among items of the selected rarity. A duplicate becomes 1, 3, 8
 purchase flow, paid currency or pity counter exists in version 1. The opening implementation must commit the draw,
 consumption and reward together before playing its animation. Cancelling an animation never rerolls an item.
 
+## The hero screen in the notch
+
+The notch's bottom bar shows Tonton in a thin ring that fills with the XP of his level; a dot on it means a booster
+waits to be opened, and the closed notch draws the same ring around the mascot beside the camera. A click on the ring
+opens the hero screen in the right column, in place of the conversation; picking a session goes back to it. The card
+on top shows Tonton large in a segmented level ring, the level, a title every ten levels (Apprentice, Builder,
+Architect, Pathfinder, Inventor, Artisan, Sage, Wizard, Luminary, Legend), the XP to the next level, today's XP, the
+streak with its last seven days and a bar per hour of the UTC day, labelled in local time. His pose follows the live
+sessions: working, resting or needing the user. Under the card, icons switch between the journal of the last gains
+("+18 · 13 minutes of work in tonton-claude"), the wardrobe, boosters, upgrades with the achievements, and the team; the
+arena opens in its own window. The wardrobe is a grid of every cosmetic, one row per slot and one column per rarity,
+each tile framed in its rarity's colour and weight: the first click tries it on the big Tonton, the second wears it,
+or takes it off when he already wears it.
+
+When a turn's XP arrives, "+XP" floats from that session's row into the ring; a new level shows for a moment across
+the notch with Tonton cheering, then its booster waits on the ring. Like the other celebrations, neither plays during
+quiet hours, without the mascot, or while a session needs the user; Reduce Motion writes the XP beside the ring and
+keeps the level-up still. VoiceOver announces the new level.
+
+The 24 × 24 art is `shared/rpg-art.json`: five poses (idle, working, resting, attention, cheer), each a few frames with
+the anchors cosmetics hang on, then a mask per slot and rarity, and the colours. `.` is empty, `O` `1` `2` `3` are the
+outline and three shades of the skin's ramp (or the item's), any other character a fixed colour. A layer's origin pixel
+lands on its anchor in the current frame, so a hat follows the breath; layers draw in `order`, back to front, and an
+unknown character or a pixel off the square is skipped. The website draws it with `web/hero.ts`; the app with
+`HeroArt` in TontonCore, from a byte-identical copy that `HeroArtTests` compares with the file.
+`shared/test/rpg-art-vectors.json` holds the hash of a few composed sprites, checked on both sides. Under 32 points
+the 12 × 12 mascot draws Tonton instead.
+
 ## Persistence and trust
 
 The relay stores one opaque encrypted document per account, with an increasing revision. Clients read, decrypt,
@@ -260,3 +288,15 @@ complete both base and upgraded runs. No deployment or release is performed by t
 ![Rarity reveal](images/rpg-opening.png)
 ![Combat arena](images/rpg-arena.png)
 ![Team standings](images/rpg-team.png)
+
+The hero screen was rendered from its SwiftUI views at 380, 460 and 500 points, dark and light, with heroes at levels
+1, 7 and 42 and a day of fixture gains, through an offscreen NSHostingView; the pages that read live stores (boosters,
+upgrades, team) were not part of these images. The two card layouts drawn first are kept below: the row leaves room
+for the pages at the notch's height. These images do not show the float, the burst, hover, timing or the real notch
+window.
+
+![Hero screen: journal, levels 7 and 42](images/rpg-hero-screen.png)
+![Wardrobe, trying on the epic hat](images/rpg-hero-wardrobe.png)
+![Level-up moment and the rings of the bottom bar and the closed notch](images/rpg-hero-moments.png)
+![Every pose and cosmetic of the 24 × 24 art](images/rpg-hero-art.png)
+![The two card layouts, centered and row](images/rpg-hero-directions.png)

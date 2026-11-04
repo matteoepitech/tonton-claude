@@ -51,6 +51,15 @@ final class NotchState: ObservableObject {
     @Published var wingCountdown = false
     /// The session the wings show, widened like the Dynamic Island (Settings › Notch › Live activity).
     @Published var liveActivity: SessionSummary?
+    /// The hero screen fills the right column, from Tonton's ring in the bottom bar.
+    @Published var showHero = false
+    /// Its page and the item tried on, kept here so they survive the column being rebuilt, as when a first session shows up.
+    @Published var heroPage = HeroPage.journal
+    @Published var heroPreview: RPG.Item?
+    /// The level Tonton just reached, shown for a moment across the notch.
+    @Published var levelUp: Int?
+    /// "+XP" on its way from a session's row to Tonton's ring.
+    @Published var xpFloat: XPFloat?
 
     static var expandedSize: CGSize { AppSettings.shared.notchSize.size }
     static let peekHeight: CGFloat = 34
@@ -72,4 +81,12 @@ final class NotchState: ObservableObject {
         case .expanded: Self.expandedSize
         }
     }
+}
+
+/// XP that just arrived, floating from the row of the session whose turn earned it, or from the ring itself when that
+/// row is not known.
+struct XPFloat: Equatable, Identifiable {
+    let id = UUID()
+    let xp: Int
+    let session: String?
 }

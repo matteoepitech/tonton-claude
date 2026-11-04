@@ -10,7 +10,7 @@ struct RPGRewardsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                Text("Boosters").font(.title2.bold())
+                Text("Boosters").font(.notch(15, weight: .semibold))
                 Text("One cosmetic per booster. Common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = rpg.error { Text(error).foregroundStyle(Theme.warning) }
@@ -49,7 +49,7 @@ struct RPGRewardsView: View {
                                 rpg.showOpening(id)
                             } label: {
                                 HStack {
-                                    MascotView(status: .idle, size: 32, hero: wearing(item))
+                                    HeroSprite(hero: wearing(item), pose: .idle, size: 36, animated: false)
                                     Text(item.rarity.label)
                                     Text(item.slot.label)
                                     Spacer()
@@ -59,8 +59,8 @@ struct RPGRewardsView: View {
                         }
                     }
                 }
-            }.padding(18)
-        }.background(Theme.bg).foregroundStyle(Theme.text)
+            }.padding(.vertical, 4)
+        }.foregroundStyle(Theme.text)
     }
     private func wearing(_ item: RPG.Item) -> RPG.State {
         var hero = rpg.hero
@@ -70,7 +70,7 @@ struct RPGRewardsView: View {
     private func reveal(_ item: RPG.Item, receipt: RPG.Opening) -> some View {
         VStack(spacing: 12) {
             if revealed {
-                MascotView(status: .working, size: 96, hero: wearing(item))
+                HeroSprite(hero: wearing(item), pose: .cheer, size: 96)
                     .overlay {
                         if !reduceMotion {
                             ForEach(0..<(5 + (RPG.Rarity.allCases.firstIndex(of: item.rarity) ?? 0) * 3), id: \.self) { index in
@@ -111,11 +111,11 @@ struct RPGUpgradesView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    MascotView(status: .working, size: 64, hero: rpg.hero)
-                    VStack(alignment: .leading) {
-                        Text("Hero upgrades").font(.title2.bold()); Text("\(rpg.hero.sparks) sparks")
-                    }
+                // Tonton himself is on the card above.
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Hero upgrades").font(.notch(15, weight: .semibold))
+                    Spacer()
+                    Text("\(rpg.hero.sparks) sparks").monospacedDigit().foregroundStyle(Theme.secondary)
                 }
                 if let error = rpg.error { Text(error).foregroundStyle(Theme.warning) }
                 ForEach(["health", "attack", "movement"], id: \.self) { stat in
@@ -133,8 +133,8 @@ struct RPGUpgradesView: View {
                     }
                 }
                 Button("Claim achievement boosters") { rpg.claimAchievements() }.disabled(!rpg.ready || rpg.busy)
-            }.padding(18)
-        }.background(Theme.bg).foregroundStyle(Theme.text)
+            }.padding(.vertical, 4)
+        }.foregroundStyle(Theme.text)
     }
     private func upgradeRow(_ stat: String) -> some View {
         let rank = rpg.hero.upgrades[stat] ?? 0

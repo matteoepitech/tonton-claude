@@ -13,7 +13,9 @@ struct ExpandedView: View {
             Color.clear.frame(height: max(state.notchSize.height, 30))
             Group {
                 // Sessions of this Mac show up without an account, so the list comes first.
-                if !settings.isConfigured && store.visibleSessions.isEmpty {
+                if store.visibleSessions.isEmpty && state.showHero {
+                    HeroScreen().padding(.horizontal, 14).padding(.top, 6)
+                } else if !settings.isConfigured && store.visibleSessions.isEmpty {
                     CenteredMessage(
                         icon: "sparkles", title: "No sessions running",
                         detail: "Start claude in a terminal on this Mac and it shows up here. For your other machines, set up an account.",
@@ -29,7 +31,9 @@ struct ExpandedView: View {
                     HStack(spacing: 0) {
                         SessionListView().frame(width: 236)
                         Rectangle().fill(Theme.line(0.08)).frame(width: 1)
-                        if let s = store.selected {
+                        if state.showHero {
+                            HeroScreen().padding(.horizontal, 14).padding(.top, 6)
+                        } else if let s = store.selected {
                             ChatPanel(session: s).id(s.id)
                         } else {
                             CenteredMessage(
@@ -42,6 +46,28 @@ struct ExpandedView: View {
             bottomBar
         }
         .padding(.horizontal, 6)
+        // Picking another session goes back to the conversation. The store also moves the selection by itself when the
+        // selected session goes away; that leaves the hero screen open.
+        .onChange(of: store.selectedId) { old, _ in
+            if let old, store.visibleSessions.contains(where: { $0.id == old }) { state.showHero = false }
+        }
+        .overlayPreferenceValue(HeroAnchors.self) { anchors in
+            GeometryReader { proxy in
+                if let float = state.xpFloat, let ring = anchors.ring {
+                    let end = proxy[ring]
+                    let start = float.session.flatMap { anchors.rows[$0] }.map { proxy[$0] }
+                    // A row scrolled out of sight still has its place: the float starts at the edge of the list instead.
+                    let from = start.map {
+                        CGPoint(x: min(max($0.midX, 0), proxy.size.width), y: min(max($0.midY, 0), proxy.size.height))
+                    }
+                    XPFloatView(
+                        xp: float.xp, from: from ?? CGPoint(x: end.midX + 24, y: end.minY - 48), to: CGPoint(x: end.midX, y: end.midY)
+                    )
+                    .id(float.id)
+                }
+            }
+            .allowsHitTesting(false)
+        }
         .overlay(alignment: .top) {
             if state.showPalette {
                 CommandPalette().padding(.top, max(state.notchSize.height, 30) + 24)

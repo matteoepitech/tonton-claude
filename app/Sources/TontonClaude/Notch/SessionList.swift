@@ -59,7 +59,11 @@ struct SessionListView: View {
                                 rename: nameField(s)
                             )
                             .contentShape(Rectangle())
-                            .onTapGesture { store.selectedId = s.id }
+                            .anchorPreference(key: HeroAnchors.self, value: .bounds) { HeroAnchors(rows: [s.id: $0]) }
+                            .onTapGesture {
+                                store.selectedId = s.id
+                                state.showHero = false
+                            }
                             // One element per session for VoiceOver, read in the order shown, that opens it like a click. While
                             // renamed, its field stays reachable.
                             .accessibilityElement(children: renaming == s.id ? .contain : .combine)

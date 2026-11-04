@@ -14,6 +14,8 @@ final class RPGStore: ObservableObject {
     @Published private(set) var leveledUp = false
     @Published var arena: RPGCombat?
     @Published private(set) var opening: String?
+    /// Committed XP that just arrived, and the level it reached when it crossed one: the notch's float and level-up.
+    let earned = PassthroughSubject<(xp: Int, level: Int?), Never>()
     private var account: Account?
     private var polling: Task<Void, Never>?
     private var celebration: Task<Void, Never>?
@@ -142,6 +144,7 @@ final class RPGStore: ObservableObject {
 
     private func accept(_ next: RPG.State) {
         if ready, next.xp > hero.xp {
+            earned.send((next.xp - hero.xp, next.level > hero.level ? next.level : nil))
             gain += next.xp - hero.xp
             leveledUp = leveledUp || next.level > hero.level
             celebration?.cancel()

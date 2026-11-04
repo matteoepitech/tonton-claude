@@ -129,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .settings(let pane): showSettings(pane: pane)
         case .session(let id):
             store.selectedId = id
+            notch.state.showHero = false
             notch.expand()
         }
     }
@@ -157,7 +158,10 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         Task { @MainActor in
             guard !isUpdate else { return AppUpdater.shared.checkForUpdates() }
             PermissionNotifications.shared.handle(actionIdentifier: action, userInfo: userInfo, store: self.store) { sessionId in
-                if let sessionId { self.store.selectedId = sessionId }
+                if let sessionId {
+                    self.store.selectedId = sessionId
+                    self.notch?.state.showHero = false
+                }
                 self.notch?.expand()
             }
         }
