@@ -5,6 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { type ClusterHero, type ClusterState, rankClusterHeroes } from '../../shared'
 import { heroTitle, LeaderboardList } from '../site/clusters/leaderboard'
 
+// Tonton's avatar asks the browser whether to keep still; rendered here without one, it is told to keep still.
+if (typeof window === 'undefined')
+  Object.assign(globalThis, { window: { matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) } })
+
 const member = (account: string, name: string) =>
   ({ account, role: 'member', joinedAt: '2026-11-01T00:00:00Z', profile: { name }, publicKeys: [] }) as ClusterState['members'][number]
 const state = { members: [member('a', 'Alice'), member('b', 'Bob'), member('c', 'Carol')] } as ClusterState
