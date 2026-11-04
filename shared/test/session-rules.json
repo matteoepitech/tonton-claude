@@ -47,7 +47,7 @@
     {
       "tool": "mcp__github__create_issue",
       "preview": "{\"title\":\"x",
-      "label": "mcp__github__create_issue",
+      "label": "github · create_issue",
       "rules": [{ "tool": "mcp__github__create_issue" }]
     }
   ]

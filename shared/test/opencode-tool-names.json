@@ -1,0 +1,18 @@
+{
+  "about": "OpenCode's tool names under Claude Code's, given the MCP servers OpenCode lists. Checked by agent/test/opencode.test.ts and app/Tests/TontonMacTests/OpenCodeLocalTests.swift.",
+  "servers": ["unreal-engine", "github", "a", "a_b", "my server"],
+  "cases": [
+    { "tool": "unreal-engine_spawn_actor", "name": "mcp__unreal-engine__spawn_actor" },
+    { "tool": "github_create_issue", "name": "mcp__github__create_issue" },
+    { "tool": "a_b_c", "name": "mcp__a_b__c" },
+    { "tool": "a_x", "name": "mcp__a__x" },
+    { "tool": "my_server_ping", "name": "mcp__my_server__ping" },
+    { "tool": "github_", "name": "github_" },
+    { "tool": "github", "name": "github" },
+    { "tool": "apply_patch", "name": "apply_patch" },
+    { "tool": "unrealMCP_create_blueprint", "name": "unrealMCP_create_blueprint" },
+    { "tool": "bash", "name": "Bash" },
+    { "tool": "task", "name": "Task" },
+    { "tool": "constructor", "name": "constructor" }
+  ]
+}

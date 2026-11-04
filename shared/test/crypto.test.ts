@@ -3,6 +3,21 @@ import { importAccountKey, newAccountKey, open, seal } from '../crypto'
 
 const newKey = newAccountKey
 
+/** The JSON a blob holds, as the Mac app's JSONDecoder reads it. */
+async function plaintext(key: string, blob: string): Promise<string> {
+  const data = Buffer.from(blob, 'base64')
+  const additionalData = new TextEncoder().encode('tonton/v1')
+  const opened = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: data.subarray(0, 12), additionalData },
+    await importAccountKey(key),
+    data.subarray(12),
+  )
+  return new TextDecoder().decode(opened)
+}
+
+/** What JSON.stringify writes for half a surrogate pair, and Swift's JSONDecoder refuses with the whole blob. */
+const LONE_ESCAPE = /(?<!\\)(?:\\\\)*\\ud[89a-f]/
+
 describe('seal / open', () => {
   test('round-trips any JSON value', async () => {
     const key = newKey()
@@ -40,5 +55,25 @@ describe('seal / open', () => {
   test('keys are 32 bytes of base64url', async () => {
     expect(Buffer.from(newKey(), 'base64url')).toHaveLength(32)
     expect(importAccountKey('not a key')).rejects.toThrow('32 bytes')
+  })
+
+  test('half an emoji seals as U+FFFD, so the Mac and the iPhone can still decode the blob', async () => {
+    const key = newKey()
+    const cut = 'Déployé 🎉'.slice(0, -1)
+    const value = { text: cut, list: ['\udf89 low half first', 'kept 🎉'], [`key ${cut}`]: 1, escaped: 'a \\ud83c in the text' }
+    const json = await plaintext(key, await seal(key, value))
+    expect(json).not.toMatch(LONE_ESCAPE)
+    expect(JSON.parse(json)).toEqual({
+      text: 'Déployé \uFFFD',
+      list: ['\uFFFD low half first', 'kept 🎉'],
+      'key Déployé \uFFFD': 1,
+      escaped: 'a \\ud83c in the text',
+    })
+  })
+
+  test('well-formed text seals byte for byte as JSON.stringify writes it', async () => {
+    const key = newKey()
+    const value = { text: 'Déployé ✅ 🎉 \\u00e9 "quoted"\n\ttab \u0001', path: 'C:\\Users\\me' }
+    expect(await plaintext(key, await seal(key, value))).toBe(JSON.stringify(value))
   })
 })

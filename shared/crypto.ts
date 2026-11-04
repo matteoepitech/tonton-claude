@@ -44,12 +44,25 @@ function cryptoKey(key: AccountKey): Promise<CryptoKey> {
 
 export async function seal(key: AccountKey, value: unknown): Promise<Sealed> {
   const iv = crypto.getRandomValues(new Uint8Array(NONCE_BYTES))
-  const plaintext = new TextEncoder().encode(JSON.stringify(value))
+  const plaintext = new TextEncoder().encode(wellFormedJson(value))
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: AAD }, await cryptoKey(key), plaintext)
   const combined = new Uint8Array(NONCE_BYTES + ciphertext.byteLength)
   combined.set(iv)
   combined.set(new Uint8Array(ciphertext), NONCE_BYTES)
   return bytesToBase64(combined)
+}
+
+/**
+ * JSON.stringify writes a lone surrogate (half of an emoji cut in two, or one already in a transcript) as an escape like
+ * `\ud83c`, and Swift's JSONDecoder refuses the whole blob for it: the Mac and the iPhone would drop the entry, or the
+ * session's meta. Whole pairs go out as they are, so these escapes are only ever lone halves: each becomes U+FFFD, what
+ * TextEncoder writes for one. Well-formed text comes out byte for byte the same.
+ */
+function wellFormedJson(value: unknown): string | undefined {
+  const json: string | undefined = JSON.stringify(value)
+  if (json === undefined || !json.includes('\\ud')) return json
+  // Escapes are read from left to right, so the second backslash of an escaped one never starts a `\ud…`.
+  return json.replace(/\\ud[89a-f][0-9a-f]{2}|\\./g, sequence => (sequence.length === 6 ? '\\ufffd' : sequence))
 }
 
 /** Throws when the blob was not sealed with this key or was tampered with. */

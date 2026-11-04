@@ -23,6 +23,7 @@ import {
   STATUS_LABELS,
   sessionRuleFor,
   shownPath,
+  toolLabel,
 } from '../shared'
 import type { SessionCommand, SessionStatus, TaskProgress, TodoItem } from '../shared/protocol'
 import { element, inline, renderMarkdown } from './markdown'
@@ -213,7 +214,7 @@ function message(item: ReturnType<typeof chatItems>[number]): HTMLElement {
     note.className = 'system'
     return note
   }
-  const summary = element('summary', element('strong', item.call.name), ` ${item.call.summary}`)
+  const summary = element('summary', element('strong', toolLabel(item.call.name)), ` ${item.call.summary}`)
   const tool = element('details', summary)
   tool.className = item.result?.isError ? 'tool failed' : item.result ? 'tool' : 'tool running'
   if (item.result?.text) tool.append(element('pre', item.result.text))
@@ -269,7 +270,7 @@ function permission(
     buttons.append(always)
   }
   buttons.append(allow)
-  const card = element('div', element('strong', `${request.toolName} wants to run`))
+  const card = element('div', element('strong', `${toolLabel(request.toolName)} wants to run`))
   card.className = 'permission'
   // The description can be a tool's whole docstring: a few lines of it, then what the call will run, as on the Mac.
   if (request.description) {
