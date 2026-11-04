@@ -668,3 +668,55 @@ describe('sharing files', () => {
     expect(stored.size).toBe(0)
   })
 })
+
+describe('claims, events and waiting, by hand', () => {
+  const claimsNow = async () => (relay.claims ? await vault.read(relay.claims.blob, decodeClusterClaims) : null)?.claims ?? []
+
+  test('cluster_claim holds paths for the hours asked, cluster_claims lists them, cluster_release lets go', async () => {
+    await join()
+    expect(await call('cluster_claims')).toBe('No session of the cluster holds a file.')
+    expect(
+      await call('cluster_claim', { paths: ['Content\\Maps\\Main.umap', 'Content/Hero/**'], reason: 'lighting pass', hours: 30 }),
+    ).toBe('Holds Content/Maps/Main.umap, Content/Hero/**: lighting pass. For 12 hours, unless you let go before with cluster_release.')
+    const [held] = await claimsNow()
+    expect(held).toMatchObject({ paths: ['Content/Maps/Main.umap', 'Content/Hero/**'], reason: 'lighting pass', session: ME })
+    expect(Date.parse(held?.until ?? '') - Date.parse(held?.at ?? '')).toBe(12 * 3_600_000)
+    expect(await call('cluster_claims')).toMatch(
+      /^- Content\/Maps\/Main\.umap, Content\/Hero\/\*\*: this session \(lighting pass\), until /,
+    )
+    expect(await call('cluster_release', { paths: ['Content/Maps/Main.umap'] })).toBe('Let go of Content/Maps/Main.umap.')
+    expect((await claimsNow()).map(claim => claim.paths)).toEqual([['Content/Hero/**']])
+    expect(await call('cluster_release')).toBe('Let go of Content/Hero/**.')
+    expect(await claimsNow()).toEqual([])
+    expect(await call('cluster_release')).toBe('This session holds no file.')
+  })
+
+  test('cluster_event posts what happened; cluster_wait returns the first matching event of another session', async () => {
+    await join()
+    expect(await call('cluster_event', { type: 'Ready', text: 'The hero rig is in', ref: 'SK_Hero', paths: ['Content/Hero'] })).toMatch(
+      /^Posted \(post /,
+    )
+    const post = relay.sent.find(message => message.t === 'cluster_post') as { blob: string }
+    expect(await vault.read(post.blob, value => value as ClusterPostBody)).toEqual({
+      kind: 'event',
+      text: 'The hero rig is in',
+      event: { type: 'ready', ref: 'SK_Hero', paths: ['Content/Hero'] },
+    })
+    const waiting = work.call('cluster_wait', { type: 'submit', word: 'sm_tree', minutes: 1 })
+    await settle()
+    // Not this one: another type. Then the one it waits for.
+    await relay.fromAna({ kind: 'event', text: 'Built', event: { type: 'build', ok: true, ref: 'SM_Tree' } })
+    await relay.fromAna({
+      kind: 'event',
+      text: 'Submitted change 1234',
+      event: { type: 'submit', ok: true, ref: '1234', paths: ['Content/SM_Tree.uasset'] },
+    })
+    const got = await waiting
+    expect(got).toContain('Submitted change 1234')
+    expect(got).toContain('<cluster kind="event"')
+    expect(await call('cluster_wait', { member: 'Nobody' })).toBe('No member Nobody in this cluster: cluster_who lists them.')
+    expect(await work.call('cluster_wait', { type: 'push', minutes: 0.005 })).toBe(
+      'Nothing matching in 0.005 minutes. Go on without it, or wait again.',
+    )
+  })
+})
