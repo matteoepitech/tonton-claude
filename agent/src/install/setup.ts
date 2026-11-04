@@ -2,13 +2,14 @@
 // reports on it, and a diagnosis from the app checks it and repairs it (see diagnose.ts). Tests point it at a temporary
 // home.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { paths } from '../config'
 import { type ClaudeSettings, launcherSettings, withTontonHooks } from './claude-settings'
 import { openCodeConfigDir } from './opencode'
-import { type Shell, withLauncher } from './shell-profile'
+import { launcherEncoding, readProfile, writeProfile } from './profile-file'
+import { removeLauncher, type Shell, withLauncher } from './shell-profile'
 import { binaryPath, IS_WINDOWS, shellProfiles } from './system'
 
 export interface Setup {
@@ -75,12 +76,26 @@ export function writeLauncherSettings(setup: Setup) {
   writeFileSync(setup.launcherSettings, `${JSON.stringify(settings, null, 2)}\n`)
 }
 
-/** Writes the launcher into each shell profile and returns them. */
+/**
+ * Writes the launcher into each shell profile and returns them, keeping a copy of a PowerShell profile the first time:
+ * it may be in an encoding the user's own tools wrote.
+ */
 export function writeLaunchers(setup: Setup): string[] {
   for (const { file, shell } of setup.profiles) {
     mkdirSync(dirname(file), { recursive: true })
-    const current = existsSync(file) ? readFileSync(file, 'utf8') : ''
-    writeFileSync(file, withLauncher(current, shell, setup.launcherSettings))
+    const current = readProfile(file, shell)
+    const backup = `${file}.tonton-backup`
+    if (current && shell === 'powershell' && !existsSync(backup)) copyFileSync(file, backup)
+    const text = withLauncher(current?.text ?? '', shell, setup.launcherSettings)
+    writeProfile(file, { text, encoding: launcherEncoding(shell, current?.encoding ?? null) })
   }
   return setup.profiles.map(profile => profile.file)
+}
+
+/** Takes the launcher out of each shell profile, in the encoding the profile has. */
+export function removeLaunchers(profiles: Setup['profiles']) {
+  for (const { file, shell } of profiles) {
+    const current = readProfile(file, shell)
+    if (current) writeProfile(file, { ...current, text: removeLauncher(current.text) })
+  }
 }

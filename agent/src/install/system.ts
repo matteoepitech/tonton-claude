@@ -65,7 +65,8 @@ export function withoutConsole(exe: Uint8Array): Uint8Array {
 export function runClaude(args: string[]): boolean {
   const command = IS_WINDOWS ? ['cmd', '/c', 'claude', ...args] : ['claude', ...args]
   try {
-    return Bun.spawnSync(command, { stdout: 'ignore', stderr: 'ignore' }).exitCode === 0
+    // Diagnose runs it from the service, which has no console on Windows: without windowsHide, a console window flashes.
+    return Bun.spawnSync(command, { stdout: 'ignore', stderr: 'ignore', windowsHide: true }).exitCode === 0
   } catch {
     return false
   }
@@ -80,18 +81,32 @@ export function unregisterMcpServer() {
   runClaude(['mcp', 'remove', '--scope', 'user', 'tonton'])
 }
 
+/**
+ * Prints the profile PowerShell reads for every host. PowerShell writes to a pipe in the console's code page (850 or
+ * 437), not UTF-8, which turns C:\Users\Jérôme into J�r�me: the path goes out as Base64 of its UTF-8 bytes instead.
+ */
+export function profilePathCommand(executable: string): string[] {
+  const script = '[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]($PROFILE.CurrentUserAllHosts)))'
+  return [executable, '-NoProfile', '-NonInteractive', '-Command', script]
+}
+
+/** The path in what profilePathCommand printed, null when there is none. */
+export function decodeProfilePath(output: string): string | null {
+  const encoded = output.trim()
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) return null
+  return Buffer.from(encoded, 'base64').toString('utf8').trim() || null
+}
+
 /** Profiles that get the launcher: zsh/bash on Unix, every installed PowerShell on Windows. */
 export function shellProfiles(): { file: string; shell: Shell }[] {
   if (IS_WINDOWS) {
     const profiles: { file: string; shell: Shell }[] = []
     for (const executable of ['powershell', 'pwsh']) {
       try {
-        const result = Bun.spawnSync([executable, '-NoProfile', '-Command', '$PROFILE.CurrentUserAllHosts'], {
-          stdout: 'pipe',
-          stderr: 'ignore',
-        })
-        const file = result.stdout.toString().trim()
-        if (result.exitCode === 0 && file) profiles.push({ file, shell: 'powershell' })
+        // Diagnose runs this from the service, which has no console: without windowsHide, PowerShell windows flash.
+        const result = Bun.spawnSync(profilePathCommand(executable), { stdout: 'pipe', stderr: 'ignore', windowsHide: true })
+        const file = result.exitCode === 0 ? decodeProfilePath(result.stdout.toString()) : null
+        if (file) profiles.push({ file, shell: 'powershell' })
       } catch {
         // This PowerShell edition is not installed.
       }

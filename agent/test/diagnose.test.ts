@@ -9,7 +9,9 @@ import type { AgentMessage, Diagnosis, SetupCheck, SetupFix } from '../../shared
 import type { AgentConfig } from '../src/config'
 import { handleDiagnoseRequest, type MachineAccess } from '../src/diagnose'
 import { HOOK_EVENTS } from '../src/install/claude-settings'
+import { encodeProfile } from '../src/install/profile-file'
 import type { Setup } from '../src/install/setup'
+import { launcherBlock } from '../src/install/shell-profile'
 import { PLUGIN_FILE } from '../src/opencode/plugin'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-diagnose-'))
@@ -177,6 +179,15 @@ test('the relay refusing the machine, or out of reach', async () => {
   expect(check((await ask())?.diagnosis, 'relay')?.detail).toBe(
     "relay.example.com is not reachable over HTTP: Unable to connect. Hooks can't report the state of sessions.",
   )
+})
+
+test('a launcher in a PowerShell profile saved as UTF-16 is found', async () => {
+  const file = join(setup.home, 'Documents', 'WindowsPowerShell', 'profile.ps1')
+  mkdirSync(join(setup.home, 'Documents', 'WindowsPowerShell'), { recursive: true })
+  setup.profiles = [{ file, shell: 'powershell' }]
+  const text = `Set-Alias ll Get-ChildItem\r\n\r\n${launcherBlock('powershell', setup.launcherSettings)}\n`
+  writeFileSync(file, encodeProfile({ text, encoding: 'utf16le' }))
+  expect(check((await ask())?.diagnosis, 'launcher')).toMatchObject({ ok: true })
 })
 
 test('the status line says when a session last reported', async () => {
