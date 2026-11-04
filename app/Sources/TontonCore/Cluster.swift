@@ -208,7 +208,7 @@ extension SessionVault {
 // MARK: What another member sealed, read leniently
 
 /// Any JSON, to read what another member sealed field by field: a field of the wrong type is dropped, never trusted.
-enum ClusterJSON: Decodable, Equatable {
+enum ClusterJSON: Decodable, Equatable, Sendable {
     case string(String), number(Double), bool(Bool), array([ClusterJSON]), object([String: ClusterJSON]), null
 
     init(from decoder: Decoder) throws {

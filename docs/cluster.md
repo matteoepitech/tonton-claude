@@ -210,7 +210,8 @@ Members can put their Tonton on the cluster's leaderboard (#316). It is one seal
 one per member: a cluster holds 16 documents and 20 members. Each member who shares keeps one entry there: its level,
 what its Tonton wears, its XP of the UTC day, its XP since the clock started (or, without a clock, since it joined),
 and its last ten level-ups. Never its inventory, its receipts, its sparks or what the work was. Sharing is each
-member's own choice, on the website's **Leaderboard** tab: a member who does not share is listed without numbers.
+member's own choice, on the **Leaderboard** tab of the website and of the notch: a member who does not share is
+listed without numbers.
 
 A member's own clients write its entry while they follow the cluster, from the hero they read. They write every other
 entry back exactly as they found it, unknown fields and entries they cannot read included, and never write over a board
@@ -225,7 +226,10 @@ order.
 
 Level-ups come to the feed from that document ("Alice's Tonton reached level 12"), not from posts: apps never post,
 and a post from the agent would need a session of that member in the cluster. A member's rank moves while one of its
-clients follows the cluster (the website now, the notch with #312); with none open, its entry waits for the next one.
+clients follows the cluster: the website while the cluster's page is open, the notch whenever the app is connected,
+from the hero it already polls. With none open, its entry waits for the next one.
+
+![The leaderboard in the notch, at 380 points dark and 500 points light](images/cluster-leaderboard.png)
 
 `shared/cluster-heroes.ts` and `TontonCore/ClusterHeroes.swift` build, merge and rank the entries the same way;
 `shared/test/cluster-heroes-vectors.json` is checked by both, and `test/cluster-watch.test.ts` runs two members and a

@@ -609,12 +609,38 @@
         }
       }
     },
+    "%@’s Tonton reached level %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@’s Tonton reached level %2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le Tonton de %1$@ a atteint le niveau %2$lld"
+          }
+        }
+      }
+    },
     "%lld" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld"
+          }
+        }
+      }
+    },
+    "%lld XP" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld XP"
           }
         }
       }
@@ -1647,6 +1673,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "+%lld étincelles"
+          }
+        }
+      }
+    },
+    "+%lld today" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld aujourd’hui"
           }
         }
       }
@@ -4473,6 +4509,16 @@
         }
       }
     },
+    "Doesn't share its Tonton" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne partage pas son Tonton"
+          }
+        }
+      }
+    },
     "Done" : {
       "localizations" : {
         "fr" : {
@@ -6098,6 +6144,16 @@
         }
       }
     },
+    "Leaderboard" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classement"
+          }
+        }
+      }
+    },
     "Leave" : {
       "localizations" : {
         "fr" : {
@@ -6168,12 +6224,38 @@
         }
       }
     },
+    "Level %lld · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Level %1$lld · %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau %1$lld · %2$@"
+          }
+        }
+      }
+    },
     "Level %lld!" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Niveau %lld !"
+          }
+        }
+      }
+    },
+    "Level up" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niveau supérieur"
           }
         }
       }
@@ -7428,6 +7510,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seules les sessions servies par un agent peuvent rejoindre un pool : celle-ci est lue depuis les fichiers de ce Mac."
+          }
+        }
+      }
+    },
+    "Only the level, the look and the XP are shared, never what the work was." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seuls le niveau, l’apparence et les XP sont partagés, jamais le travail lui-même."
           }
         }
       }
@@ -9292,6 +9384,16 @@
         }
       }
     },
+    "Share my Tonton here" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager mon Tonton ici"
+          }
+        }
+      }
+    },
     "Share read-only" : {
       "localizations" : {
         "fr" : {
@@ -10018,6 +10120,16 @@
         }
       }
     },
+    "Stop sharing my Tonton" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne plus partager mon Tonton"
+          }
+        }
+      }
+    },
     "Stopped: it takes no tasks until you start it again." : {
       "localizations" : {
         "fr" : {
@@ -10503,6 +10615,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La dernière modification de ce fichier a échoué"
+          }
+        }
+      }
+    },
+    "The leaderboard does not open with the keys you hold yet: nothing was changed." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le classement ne s’ouvre pas encore avec vos clés : rien n’a été changé."
           }
         }
       }
@@ -12038,6 +12160,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XP par heure aujourd’hui"
+          }
+        }
+      }
+    },
+    "XP since each member joined" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XP depuis l’arrivée de chacun"
+          }
+        }
+      }
+    },
+    "XP since the clock started" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XP depuis le départ de l’horloge"
           }
         }
       }
