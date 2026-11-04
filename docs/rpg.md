@@ -1,36 +1,74 @@
-# Tonton's progression (rules version 1)
+# Tonton's progression (rules version 2)
 
 One account has one Tonton. Every machine contributes to it. A hackathon never resets the hero. Work rewards apply
 equally to Claude Code and OpenCode. Cosmetics change appearance; combat upgrades change combat statistics.
 
 ## Rewards
 
+Rules version 2 rewards the work Claude Code and OpenCode actually do: answered prompts, minutes of work, finished
+tasks and pushes. Version 1 rewarded only checklist items and pool tasks, and Claude Code rarely writes a checklist.
+
 | Source | XP | Sparks | Identity and limit |
 | --- | ---: | ---: | --- |
-| Completed checklist task | 10 | 1 | Session and normalized task text; once, even after reopening |
+| Answered prompt: a turn its user typed (terminal, notch or website) that ends without failure | 5 | — | Session and turn; 1 XP if the turn worked less than 5 seconds |
+| Work time | 1 per minute the turn worked | — | Same receipt as the prompt; 60 minutes per turn at most, waits on a permission prompt excluded where the agent can tell |
+| First prompted turn of the UTC day | 20, plus 10 per day of streak | — | Account and UTC day; 50 at most, once a day for the whole account |
+| Commit pushed, or Perforce changelist submitted | 15 | — | Repository and commit, or server and changelist; once each |
+| Completed checklist task (`TodoWrite`, `TaskUpdate` to completed, OpenCode's `todowrite`) | 10 | 1 | Session and normalized task text; once, even after reopening |
 | Completed pool task | 50 | 5 | Pool and task id; once for the assignee at completion |
 | Accepted review | 20 | 2 | Pool and task id; once for the reviewer at acceptance |
 | Won combat encounter | 15 | 2 | Run and encounter id; once per encounter |
 | Won boss fight | 75 | 10 | Run and boss id; once per boss |
 
-These are tunable defaults, recorded with the rules version. Work rewards are capped at 1,000 XP per UTC day;
-combat rewards at 300 XP. An award crossing the cap receives only the remaining XP and proportional sparks, rounded
-down. Its receipt is still saved. Replaying it tomorrow earns nothing. Idle time, token spending, tool calls and
-ordinary assistant messages earn nothing. Cancelled or failed tasks earn nothing. A completed checklist item is
-self-reported work, not proof that tests pass. Pool tasks are the larger unit of work; a pool session's checklist
-does not also earn solo XP.
+A turn earns one receipt: its prompt and its minutes together, so "13 minutes of work" reads as +18 XP (5 + 13).
+The streak counts the days in a row before this one that had a first turn: 20 XP on the first day, 30 on the second,
+40 on the third, 50 from the fourth. Work rewards (everything above but combat) earn one spark per 10 XP, rounded
+down per award; a full prompt alone earns none. These are tunable defaults, one set of constants: `RPG_RULES` in
+`shared/rpg.ts` and `RPG.Rules` in `TontonCore/RPG.swift`, checked against each other by
+`shared/test/rpg-v2-vectors.json`.
 
-Solo rewards begin with successful checklist results observed by the updated agent. Loading an old transcript or
-OpenCode history does not backfill XP. Pending rewards already saved by the agent do survive restarts. Local-only
-sessions shown by the Mac without an agent do not produce rewards. Pool completions store their original assignee,
-reviewer and completion time in the sealed task, so a later reassignment cannot move an existing reward.
+Work rewards are capped at 1,500 XP per UTC day (1,000 in version 1); combat rewards at 300 XP. An award crossing the
+cap receives only the remaining XP and proportional sparks, rounded down. A turn started by a pool or cluster post
+earns its minutes but not the prompt, and never the day's first turn, so two Claudes cannot farm each other.
+Subagents work inside their parent's turn and count once, with it. Idle time, token spending, tool calls and ordinary
+assistant messages earn nothing. Cancelled, interrupted or failed turns earn their minutes, not the prompt. Cancelled
+or failed tasks earn nothing. A completed checklist item is self-reported work, not proof that tests pass. Pool tasks
+are the larger unit of work; a pool session's checklist does not also earn solo XP.
+
+The agent sends facts, never amounts: a turn's length, whether its user typed it, a commit's identity. The rules
+above turn them into XP when the reward is applied, so every client computes the same hero. Pending rewards already
+saved by the agent survive restarts. On its first run, the updated agent also backfills the last 14 days of this
+machine's Claude Code transcripts and OpenCode history at version 2 rates, each day under its own cap. Backfilled
+rewards have the same identities as live ones, so nothing counts twice. Local-only sessions shown by the Mac without
+an agent do not produce rewards. Pool completions store their original assignee, reviewer and completion time in the
+sealed task, so a later reassignment cannot move an existing reward.
 
 Level 1 starts at zero XP. Reaching level L needs 50 × L × (L − 1) lifetime XP: level 2 needs 100, level 3 needs 300,
-level 4 needs 600. The maximum level is 100; XP can continue accumulating. Each new level grants one unopened
-booster, identified by that level. The first completed task earns 10 XP and one spark. Ten such tasks reach level 2
-and grant one booster. Six pool tasks earn 300 XP, level 3 and two boosters. A fight and a boss earn 90 XP and 12
-sparks before the daily combat cap. Sparks buy permanent upgrades: the next rank costs 10 × (current rank + 1),
-up to ten ranks each in health, attack and movement. The combat implementation owns the resulting stat multipliers.
+level 4 needs 600. The curve is the same as in version 1, so no hero loses a level. The maximum level is 100; XP can
+continue accumulating. Each new level grants one unopened booster, identified by that level.
+
+A worked example. A day of 60 prompts, 4 hours of work and 5 pushed commits earns 60 × 5 + 240 + 5 × 15 + 20 = 635 XP.
+One hour of it (15 prompts, 60 minutes, the first turn) is 155 XP: level 2. Two such days are 635 + 645 = 1,280 XP:
+level 5 (1,000). A week, with the streak at its maximum from the fourth day, is about 4,600 XP: level 10 (4,500).
+In version 1 terms, the first completed task still earns 10 XP and one spark, and six pool tasks earn 300 XP,
+level 3 and two boosters. A fight and a boss earn 90 XP and 12 sparks before the daily combat cap. Sparks buy permanent
+upgrades: the next rank costs 10 × (current rank + 1), up to ten ranks each in health, attack and movement. The combat
+implementation owns the resulting stat multipliers.
+
+### Receipts and gains
+
+Version 1 kinds (tasks, pool tasks, reviews, combat) keep their receipts in `receipts`, never pruned. Version 2 kinds
+(`turn`, `day`, `push`) keep theirs in `gains`, a field apps of version 1 do not read. A gain carries its UTC time,
+a turn its seconds, and both may carry a short sealed note for the journal (the project folder, the branch), at most 80
+characters. The hero screens read them through `rpgToday` and `rpgJournal` (`shared/rpg-journal.ts`,
+`TontonCore/RPGJournal.swift`): today's XP, the streak, XP per UTC hour, and the last gains.
+
+Gains are many, so they are bounded. A gain whose UTC day is more than 21 days before the award, or more than a day
+after it, earns nothing. Gains older than 30 days are pruned when a new one is applied: the 9 days between the two
+mean a pruned receipt can never be earned again. At most 200 gains a UTC day are kept; more earn nothing. A gain that
+earns nothing (the cap is reached, or a turn a post started worked less than a minute) leaves no receipt: its day's
+total can only grow, so replaying it can never earn more. Version 1 receipts keep their rule: a capped receipt is
+saved, and reaching 10,000 stops new rewards rather than forgetting claims.
 
 ## Cosmetics and boosters
 
@@ -151,6 +189,11 @@ existing storage; the RPG milestone rewards are account-wide.
 | Windows/Linux island | Existing session UI; use the relay website for RPG | Relay website | Renderer not shipped |
 | iPhone | Core can read the same hero; dedicated RPG screens not shipped | Relay website | Renderer not shipped |
 
+`shared/test/rpg-v2-vectors.json` holds the version 2 boundaries, worked out by hand: short turns, the 60-minute turn,
+the daily cap crossing, a streak across UTC midnight, the horizon and pruning, the 200 gains a day and the journal.
+`bun test shared/test/rpg*` and `swift test --filter RPG` run them. A frozen copy of each released reader
+(`shared/test/rpg-v1-reader.ts`, `ReleasedState` in `RPGRulesTests`) proves a version 2 hero still opens there.
+
 Run `bun scripts/rpg-demo.ts`. It creates a relay on a random local port, two temporary accounts and isolated agent
 reward collectors. Its printed local `demo.json` path contains recovery keys for Alice and Bob; paste them into two
 separate disposable browser contexts. Nothing changes the real account, Claude settings, shell profile or login items.
@@ -177,6 +220,21 @@ old clients preserve balances and inventory and may omit opening table metadata,
 | Old | New | New | Sessions work; the panel asks for a relay update; agent rewards remain pending. |
 | New | Old | New | Existing hero is readable; old agents do not earn XP. |
 | New | New | Old | Agents earn and save XP; old apps keep their existing UI. |
+
+Rules version 2 changes no route and no relay: the hero stays one sealed document behind `GET`/`PUT /api/rpg`, with
+schema `version: 1`, so released apps keep opening it. They read the XP, level, sparks, boosters and items that
+version 2 rewards produce, and ignore `gains`. A Mac or iPhone app older than rules version 2 drops `gains` when it
+writes the hero back (equipping, opening a booster, an upgrade, the arena): balances and items stay, the journal of the
+last 30 days empties, and the updated agent keeps its own record of the rewards it committed, so a transcript it reads
+again does not pay twice. TypeScript clients of version 1 (older agents, the relay's website) keep `gains`, since they
+copy the fields they don't know. Agents earn version 2 rewards after **Update agent**; older agents keep earning
+version 1 rewards, under their own 1,000 XP cap.
+
+| Relay | Agent | Mac app | Behavior with rules version 2 |
+| --- | --- | --- | --- |
+| Any with `/api/rpg` | New | New | Turns, streaks and pushes earn XP; the hero screen shows today and the journal. |
+| Any with `/api/rpg` | Old | New | Only version 1 rewards; the hero opens. |
+| Any with `/api/rpg` | New | Old | The agent earns version 2 XP; the old panel shows the level; its writes empty the journal. |
 
 No pool key or account key is exposed to the relay. Private hero data is independent of pool keys. The pool
 leaderboard publishes only a separate pool-key-encrypted profile, never the account document.
