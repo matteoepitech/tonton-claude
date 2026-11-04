@@ -23,14 +23,14 @@ final class RPGTests: XCTestCase {
 
     func testWorkAndCombatCapsAndRetainedClaims() throws {
         var hero = RPG.State()
-        for i in 0..<22 { try hero.award(RPG.Reward(kind: .poolTask, source: "\(i)", at: "2026-10-28")) }
-        XCTAssertEqual(hero.xp, 1000)
-        XCTAssertEqual(hero.receipts.count, 22)
-        try hero.award(RPG.Reward(kind: .poolTask, source: "21", at: "2026-10-29"))
-        XCTAssertEqual(hero.xp, 1000)
+        for i in 0..<32 { try hero.award(RPG.Reward(kind: .poolTask, source: "\(i)", at: "2026-10-28")) }
+        XCTAssertEqual(hero.xp, 1500)
+        XCTAssertEqual(hero.receipts.count, 32)
+        try hero.award(RPG.Reward(kind: .poolTask, source: "31", at: "2026-10-29"))
+        XCTAssertEqual(hero.xp, 1500)
         for i in 0..<5 { try hero.award(RPG.Reward(kind: .boss, source: "\(i)", at: "2026-10-28")) }
-        XCTAssertEqual(hero.xp, 1300)
-        XCTAssertEqual(hero.sparks, 140)
+        XCTAssertEqual(hero.xp, 1800)
+        XCTAssertEqual(hero.sparks, 190)
     }
 
     func testInventorySlotsAndPixelBounds() throws {

@@ -1,0 +1,222 @@
+{
+  "about": "Rules version 2, checked by shared/test/rpg-v2.test.ts and app/Tests/TontonCoreTests/RPGRulesTests.swift. Rewards are applied in order from an empty hero (or `start`) at `now`. A reward with `times` is repeated with the index appended to its source. The expected numbers are worked out by hand in docs/rpg.md's terms, not generated.",
+  "cases": [
+    {
+      "name": "short turns and unprompted minutes",
+      "now": "2026-11-04T18:00:00Z",
+      "rewards": [
+        { "kind": "turn", "source": "s\na1", "at": "2026-11-04T10:00:00Z", "seconds": 3, "prompted": true },
+        { "kind": "turn", "source": "s\na2", "at": "2026-11-04T10:01:00Z", "seconds": 5, "prompted": true },
+        { "kind": "turn", "source": "s\na3", "at": "2026-11-04T10:02:00Z", "seconds": 59, "prompted": false },
+        { "kind": "turn", "source": "s\na4", "at": "2026-11-04T10:03:00Z", "seconds": 60, "prompted": false },
+        { "kind": "turn", "source": "s\na5", "at": "2026-11-04T10:04:00Z", "seconds": 299, "prompted": true },
+        { "kind": "turn", "source": "s\na2", "at": "2026-11-04T10:05:00Z", "seconds": 600, "prompted": true }
+      ],
+      "expect": {
+        "xp": 16,
+        "sparks": 0,
+        "level": 1,
+        "boosters": [],
+        "owned": [],
+        "receipts": 0,
+        "gains": 4,
+        "today": [{ "now": "2026-11-04T18:00:00Z", "day": "2026-11-04", "xp": 16, "streak": 0, "hours": { "10": 16 } }]
+      }
+    },
+    {
+      "name": "the 60-minute turn cap",
+      "now": "2026-11-04T18:00:00Z",
+      "rewards": [
+        { "kind": "turn", "source": "s\nb1", "at": "2026-11-04T09:00:00Z", "seconds": 3600, "prompted": true },
+        { "kind": "turn", "source": "s\nb2", "at": "2026-11-04T11:00:00Z", "seconds": 7200, "prompted": true },
+        { "kind": "turn", "source": "s\nb3", "at": "2026-11-04T13:00:00Z", "seconds": 5400, "prompted": false },
+        { "kind": "turn", "source": "s\nb4", "at": "2026-11-04T14:00:00Z", "seconds": 3599, "prompted": true }
+      ],
+      "expect": {
+        "xp": 254,
+        "sparks": 24,
+        "level": 2,
+        "boosters": ["level-2"],
+        "owned": ["skin-common"],
+        "receipts": 0,
+        "gains": 4,
+        "today": [
+          { "now": "2026-11-04T18:00:00Z", "day": "2026-11-04", "xp": 254, "streak": 0, "hours": { "9": 65, "11": 65, "13": 60, "14": 64 } }
+        ]
+      }
+    },
+    {
+      "name": "the daily cap crossing",
+      "now": "2026-11-05T12:00:00Z",
+      "rewards": [
+        { "kind": "poolTask", "source": "pool\nc0", "at": "2026-11-04T08:00:00Z" },
+        { "kind": "turn", "source": "s\nc", "at": "2026-11-04T09:00:00Z", "seconds": 3600, "prompted": true, "times": 22 },
+        { "kind": "push", "source": "git\nc1", "at": "2026-11-04T17:00:00Z", "note": "main" },
+        { "kind": "push", "source": "git\nc2", "at": "2026-11-04T17:01:00Z", "note": "main" },
+        { "kind": "task", "source": "s\ncapped", "at": "2026-11-04T17:02:00Z" },
+        { "kind": "push", "source": "git\nc3", "at": "2026-11-04T17:03:00Z", "note": "main" },
+        { "kind": "encounter", "source": "arena\nc", "at": "2026-11-04T17:04:00Z" },
+        { "kind": "turn", "source": "s\nnext", "at": "2026-11-05T00:00:30Z", "seconds": 3600, "prompted": true }
+      ],
+      "expect": {
+        "xp": 1580,
+        "sparks": 146,
+        "level": 6,
+        "boosters": ["level-2", "level-3", "level-4", "level-5", "level-6"],
+        "owned": ["skin-common", "hat-common", "accessory-common", "aura-common", "trail-common"],
+        "receipts": 3,
+        "gains": 25,
+        "today": [
+          { "now": "2026-11-05T12:00:00Z", "day": "2026-11-05", "xp": 65, "streak": 0, "hours": { "0": 65 } },
+          { "now": "2026-11-04T23:59:59Z", "day": "2026-11-04", "xp": 1515, "streak": 0, "hours": { "8": 50, "9": 1430, "17": 35 } }
+        ]
+      }
+    },
+    {
+      "name": "a streak across UTC midnight",
+      "now": "2026-11-07T12:00:00Z",
+      "rewards": [
+        { "kind": "day", "source": "2026-11-01", "at": "2026-11-01T23:59:30Z" },
+        { "kind": "day", "source": "2026-11-02", "at": "2026-11-02T00:00:10Z" },
+        { "kind": "day", "source": "2026-11-03", "at": "2026-11-03T12:00:00Z" },
+        { "kind": "day", "source": "2026-11-04", "at": "2026-11-04T12:00:00Z" },
+        { "kind": "day", "source": "2026-11-05", "at": "2026-11-05T12:00:00Z" },
+        { "kind": "day", "source": "2026-11-04", "at": "2026-11-04T13:00:00Z" },
+        { "kind": "day", "source": "2026-11-07", "at": "2026-11-07T09:00:00Z" }
+      ],
+      "expect": {
+        "xp": 210,
+        "sparks": 21,
+        "level": 2,
+        "boosters": ["level-2"],
+        "owned": ["skin-common"],
+        "receipts": 0,
+        "gains": 6,
+        "today": [
+          { "now": "2026-11-07T12:00:00Z", "day": "2026-11-07", "xp": 20, "streak": 1, "hours": { "9": 20 } },
+          { "now": "2026-11-06T08:00:00Z", "day": "2026-11-06", "xp": 0, "streak": 5, "hours": {} },
+          { "now": "2026-11-02T00:00:00Z", "day": "2026-11-02", "xp": 30, "streak": 2, "hours": { "0": 30 } }
+        ]
+      }
+    },
+    {
+      "name": "the horizon, the future and pruning",
+      "now": "2026-11-30T12:00:00Z",
+      "start": {
+        "version": 1,
+        "xp": 10,
+        "sparks": 0,
+        "receipts": [],
+        "owned": [],
+        "equipped": {},
+        "boosters": [],
+        "openings": {},
+        "upgrades": {},
+        "gains": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "kind": "turn",
+            "day": "2026-10-30",
+            "xp": 5,
+            "sparks": 0
+          },
+          {
+            "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "kind": "turn",
+            "day": "2026-10-31",
+            "xp": 5,
+            "sparks": 0
+          }
+        ]
+      },
+      "rewards": [
+        { "kind": "turn", "source": "s\ne1", "at": "2026-11-09T10:00:00Z", "seconds": 3600, "prompted": true },
+        { "kind": "turn", "source": "s\ne2", "at": "2026-11-08T23:59:59Z", "seconds": 3600, "prompted": true },
+        { "kind": "turn", "source": "s\ne3", "at": "2026-12-01T10:00:00Z", "seconds": 3600, "prompted": true },
+        { "kind": "turn", "source": "s\ne4", "at": "2026-12-02T00:00:00Z", "seconds": 3600, "prompted": true }
+      ],
+      "expect": {
+        "xp": 140,
+        "sparks": 12,
+        "level": 2,
+        "boosters": ["level-2"],
+        "owned": ["skin-common"],
+        "receipts": 0,
+        "gains": 3,
+        "today": [{ "now": "2026-11-30T12:00:00Z", "day": "2026-11-30", "xp": 0, "streak": 0, "hours": {} }]
+      }
+    },
+    {
+      "name": "two hundred gains a day",
+      "now": "2026-11-04T18:00:00Z",
+      "rewards": [{ "kind": "turn", "source": "s\nf", "at": "2026-11-04T10:00:00Z", "seconds": 3, "prompted": true, "times": 201 }],
+      "expect": {
+        "xp": 200,
+        "sparks": 0,
+        "level": 2,
+        "boosters": ["level-2"],
+        "owned": ["skin-common"],
+        "receipts": 0,
+        "gains": 200,
+        "today": [{ "now": "2026-11-04T18:00:00Z", "day": "2026-11-04", "xp": 200, "streak": 0, "hours": { "10": 200 } }]
+      }
+    },
+    {
+      "name": "the journal",
+      "now": "2026-11-04T18:00:00Z",
+      "rewards": [
+        { "kind": "push", "source": "git\ng1", "at": "2026-11-04T10:00:00Z", "note": "main" },
+        { "kind": "turn", "source": "s\ng2", "at": "2026-11-04T10:05:00Z", "seconds": 790, "prompted": true, "note": "tonton-claude" },
+        { "kind": "task", "source": "s\nWrite the docs", "at": "2026-11-04T10:06:00Z" },
+        { "kind": "day", "source": "2026-11-04", "at": "2026-11-04T10:04:59Z" }
+      ],
+      "expect": {
+        "xp": 63,
+        "sparks": 5,
+        "level": 1,
+        "boosters": [],
+        "owned": [],
+        "receipts": 1,
+        "gains": 3,
+        "today": [{ "now": "2026-11-04T18:00:00Z", "day": "2026-11-04", "xp": 63, "streak": 1, "hours": { "10": 63 } }],
+        "journal": [
+          {
+            "id": "f6b01d5ef2465774430f0a02857b7ba9f540d30cdc6c136102346082b995cc45",
+            "kind": "task",
+            "xp": 10,
+            "sparks": 1,
+            "day": "2026-11-04",
+            "at": "2026-11-04T10:06:00Z"
+          },
+          {
+            "id": "eb86992ebc9e2f72370a4d80e42eb600c198a3aa57994d10fdca12f1eebee658",
+            "kind": "turn",
+            "xp": 18,
+            "sparks": 1,
+            "day": "2026-11-04",
+            "at": "2026-11-04T10:05:00Z",
+            "seconds": 790,
+            "note": "tonton-claude"
+          },
+          {
+            "id": "4304d89cc5357906b101be65b3508eafb8266454384daa50f552e0f1ddd28fc3",
+            "kind": "day",
+            "xp": 20,
+            "sparks": 2,
+            "day": "2026-11-04",
+            "at": "2026-11-04T10:04:59Z"
+          },
+          {
+            "id": "c23b784041f38ca6af2ca8e5d6224bb42d94937a719fe99b91308d2dac1c2b9c",
+            "kind": "push",
+            "xp": 15,
+            "sparks": 1,
+            "day": "2026-11-04",
+            "at": "2026-11-04T10:00:00Z",
+            "note": "main"
+          }
+        ]
+      }
+    }
+  ]
+}
