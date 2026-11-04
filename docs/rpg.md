@@ -132,8 +132,13 @@ scores from pool work receipts, excluding combat and solo work; it must not expo
 
 ## Play, open and upgrade
 
-On Mac, open Tonton's panel and choose **Boosters**, **Hero** or **Team**. The website has a **Tonton** tab for the
-same inventory, openings and upgrades, and pool leaderboards show contribution XP and shared goals.
+On Mac, click the ring around Tonton in the notch's bottom bar: the hero screen opens in the right column, with
+**Journal**, **Wardrobe**, **Boosters**, **Upgrades** and **Team** behind its icons. The website has a **Tonton** tab for the
+same inventory, openings and upgrades, and pool leaderboards show contribution XP and shared goals. Its hero card shows
+the level ring, today's XP with the streak and a bar per hour; the journal of the last gains is the first page under it,
+and the wardrobe tries an item on the big Tonton at the first click and wears it at the second. On Windows and Linux, the island's closed bar
+shows the level ring and the last gain; a click on the ring opens the same hero page in the island. Both draw the
+24 × 24 art of `shared/rpg-art.json`, the notch's too, through `web/hero.ts`.
 
 Loot table 1 uses the probabilities above and uniformly selects a slot within the chosen rarity. Browser draws use
 WebCrypto; Mac draws use the system random generator. The two random values are selected before the transaction,
@@ -214,7 +219,7 @@ existing storage; the RPG milestone rewards are account-wide.
 | --- | --- | --- | --- |
 | Mac | Yes, English/French | Yes, plus link to pool page | Native arena and local resumable checkpoint |
 | Website | Yes, with previews and reduced-motion reveals | Yes, with existing session drilldown | Play in the Mac app; rewards sync here |
-| Windows/Linux island | Existing session UI; use the relay website for RPG | Relay website | Renderer not shipped |
+| Windows/Linux island | Yes: level ring and last gain in the bar, the hero page in the island | Relay website | Renderer not shipped |
 | iPhone | Core can read the same hero; dedicated RPG screens not shipped | Relay website | Renderer not shipped |
 
 `shared/test/rpg-v2-vectors.json` holds the version 2 boundaries, worked out by hand: short turns, the 60-minute turn,
