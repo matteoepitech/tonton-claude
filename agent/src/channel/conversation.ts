@@ -12,6 +12,7 @@ import { backlogImages, forgetOldImages } from '../transcript/images'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
+import { TranscriptWork, type WorkFacts } from '../transcript/work'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import { deferClusterPost, forgetClusterPosts } from './cluster-digest'
 import { ClusterAutoJoin } from './cluster-joins'
@@ -62,6 +63,9 @@ export class Conversation {
   private readonly tailer: Tailer | null
   private readonly subagents: Subagents | null
   private subEntries: Entry[] = []
+  /** Turns, tasks and pushes, for XP. Read again from the start with the transcript. */
+  private workLog = new TranscriptWork()
+  private pushes = new EventDetector()
   /** Every subagent entry sent, so a transcript read again doesn't send one twice, even after it left the backlog. */
   private readonly sentSubIds = new Set<string>()
   /** Read-only shares of this session: each gets its own sealed copy. */
@@ -179,6 +183,8 @@ export class Conversation {
           lines: (lines, initial) => this.onLines(lines, initial),
           reset: () => {
             this.entries = []
+            this.workLog = new TranscriptWork()
+            this.pushes = new EventDetector()
             this.tokens = undefined
             this.countedRequests.clear()
             this.context = undefined
@@ -252,18 +258,25 @@ export class Conversation {
     this.postPermission(requestId)
   }
 
+  /** Answered from the notch, the website or the phone: from the request to the answer, the turn waited and did not work. */
   resolvePermission(requestId: string) {
+    const asked = this.pending.get(requestId)
+    if (asked) this.workLog.waited(Date.now() - Date.parse(asked.ts))
     this.pending.delete(requestId)
   }
 
   private onLines(lines: string[], initial: boolean) {
     const fresh: Entry[] = []
     const commands: Record<string, string> = {}
+    const work: WorkFacts = { turns: [], tasks: [] }
     let metaChanged = false
     for (const line of lines) {
       const parsed = parseLine(line)
       fresh.push(...parsed.entries)
       Object.assign(commands, parsed.commands)
+      const facts = this.workLog.line(parsed)
+      work.turns.push(...facts.turns)
+      work.tasks.push(...facts.tasks)
       if (parsed.title !== undefined && parsed.title !== this.title) {
         this.title = parsed.title
         metaChanged = true
@@ -291,7 +304,10 @@ export class Conversation {
       }
     }
     this.remember(fresh)
-    if (!initial) this.rpg?.observe(this.link.sessionId, this.entries, this.pools.ids().length > 0, fresh)
+    // The first read is the past: it tells the trackers where the session is, and the welcome backfill paid it once.
+    const vcs = this.pushes.work(fresh, id => this.workLog.command(id))
+    const inPool = this.pools.ids().length > 0 || this.workLog.pool
+    if (!initial) this.rpg?.work(this.link.sessionId, { ...work, vcs, cwd: this.workLog.cwd ?? this.cwd() }, inPool)
     if (initial) return this.announce()
     // What its shell calls tell its clusters: commits, pushes, submits, builds, files opened (agent/src/cluster/detect.ts).
     this.detector ??= new EventDetector(this.cwd())

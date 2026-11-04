@@ -224,8 +224,10 @@ describe('OpenCode through the relay', () => {
     }, 'the progress')
     expect(tasks).toEqual({ done: 1, total: 2 })
     emit('session.tool.success', { callID: 'call_todo', tool: 'todowrite', output: 'ok', timestamp: Date.now() })
+    // The task's own receipt: the recorded run's turn earns work XP next to it, while it is recent.
     await eventually(
-      async () => (await new RPGClient(`${base}/api/rpg`, accountToken, key).read()).state.xp === 10,
+      async () =>
+        (await new RPGClient(`${base}/api/rpg`, accountToken, key).read()).state.receipts.some(r => r.kind === 'task' && r.xp === 10),
       'OpenCode checklist XP',
     )
   })

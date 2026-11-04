@@ -6,6 +6,7 @@ import { receiveDiagnoseRequest } from '../diagnose'
 import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
 import { handleLogRequest } from '../logs'
+import { AgentRPG } from '../rpg'
 import { receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { acquireLock, releaseLock } from './control'
@@ -22,6 +23,8 @@ import { runTray } from './tray'
 const CONFIG_POLL_MS = 2000
 /** How often the machine's CPU, memory and battery go to the app. */
 const HEALTH_INTERVAL_MS = 60_000
+/** The welcome backfill waits for the machine to settle after login or an update. */
+const BACKFILL_DELAY_MS = 60_000
 
 /**
  * Runs in the background from login: keeps the machine reachable so the app can update it even with no claude open,
@@ -79,7 +82,7 @@ export async function runService(args: string[]) {
     const worker = new PoolWorker(pools, { machineName: config.machine })
     const lead = new PoolLead(pools, { machineName: config.machine })
     const loop = new DispatchLoop(pools)
-    autopilot = [worker, lead, loop]
+    autopilot = [worker, lead, loop, welcomeBackfill(config)]
     const relay: RelayConnection = new RelayConnection(config, 'service', {
       connected: () => {
         writeStatus('connected', config.server)
@@ -121,4 +124,26 @@ export async function runService(args: string[]) {
   setInterval(follow, CONFIG_POLL_MS)
   setInterval(reportHealth, HEALTH_INTERVAL_MS)
   runTray(stop)
+}
+
+/**
+ * XP version 2's welcome backfill (agent/src/rpg-backfill.ts): once per relay and account, in the one process every machine
+ * runs, so sessions start without waiting for it. Its rewards drain from here like a session's.
+ */
+function welcomeBackfill(config: NonNullable<ReturnType<typeof loadConfig>>): { stop(): void } {
+  const rpg = new AgentRPG(config)
+  const timer = setTimeout(() => {
+    rpg
+      .backfill()
+      .then(ran => ran && log('xp: welcome backfill done'))
+      // Its errors can name a project's files: none goes to the log.
+      .catch(() => log('xp: welcome backfill failed'))
+  }, BACKFILL_DELAY_MS)
+  timer.unref?.()
+  return {
+    stop() {
+      clearTimeout(timer)
+      rpg.stop()
+    },
+  }
 }

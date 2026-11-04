@@ -765,6 +765,72 @@ describe('EventDetector', () => {
   })
 })
 
+describe('EventDetector.work, for XP', () => {
+  let call = 0
+  const shell = (command: string, text: string, isError = false) => {
+    call++
+    return [
+      { id: `t${call}`, ts: '2026-11-04T14:00:00Z', kind: 'tool' as const, toolUseId: `c${call}`, name: 'Bash', summary: command },
+      { id: `r${call}`, ts: `2026-11-04T14:00:0${call % 10}Z`, kind: 'tool_result' as const, toolUseId: `c${call}`, text, isError },
+    ]
+  }
+  const committed = (sha: string, branch = 'main') => `[${branch} ${sha}] Work\n 1 file changed, 1 insertion(+)`
+
+  test("a push sends this session's commits on its branch, else the head it names", () => {
+    const detector = new EventDetector()
+    const work = detector.work([
+      ...shell('git commit -am one', committed('1111111')),
+      ...shell('git commit -am two', committed('2222222')),
+      ...shell('git commit -am other', committed('3333333', 'feat/x')),
+      ...shell('git push', 'To github.com:me/hero.git\n   0000000..2222222  main -> main'),
+      // Commits made in the terminal: only the new head is known.
+      ...shell('git push', 'To github.com:me/hero.git\n   2222222..4444444  main -> main'),
+      ...shell('git push origin feat/x', 'To github.com:me/hero.git\n * [new branch]      feat/x -> feat/x'),
+    ])
+    expect(work).toEqual([
+      { kind: 'push', ts: '2026-11-04T14:00:04Z', branch: 'main', commits: ['1111111', '2222222'] },
+      { kind: 'push', ts: '2026-11-04T14:00:05Z', branch: 'main', commits: ['4444444'] },
+      { kind: 'push', ts: '2026-11-04T14:00:06Z', branch: 'feat/x', commits: ['3333333'] },
+    ])
+    // Its posts are what they were: the commits stay on the machine.
+    expect(new EventDetector().read(shell('git push', 'To o\n   0000000..2222222  main -> main'))[0].event).toEqual({
+      type: 'push',
+      ok: true,
+      ref: 'main',
+    })
+  })
+
+  test('rejected, tag, review and new branch pushes with no known commit send nothing', () => {
+    const detector = new EventDetector()
+    expect(
+      detector.work([
+        ...shell('git commit -am one', committed('1111111')),
+        ...shell('git push', 'To o\n ! [rejected]        main -> main (fetch first)', true),
+        ...shell('git push --tags', 'To o\n * [new tag]         v1.0 -> v1.0'),
+        ...shell('git push origin HEAD:refs/for/main', 'To o\n * [new reference]   main -> refs/for/main'),
+        ...shell('git push -u origin feat/y', 'To o\n * [new branch]      feat/y -> feat/y'),
+      ]),
+    ).toEqual([])
+  })
+
+  test('a submit names its change, and the server when the command does', () => {
+    const detector = new EventDetector()
+    expect(
+      detector.work([
+        ...shell(
+          'p4 -c ws -p ssl:p4.example.com:1666 submit -d "Fix"',
+          'Submitting change 41.\nChange 41 renamed change 42 and submitted.',
+        ),
+        ...shell('P4PORT=perforce:1666 p4 submit -c 43', 'Change 43 submitted.'),
+        ...shell('p4 submit -c 44', 'Submit aborted -- fix problems then use p4 submit -c 44.', true),
+      ]),
+    ).toEqual([
+      { kind: 'submit', ts: expect.any(String), change: '42', port: 'ssl:p4.example.com:1666' },
+      { kind: 'submit', ts: expect.any(String), change: '43', port: 'perforce:1666' },
+    ])
+  })
+})
+
 describe('commands', () => {
   const programs = (line: string) => commandsOf(line).map(command => [command.program, ...command.args])
 

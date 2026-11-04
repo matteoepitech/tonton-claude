@@ -37,6 +37,8 @@ import { handleLogRequest } from '../logs'
 import { AgentRPG } from '../rpg'
 import { matchingRule, modeAllows, openSessionRules, readRules, receiveRules } from '../rules'
 import { backlogImages, forgetOldImages } from '../transcript/images'
+import { isPoolPost } from '../transcript/parser'
+import { TranscriptWork } from '../transcript/work'
 import { OPENCODE_COMMANDS, type OpenCodePermission, OpenCodeTracker, type SessionUpdate } from './events'
 
 const BACKLOG_SIZE = 400
@@ -100,6 +102,13 @@ class Link {
   /** Turns that ended, from the statuses OpenCode reports, for the time budgets: OpenCode writes no turn times. */
   private turns: TurnTime[] = []
   private turnStarted: number | null = null
+  /** Time the current turn waited on a permission prompt, from the request to its answer: it is not work. */
+  private waitedMs = 0
+  /** A pool post reached the session: its checklist is the pool's. */
+  private poolPosts = false
+  /** Checklist tasks, pushes and submits, for XP: OpenCode's entries read as Claude Code's are. */
+  private readonly workLog = new TranscriptWork()
+  private readonly pushes = new EventDetector()
 
   constructor(
     readonly sessionId: string,
@@ -230,7 +239,7 @@ class Link {
   add(entries: Entry[]) {
     const marked = entries.map(entry => this.markFromNotch(entry))
     this.entries = forgetOldImages([...this.entries, ...marked].slice(-BACKLOG_SIZE))
-    this.rpg.observe(this.sessionId, this.entries, this.pools.ids().length > 0, marked)
+    this.readWork(marked)
     // Live entries only: OpenCode's own history, after a restart, comes through `reset`.
     this.detector ??= new EventDetector(this.cwd() ?? process.cwd())
     this.cluster.observe(this.detector.read(marked, id => this.tracker.command(this.sessionId, id)))
@@ -241,6 +250,8 @@ class Link {
 
   /** OpenCode's own history arrived: it replaces what the relay holds, its images within the backlog's budget. */
   reset(history: Entry[]) {
+    // The past, as for Claude Code's first read: it tells the trackers where the session is, and earns nothing again.
+    this.readWork(history, false)
     const known = new Map(this.entries.map(entry => [entry.id, entry]))
     this.entries = forgetOldImages(history.map(entry => known.get(entry.id) ?? entry).slice(-BACKLOG_SIZE))
     const entries = backlogImages(this.entries)
@@ -260,6 +271,28 @@ class Link {
     this.work.descriptionChanged()
     this.cluster.descriptionChanged()
     this.safety.usageChanged()
+  }
+
+  /** Turns that ended and pushes, from the tracker, for XP. The time waited on permissions comes off the last turn. */
+  earn(update: SessionUpdate) {
+    const turns = [...(update.turns ?? [])]
+    const last = turns.at(-1)
+    if (last) {
+      turns[turns.length - 1] = { ...last, seconds: Math.max(0, last.seconds - this.waitedMs / 1000) }
+      this.waitedMs = 0
+    }
+    this.rpg.work(this.sessionId, { turns, cwd: this.cwd() }, this.inPool())
+  }
+
+  private readWork(entries: Entry[], earn = true) {
+    if (entries.some(entry => entry.kind === 'user' && isPoolPost(entry.text))) this.poolPosts = true
+    const { tasks } = this.workLog.line({ entries })
+    const vcs = this.pushes.work(entries, id => this.tracker.command(this.sessionId, id))
+    if (earn) this.rpg.work(this.sessionId, { tasks, vcs, cwd: this.cwd() }, this.inPool())
+  }
+
+  private inPool(): boolean {
+    return this.pools.ids().length > 0 || this.poolPosts
   }
 
   /** A status from OpenCode: a turn starts with the prompt and ends when OpenCode is done or fails. */
@@ -294,6 +327,8 @@ class Link {
   }
 
   close(requestId: string) {
+    const asked = this.pending.get(requestId)
+    if (asked) this.waitedMs += Math.max(0, Date.now() - Date.parse(asked.ts))
     if (!this.pending.delete(requestId)) return
     this.relay.post(async () => ({ t: 'permission_closed', sessionId: this.sessionId, requestId: shortId(requestId) }))
   }
@@ -489,6 +524,7 @@ export async function runOpenCode() {
     if (update.metaChanged) link.postMeta()
     if (update.permission) link.ask(update.permission)
     if (update.permissionClosed) link.close(update.permissionClosed)
+    if (update.turns?.length) link.earn(update)
     const { status } = update
     if (status) link.turn(status.hook)
     if (status) {
