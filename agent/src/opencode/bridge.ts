@@ -19,7 +19,7 @@ import { PoolSafety } from '../channel/pool-safety'
 import { poolUsage } from '../channel/pool-usage'
 import { PoolWork } from '../channel/pool-work'
 import { SessionPools } from '../channel/pools'
-import { RelayConnection } from '../channel/relay-connection'
+import { entriesMessages, RelayConnection } from '../channel/relay-connection'
 import { SessionShares } from '../channel/shares'
 import { claimCommand, whyInvalid } from '../channel/terminal'
 import { clearGuardState, OpenCodeGuard } from '../cluster/guard'
@@ -31,6 +31,7 @@ import { log } from '../log'
 import { handleLogRequest } from '../logs'
 import { AgentRPG } from '../rpg'
 import { matchingRule, modeAllows, openSessionRules, readRules, receiveRules } from '../rules'
+import { backlogImages } from '../transcript/images'
 import { OPENCODE_COMMANDS, type OpenCodePermission, OpenCodeTracker, type SessionUpdate } from './events'
 
 const BACKLOG_SIZE = 400
@@ -95,7 +96,7 @@ class Link {
       () => sessionId,
       config.key,
       build => this.relay.post(build),
-      () => this.entries,
+      () => backlogImages(this.entries),
     )
     this.pools = new SessionPools(
       () => sessionId,
@@ -139,18 +140,17 @@ class Link {
     const marked = entries.map(entry => this.markFromNotch(entry))
     this.entries = [...this.entries, ...marked].slice(-BACKLOG_SIZE)
     this.rpg.observe(this.sessionId, this.entries, this.pools.ids().length > 0, marked)
-    if (marked.length)
-      this.relay.post(async () => ({ t: 'entries', sessionId: this.sessionId, entries: await this.seal(marked), reset: false }))
+    if (marked.length) this.postEntries(marked, false)
     this.shares.entries(marked)
     if (marked.some(isTodoWrite)) this.postMeta()
   }
 
-  /** OpenCode's own history arrived: it replaces what the relay holds. */
+  /** OpenCode's own history arrived: it replaces what the relay holds, its images within the backlog's budget. */
   reset(history: Entry[]) {
     const known = new Map(this.entries.map(entry => [entry.id, entry]))
     this.entries = history.map(entry => known.get(entry.id) ?? entry).slice(-BACKLOG_SIZE)
-    const entries = this.entries
-    this.relay.post(async () => ({ t: 'entries', sessionId: this.sessionId, entries: await this.seal(entries), reset: true }))
+    const entries = backlogImages(this.entries)
+    this.postEntries(entries, true)
     this.shares.entries(entries, true)
     if (entries.some(isTodoWrite)) this.postMeta()
   }
@@ -219,9 +219,9 @@ class Link {
   private announce() {
     const cwd = this.cwd() ?? process.cwd()
     const info: SessionInfo = { machine: this.config.machine, platform: process.platform, cwd, project: projectOf(cwd), tool: 'opencode' }
-    const { sessionId, entries } = this
+    const { sessionId } = this
     this.relay.post(async () => ({ t: 'hello', sessionId, info: await seal(this.config.key, info), channel: true }))
-    this.relay.post(async () => ({ t: 'entries', sessionId, entries: await this.seal(entries), reset: true }))
+    this.postEntries(backlogImages(this.entries), true)
     this.postMeta()
     for (const requestId of this.pending.keys()) this.postPermission(requestId)
   }
@@ -338,6 +338,11 @@ class Link {
       sessionId: this.sessionId,
       request: { requestId: shortId(requestId), ts, blob: await seal(this.config.key, detail) },
     }))
+  }
+
+  /** Several messages when they would be too big for one, as for Claude Code. */
+  private postEntries(entries: Entry[], reset: boolean) {
+    this.relay.post(async () => entriesMessages(this.sessionId, await this.seal(entries), reset))
   }
 
   private seal(entries: Entry[]): Promise<SealedEntry[]> {

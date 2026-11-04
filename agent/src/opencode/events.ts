@@ -1,4 +1,5 @@
 import type { Entry, ImageData, PermissionDetail, SessionCommand, SessionMeta, TokenCounts } from '../../../shared/protocol'
+import { entryImages } from '../transcript/images'
 import { cutToolResult, fileEdits, todoItems, toolSummary } from '../transcript/parser'
 
 // OpenCode's plugin events, turned into what the notch shows for a Claude Code session: entries, a status and the meta.
@@ -58,8 +59,6 @@ export interface CatalogModel {
   released?: number
 }
 
-/** As for Claude Code: larger images stay out of the conversation. */
-const MAX_IMAGE_BASE64 = 4 * 1024 * 1024
 const MAX_LAST_MESSAGE_CHARS = 200
 /** Event ids already handled: OpenCode 2 hands each event to every plugin instance of the process. */
 const SEEN_EVENTS = 4000
@@ -473,7 +472,7 @@ export class OpenCodeTracker {
     const body = text(item?.payload?.text) ?? ''
     const images = imagesOf(item?.payload?.files)
     if (!session || !id || item?.type !== 'user' || (!body && !images.length)) return []
-    return this.add(session, { id, ts: this.time(), kind: 'user', text: body, ...(images.length ? { images } : {}) })
+    return this.add(session, { id, ts: this.time(), kind: 'user', ...entryImages(body, images) })
   }
 
   private text(props: Fields): SessionUpdate[] {
@@ -580,7 +579,7 @@ export class OpenCodeTracker {
       )
     } else if (part.type === 'file' && message.role === 'user') {
       const images = imagesOf([part])
-      if (images.length) entries.push({ id: part.id, ts, kind: 'user', text: part.filename ?? '', images })
+      if (images.length) entries.push({ id: part.id, ts, kind: 'user', ...entryImages(part.filename ?? '', images) })
     } else if (part.type === 'tool' && typeof part.tool === 'string' && part.state) {
       const { status } = part.state
       if (status !== 'running' && status !== 'completed' && status !== 'error') return []
@@ -789,6 +788,7 @@ function toolEntry(id: string, call: string, ts: string, tool: string, input: Fi
 /**
  * A shell command that exited with an error is a completed tool for OpenCode. As in Claude Code, its result is an error
  * that starts with its exit code; one stopped before it ended (a timeout, an abort) has no exit code, and is an error.
+ * The entry keeps the images that fit, as for Claude Code.
  */
 function resultEntry(
   id: string,
@@ -803,16 +803,16 @@ function resultEntry(
   const exitCode = !failed && typeof exit === 'number' && exit !== 0 ? exit : undefined
   const isError = failed || exitCode !== undefined || exit === null
   const text = cutToolResult(exitCode !== undefined ? `Exit code ${exitCode}\n${output}` : output)
-  return { id, ts, kind: 'tool_result', toolUseId: call, text, isError, ...(images.length ? { images } : {}) }
+  return { id, ts, kind: 'tool_result', toolUseId: call, ...entryImages(text, images), isError }
 }
 
-/** The images among OpenCode's files: it passes them as data URLs. */
+/** The images among OpenCode's files: it passes them as data URLs. The entry keeps the ones that fit, as for Claude Code. */
 function imagesOf(files: unknown): ImageData[] {
   if (!Array.isArray(files)) return []
   return files.flatMap(file => {
     const url = file && typeof file === 'object' ? (file as { url?: unknown }).url : undefined
     const match = typeof url === 'string' ? /^data:(image\/[\w.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(url) : null
-    return match && match[2].length <= MAX_IMAGE_BASE64 ? [{ mediaType: match[1], data: match[2] }] : []
+    return match ? [{ mediaType: match[1], data: match[2] }] : []
   })
 }
 

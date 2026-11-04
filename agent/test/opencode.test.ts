@@ -469,6 +469,34 @@ describe('OpenCode 1', () => {
     expect(result?.kind === 'tool_result' && result.text).toMatch(/^start\n[\s\S]*characters truncated\)\n[\s\S]*Result: Failed$/)
   })
 
+  test('a result keeps the images that fit in its budget and says how many it left out, as for Claude Code', () => {
+    const shot = (fill: string) => ({ type: 'file', mime: 'image/png', url: `data:image/png;base64,${fill.repeat(3 * 1024 * 1024)}` })
+    const { entries } = replay([
+      message('m1', 'assistant'),
+      part({
+        id: 'p1',
+        messageID: 'm1',
+        type: 'tool',
+        callID: 'c1',
+        tool: 'read',
+        state: { status: 'completed', input: {}, output: 'Took them', attachments: [shot('A'), shot('B'), shot('C')] },
+      }),
+      {
+        id: 'e1',
+        created: 1,
+        type: 'session.tool.success',
+        data: { sessionID: 'ses_1', id: 'call_2', content: [{ type: 'text', text: 'And these' }, shot('D'), shot('E'), shot('F')] },
+      },
+    ])
+    const results = entries.flatMap(entry =>
+      entry.kind === 'tool_result' ? [[entry.text, entry.images?.map(image => image.data[0])]] : [],
+    )
+    expect(results).toEqual([
+      ['Took them\n[2 images not loaded]', ['A']],
+      ['And these\n[2 images not loaded]', ['D']],
+    ])
+  })
+
   test('anything unexpected is skipped', () => {
     const tracker = new OpenCodeTracker()
     for (const event of [null, 3, 'x', {}, { type: 'message.updated' }, { type: 'message.part.updated', properties: { part: 5 } }]) {

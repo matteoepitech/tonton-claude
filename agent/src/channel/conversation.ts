@@ -1,11 +1,12 @@
 import { basename } from 'node:path'
 import { seal } from '../../../shared/crypto'
-import type { AgentMessage, ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
+import type { ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { paths } from '../config'
 import { gitBranch } from '../git'
 import type { AgentRPG } from '../rpg'
 import { setPoolMode, setPoolRules } from '../rules'
+import { backlogImages } from '../transcript/images'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
@@ -14,6 +15,7 @@ import { PoolSafety } from './pool-safety'
 import { poolUsage } from './pool-usage'
 import { PoolWork } from './pool-work'
 import { SessionPools } from './pools'
+import { entriesMessages, type Outgoing } from './relay-connection'
 import type { SessionLink } from './session-link'
 import { SessionShares } from './shares'
 import { COMMANDS, runCommand } from './terminal'
@@ -23,12 +25,10 @@ const BACKLOG_SIZE = 400
 const SUBAGENT_BACKLOG_SIZE = 300
 /** Turns that ended while the Mac was away: more than this many before it comes back, and the oldest go uncounted. */
 const KEPT_TURNS = 20
-/** On reconnect only the latest entries keep their images, the rest is sent as text. */
-const BACKLOG_IMAGES = 40
 /** How often the usage left by the status line is checked. */
 const USAGE_POLL_MS = 1000
 
-type Post = (build: () => Promise<AgentMessage | null>) => void
+type Post = (build: () => Promise<Outgoing>) => void
 
 interface PendingPermission extends PermissionDetail {
   ts: string
@@ -83,7 +83,7 @@ export class Conversation {
       () => link.sessionId,
       key,
       post,
-      () => withoutOldImages(this.entries),
+      () => backlogImages(this.entries),
     )
     this.pools = new SessionPools(() => link.sessionId, key, post)
     this.work = new PoolWork(
@@ -163,10 +163,10 @@ export class Conversation {
   announce() {
     const { sessionId } = this.link
     const cwd = this.cwd()
-    const backlog = [...withoutOldImages(this.entries), ...this.subEntries]
+    const backlog = [...backlogImages(this.entries), ...this.subEntries]
     const info = { machine: this.machine, platform: process.platform, cwd, project: projectOf(cwd) }
     this.post(async () => ({ t: 'hello', sessionId, info: await seal(this.key, info), channel: this.canChat }))
-    this.post(async () => ({ t: 'entries', sessionId, entries: await this.sealEntries(backlog), reset: true }))
+    this.postEntries(backlog, true)
     this.postMeta()
     for (const requestId of this.pending.keys()) this.postPermission(requestId)
   }
@@ -182,14 +182,14 @@ export class Conversation {
     for (const entry of fresh) this.sentSubIds.add(entry.id)
     this.subEntries = [...this.subEntries, ...fresh].slice(-SUBAGENT_BACKLOG_SIZE)
     if (backlog) return
-    this.post(async () => ({ t: 'entries', sessionId: this.link.sessionId, entries: await this.sealEntries(fresh), reset: false }))
+    this.postEntries(fresh, false)
   }
 
   /** A line from the agent in the conversation, such as why a command from the notch was not typed. */
   notice(text: string) {
     const entry: Entry = { id: `notice-${crypto.randomUUID()}`, ts: new Date().toISOString(), kind: 'system', text }
     this.entries.push(entry)
-    this.post(async () => ({ t: 'entries', sessionId: this.link.sessionId, entries: await this.sealEntries([entry]), reset: false }))
+    this.postEntries([entry], false)
     this.shares.entries([entry])
   }
 
@@ -239,7 +239,7 @@ export class Conversation {
     if (initial) return this.announce()
 
     const { sessionId } = this.link
-    if (fresh.length) this.post(async () => ({ t: 'entries', sessionId, entries: await this.sealEntries(fresh), reset: false }))
+    if (fresh.length) this.postEntries(fresh, false)
     this.shares.entries(fresh)
     if (metaChanged || fresh.some(e => e.kind === 'assistant' || e.kind === 'user' || isTodoWrite(e))) this.postMeta()
 
@@ -340,6 +340,11 @@ export class Conversation {
     }))
   }
 
+  /** Several messages when they would be too big for one. */
+  private postEntries(entries: Entry[], reset: boolean) {
+    this.post(async () => entriesMessages(this.link.sessionId, await this.sealEntries(entries), reset))
+  }
+
   private sealEntries(entries: Entry[]): Promise<SealedEntry[]> {
     return Promise.all(entries.map(async entry => ({ id: entry.id, ts: entry.ts, blob: await seal(this.key, entry) })))
   }
@@ -362,13 +367,4 @@ function addTokens(total: TokenCounts | undefined, response: TokenCounts): Token
     cacheRead: (total?.cacheRead ?? 0) + response.cacheRead,
     cacheWrite: (total?.cacheWrite ?? 0) + response.cacheWrite,
   }
-}
-
-function withoutOldImages(entries: Entry[]): Entry[] {
-  const keepFrom = entries.length - BACKLOG_IMAGES
-  return entries.map((entry, index) => {
-    if (index >= keepFrom || !('images' in entry) || !entry.images?.length) return entry
-    const { images, ...rest } = entry
-    return { ...rest, text: `${rest.text}\n[${images.length} image${images.length === 1 ? '' : 's'} not loaded]` } as Entry
-  })
 }

@@ -71,6 +71,31 @@ describe('parseLine', () => {
     expect(entries[0]).toMatchObject({ kind: 'user', images: [{ mediaType: 'image/png', data: 'iVBORw0' }] })
   })
 
+  test('an entry keeps the images that fit in its budget and says how many it left out', () => {
+    // Three 3 MB screenshots would seal to 12 MB: the relay drops a blob over 8 MB, and the result would never show.
+    const shot = (fill: string, size = 3 * 1024 * 1024) => ({
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: fill.repeat(size) },
+    })
+    const result = parseLine(
+      line({
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 't1', content: [{ type: 'text', text: 'Took them' }, shot('A'), shot('B'), shot('C')] },
+          ],
+        },
+      }),
+    ).entries[0]
+    if (result.kind !== 'tool_result') throw new Error('expected a tool result')
+    expect(result.images?.map(image => image.data[0])).toEqual(['A'])
+    expect(result.text).toBe('Took them\n[2 images not loaded]')
+
+    // A screenshot too large on its own still says it was there.
+    const prompt = parseLine(line({ type: 'user', message: { content: [shot('D', 5 * 1024 * 1024), shot('E', 16)] } })).entries[0]
+    expect(prompt).toMatchObject({ kind: 'user', text: '[1 image not loaded]', images: [{ data: 'E'.repeat(16) }] })
+  })
+
   test('messages sent from the notch are unwrapped', () => {
     const { entries } = parseLine(
       line({

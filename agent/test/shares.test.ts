@@ -10,10 +10,10 @@ const entry = (id: string, text: string): Entry => ({ id, ts: '2026-10-26T10:00:
 function shares(backlog: Entry[] = []) {
   const sent: AgentMessage[] = []
   let outbox = Promise.resolve()
-  const post = (build: () => Promise<AgentMessage | null>) => {
+  const post = (build: () => Promise<AgentMessage | AgentMessage[] | null>) => {
     outbox = outbox.then(async () => {
       const message = await build()
-      if (message) sent.push(message)
+      if (message) sent.push(...[message].flat())
     })
   }
   const set = new SessionShares(

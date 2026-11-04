@@ -4,8 +4,9 @@
 import { open, seal } from '../../../shared/crypto'
 import type { AgentMessage, Entry, SealedEntry, SharedInfo, ShareOrder } from '../../../shared/protocol'
 import { log } from '../log'
+import { entryBatches, type Outgoing } from './relay-connection'
 
-type Post = (build: () => Promise<AgentMessage | null>) => void
+type Post = (build: () => Promise<Outgoing>) => void
 
 interface Share {
   key: string
@@ -79,12 +80,20 @@ export class SessionShares {
     return { t: 'share_info', sessionId: this.sessionId(), shareId, info: await seal(share.key, this.info) }
   }
 
-  private async sealEntries(shareId: string, entries: Entry[], reset: boolean): Promise<AgentMessage | null> {
+  /** Several messages when they would be too big for one, as for the session's own copy. */
+  private async sealEntries(shareId: string, entries: Entry[], reset: boolean): Promise<AgentMessage[] | null> {
     const share = this.live(shareId)
     if (!share) return null
     const sealed: SealedEntry[] = await Promise.all(
       entries.map(async entry => ({ id: entry.id, ts: entry.ts, blob: await seal(share.key, entry) })),
     )
-    return { t: 'share_entries', sessionId: this.sessionId(), shareId, entries: sealed, reset }
+    const sessionId = this.sessionId()
+    return entryBatches(sealed).map((batch, index) => ({
+      t: 'share_entries',
+      sessionId,
+      shareId,
+      entries: batch,
+      reset: reset && index === 0,
+    }))
   }
 }
