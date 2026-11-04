@@ -2317,12 +2317,32 @@
         }
       }
     },
+    "Apprentice" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apprenti"
+          }
+        }
+      }
+    },
     "Approval requests" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Demandes d’autorisation"
+          }
+        }
+      }
+    },
+    "Architect" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Architecte"
           }
         }
       }
@@ -2383,6 +2403,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Flèches / WASD : déplacement · Espace : attaque · E : onde · Échap : pause"
+          }
+        }
+      }
+    },
+    "Artisan" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artisan"
           }
         }
       }
@@ -2575,6 +2605,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Budgets, succès et résumé du jour"
+          }
+        }
+      }
+    },
+    "Builder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bâtisseur"
           }
         }
       }
@@ -4877,6 +4917,16 @@
         }
       }
     },
+    "Inventor" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inventeur"
+          }
+        }
+      }
+    },
     "It plans and hands out the work." : {
       "localizations" : {
         "fr" : {
@@ -5268,6 +5318,16 @@
         }
       }
     },
+    "Legend" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Légende"
+          }
+        }
+      }
+    },
     "Legendary" : {
       "localizations" : {
         "fr" : {
@@ -5400,6 +5460,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recherche une nouvelle version de Tonton Claude une fois par jour."
+          }
+        }
+      }
+    },
+    "Luminary" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phare"
           }
         }
       }
@@ -6527,6 +6597,16 @@
         }
       }
     },
+    "Pathfinder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Éclaireur"
+          }
+        }
+      }
+    },
     "Pause" : {
       "localizations" : {
         "fr" : {
@@ -7506,6 +7586,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RÉGLAGES"
+          }
+        }
+      }
+    },
+    "Sage" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sage"
           }
         }
       }
@@ -10116,6 +10206,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sans elle, ouvrez Tonton Claude depuis Spotlight pour revenir ici."
+          }
+        }
+      }
+    },
+    "Wizard" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Magicien"
           }
         }
       }
