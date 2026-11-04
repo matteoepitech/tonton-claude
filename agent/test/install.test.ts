@@ -13,10 +13,12 @@ describe('Claude settings', () => {
   const userHook = { matcher: 'Bash', hooks: [{ type: 'command', command: '/usr/local/bin/audit' }] }
 
   test('adds one hook per event and keeps unrelated settings and hooks', () => {
-    const settings = withTontonHooks({ model: 'opus', hooks: { PreToolUse: [userHook] } }, BINARY)
+    const settings = withTontonHooks({ model: 'opus', hooks: { PreToolUse: [userHook], PostToolUse: [userHook] } }, BINARY)
     expect(settings.model).toBe('opus')
-    expect(settings.hooks?.PreToolUse).toEqual([userHook])
-    for (const event of HOOK_EVENTS) expect(settings.hooks?.[event]).toHaveLength(1)
+    expect(settings.hooks?.PostToolUse).toEqual([userHook])
+    // The user's own hook of an event Tonton also uses stays, first.
+    expect(settings.hooks?.PreToolUse?.[0]).toEqual(userHook)
+    for (const event of HOOK_EVENTS) expect(settings.hooks?.[event]).toHaveLength(event === 'PreToolUse' ? 2 : 1)
   })
 
   test('is idempotent', () => {

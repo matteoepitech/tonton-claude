@@ -1,4 +1,5 @@
 import { ALL_POOL_TOOLS } from '../channel/pool-work'
+import { EDIT_TOOLS } from '../cluster/guard'
 import { FORWARDED_EVENTS } from './events'
 
 /** The file name in OpenCode's plugins folder. */
@@ -22,7 +23,10 @@ import { spawn } from 'node:child_process'
 const COMMAND = ${JSON.stringify(command)}
 const FORWARDED = new Set(${JSON.stringify(FORWARDED_EVENTS)})
 const POOL_TOOLS = ${JSON.stringify(ALL_POOL_TOOLS)}
+const EDIT_TOOLS = new Set(${JSON.stringify(EDIT_TOOLS)})
 const TOOL_TIMEOUT_MS = 30000
+/** An edit waits this long at most for the bridge to say whether someone holds the file, then goes ahead. */
+const GUARD_TIMEOUT_MS = 3000
 const state = (globalThis.__tontonClaude ??= { bridge: null, inputs: new Map(), client: null, calls: new Map(), nextCall: 0 })
 state.calls ??= new Map()
 state.nextCall ??= 0
@@ -162,6 +166,27 @@ function callTool(sessionID, name, args) {
   })
 }
 
+/**
+ * Before OpenCode edits a file: the bridge answers empty, or why another session of a cluster holds it, and the edit
+ * fails with that so the session asks its user. No answer in time, and the edit goes ahead.
+ */
+function guard(sessionID, tool, args) {
+  if (!EDIT_TOOLS.has(String(tool ?? '').toLowerCase())) return Promise.resolve()
+  const callID = 'guard-' + ++state.nextCall + '-' + Date.now()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      state.calls.delete(callID)
+      resolve()
+    }, GUARD_TIMEOUT_MS)
+    state.calls.set(callID, output => {
+      clearTimeout(timer)
+      if (output) reject(new Error(output))
+      else resolve()
+    })
+    send({ type: 'tonton.guard', data: { callID, sessionID, tool, args: args ?? {} } })
+  })
+}
+
 /** OpenCode 2: tools with Effect schemas, added to its registry. */
 async function addTools2(input) {
   if (!input.tool?.transform) return
@@ -229,6 +254,9 @@ export default {
     try {
       await addTools2(input)
     } catch {}
+    try {
+      input.tool?.hook?.('execute.before', event => guard(event?.sessionID, event?.tool, event?.input))
+    } catch {}
     const controller = new AbortController()
     ;(async () => {
       try {
@@ -245,7 +273,11 @@ export default {
     if (input?.client) state.client = input.client
     bridge()
     const tool = await tools1().catch(() => undefined)
-    return { event: async ({ event }) => forward(event), ...(tool ? { tool } : {}) }
+    return {
+      event: async ({ event }) => forward(event),
+      'tool.execute.before': async (call, output) => guard(call?.sessionID, call?.tool, output?.args),
+      ...(tool ? { tool } : {}),
+    }
   },
 }
 `

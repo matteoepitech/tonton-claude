@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { seal } from '../../shared/crypto'
 import type { HookPost } from '../../shared/protocol'
 import { terminalOf } from './channel/terminal'
+import { clearGuardState, guard, readGuardState } from './cluster/guard'
 import { type AgentConfig, loadConfig, paths } from './config'
 import { log } from './log'
 import { clearSessionRules, matchingRule, modeAllows, poolMode, poolRules, readRules, sessionRules } from './rules'
@@ -32,9 +33,14 @@ export async function runHook() {
   if (!event) return log('hook: unreadable input')
   try {
     if (!event.session_id) return
+    // Before each edit: it has to be quick, and the session is linked by then.
+    if (event.hook_event_name === 'PreToolUse') return guardEdit(event)
     linkSession(event)
     if (event.hook_event_name === 'PermissionRequest') return approveByRule(event)
-    if (event.hook_event_name === 'SessionEnd') clearSessionRules(event.session_id)
+    if (event.hook_event_name === 'SessionEnd') {
+      clearSessionRules(event.session_id)
+      clearGuardState(event.session_id)
+    }
 
     const config = loadConfig()
     if (!config) return
@@ -86,6 +92,8 @@ export function waitsForBackground(event: Pick<HookInput, 'hook_event_name' | 'n
  * mode its owner chose lets it pass. Otherwise print nothing, and the user is asked as usual, in the terminal or the notch.
  */
 function approveByRule(event: HookInput) {
+  // A file another session of a cluster holds is the owner's to decide: no rule or mode lets that edit through.
+  if (event.tool_name && guard(readGuardState(event.session_id), event.tool_name, event.tool_input, event.cwd)) return
   const rules = [...(readRules()?.rules ?? []), ...sessionRules(event.session_id), ...poolRules(event.session_id)]
   const rule = event.tool_name ? matchingRule(rules, event.tool_name, event.tool_input) : undefined
   const mode = !rule && event.tool_name ? poolMode(event.session_id) : null
@@ -93,6 +101,19 @@ function approveByRule(event: HookInput) {
   log(rule ? 'approved by an auto-approve rule' : 'approved by the pool machine’s mode', { tool: rule?.tool ?? event.tool_name })
   const decision = { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } }
   process.stdout.write(JSON.stringify(decision))
+}
+
+/**
+ * Claude Code is about to edit a file: when another session of one of this session's clusters holds it, the owner is
+ * asked, with who holds it, or the edit is refused when the cluster says so. Otherwise print nothing. The path stays out
+ * of the log, which the owner can send from the app.
+ */
+function guardEdit(event: HookInput) {
+  const found = event.tool_name ? guard(readGuardState(event.session_id), event.tool_name, event.tool_input, event.cwd) : null
+  if (!found) return
+  log('cluster guard: the file is held', { tool: event.tool_name, decision: found.decision })
+  const output = { hookEventName: 'PreToolUse', permissionDecision: found.decision, permissionDecisionReason: found.reason }
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: output }))
 }
 
 /** Tells the channel of the same claude process which session and transcript it serves. */

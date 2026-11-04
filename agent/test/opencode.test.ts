@@ -481,4 +481,59 @@ describe('plugin', () => {
     expect(lines.sort()).toEqual(['session.execution.started', 'session.idle'])
     ;(globalThis as { __tontonClaude?: { bridge?: { kill(): void } } }).__tontonClaude?.bridge?.kill()
   })
+
+  test('asks the bridge before an edit, in OpenCode 1 and 2, and the edit fails with its reason', async () => {
+    // A bridge that holds every Main.umap.
+    const bridge = join(dir, 'guard-bridge.ts')
+    writeFileSync(
+      bridge,
+      `let buffer = ''
+for await (const chunk of Bun.stdin.stream()) {
+  buffer += new TextDecoder().decode(chunk)
+  let newline
+  while ((newline = buffer.indexOf('\\n')) >= 0) {
+    const event = JSON.parse(buffer.slice(0, newline))
+    buffer = buffer.slice(newline + 1)
+    if (event.type !== 'tonton.guard') continue
+    const held = JSON.stringify(event.data.args).includes('Main.umap')
+    process.stdout.write(JSON.stringify({ op: 'tool_result', callID: event.data.callID, output: held ? event.data.sessionID + ' held' : '' }) + '\\n')
+  }
+}
+`,
+    )
+    const file = join(dir, 'tonton-claude-guard.js')
+    writeFileSync(file, pluginSource([process.execPath, bridge]))
+    const plugin = (await import(file)).default
+
+    // OpenCode 1
+    const hooks = await plugin.server({})
+    const before = hooks['tool.execute.before']
+    await expect(before({ tool: 'edit', sessionID: 'a', callID: 'c1' }, { args: { filePath: 'Content/Maps/Main.umap' } })).rejects.toThrow(
+      'a held',
+    )
+    await expect(
+      before({ tool: 'write', sessionID: 'a', callID: 'c2' }, { args: { filePath: 'Content/Free.umap' } }),
+    ).resolves.toBeUndefined()
+    // Not an edit: the bridge is not asked.
+    await expect(before({ tool: 'bash', sessionID: 'a', callID: 'c3' }, { args: { command: 'cat Main.umap' } })).resolves.toBeUndefined()
+
+    // OpenCode 2
+    let hooked: ((event: unknown) => Promise<void>) | undefined
+    await plugin.setup({
+      event: { subscribe: async function* () {} },
+      tool: {
+        hook: (name: string, run: (event: unknown) => Promise<void>) => {
+          if (name === 'execute.before') hooked = run
+        },
+      },
+    })
+    if (!hooked) throw new Error('no execute.before hook')
+    await expect(hooked({ tool: 'edit', sessionID: 'b', id: 'c4', input: { filePath: 'Content/Maps/Main.umap' } })).rejects.toThrow(
+      'b held',
+    )
+    await expect(
+      hooked({ tool: 'apply_patch', sessionID: 'b', id: 'c5', input: { patchText: '*** Update File: a.ts' } }),
+    ).resolves.toBeUndefined()
+    ;(globalThis as { __tontonClaude?: { bridge?: { kill(): void } } }).__tontonClaude?.bridge?.kill()
+  })
 })

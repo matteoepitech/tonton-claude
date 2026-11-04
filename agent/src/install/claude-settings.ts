@@ -10,7 +10,12 @@ export const HOOK_EVENTS = [
   'SessionEnd',
   // Approves the calls the app's auto-approve rules allow.
   'PermissionRequest',
+  // Asks before an edit of a file another session of a cluster holds.
+  'PreToolUse',
 ] as const
+
+/** The tools an event's hook runs for, when not all: a hook before every tool call would slow every one down. */
+const MATCHERS: Partial<Record<(typeof HOOK_EVENTS)[number], string>> = { PreToolUse: 'Edit|Write|MultiEdit|NotebookEdit' }
 
 interface HookCommand {
   type: string
@@ -48,7 +53,8 @@ export function withTontonHooks(settings: ClaudeSettings, binary: string): Claud
   for (const event of HOOK_EVENTS) {
     // SessionEnd hooks share a short budget in Claude Code.
     const hook: HookCommand = { type: 'command', command: binary, args: ['hook'], timeout: event === 'SessionEnd' ? 2 : 5 }
-    hooks[event] = [...(hooks[event] ?? []), { hooks: [hook] }]
+    const matcher = MATCHERS[event]
+    hooks[event] = [...(hooks[event] ?? []), matcher ? { matcher, hooks: [hook] } : { hooks: [hook] }]
   }
   return { ...clean, hooks }
 }
