@@ -51,10 +51,8 @@ if (toXWayland) {
   app.relaunch({ execPath: process.env.APPIMAGE, args: [...process.argv.slice(1), '--ozone-platform=x11'] })
   app.exit(0)
 } else if (app.requestSingleInstanceLock()) {
-  // Opening the app again shows the island: the way back when there is no tray to click.
-  app.on('second-instance', () => {
-    if (island && !island.visible) island.toggle()
-  })
+  // Opening the app again shows the island open, hidden or not: the way back when there is no tray to click.
+  app.on('second-instance', () => island?.reveal('launch'))
   // The island hides, it never closes: the app runs until Quit.
   app.on('window-all-closed', () => {})
   // Without its window or its tray, the island would hold the single-instance lock with nothing on screen: say so and quit.
@@ -82,8 +80,9 @@ function start() {
   island = new IslandWindow(built('island.html'), built('preload.cjs'), refreshMenu)
   tray = new Tray(trayIcon())
   tray.setToolTip('Tonton Claude island')
-  // Windows shows the menu on a right click; a left click shows or hides the island. Linux only has the menu.
-  tray.on('click', () => island?.toggle())
+  // Windows shows the menu on a right click; a left click opens the island, or closes it to its bar. Linux shows the menu,
+  // or does the same where the desktop activates the icon on a click.
+  tray.on('click', () => island?.reveal('tray'))
   refreshMenu()
 }
 
@@ -177,11 +176,9 @@ async function signIn(get: () => Promise<RecoveredAccount>, remember: boolean): 
     return failure(error instanceof RelayError ? error.message : 'Something went wrong. Try again.')
   }
   account = next
-  remembered = remember && store.save(next)
-  // Not remembering this one also forgets the account kept before.
-  if (!remembered) store.forget()
+  remembered = store.keep(next, remember)
   refreshMenu()
-  return { ok: true, account: pageAccount(next) }
+  return { ok: true, account: pageAccount(next), unsaved: remember && !remembered }
 }
 
 function signOut(fromMenu: boolean) {
@@ -199,7 +196,7 @@ function template() {
   return menuTemplate(
     { signedIn: account !== null, visible: island?.visible ?? false, openAtLogin: login.enabled() },
     {
-      toggle: () => island?.toggle(),
+      toggle: () => island?.reveal('menu'),
       copyInstallCommand: platform => void copyInstallCommand(platform),
       copyRecoveryKey: () => {
         if (account) clipboard.writeText(encodeRecoveryKey(account))

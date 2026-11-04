@@ -235,13 +235,16 @@ conversation and its permission requests. It is the web app's views in an Electr
 - **Where the account is kept.** With **Remember on this computer**, the recovery key is encrypted by the system's keyring
   (Electron's `safeStorage`: DPAPI on Windows, the Secret Service of GNOME or KWallet on Linux) in the app's data folder
   (`%APPDATA%\Tonton Claude\account`, `~/.config/Tonton Claude/account`). Without a keyring, or unticked, nothing is
-  written and the island forgets the account when it quits.
+  written and the island forgets the account when it quits. When the file cannot be written, the island says so and
+  keeps the one saved before.
 - **The token stays out of the page.** The main process adds the account's token to the page's socket as an
   `Authorization` header, so it works with every relay, and refuses sockets to anything else. The page gets the relay's
   address and the end-to-end key, imports the key as a `CryptoKey` it cannot read back, and decrypts like the web app.
 - **The page** has the web app's Content-Security-Policy, runs sandboxed without Node, never navigates, and opens links
   in the browser. It asks for no permission (camera, notifications…).
 - **Start at login** is in the menu, off by default: the Run key on Windows, `~/.config/autostart` on Linux.
+- **On Windows** the island is a tool window, out of the taskbar and Alt+Tab. A left click on the tray icon opens it, or
+  closes it to its bar; the menu (a right click) hides it. Opening the app again shows it open.
 
 On Linux:
 
@@ -251,7 +254,7 @@ On Linux:
   is a plain Wayland window that the compositor places. X11 sessions need nothing.
 - **The tray icon** is a StatusNotifierItem: KDE shows it, and GNOME with the AppIndicator extension (on by default in
   Ubuntu). Its menu shows and hides the island. Without it, the island's ⋯ button has the same menu, and opening the app
-  again shows a hidden island.
+  again shows the island open, hidden or not.
 - **Ubuntu 24.04 and later** only let installed apps with an AppArmor profile use the sandbox Chromium needs: take the
   `.deb`, which installs one. The AppImage there needs `--no-sandbox`, or the system setting
   `kernel.apparmor_restrict_unprivileged_userns=0`.

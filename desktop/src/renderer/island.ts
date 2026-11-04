@@ -132,9 +132,13 @@ async function signInScreen(problem?: string) {
       error.textContent = result.error
       return
     }
-    notice = created
-      ? 'Account created. To add a machine, ⋯ › Add a machine copies the command to run in a terminal there. Keep the recovery key (⋯ › Copy the recovery key) in your password manager: it signs you in elsewhere.'
-      : null
+    const notices = [
+      created
+        ? 'Account created. To add a machine, ⋯ › Add a machine copies the command to run in a terminal there. Keep the recovery key (⋯ › Copy the recovery key) in your password manager: it signs you in elsewhere.'
+        : '',
+      result.unsaved ? 'This computer could not save the account: the island may ask for the recovery key again when it next starts.' : '',
+    ]
+    notice = notices.filter(Boolean).join(' ') || null
     void connect(result.account)
   }
   signIn.onclick = () => void run(signIn, signInError, () => bridge.signIn(field.value, remember.checked), false)
