@@ -5,6 +5,7 @@
 // a cluster's keys can never be taken for a pool's.
 
 import { bytesToBase64Url } from './base64'
+import type { ClusterLeaderboard } from './cluster-heroes'
 import type {
   ClusterAuthor,
   ClusterClaim,
@@ -344,7 +345,15 @@ export class ClusterVault {
   }
 
   seal(
-    value: ClusterInfo | ClusterMemberProfile | ClusterSessionProfile | ClusterPostBody | ClusterNotes | ClusterClaims | ClusterClock,
+    value:
+      | ClusterInfo
+      | ClusterMemberProfile
+      | ClusterSessionProfile
+      | ClusterPostBody
+      | ClusterNotes
+      | ClusterClaims
+      | ClusterClock
+      | ClusterLeaderboard,
   ): Promise<Sealed> {
     return this.keyring.seal(value)
   }

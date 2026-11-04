@@ -2,9 +2,10 @@
 // the claims, the notes, the clock and the members. Live: every change of the cluster draws the page again.
 import { ArrowLeftIcon, UserPlusIcon } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
-import type { ClusterState, OpenCluster } from '../../../shared'
+import type { ClusterState, OpenCluster, RPGState } from '../../../shared'
 import { Loading, Problem } from '../common'
 import { InviteResult } from '../pools/invites'
+import { useHero } from '../rpg'
 import { useStore } from '../store'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/card'
@@ -14,6 +15,7 @@ import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { Claims, Notes } from './board'
 import { Clock } from './clock'
 import { Feed } from './feed'
+import { Leaderboard, useShareHero } from './leaderboard'
 import { Members } from './members'
 import { clockView } from './model'
 import { Roster } from './roster'
@@ -21,11 +23,14 @@ import { Roster } from './roster'
 export interface ClusterTabProps {
   cluster: OpenCluster
   state: ClusterState
+  /** This account's hero, null until read or when the relay has none. */
+  hero?: RPGState | null
 }
 
 const TABS: { id: string; label: string; render(props: ClusterTabProps): ReactNode }[] = [
   { id: 'roster', label: 'Roster', render: props => <Roster {...props} /> },
   { id: 'feed', label: 'Feed', render: props => <Feed {...props} /> },
+  { id: 'leaderboard', label: 'Leaderboard', render: props => <Leaderboard {...props} /> },
   { id: 'claims', label: 'Claims', render: props => <Claims {...props} /> },
   { id: 'notes', label: 'Notes', render: props => <Notes {...props} /> },
   { id: 'clock', label: 'Clock', render: props => <Clock {...props} /> },
@@ -39,6 +44,8 @@ export function ClusterPage({ clusterId }: { clusterId: string }) {
   const state = cluster?.state ?? null
   const name = state?.info?.name ?? watch?.clusters.find(listed => listed.summary.id === clusterId)?.info?.name ?? 'A cluster'
   const now = useNow(30_000)
+  const { hero } = useHero()
+  useShareHero(clusterId, hero)
   const clock = clockView(cluster?.clock ?? null, now)
   const current = TABS.find(tab => tab.id === store.clusterTab) ?? TABS[0]
   return (
@@ -90,7 +97,7 @@ export function ClusterPage({ clusterId }: { clusterId: string }) {
               <Problem onDismiss={() => watch?.clearProblem(cluster.id)}>{cluster.problem}</Problem>
             </div>
           )}
-          <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto p-4')}>{current.render({ cluster, state })}</div>
+          <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto p-4')}>{current.render({ cluster, state, hero })}</div>
         </>
       )}
     </div>

@@ -1,6 +1,8 @@
 // The clusters as the website and the island follow them (shared/cluster-watch.ts): two accounts on a real relay make a
-// cluster, invite, join, put a session in, see each other's sessions, posts and clock, and the owner kicks. Each side
-// reads through its own ClusterWatch, as a browser would.
+// cluster, invite, join, put a session in, see each other's sessions, posts and clock, and the owner kicks; then three
+// share or keep their Tonton on the leaderboard. Each side reads through its own ClusterWatch, as a browser would.
+
+import { Database } from 'bun:sqlite'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,9 +12,11 @@ import { startRelay } from '../relay/src/main'
 import { RelayClient } from '../shared/client'
 import { ClusterVault, newClusterItemId, openClusterSessionOrder } from '../shared/cluster'
 import { ClusterApi } from '../shared/cluster-api'
+import { CLUSTER_LEADERBOARD, rankClusterHeroes } from '../shared/cluster-heroes'
 import { CLUSTERS_UNSUPPORTED, ClusterWatch } from '../shared/cluster-watch'
 import { parseClusterToAgent } from '../shared/cluster-wire'
 import { newAccountKey } from '../shared/crypto'
+import { newRPGState, type RPGState } from '../shared/rpg'
 import { Vault } from '../shared/vault'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-cluster-watch-'))
@@ -183,6 +187,80 @@ describe('following clusters from a browser', () => {
     await bob.watch.refresh()
     expect(bob.watch.clusters).toEqual([])
     expect(bob.watch.cluster(id)).toBeNull()
+  })
+
+  test('the leaderboard: ranks move as XP comes in, a member who does not share has no numbers, the relay sees none', async () => {
+    const carol = await member()
+    const id = await alice.watch.create({ name: 'XP race' }, { name: 'Alice' })
+    if (!id) throw new Error(alice.watch.problem ?? 'no cluster')
+    alice.watch.open(id)
+    await eventually(() => alice.watch.cluster(id)?.state, 'alice opened the cluster')
+    const invite = await alice.watch.invite(id, { uses: 2, hours: 1 })
+    if (!invite) throw new Error(alice.watch.problem ?? 'no invite')
+    expect(await bob.watch.join(invite.link, { name: 'Bob' })).toBe(id)
+    expect(await carol.watch.join(invite.link, { name: 'Carol' })).toBe(id)
+    for (const m of [bob, carol]) m.watch.open(id)
+    for (const m of [alice, bob, carol]) await eventually(() => m.watch.cluster(id)?.state?.members.length === 3, 'three members')
+
+    // What an agent's awards leave in a hero: XP, and the gains it came from.
+    const hero = (xp: number, gained: number[]): RPGState => {
+      const at = new Date(Date.now() + 1000).toISOString()
+      const gains = gained.map((amount, index) => ({
+        id: `${xp}`.padStart(32, '0') + `${index}`.padStart(32, '0'),
+        kind: 'turn' as const,
+        day: at.slice(0, 10),
+        xp: amount,
+        sparks: 1,
+        at,
+      }))
+      return { ...newRPGState(), xp, gains, owned: ['hat-rare'], equipped: { hat: 'hat-rare' } }
+    }
+    const ranks = (m: Member) => rankClusterHeroes(m.watch.cluster(id)?.leaderboard ?? null, m.watch.cluster(id)?.state?.members ?? [])
+
+    // Alice and Bob share at once over the same revision: one write crosses the other and is made again, alone.
+    expect(await Promise.all([alice.watch.shareHero(id, hero(400, [60, 40])), bob.watch.shareHero(id, hero(250, [30]))])).toEqual([
+      true,
+      true,
+    ])
+    const first = await eventually(() => {
+      const board = ranks(carol)
+      return board.filter(rank => rank.hero).length === 2 && board
+    }, 'both entries at carol')
+    expect(first.map(rank => [rank.account, rank.rank, rank.hero?.since ?? null])).toEqual([
+      [alice.account, 1, 100],
+      [bob.account, 2, 30],
+      [carol.account, null, null],
+    ])
+    expect(first[0].hero?.equipped).toEqual({ hat: 'hat-rare' })
+    expect(alice.watch.cluster(id)?.problem).toBeNull()
+    expect(bob.watch.cluster(id)?.problem).toBeNull()
+    expect(bob.watch.sharesHero(id)).toBe(true)
+    expect(carol.watch.sharesHero(id)).toBe(false)
+
+    // Bob's agent earns a long turn: he passes Alice, at Alice's too, and his level-up is on the board for the feed.
+    await eventually(() => ranks(bob).some(rank => rank.account === bob.account && rank.hero), 'bob reads his own entry')
+    expect(await bob.watch.shareHero(id, hero(320, [30, 65, 25]))).toBe(true)
+    const second = await eventually(() => {
+      const board = ranks(alice)
+      return board[0]?.account === bob.account && board
+    }, 'bob first at alice')
+    expect(second.map(rank => [rank.account, rank.rank, rank.hero?.level ?? null])).toEqual([
+      [bob.account, 1, 3],
+      [alice.account, 2, 3],
+      [carol.account, null, null],
+    ])
+    expect(second[0].hero?.levelUps.map(up => up.level)).toEqual([3])
+
+    // Alice stops sharing: she keeps her place in the list, without numbers.
+    expect(await alice.watch.shareHero(id, null)).toBe(true)
+    await eventually(() => ranks(bob).find(rank => rank.account === alice.account)?.rank === null, 'alice without numbers')
+
+    // The relay holds one sealed blob: no level, no XP, no item in it.
+    const db = new Database(join(dir, 'data', 'tonton.db'), { readonly: true })
+    const row = db.query('SELECT blob FROM cluster_docs WHERE cluster_id = ? AND name = ?').get(id, CLUSTER_LEADERBOARD) as { blob: string }
+    db.close()
+    expect(typeof row.blob).toBe('string')
+    for (const clear of ['since', 'level', 'hat-rare', 'heroes', bob.account]) expect(row.blob).not.toContain(clear)
   })
 
   test('a relay from before clusters says it needs updating', async () => {

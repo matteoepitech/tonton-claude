@@ -1,0 +1,368 @@
+{
+  "entries": [
+    {
+      "name": "first share: XP since the clock counts timed gains after the start and day-only receipts from the next day",
+      "hero": {
+        "version": 1,
+        "xp": 640,
+        "sparks": 0,
+        "receipts": [
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000001",
+            "kind": "task",
+            "day": "2026-11-01",
+            "xp": 10,
+            "sparks": 1
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000002",
+            "kind": "task",
+            "day": "2026-11-02",
+            "xp": 10,
+            "sparks": 1
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000003",
+            "kind": "task",
+            "day": "2026-11-03",
+            "xp": 10,
+            "sparks": 1
+          }
+        ],
+        "gains": [
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000004",
+            "kind": "turn",
+            "day": "2026-11-02",
+            "xp": 30,
+            "sparks": 3,
+            "at": "2026-11-02T09:00:00Z"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000005",
+            "kind": "turn",
+            "day": "2026-11-02",
+            "xp": 18,
+            "sparks": 1,
+            "at": "2026-11-02T15:00:00Z"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000006",
+            "kind": "day",
+            "day": "2026-11-03",
+            "xp": 40,
+            "sparks": 4,
+            "at": "2026-11-03T08:00:00Z"
+          },
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000007",
+            "kind": "push",
+            "day": "2026-11-04",
+            "xp": 15,
+            "sparks": 1,
+            "at": "2026-11-04T10:30:00Z"
+          }
+        ],
+        "owned": ["hat-rare"],
+        "equipped": {
+          "hat": "hat-rare"
+        },
+        "boosters": [],
+        "openings": {},
+        "upgrades": {}
+      },
+      "account": "acc-alice",
+      "from": "2026-11-02T12:00:00Z",
+      "previous": null,
+      "now": "2026-11-04T11:00:00Z",
+      "expected": {
+        "account": "acc-alice",
+        "level": 4,
+        "today": 15,
+        "day": "2026-11-04",
+        "since": 83,
+        "from": "2026-11-02T12:00:00Z",
+        "base": 557,
+        "equipped": {
+          "hat": "hat-rare"
+        },
+        "levelUps": [],
+        "updatedAt": "2026-11-04T11:00:00.000Z"
+      }
+    },
+    {
+      "name": "the base carries over while the start stays, and a higher level is a level-up",
+      "hero": {
+        "version": 1,
+        "xp": 1020,
+        "sparks": 0,
+        "receipts": [],
+        "gains": [
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000008",
+            "kind": "turn",
+            "day": "2026-11-04",
+            "xp": 80,
+            "sparks": 8,
+            "at": "2026-11-04T11:30:00Z"
+          }
+        ],
+        "owned": [],
+        "equipped": {},
+        "boosters": [],
+        "openings": {},
+        "upgrades": {}
+      },
+      "account": "acc-alice",
+      "from": "2026-11-02T12:00:00Z",
+      "previous": {
+        "account": "acc-alice",
+        "level": 4,
+        "today": 15,
+        "day": "2026-11-04",
+        "since": 83,
+        "from": "2026-11-02T12:00:00Z",
+        "base": 557,
+        "equipped": {
+          "hat": "hat-rare"
+        },
+        "levelUps": [],
+        "updatedAt": "2026-11-04T11:00:00Z"
+      },
+      "now": "2026-11-04T12:00:00Z",
+      "expected": {
+        "account": "acc-alice",
+        "level": 5,
+        "today": 80,
+        "day": "2026-11-04",
+        "since": 463,
+        "from": "2026-11-02T12:00:00Z",
+        "base": 557,
+        "equipped": {},
+        "levelUps": [
+          {
+            "level": 5,
+            "at": "2026-11-04T12:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-11-04T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "a new start, the clock: the base is worked out again",
+      "hero": {
+        "version": 1,
+        "xp": 720,
+        "sparks": 0,
+        "receipts": [],
+        "gains": [
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000008",
+            "kind": "turn",
+            "day": "2026-11-04",
+            "xp": 80,
+            "sparks": 8,
+            "at": "2026-11-04T11:30:00Z"
+          }
+        ],
+        "owned": [],
+        "equipped": {},
+        "boosters": [],
+        "openings": {},
+        "upgrades": {}
+      },
+      "account": "acc-alice",
+      "from": "2026-11-04T11:00:00Z",
+      "previous": {
+        "account": "acc-alice",
+        "level": 4,
+        "today": 15,
+        "day": "2026-11-04",
+        "since": 83,
+        "from": "2026-11-02T12:00:00Z",
+        "base": 557,
+        "equipped": {},
+        "levelUps": [
+          {
+            "level": 4,
+            "at": "2026-11-03T08:00:00Z"
+          }
+        ],
+        "updatedAt": "2026-11-04T11:00:00Z"
+      },
+      "now": "2026-11-04T12:00:00Z",
+      "expected": {
+        "account": "acc-alice",
+        "level": 4,
+        "today": 80,
+        "day": "2026-11-04",
+        "since": 80,
+        "from": "2026-11-04T11:00:00Z",
+        "base": 640,
+        "equipped": {},
+        "levelUps": [
+          {
+            "level": 4,
+            "at": "2026-11-03T08:00:00Z"
+          }
+        ],
+        "updatedAt": "2026-11-04T12:00:00.000Z"
+      }
+    }
+  ],
+  "ranking": {
+    "name": "by XP since the start, then level, then account; a stale day reads as no XP today; who does not share comes last",
+    "board": {
+      "heroes": [
+        {
+          "account": "acc-bob",
+          "level": 6,
+          "today": 40,
+          "day": "2026-11-04",
+          "since": 300,
+          "from": "2026-11-02T12:00:00Z",
+          "base": 1200,
+          "equipped": {},
+          "levelUps": [
+            {
+              "level": 6,
+              "at": "2026-11-04T09:00:00Z"
+            }
+          ],
+          "updatedAt": "2026-11-04T09:00:00Z"
+        },
+        {
+          "account": "acc-alice",
+          "level": 5,
+          "today": 95,
+          "day": "2026-11-04",
+          "since": 300,
+          "from": "2026-11-02T12:00:00Z",
+          "base": 700,
+          "equipped": {
+            "hat": "hat-rare"
+          },
+          "levelUps": [
+            {
+              "level": 4,
+              "at": "2026-11-03T08:00:00Z"
+            },
+            {
+              "level": 5,
+              "at": "2026-11-04T12:00:00Z"
+            }
+          ],
+          "updatedAt": "2026-11-04T12:00:00Z"
+        },
+        {
+          "account": "acc-dan",
+          "level": 3,
+          "today": 20,
+          "day": "2026-11-03",
+          "since": 120,
+          "from": "2026-11-02T12:00:00Z",
+          "base": 200,
+          "equipped": {},
+          "levelUps": [],
+          "updatedAt": "2026-11-03T20:00:00Z"
+        },
+        {
+          "account": "acc-gone",
+          "level": 9,
+          "today": 0,
+          "day": "2026-11-01",
+          "since": 900,
+          "from": "2026-11-01T00:00:00Z",
+          "base": 0,
+          "equipped": {},
+          "levelUps": [
+            {
+              "level": 9,
+              "at": "2026-11-01T10:00:00Z"
+            }
+          ],
+          "updatedAt": "2026-11-01T10:00:00Z"
+        },
+        {
+          "account": "acc-alice",
+          "level": 99,
+          "today": 0,
+          "day": "2026-11-04",
+          "since": 99999,
+          "from": "2026-11-02T12:00:00Z",
+          "base": 0,
+          "equipped": {},
+          "levelUps": [],
+          "updatedAt": "2026-11-04T12:00:00Z"
+        },
+        {
+          "account": "acc-bad",
+          "level": 0,
+          "today": 1,
+          "day": "2026-11-04",
+          "since": 1,
+          "from": "x",
+          "base": 0,
+          "equipped": {},
+          "levelUps": [],
+          "updatedAt": "x"
+        }
+      ]
+    },
+    "members": [
+      {
+        "account": "acc-carol"
+      },
+      {
+        "account": "acc-alice"
+      },
+      {
+        "account": "acc-bob"
+      },
+      {
+        "account": "acc-dan"
+      }
+    ],
+    "now": "2026-11-04T13:00:00Z",
+    "decodedAccounts": ["acc-bob", "acc-alice", "acc-dan", "acc-gone"],
+    "expected": [
+      {
+        "account": "acc-bob",
+        "rank": 1,
+        "today": 40
+      },
+      {
+        "account": "acc-alice",
+        "rank": 2,
+        "today": 95
+      },
+      {
+        "account": "acc-dan",
+        "rank": 3,
+        "today": 0
+      },
+      {
+        "account": "acc-carol",
+        "rank": null,
+        "today": 0
+      }
+    ],
+    "levelUps": [
+      {
+        "account": "acc-alice",
+        "level": 5,
+        "at": "2026-11-04T12:00:00Z"
+      },
+      {
+        "account": "acc-bob",
+        "level": 6,
+        "at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "account": "acc-alice",
+        "level": 4,
+        "at": "2026-11-03T08:00:00Z"
+      }
+    ]
+  }
+}
