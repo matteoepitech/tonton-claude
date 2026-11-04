@@ -3,7 +3,7 @@
 // their calls. Mirrors app/Sources/TontonCore/SessionRule.swift; both check shared/test/session-rules.json.
 
 import type { PermissionRule } from './protocol'
-import type { Machine } from './session'
+import { type Machine, toolLabel } from './session'
 
 /** Agents from this version keep what "Allow for this session" allows; older ones only allow the one call. */
 export const SESSION_RULES_SINCE = '0.8.0'
@@ -26,7 +26,7 @@ const SUBCOMMAND = /^[A-Za-z][A-Za-z0-9_:-]*$/
 
 /** What a card shows and the agent receives. Null when no rule is safe to offer: then the card has no such button. */
 export interface SessionRule {
-  /** `npm test`, `github.com`, `Edit`. */
+  /** `npm test`, `github.com`, `Edit`, `github · create_issue`. */
   label: string
   rules: PermissionRule[]
 }
@@ -69,5 +69,5 @@ export function sessionRuleFor(toolName: string, inputPreview: string): SessionR
       ],
     }
   }
-  return { label: toolName, rules: [{ tool: toolName }] }
+  return { label: toolLabel(toolName), rules: [{ tool: toolName }] }
 }

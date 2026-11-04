@@ -159,6 +159,15 @@ describe('sessions', () => {
     expect(displayStatusText(session(asking))).toBe('Needs approval')
   })
 
+  test('an MCP tool reads as its server and its tool', () => {
+    const request = { requestId: 'r1', toolName: 'mcp__unreal-engine__spawn_actor', description: '', inputPreview: '{}', ts: '' }
+    const asking = { status: 'permission' as const, statusText: 'Claude needs your permission' }
+    expect(displayStatusText(session({ ...asking, pendingPermissions: [request] }))).toBe('Wants to use unreal-engine · spawn_actor')
+    expect(displayStatusText(session({ statusText: 'Claude needs your permission to use mcp__github__create_issue' }))).toBe(
+      'Wants to use github · create_issue',
+    )
+  })
+
   test('live sessions come first, then the most recent, and the one that needs the user is shown first', () => {
     const list = [
       session({ id: 'old', status: 'ended', lastActivity: 50 }),

@@ -157,12 +157,12 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public static func statusText(_ statusText: String?, status: SessionStatus, tool: String? = nil) -> String {
         guard let text = statusText, !text.isEmpty else { return status.label }
         if let range = text.range(of: "needs your permission to use ") {
-            return String(core: "Wants to use \(String(text[range.upperBound...]))")
+            return String(core: "Wants to use \(ToolLabel.text(String(text[range.upperBound...])))")
         }
         // Claude Code 2.1.160 and later no longer name the tool: the request it waits on does.
         if text.contains("needs your permission") {
             guard let tool, !tool.isEmpty else { return SessionStatus.permission.label }
-            return String(core: "Wants to use \(tool)")
+            return String(core: "Wants to use \(ToolLabel.text(tool))")
         }
         if text.contains("waiting for your input") { return String(core: "Waiting for you") }
         // StopFailure's error type when the plan's limit refuses a request.

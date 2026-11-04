@@ -113,6 +113,13 @@ async function runIn2(input, { op, sessionID, ...command }) {
     }))
     return send({ type: 'tonton.models', data: { models } })
   }
+  if (op === 'mcp') {
+    if (!input.mcp?.list) return
+    const list = await input.mcp.list({})
+    const items = Array.isArray(list?.data) ? list.data : Array.isArray(list) ? list : []
+    const servers = items.map(server => server?.name).filter(name => typeof name === 'string')
+    return send({ type: 'tonton.mcp', data: { servers } })
+  }
 }
 
 async function runIn1(client, { op, sessionID, ...command }) {
@@ -147,6 +154,11 @@ async function runIn1(client, { op, sessionID, ...command }) {
       })),
     )
     return send({ type: 'tonton.models', data: { models } })
+  }
+  if (op === 'mcp') {
+    if (!client.mcp?.status) return
+    const servers = Object.keys(data(await client.mcp.status()) ?? {})
+    return send({ type: 'tonton.mcp', data: { servers } })
   }
 }
 

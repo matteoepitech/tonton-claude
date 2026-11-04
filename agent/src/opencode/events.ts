@@ -85,6 +85,25 @@ const TOOL_NAMES: Record<string, string> = {
   task: 'Task',
   subagent: 'Task',
 }
+/**
+ * OpenCode names an MCP tool `<server>_<tool>`, each part with what is not a letter, a digit, `_` or `-` turned into `_`.
+ * As the server's name holds `_` and `-` too, only the servers OpenCode lists are split off.
+ */
+export const mcpServerName = (name: string): string => name.replace(/[^a-zA-Z0-9_-]/g, '_')
+
+/**
+ * A tool of OpenCode under Claude Code's name: its built-in tools, and an MCP server's as `mcp__<server>__<tool>`, so the
+ * notch shows both alike and the same rules allow them. The longest server wins, for `a` and `a_b`. Like
+ * `OpenCodeLocal.toolName` in the Mac app; both check shared/test/opencode-tool-names.json.
+ */
+export function claudeToolName(tool: string, servers: Iterable<string>): string {
+  const builtIn = Object.hasOwn(TOOL_NAMES, tool) ? TOOL_NAMES[tool] : undefined
+  if (builtIn) return builtIn
+  let server = ''
+  for (const name of servers) if (name.length > server.length && tool.length > name.length + 1 && tool.startsWith(`${name}_`)) server = name
+  return server ? `mcp__${server}__${tool.slice(server.length + 1)}` : tool
+}
+
 /** The field an auto-approve rule reads for each tool, as in a Claude Code tool call (agent/src/rules.ts). */
 const RULE_FIELDS: Record<string, string> = {
   Bash: 'command',
@@ -203,6 +222,8 @@ export class OpenCodeTracker {
   private readonly seen = new Set<string>()
   /** OpenCode's models, for their context window and to switch a session to a family. */
   private catalog: CatalogModel[] = []
+  /** The MCP servers of every folder OpenCode serves, as its tool names spell them. */
+  private readonly mcpServers = new Set<string>()
   /** When the event being handled happened: OpenCode 2 dates the event, not its data. */
   private eventTime = Date.now()
 
@@ -367,6 +388,8 @@ export class OpenCodeTracker {
       }
       case 'tonton.models':
         return this.models(props.models)
+      case 'tonton.mcp':
+        return this.mcp(props.servers)
       case 'tonton.history':
         return this.history(props)
       case 'tonton.failed':
@@ -491,7 +514,7 @@ export class OpenCodeTracker {
     if (!session || !call) return []
     const raw = text(props.tool) ?? text(props.name) ?? session.toolNames.get(call) ?? 'tool'
     const input = (props.input && typeof props.input === 'object' ? props.input : {}) as Fields
-    return this.add(session, this.callEntry(session, call, call, this.time(props.timestamp), raw, input))
+    return this.add(session, this.callEntry(session, call, call, this.time(props.timestamp), this.toolName(raw), input))
   }
 
   private toolEnded(props: Fields, failed: boolean): SessionUpdate[] {
@@ -585,7 +608,7 @@ export class OpenCodeTracker {
       const { status } = part.state
       if (status !== 'running' && status !== 'completed' && status !== 'error') return []
       const call = part.callID ?? part.id
-      entries.push(this.callEntry(session, part.id, call, ts, part.tool, part.state.input ?? {}))
+      entries.push(this.callEntry(session, part.id, call, ts, this.toolName(part.tool), part.state.input ?? {}))
       if (status !== 'running') {
         const output = status === 'error' ? (part.state.error ?? '') : (part.state.output ?? '')
         const images = imagesOf(part.state.attachments)
@@ -599,7 +622,7 @@ export class OpenCodeTracker {
 
   private permission(props: Fields): SessionUpdate[] {
     const raw = text(props.action) ?? text(props.permission) ?? text(props.type) ?? 'tool'
-    const toolName = TOOL_NAMES[raw] ?? raw
+    const toolName = this.toolName(raw)
     const updates = this.status(props.sessionID, {
       hook: 'Notification',
       notificationType: 'permission_prompt',
@@ -634,6 +657,17 @@ export class OpenCodeTracker {
     session.contextUsed = 0
     const entry: Entry = { id: `compacted-${this.eventTime}`, ts: this.time(), kind: 'system', text: 'Conversation compacted' }
     return this.markSent(session, entry) ? this.update(session, [entry], undefined, true) : []
+  }
+
+  private toolName(tool: string): string {
+    return claudeToolName(tool, this.mcpServers)
+  }
+
+  /** Names only add up: a server gone from one folder may still be in another. */
+  private mcp(servers: unknown): SessionUpdate[] {
+    if (!Array.isArray(servers)) return []
+    for (const name of servers) if (typeof name === 'string' && name) this.mcpServers.add(mcpServerName(name))
+    return []
   }
 
   private models(list: unknown): SessionUpdate[] {
@@ -723,7 +757,7 @@ export class OpenCodeTracker {
           metadata?: unknown
         }
         const input = (state.input && typeof state.input === 'object' ? state.input : {}) as Fields
-        this.markSent(session, this.callEntry(session, call, call, ts, text(content.name) ?? 'tool', input))
+        this.markSent(session, this.callEntry(session, call, call, ts, this.toolName(text(content.name) ?? 'tool'), input))
         if (state.status === 'completed' || state.status === 'error') {
           const output =
             state.status === 'error'
@@ -769,8 +803,8 @@ export class OpenCodeTracker {
   }
 }
 
-function toolEntry(id: string, call: string, ts: string, tool: string, input: Fields): Entry {
-  const name = TOOL_NAMES[tool] ?? tool
+/** `name` is Claude Code's (`claudeToolName`). */
+function toolEntry(id: string, call: string, ts: string, name: string, input: Fields): Entry {
   const claudeInput = Object.fromEntries(Object.entries(input).map(([key, value]) => [INPUT_FIELDS[key] ?? key, value]))
   const edits = fileEdits(name, claudeInput)
   const todos = todoItems(name, claudeInput)
