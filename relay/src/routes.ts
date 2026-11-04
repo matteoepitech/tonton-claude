@@ -44,7 +44,7 @@ export function createFetchHandler(ctx: RelayContext) {
       path === '/api/agent/rpg' ||
       /^\/api\/agent\/pools\/[A-Za-z0-9_-]{12}\/rpg$/.test(path) ||
       path === '/api/agent/clusters' ||
-      /^\/api\/agent\/clusters\/[A-Za-z0-9_-]{12}\/members$/.test(path) ||
+      /^\/api\/agent\/clusters\/[A-Za-z0-9_-]{12}\/(members|files\/[A-Za-z0-9_-]{8,40})$/.test(path) ||
       path === '/ws/agent'
     )
       return agentRoute(ctx, req, server, path, ip)

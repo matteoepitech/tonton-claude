@@ -4,6 +4,8 @@
 // the cluster, as its owner chose: live, in a digest at its next prompt, or not at all. There is no task and no order in
 // a cluster: other Claudes inform and ask, they never stand for the user (docs/cluster.md, The rule).
 
+import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
+import { basename, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import {
   type ClusterPostItem,
   type ClusterSession,
@@ -12,8 +14,14 @@ import {
   clusterPostIsFor,
   decodeClusterClaims,
   decodeClusterNotes,
+  decodeClusterPostBody,
+  MAX_CLUSTER_FILE_BYTES,
   newClusterItemId,
+  openClusterFile,
+  sealClusterFile,
+  sha256Hex,
 } from '../../../shared/cluster'
+import { ClusterApi } from '../../../shared/cluster-api'
 import type {
   ClusterClaim,
   ClusterDelivery,
@@ -25,8 +33,9 @@ import type {
   ClusterUpdate,
 } from '../../../shared/cluster-protocol'
 import type { AgentMessage } from '../../../shared/protocol'
-import type { Detected } from '../cluster/detect'
+import { type Detected, normalizePath } from '../cluster/detect'
 import { clearGuardState, type GuardCluster, writeGuardState } from '../cluster/guard'
+import { type AgentConfig, paths as homePaths } from '../config'
 import { log } from '../log'
 import type { SessionClusters } from './clusters'
 import type { PoolToolSpec } from './pool-work'
@@ -47,6 +56,36 @@ export const MAX_POSTS_PER_MINUTE = 20
 export const WAKES_PER_HOUR = 20
 /** How long a file a session opened in Perforce or locked in Git LFS stays held, unless it lets it go first (#310). */
 export const CLAIM_HOURS = 2
+const MAX_CLAIM_HOURS = 12
+/** A shared text file this short comes back in the tool's result; anything else is saved on the machine for Claude to read. */
+const MAX_INLINE_FILE_BYTES = 100 * 1024
+/** By extension, the type a shared file says it is; anything else is bytes. */
+const MEDIA_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  '.log': 'text/plain',
+  '.csv': 'text/csv',
+  '.json': 'application/json',
+  '.ini': 'text/plain',
+  '.xml': 'application/xml',
+  '.yaml': 'text/yaml',
+  '.yml': 'text/yaml',
+}
+/** Paths as the tools take them: relative to the project, with `/`. */
+const pathsOf = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value
+        .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+        .map(path => normalizePath(path.trim()))
+        .slice(0, 100)
+    : []
+const isText = (type: string) => type.startsWith('text/') || type === 'application/json' || type === 'application/xml'
 /** How long a change waits for the relay to confirm it. */
 const CONFIRM_MS = 10_000
 /** Posts cluster_inbox returns at most. */
@@ -113,6 +152,71 @@ export const CLUSTER_TOOLS: ClusterToolSpec[] = [
       rev: { type: 'number', description: 'The revision cluster_notes_read gave.', required: true },
     },
   },
+  {
+    name: 'cluster_claims',
+    description:
+      'The files, folders and assets the sessions of the cluster hold, by whom and until when. Look before you edit a binary asset (.uasset, .umap) or a file another session works on.',
+    params: { cluster: CLUSTER },
+  },
+  {
+    name: 'cluster_claim',
+    description:
+      'Hold files, folders or globs (Content/Characters/Hero/**): the other sessions see it, and their owners are asked before they edit them. What you open with p4 edit or lock with git lfs lock is held on its own.',
+    params: {
+      cluster: CLUSTER,
+      paths: { type: 'array', description: 'Relative to the project, with /.', required: true },
+      reason: { type: 'string', description: 'What you do with them, in a few words.' },
+      hours: { type: 'number', description: `How long, from 1 to ${MAX_CLAIM_HOURS} (${CLAIM_HOURS} by default).` },
+    },
+  },
+  {
+    name: 'cluster_release',
+    description: 'Let go of files this session holds: the ones given, or all of them.',
+    params: { cluster: CLUSTER, paths: { type: 'array', description: 'Missing: every file this session holds.' } },
+  },
+  {
+    name: 'cluster_event',
+    description:
+      'Tell the cluster something happened that it cannot see on its own ("the hero rig is ready in Content/Characters/Hero"). Commits, pushes, Perforce submits, builds and tests are posted on their own.',
+    params: {
+      cluster: CLUSTER,
+      type: { type: 'string', description: 'One word: ready, done, blocked, broken…', required: true },
+      text: { type: 'string', description: 'What happened.', required: true },
+      ref: { type: 'string', description: 'What names it: an asset, a branch, a changelist.' },
+      paths: { type: 'array', description: 'The files it is about, relative to the project.' },
+    },
+  },
+  {
+    name: 'cluster_wait',
+    description:
+      'Wait until another session of the cluster posts an event that matches, then get it (at most 10 minutes): wait for "SM_Tree" to be submitted rather than asking again and again.',
+    params: {
+      cluster: CLUSTER,
+      type: { type: 'string', description: 'The kind of event: submit, push, commit, build, test, ready, claim, release…' },
+      member: { type: 'string', description: 'Only from this member, by name or account id.' },
+      word: { type: 'string', description: 'A word its text, its ref or its paths hold: SM_Tree, main, Hero.' },
+      minutes: { type: 'number', description: 'How long to wait, from 1 to 10 (10 by default).' },
+    },
+    waitMs: (MAX_ASK_MINUTES * 60 + 30) * 1000,
+  },
+  {
+    name: 'cluster_share',
+    description:
+      'Share a small file of this project with the cluster (10 MB at most): a screenshot, a crash log, a JSON spec, a texture. The others fetch it with cluster_file.',
+    params: {
+      cluster: CLUSTER,
+      path: { type: 'string', description: 'The file, relative to the project.', required: true },
+      text: { type: 'string', description: 'What it is, in a sentence.' },
+      to_session: { type: 'string', description: 'A session id, as cluster_who lists it. Missing: everyone.' },
+      to_member: { type: 'string', description: 'Every session of this member, by name or account id.' },
+    },
+  },
+  {
+    name: 'cluster_file',
+    description:
+      'Fetch a file another session shared, by the id its post gives. A short text file comes back here; anything else, an image included, is saved on this machine and its path given: open it with your Read tool.',
+    params: { cluster: CLUSTER, id: { type: 'string', description: 'The file id from the post.', required: true } },
+  },
 ]
 
 export const isClusterTool = (name: string) => name.startsWith('cluster_')
@@ -139,6 +243,22 @@ export interface ClusterHooks {
   busy(): boolean
   /** The session skips permission prompts: it gets a digest unless its owner turned live delivery on. */
   skipsPrompts(): boolean
+  /** The session's project folder: the only place cluster_share reads from. */
+  cwd?(): string
+  /** The relay's store of shared files. Missing: the tools say files need the agent. */
+  files?: ClusterFileStore
+}
+
+/** Where shared files go, sealed (`ClusterApi.putFile` and `file`). */
+export interface ClusterFileStore {
+  put(clusterId: string, fileId: string, blob: string): Promise<void>
+  get(clusterId: string, fileId: string): Promise<string>
+}
+
+/** The relay's file store, through the machine's own token. */
+export function relayFiles(config: Pick<AgentConfig, 'server' | 'token'>): ClusterFileStore {
+  const api = new ClusterApi({ relay: config.server, token: config.token, agent: true })
+  return { put: (clusterId, fileId, blob) => api.putFile(clusterId, fileId, blob), get: (clusterId, fileId) => api.file(clusterId, fileId) }
 }
 
 /** The session as the cluster sees it, from its agent. */
@@ -220,6 +340,20 @@ export class ClusterWork {
           return await this.ask(clusterId, state, me, args)
         case 'cluster_notes_write':
           return await this.writeNotes(clusterId, args)
+        case 'cluster_claims':
+          return await this.listClaims(clusterId, state, me)
+        case 'cluster_claim':
+          return await this.claim(clusterId, me, args)
+        case 'cluster_release':
+          return await this.release(clusterId, state, me, args)
+        case 'cluster_event':
+          return await this.event(clusterId, args)
+        case 'cluster_wait':
+          return await this.waitEvent(clusterId, state, me, args)
+        case 'cluster_share':
+          return await this.share(clusterId, state, me, args)
+        case 'cluster_file':
+          return await this.fetchFile(clusterId, state, args)
       }
     } catch (error) {
       log('cluster tool failed', { name, error: String(error) })
@@ -333,15 +467,9 @@ export class ClusterWork {
         to = [{ account: original.account, session: original.session }]
       }
     }
-    if (typeof args.to_session === 'string' && args.to_session) {
-      const target = this.findSession(state, args.to_session, me)
-      if (typeof target === 'string') return target
-      to = [{ account: target.account, session: target.session }]
-    } else if (typeof args.to_member === 'string' && args.to_member) {
-      const member = state.members.find(m => m.account === args.to_member || m.profile?.name === args.to_member)
-      if (!member) return `No member ${args.to_member} in this cluster: cluster_who lists them.`
-      to = [{ account: member.account }]
-    }
+    const named = this.targets(state, me, args)
+    if (typeof named === 'string') return named
+    if (named) to = named
     const topic = typeof args.topic === 'string' && args.topic.trim() ? args.topic.trim().slice(0, 64) : undefined
     const body: ClusterPostBody = {
       kind,
@@ -352,6 +480,182 @@ export class ClusterWork {
     }
     const id = newClusterItemId()
     return (await this.postBody(clusterId, body, id)) ?? `Sent (post ${id}).`
+  }
+
+  /** `to_session` or `to_member`, as the tools take them: undefined for none, a string when it names no one. */
+  private targets(state: ClusterState, me: ClusterSession, args: Args): ClusterTarget[] | undefined | string {
+    if (typeof args.to_session === 'string' && args.to_session) {
+      const target = this.findSession(state, args.to_session, me)
+      return typeof target === 'string' ? target : [{ account: target.account, session: target.session }]
+    }
+    if (typeof args.to_member === 'string' && args.to_member) {
+      const member = state.members.find(m => m.account === args.to_member || m.profile?.name === args.to_member)
+      return member ? [{ account: member.account }] : `No member ${args.to_member} in this cluster: cluster_who lists them.`
+    }
+    return undefined
+  }
+
+  // MARK: Claims and events
+
+  private async listClaims(clusterId: string, state: ClusterState, me: ClusterSession): Promise<string> {
+    const vault = this.clusters.vault(clusterId)
+    const now = Date.now()
+    const claims = ((vault ? await vault.doc(state, 'claims', decodeClusterClaims) : null)?.claims ?? []).filter(
+      claim => !claim.until || Date.parse(claim.until) > now,
+    )
+    if (!claims.length) return 'No session of the cluster holds a file.'
+    return claims
+      .map(claim => {
+        const holder = claim.account === me.account && claim.session === me.session ? 'this session' : this.from(state, claim)
+        const until = claim.until ? `, until ${claim.until}` : ''
+        return `- ${claim.paths.join(', ')}: ${holder}${claim.reason ? ` (${claim.reason})` : ''}${until}`
+      })
+      .join('\n')
+  }
+
+  private async claim(clusterId: string, me: ClusterSession, args: Args): Promise<string> {
+    const paths = pathsOf(args.paths)
+    if (!paths.length) return 'paths is empty.'
+    const limited = this.limit()
+    if (limited) return limited
+    const hours = typeof args.hours === 'number' && args.hours > 0 ? Math.min(args.hours, MAX_CLAIM_HOURS) : CLAIM_HOURS
+    const reason = typeof args.reason === 'string' ? args.reason.trim().slice(0, 500) : ''
+    const found: Detected = { kind: 'claim', ts: new Date().toISOString(), text: reason, event: { type: 'claim', paths } }
+    await this.updateClaims(clusterId, me, found, hours)
+    const text = `Holds ${paths.join(', ')}${reason ? `: ${reason}` : ''}.`
+    await this.postBody(clusterId, { kind: 'claim', text, event: { type: 'claim', paths } }, newClusterItemId())
+    return `${text} For ${hours} hours, unless you let go before with cluster_release.`
+  }
+
+  private async release(clusterId: string, state: ClusterState, me: ClusterSession, args: Args): Promise<string> {
+    const vault = this.clusters.vault(clusterId)
+    const held = ((vault ? await vault.doc(state, 'claims', decodeClusterClaims) : null)?.claims ?? [])
+      .filter(claim => claim.account === me.account && claim.session === me.session)
+      .flatMap(claim => claim.paths)
+    const asked = pathsOf(args.paths)
+    const paths = asked.length ? asked.filter(path => held.includes(path)) : held
+    if (!paths.length) return asked.length ? 'This session holds none of these.' : 'This session holds no file.'
+    const found: Detected = { kind: 'claim', ts: new Date().toISOString(), text: '', event: { type: 'release', paths } }
+    await this.updateClaims(clusterId, me, found)
+    const text = `Let go of ${paths.join(', ')}.`
+    await this.postBody(clusterId, { kind: 'claim', text, event: { type: 'release', paths } }, newClusterItemId())
+    return text
+  }
+
+  private async event(clusterId: string, args: Args): Promise<string> {
+    const type = typeof args.type === 'string' ? args.type.trim().toLowerCase().slice(0, 64) : ''
+    if (!type || typeof args.text !== 'string' || !args.text.trim()) return 'type and text are needed.'
+    const limited = this.limit()
+    if (limited) return limited
+    const paths = pathsOf(args.paths)
+    const ref = typeof args.ref === 'string' && args.ref.trim() ? args.ref.trim().slice(0, 120) : undefined
+    const event = { type, ...(ref ? { ref } : {}), ...(paths.length ? { paths } : {}) }
+    const id = newClusterItemId()
+    return (await this.postBody(clusterId, { kind: 'event', text: args.text.trim(), event }, id)) ?? `Posted (post ${id}).`
+  }
+
+  /** The first event or claim another session posts that matches, as Claude would get it, or a timeout to go on from. */
+  private waitEvent(clusterId: string, state: ClusterState, me: ClusterSession, args: Args): Promise<string> {
+    const minutes = typeof args.minutes === 'number' && args.minutes > 0 ? Math.min(args.minutes, MAX_ASK_MINUTES) : MAX_ASK_MINUTES
+    const type = typeof args.type === 'string' && args.type.trim() ? args.type.trim().toLowerCase() : undefined
+    const word = typeof args.word === 'string' && args.word.trim() ? args.word.trim().toLowerCase() : undefined
+    const named = typeof args.member === 'string' && args.member ? args.member : undefined
+    const account = named ? state.members.find(m => m.account === named || m.profile?.name === named)?.account : undefined
+    if (named && !account) return Promise.resolve(`No member ${named} in this cluster: cluster_who lists them.`)
+    const vault = this.clusters.vault(clusterId)
+    if (!vault) return Promise.resolve('This session left the cluster.')
+    const since = state.posts.at(-1)?.seq ?? 0
+    const matches = (post: ClusterPostItem) => {
+      const body = post.body
+      if (!body || (body.kind !== 'event' && body.kind !== 'claim')) return false
+      if ((post.account === me.account && post.session === me.session) || (account && post.account !== account)) return false
+      if (type && body.event?.type.toLowerCase() !== type) return false
+      return !word || [body.text, body.event?.ref, ...(body.event?.paths ?? [])].join(' ').toLowerCase().includes(word)
+    }
+    return new Promise(resolve => {
+      const timer = setTimeout(() => {
+        stop()
+        resolve(`Nothing matching in ${minutes} minutes. Go on without it, or wait again.`)
+      }, minutes * 60_000)
+      const stop = this.clusters.listen(update => {
+        if (update.t !== 'cluster_post' || update.clusterId !== clusterId || update.post.seq <= since) return
+        void vault.read(update.post.blob, decodeClusterPostBody).then(body => {
+          const post: ClusterPostItem = { ...update.post, body }
+          const now = this.clusters.state(clusterId)
+          if (!matches(post) || !now) return
+          clearTimeout(timer)
+          stop()
+          resolve(this.postEnvelope(now, post, me))
+        })
+      })
+    })
+  }
+
+  // MARK: Files
+
+  /** A file of the project, sealed with the cluster key on this machine, kept by the relay, and announced in a post. */
+  private async share(clusterId: string, state: ClusterState, me: ClusterSession, args: Args): Promise<string> {
+    const root = this.hooks.cwd?.()
+    const files = this.hooks.files
+    const vault = this.clusters.vault(clusterId)
+    if (!root || !files || !vault) return 'Sharing files needs this session to be connected to the relay.'
+    if (typeof args.path !== 'string' || !args.path.trim()) return 'path is empty.'
+    const limited = this.limit()
+    if (limited) return limited
+    const named = this.targets(state, me, args)
+    if (typeof named === 'string') return named
+    // Only what is under the project, links followed: never a secret elsewhere on the machine because a post asked.
+    let real: string
+    try {
+      real = realpathSync(resolve(root, args.path.trim()))
+    } catch {
+      return `No file ${args.path} in this project.`
+    }
+    const inside = relative(realpathSync(root), real)
+    if (!inside || inside.startsWith('..') || isAbsolute(inside)) return 'Only a file of this project can be shared.'
+    const stat = statSync(real)
+    if (!stat.isFile()) return `${inside} is not a file.`
+    if (stat.size > MAX_CLUSTER_FILE_BYTES) return `${inside} is ${stat.size} bytes: a cluster takes files of 10 MB at most.`
+    const bytes = new Uint8Array(readFileSync(real))
+    const id = newClusterItemId()
+    const name = basename(real)
+    await files.put(clusterId, id, await sealClusterFile(vault.keyring, bytes))
+    const note = typeof args.text === 'string' && args.text.trim() ? args.text.trim() : `Shared ${name}.`
+    const file = {
+      id,
+      name,
+      size: bytes.length,
+      type: MEDIA_TYPES[extname(name).toLowerCase()] ?? 'application/octet-stream',
+      sha256: await sha256Hex(bytes),
+    }
+    const body: ClusterPostBody = { kind: 'file', text: note, ...(named ? { to: named } : {}), file }
+    const refused = await this.postBody(clusterId, body, newClusterItemId())
+    return refused ?? `Shared ${inside} (${bytes.length} bytes) as file ${id}.`
+  }
+
+  /** A shared file, opened and checked against its post: a short text inline, anything else saved under the agent's home. */
+  private async fetchFile(clusterId: string, state: ClusterState, args: Args): Promise<string> {
+    const files = this.hooks.files
+    const vault = this.clusters.vault(clusterId)
+    if (!files || !vault) return 'Fetching files needs this session to be connected to the relay.'
+    if (typeof args.id !== 'string' || !args.id) return 'id is empty.'
+    const ref = state.posts.findLast(post => post.body?.file?.id === args.id)?.body?.file
+    if (!ref) return `No file ${args.id} among the cluster's latest posts.`
+    let bytes: Uint8Array<ArrayBuffer>
+    try {
+      bytes = new Uint8Array(await openClusterFile(vault.keyring, await files.get(clusterId, ref.id)))
+    } catch (error) {
+      return `The file could not be fetched or opened: ${String(error)}`
+    }
+    if ((await sha256Hex(bytes)) !== ref.sha256) return 'The file is not the one its post names: it was not opened.'
+    if (isText(ref.type) && bytes.length <= MAX_INLINE_FILE_BYTES) {
+      return `${ref.name} (${ref.type}, ${bytes.length} bytes), shared in the cluster:\n${new TextDecoder().decode(bytes)}`
+    }
+    const folder = join(homePaths.home, 'cluster', clusterId.replace(/[^\w-]/g, '_'), 'files')
+    mkdirSync(folder, { recursive: true, mode: 0o700 })
+    const path = join(folder, `${ref.id}-${ref.name.replace(/[^\w.-]/g, '_')}`)
+    writeFileSync(path, bytes, { mode: 0o600 })
+    return `Saved ${ref.name} (${ref.type}, ${bytes.length} bytes) to ${path}. Open it with your Read tool${ref.type.startsWith('image/') ? ' to see the image' : ''}.`
   }
 
   private async ask(clusterId: string, state: ClusterState, me: ClusterSession, args: Args): Promise<string> {
@@ -484,7 +788,13 @@ export class ClusterWork {
    * The claims document with this session's files taken (`claim`) or let go (`release`), written over the revision read:
    * when another writer got there first, once more over theirs. Lapsed claims go at the same time.
    */
-  private async updateClaims(clusterId: string, me: ClusterSession, found: Detected, base?: ClusterDocWire | null): Promise<void> {
+  private async updateClaims(
+    clusterId: string,
+    me: ClusterSession,
+    found: Detected,
+    hours = CLAIM_HOURS,
+    base?: ClusterDocWire | null,
+  ): Promise<void> {
     const vault = this.clusters.vault(clusterId)
     const state = this.clusters.state(clusterId)
     if (!vault || !state) return
@@ -503,11 +813,11 @@ export class ClusterWork {
             {
               id: newClusterItemId(),
               paths: [...paths],
-              reason: found.text,
+              ...(found.text ? { reason: found.text } : {}),
               account: me.account,
               session: me.session,
               at: new Date(now).toISOString(),
-              until: new Date(now + CLAIM_HOURS * 3_600_000).toISOString(),
+              until: new Date(now + hours * 3_600_000).toISOString(),
             },
           ]
         : []
@@ -536,7 +846,7 @@ export class ClusterWork {
       blob: await vault.seal({ claims: [...kept, ...taken] }),
     }))
     const conflict = await answer
-    if (conflict !== undefined && base === undefined) await this.updateClaims(clusterId, me, found, conflict)
+    if (conflict !== undefined && base === undefined) await this.updateClaims(clusterId, me, found, hours, conflict)
   }
 
   /** What the session's guard reads before an edit (#310): the claims of every cluster it is in but its own, by holder. */
@@ -721,7 +1031,10 @@ export class ClusterWork {
       )
       if (paths?.length) lines.push(`Paths: ${paths.slice(0, 20).join(', ')}${paths.length > 20 ? '…' : ''}`)
     }
-    if (body.file) lines.push(`File: ${body.file.name} (${body.file.type}, ${body.file.size} bytes, id ${body.file.id})`)
+    if (body.file)
+      lines.push(
+        `File: ${body.file.name} (${body.file.type}, ${body.file.size} bytes, id ${body.file.id}). Fetch it with cluster_file if you need it.`,
+      )
     if (body.kind === 'ask')
       lines.push(`Answer it with cluster_send, reply_to "${post.id}", if you can without leaving what your own user asked.`)
     return clusterEnvelope(body.kind, this.from(state, post), attributes, lines.filter(Boolean).join('\n'))

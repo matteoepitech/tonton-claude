@@ -83,6 +83,9 @@ export const MAX_CLUSTER_DOC_BYTES = 1024 * 1024
 export const MAX_CLUSTER_DOCS = 16
 /** What a snapshot carries of the posts, the latest ones. */
 export const CLUSTER_SNAPSHOT_POSTS = 300
+/** One sealed file (10 MB before sealing, base64 after), and every file of a cluster together, the oldest going first. */
+export const MAX_CLUSTER_FILE_BLOB_BYTES = 14 * 1024 * 1024
+export const MAX_CLUSTER_FILES_BYTES = 200 * 1024 * 1024
 /** Posts and documents one member may send to one cluster per minute. */
 export const MAX_CLUSTER_POSTS_PER_MINUTE = 120
 export const MAX_WS_MESSAGE_BYTES = 32 * 1024 * 1024
