@@ -57,7 +57,7 @@ export async function runChannel() {
         else if (message.t === 'pool_left') conversation.pools.remove(message.poolId)
         else if (message.t === 'pool_stop') conversation.pools.stop(message.poolId)
         else if (message.t === 'pool_accept') conversation.pools.accept(message.poolId, message.acceptance)
-        else void onRelayMessage(message)
+        else if (message.t === 'prompt' || message.t === 'verdict') void onRelayMessage(message)
       }
     },
     pool: update => conversation?.pools.apply(update),

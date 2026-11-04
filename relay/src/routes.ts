@@ -1,6 +1,8 @@
 import type { Server } from 'bun'
 import type { HookPost, PushDevice, PushStatus } from '../../shared/protocol'
 import { RELEASES_URL } from '../../shared/version'
+import { agentClusterRoute, clusterRoute } from './cluster-routes'
+import { removeAccountClusters } from './cluster-sockets'
 import type { RelayContext } from './context'
 import { BROWSER_PROTOCOL, bearerToken, browserToken, clientIp, fail, json, readJson } from './http'
 import type { SocketData } from './hub'
@@ -41,6 +43,8 @@ export function createFetchHandler(ctx: RelayContext) {
       path === '/api/agent/ping' ||
       path === '/api/agent/rpg' ||
       /^\/api\/agent\/pools\/[A-Za-z0-9_-]{12}\/rpg$/.test(path) ||
+      path === '/api/agent/clusters' ||
+      /^\/api\/agent\/clusters\/[A-Za-z0-9_-]{12}\/members$/.test(path) ||
       path === '/ws/agent'
     )
       return agentRoute(ctx, req, server, path, ip)
@@ -112,6 +116,8 @@ async function agentRoute(ctx: RelayContext, req: Request, server: RelayServer, 
   if (path === '/api/agent/rpg') return rpgRoute(ctx, req, machine.accountId)
   const poolRPG = /^\/api\/agent\/pools\/([A-Za-z0-9_-]{12})\/rpg$/.exec(path)
   if (poolRPG) return poolRPGRoute(ctx, req, machine.accountId, poolRPG[1])
+  // Read only, for `tonton cluster join` on the machine: the clusters of its account and their members' keys.
+  if (path.startsWith('/api/agent/clusters')) return agentClusterRoute(ctx, req, path, machine.accountId)
   if (path === '/ws/agent') {
     const version = req.headers.get('x-tonton-agent')
     const data: SocketData = {
@@ -209,6 +215,10 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
     const response = await poolRoute(ctx, req, path, accountId, ip)
     if (response) return response
   }
+  if (path.startsWith('/api/clusters')) {
+    const response = await clusterRoute(ctx, req, path, accountId, ip)
+    if (response) return response
+  }
 
   const devicePath = DEVICE_PATH.exec(path)
   if (devicePath && req.method === 'DELETE') {
@@ -245,6 +255,7 @@ async function appRoute(ctx: RelayContext, req: Request, server: RelayServer, pa
     }
     for (const share of ctx.registry.shares(accountId)) ctx.endShare(share, 'account deleted')
     ctx.removeAccountPools(accountId)
+    removeAccountClusters(ctx, accountId)
     ctx.hub.disconnectApps(accountId, 'account deleted')
     ctx.registry.deleteAccount(accountId)
     ctx.sessions.removeAccount(accountId)

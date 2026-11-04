@@ -260,6 +260,86 @@ const MIGRATIONS = [
      rev INTEGER NOT NULL,
      blob TEXT NOT NULL
    );`,
+  // Clusters (relay/src/clusters.ts, docs/cluster.md): sessions of several accounts talking to each other. Ids, roles,
+  // revisions and times in clear; everything else sealed with the cluster key, except each member's copy of that key and
+  // its private key, sealed with its own account key, and the orders that put a session in, sealed the same way.
+  `CREATE TABLE clusters (
+     id TEXT PRIMARY KEY,
+     owner_account TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+     created_at TEXT NOT NULL,
+     key_version INTEGER NOT NULL DEFAULT 1,
+     info_blob TEXT NOT NULL
+   );
+   CREATE TABLE cluster_members (
+     cluster_id TEXT NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+     role TEXT NOT NULL,
+     joined_at TEXT NOT NULL,
+     profile_blob TEXT,
+     key_blob TEXT NOT NULL,
+     secret_blob TEXT,
+     PRIMARY KEY (cluster_id, account_id)
+   );
+   CREATE INDEX cluster_members_account ON cluster_members(account_id);
+   CREATE TABLE cluster_member_keys (
+     cluster_id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     version INTEGER NOT NULL,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (cluster_id, account_id, version),
+     FOREIGN KEY (cluster_id, account_id) REFERENCES cluster_members(cluster_id, account_id) ON DELETE CASCADE
+   );
+   CREATE TABLE cluster_key_wraps (
+     cluster_id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     version INTEGER NOT NULL,
+     from_account TEXT NOT NULL,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (cluster_id, account_id, version),
+     FOREIGN KEY (cluster_id, account_id) REFERENCES cluster_members(cluster_id, account_id) ON DELETE CASCADE
+   );
+   CREATE TABLE cluster_invites (
+     id TEXT PRIMARY KEY,
+     cluster_id TEXT NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+     secret_hash BLOB NOT NULL,
+     uses_left INTEGER NOT NULL,
+     created_at TEXT NOT NULL,
+     expires_at INTEGER NOT NULL
+   );
+   CREATE INDEX cluster_invites_cluster ON cluster_invites(cluster_id);
+   CREATE TABLE cluster_sessions (
+     cluster_id TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT NOT NULL,
+     joined_at TEXT NOT NULL,
+     profile_blob TEXT,
+     order_blob TEXT NOT NULL,
+     PRIMARY KEY (cluster_id, account_id, session_id),
+     FOREIGN KEY (cluster_id, account_id) REFERENCES cluster_members(cluster_id, account_id) ON DELETE CASCADE
+   );
+   CREATE INDEX cluster_sessions_session ON cluster_sessions(account_id, session_id);
+   CREATE TABLE cluster_posts (
+     seq INTEGER PRIMARY KEY AUTOINCREMENT,
+     cluster_id TEXT NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+     id TEXT NOT NULL,
+     ts TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT,
+     machine_id TEXT,
+     blob TEXT NOT NULL,
+     UNIQUE (cluster_id, id)
+   );
+   CREATE TABLE cluster_docs (
+     cluster_id TEXT NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+     name TEXT NOT NULL,
+     rev INTEGER NOT NULL,
+     updated_at TEXT NOT NULL,
+     account_id TEXT NOT NULL,
+     session_id TEXT,
+     machine_id TEXT,
+     blob TEXT NOT NULL,
+     PRIMARY KEY (cluster_id, name)
+   );`,
 ]
 
 /** One install of the iPhone app, with its APNs tokens (see `PushDevice` in shared/protocol.ts). */

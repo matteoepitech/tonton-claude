@@ -2,6 +2,8 @@ import type { PoolAuditAction, PoolSessionWire, PoolSnapshot, PoolUpdate } from 
 import type { MachineSummary, SessionSummary, ShareSummary } from '../../shared/protocol'
 import { ApnsClient, type Pusher } from './apns'
 import { SessionArchive } from './archive'
+import { clusterStatusChanged } from './cluster-sockets'
+import { ClusterStore } from './clusters'
 import type { RelayConfig } from './config'
 import { Hub } from './hub'
 import { POOL_SNAPSHOT_AUDIT, RATE_LIMITS } from './limits'
@@ -46,6 +48,12 @@ export class RelayContext {
   readonly poolPosts = new Map<string, { minute: number; count: number }>()
   /** The status pool members were last told, per pool session: `account/session`. */
   private readonly poolStatuses = new Map<string, string>()
+  /** Clusters, their members, sessions, posts and documents (docs/cluster.md). */
+  readonly clusters: ClusterStore
+  /** Posts per cluster member in the current minute. */
+  readonly clusterPosts = new Map<string, { minute: number; count: number }>()
+  /** The status cluster members were last told, per cluster session: `account/session`. */
+  readonly clusterStatuses = new Map<string, string>()
   /** The sealed copies of shared sessions. */
   readonly shares = new ShareStreams()
   private readonly archive: SessionArchive
@@ -66,16 +74,19 @@ export class RelayContext {
     this.pools = new PoolStore(this.registry.db)
     this.poolSafety = new PoolSafetyStore(this.registry.db)
     this.poolMachines = new PoolMachineStore(this.registry.db)
+    this.clusters = new ClusterStore(this.registry.db)
     this.sessions = new SessionStore(
       {
         updated: (accountId, session) => {
           this.hub.sendToApps(accountId, { t: 'session', session })
           this.pushSharedStatus(accountId, session)
           this.poolStatusChanged(accountId, session)
+          clusterStatusChanged(this, accountId, session)
           this.push?.sessionsChanged(accountId)
         },
         removed: (accountId, sessionId) => {
           this.poolStatuses.delete(`${accountId}/${sessionId}`)
+          this.clusterStatuses.delete(`${accountId}/${sessionId}`)
           this.hub.sendToApps(accountId, { t: 'removed', sessionId })
           this.push?.sessionsChanged(accountId)
         },
@@ -96,6 +107,7 @@ export class RelayContext {
       for (const limiter of [this.signups, this.claims, this.failedAuth]) limiter.prune()
       for (const share of this.registry.expireShares()) this.endShare(share, 'expired')
       this.poolPosts.clear()
+      this.clusterPosts.clear()
     }, 60_000)
   }
 
