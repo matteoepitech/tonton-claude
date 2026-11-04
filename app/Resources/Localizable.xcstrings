@@ -551,6 +551,22 @@
         }
       }
     },
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ : %2$@"
+          }
+        }
+      }
+    },
     "%@: %@ in 13 weeks" : {
       "localizations" : {
         "en" : {
@@ -735,6 +751,32 @@
         }
       }
     },
+    "%lld d %lld h left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld d %2$lld h left"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il reste %1$lld j %2$lld h"
+          }
+        }
+      }
+    },
+    "%lld d left" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il reste %lld j"
+          }
+        }
+      }
+    },
     "%lld days in a row" : {
       "localizations" : {
         "en" : {
@@ -853,6 +895,32 @@
         }
       }
     },
+    "%lld h %@ min left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld h %2$@ min left"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il reste %1$lld h %2$@ min"
+          }
+        }
+      }
+    },
+    "%lld h left" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il reste %lld h"
+          }
+        }
+      }
+    },
     "%lld image(s)" : {
       "localizations" : {
         "fr" : {
@@ -931,6 +999,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld min"
+          }
+        }
+      }
+    },
+    "%lld min left" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il reste %lld min"
           }
         }
       }
@@ -1175,6 +1253,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld tâches finies sur %lld"
+          }
+        }
+      }
+    },
+    "%lld of %lld working" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld working"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld sur %2$lld au travail"
           }
         }
       }
@@ -1793,6 +1887,26 @@
         }
       }
     },
+    "A cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un cluster"
+          }
+        }
+      }
+    },
+    "A deadline for everyone" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une échéance pour tous"
+          }
+        }
+      }
+    },
     "A first session showed up in the notch." : {
       "localizations" : {
         "fr" : {
@@ -1833,12 +1947,32 @@
         }
       }
     },
+    "A link and a QR code for the people you want in" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un lien et un code QR pour les personnes que vous voulez inviter"
+          }
+        }
+      }
+    },
     "A macOS notification in the evening: how long Claude worked, in how many sessions, and the cost when costs are shown." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Une notification macOS le soir : combien de temps Claude a travaillé, dans combien de sessions, et le coût quand les coûts sont affichés."
+          }
+        }
+      }
+    },
+    "A machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une machine"
           }
         }
       }
@@ -1883,6 +2017,26 @@
         }
       }
     },
+    "A session" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une session"
+          }
+        }
+      }
+    },
+    "A session in the cluster tells the others what it does and reads what they post, as information, never as orders. Permission prompts stay yours." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une session du cluster dit aux autres ce qu’elle fait et lit ce qu’ils publient, comme des informations, jamais comme des ordres. Les demandes de permission restent les vôtres."
+          }
+        }
+      }
+    },
     "A session needs you" : {
       "localizations" : {
         "fr" : {
@@ -1909,6 +2063,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Une session ouverte pendant 6 heures."
+          }
+        }
+      }
+    },
+    "A session that skips permission prompts gets a digest unless you choose Live anyway." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une session qui saute les demandes de permission reçoit un résumé, sauf si vous choisissez « En direct quand même »."
           }
         }
       }
@@ -2243,6 +2407,16 @@
         }
       }
     },
+    "Ahead" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À venir"
+          }
+        }
+      }
+    },
     "Alerts" : {
       "localizations" : {
         "fr" : {
@@ -2453,6 +2627,16 @@
         }
       }
     },
+    "Answer" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réponse"
+          }
+        }
+      }
+    },
     "Any" : {
       "localizations" : {
         "fr" : {
@@ -2659,6 +2843,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Automatisation"
+          }
+        }
+      }
+    },
+    "Back to the clusters" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour aux clusters"
           }
         }
       }
@@ -2915,6 +3109,16 @@
         }
       }
     },
+    "Claim" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réservation"
+          }
+        }
+      }
+    },
     "Claim achievement boosters" : {
       "localizations" : {
         "fr" : {
@@ -2941,6 +3145,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Récupérer les récompenses de victoire"
+          }
+        }
+      }
+    },
+    "Claims" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réservations"
           }
         }
       }
@@ -3164,6 +3378,16 @@
         }
       }
     },
+    "Clock" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Horloge"
+          }
+        }
+      }
+    },
     "Close" : {
       "localizations" : {
         "fr" : {
@@ -3180,6 +3404,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fermer (Échap)"
+          }
+        }
+      }
+    },
+    "Close the clusters" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer les clusters"
           }
         }
       }
@@ -3230,6 +3464,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les sessions fermées et hors ligne quittent la liste. L’œil au-dessus de la liste active ou désactive ce réglage en un clic."
+          }
+        }
+      }
+    },
+    "Cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cluster"
+          }
+        }
+      }
+    },
+    "Cluster sections" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sections du cluster"
+          }
+        }
+      }
+    },
+    "Clusters" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clusters"
+          }
+        }
+      }
+    },
+    "Clusters of this session" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clusters de cette session"
+          }
+        }
+      }
+    },
+    "Clusters: the sessions of several people, telling each other what they do" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clusters : les sessions de plusieurs personnes, qui se disent ce qu’elles font"
+          }
+        }
+      }
+    },
+    "Cluster…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cluster…"
           }
         }
       }
@@ -3405,6 +3699,16 @@
         }
       }
     },
+    "Connect to the relay to put a session in a cluster." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous au relais pour mettre une session dans un cluster."
+          }
+        }
+      }
+    },
     "Connect to the relay to put a session in a pool." : {
       "localizations" : {
         "fr" : {
@@ -3421,6 +3725,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Connectez-vous au relais pour partager une session."
+          }
+        }
+      }
+    },
+    "Connect to the relay to use clusters." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous au relais pour utiliser les clusters."
           }
         }
       }
@@ -3541,6 +3855,16 @@
         }
       }
     },
+    "Copied." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copié."
+          }
+        }
+      }
+    },
     "Copy" : {
       "localizations" : {
         "fr" : {
@@ -3587,6 +3911,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copier les lignes"
+          }
+        }
+      }
+    },
+    "Copy the link" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier le lien"
           }
         }
       }
@@ -3769,6 +4103,16 @@
         }
       }
     },
+    "Create" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créer"
+          }
+        }
+      }
+    },
     "Create account" : {
       "localizations" : {
         "fr" : {
@@ -3855,6 +4199,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jour"
+          }
+        }
+      }
+    },
+    "Deadline" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échéance"
+          }
+        }
+      }
+    },
+    "Deadline: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échéance : %@"
           }
         }
       }
@@ -3969,6 +4333,26 @@
         }
       }
     },
+    "Delete the cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le cluster"
+          }
+        }
+      }
+    },
+    "Delete the cluster for everyone? Its posts, notes, claims and clock go, and every session leaves it. This cannot be undone." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le cluster pour tout le monde ? Ses messages, notes, réservations et horloge disparaissent, et chaque session le quitte. C’est irréversible."
+          }
+        }
+      }
+    },
     "Delete this template" : {
       "localizations" : {
         "fr" : {
@@ -3985,6 +4369,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Supprimer votre compte ?"
+          }
+        }
+      }
+    },
+    "Delivery: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réception : %@"
           }
         }
       }
@@ -4045,6 +4439,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dicter un message (ou maintenir ⌃)"
+          }
+        }
+      }
+    },
+    "Digest" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Résumé"
           }
         }
       }
@@ -4259,6 +4663,16 @@
         }
       }
     },
+    "Event" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Événement"
+          }
+        }
+      }
+    },
     "Event sound" : {
       "localizations" : {
         "fr" : {
@@ -4285,6 +4699,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chaque demande d’autorisation de ses sessions du pool vous arrive, comme pour toute session."
+          }
+        }
+      }
+    },
+    "Every post" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous les messages"
           }
         }
       }
@@ -4385,6 +4809,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Échec"
+          }
+        }
+      }
+    },
+    "Feed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fil"
+          }
+        }
+      }
+    },
+    "File" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichier"
           }
         }
       }
@@ -4567,6 +5011,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Funky"
+          }
+        }
+      }
+    },
+    "Gathered for its next prompt" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regroupés pour son prochain prompt"
           }
         }
       }
@@ -4849,6 +5303,36 @@
         }
       }
     },
+    "How it takes the posts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comment elle reçoit les messages"
+          }
+        }
+      }
+    },
+    "How it takes the posts once in" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comment elle recevra les messages une fois dedans"
+          }
+        }
+      }
+    },
+    "How it takes the posts, or take it out of the cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comment elle reçoit les messages, ou la retirer du cluster"
+          }
+        }
+      }
+    },
     "How much of the desktop shows through the open notch. Text stays readable at every value." : {
       "localizations" : {
         "fr" : {
@@ -4865,6 +5349,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Comment l’encoche s’ouvre et vous prévient quand une session a besoin de vous."
+          }
+        }
+      }
+    },
+    "How the others see you" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comment les autres vous voient"
           }
         }
       }
@@ -4937,12 +5431,32 @@
         }
       }
     },
+    "In %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dans %@"
+          }
+        }
+      }
+    },
     "In pool %@" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dans le pool %@"
+          }
+        }
+      }
+    },
+    "In the cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dans le cluster"
           }
         }
       }
@@ -5103,6 +5617,46 @@
         }
       }
     },
+    "Invite" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inviter"
+          }
+        }
+      }
+    },
+    "Invite people" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inviter des personnes"
+          }
+        }
+      }
+    },
+    "Invite to a cluster on %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitation à un cluster sur %@"
+          }
+        }
+      }
+    },
+    "It leaves the cluster and stops reading its posts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elle quitte le cluster et ne lit plus ses messages"
+          }
+        }
+      }
+    },
     "It plans and hands out the work." : {
       "localizations" : {
         "fr" : {
@@ -5169,6 +5723,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Son agent est hors ligne."
+          }
+        }
+      }
+    },
+    "Its agent takes the order, sealed with your account key. Permission prompts stay yours." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son agent reçoit l’ordre, scellé avec la clé de votre compte. Les demandes de permission restent les vôtres."
+          }
+        }
+      }
+    },
+    "Its key is made on this Mac: the relay never reads the cluster." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sa clé est créée sur ce Mac : le relais ne lit jamais le cluster."
           }
         }
       }
@@ -5253,6 +5827,36 @@
         }
       }
     },
+    "Join" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre"
+          }
+        }
+      }
+    },
+    "Join a cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre un cluster"
+          }
+        }
+      }
+    },
+    "Join a cluster with the invite someone sent you" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rejoindre un cluster avec l’invitation qu’on vous a envoyée"
+          }
+        }
+      }
+    },
     "Join a pool to share Tonton's level and equipped look with your team." : {
       "localizations" : {
         "fr" : {
@@ -5289,6 +5893,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rejoindre le pool"
+          }
+        }
+      }
+    },
+    "Joined %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Membre depuis le %@"
           }
         }
       }
@@ -5494,6 +6108,26 @@
         }
       }
     },
+    "Leave the cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitter le cluster"
+          }
+        }
+      }
+    },
+    "Leave the cluster? Your sessions leave it with you. You need a new invite to come back." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitter le cluster ? Vos sessions le quittent avec vous. Il vous faudra une nouvelle invitation pour revenir."
+          }
+        }
+      }
+    },
     "Left the pool" : {
       "localizations" : {
         "fr" : {
@@ -5564,12 +6198,42 @@
         }
       }
     },
+    "Live" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En direct"
+          }
+        }
+      }
+    },
     "Live activity" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activité en direct"
+          }
+        }
+      }
+    },
+    "Live anyway" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En direct quand même"
+          }
+        }
+      }
+    },
+    "Live anyway, if it skips permission prompts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En direct quand même, si elle saute les demandes de permission"
           }
         }
       }
@@ -5694,6 +6358,16 @@
         }
       }
     },
+    "Make a cluster: its key is made on this Mac" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créer un cluster : sa clé est créée sur ce Mac"
+          }
+        }
+      }
+    },
     "Make it the orchestrator" : {
       "localizations" : {
         "fr" : {
@@ -5710,6 +6384,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En faire l’orchestrateur du pool"
+          }
+        }
+      }
+    },
+    "Making the invite…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Création de l’invitation…"
           }
         }
       }
@@ -5754,12 +6438,52 @@
         }
       }
     },
+    "Member" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Membre"
+          }
+        }
+      }
+    },
+    "Members" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Membres"
+          }
+        }
+      }
+    },
+    "Members: %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Membres : %lld"
+          }
+        }
+      }
+    },
     "Menu bar icon" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Icône dans la barre des menus"
+          }
+        }
+      }
+    },
+    "Message" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message"
           }
         }
       }
@@ -5781,6 +6505,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Minuit"
+          }
+        }
+      }
+    },
+    "Milestone" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étape"
+          }
+        }
+      }
+    },
+    "Milestones" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étapes"
           }
         }
       }
@@ -5901,6 +6645,16 @@
         }
       }
     },
+    "Muted" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silencieux"
+          }
+        }
+      }
+    },
     "Name" : {
       "localizations" : {
         "fr" : {
@@ -5921,6 +6675,16 @@
         }
       }
     },
+    "Name, such as Game jam" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom, par exemple Game jam"
+          }
+        }
+      }
+    },
     "Needs approval" : {
       "localizations" : {
         "fr" : {
@@ -5937,6 +6701,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jamais"
+          }
+        }
+      }
+    },
+    "New" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouveau"
+          }
+        }
+      }
+    },
+    "New cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouveau cluster"
           }
         }
       }
@@ -5991,6 +6775,22 @@
         }
       }
     },
+    "Next: %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Next: %1$@, %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ensuite : %1$@, %2$@"
+          }
+        }
+      }
+    },
     "Night owl" : {
       "localizations" : {
         "fr" : {
@@ -6041,6 +6841,46 @@
         }
       }
     },
+    "No claims: nobody holds a file right now." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune réservation : personne ne tient de fichier en ce moment."
+          }
+        }
+      }
+    },
+    "No clock yet. Set a deadline below." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore d’horloge. Fixez une échéance ci-dessous."
+          }
+        }
+      }
+    },
+    "No clock yet. The owner can set one." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore d’horloge. Le propriétaire peut en fixer une."
+          }
+        }
+      }
+    },
+    "No cluster yet. Make one for a jam or a sprint, or join one with the invite someone sent you." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun cluster pour l’instant. Créez-en un pour une jam ou un sprint, ou rejoignez-en un avec l’invitation qu’on vous a envoyée."
+          }
+        }
+      }
+    },
     "No coding tool on this machine: install Claude Code or OpenCode there first." : {
       "localizations" : {
         "fr" : {
@@ -6081,6 +6921,16 @@
         }
       }
     },
+    "No notes yet. The sessions write conventions, interfaces and decisions here." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore de notes. Les sessions y écrivent les conventions, les interfaces et les décisions."
+          }
+        }
+      }
+    },
     "No report for a few minutes" : {
       "localizations" : {
         "fr" : {
@@ -6097,6 +6947,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucune récompense perdue. Essayez une autre trajectoire ou améliorez Tonton."
+          }
+        }
+      }
+    },
+    "No session in the cluster yet." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune session dans le cluster pour l’instant."
           }
         }
       }
@@ -6271,6 +7131,16 @@
         }
       }
     },
+    "None of your running sessions is outside the cluster." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes vos sessions en cours sont déjà dans le cluster."
+          }
+        }
+      }
+    },
     "Not a model name: use an alias, a model id or provider/model." : {
       "localizations" : {
         "fr" : {
@@ -6287,6 +7157,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pas de connexion au relais."
+          }
+        }
+      }
+    },
+    "Not connected to the relay: nothing was changed." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas connecté au relais : rien n’a été modifié."
           }
         }
       }
@@ -6341,6 +7221,16 @@
         }
       }
     },
+    "Notes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes"
+          }
+        }
+      }
+    },
     "Nothing archived yet." : {
       "localizations" : {
         "fr" : {
@@ -6371,6 +7261,26 @@
         }
       }
     },
+    "Nothing posted yet." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien n’a encore été publié."
+          }
+        }
+      }
+    },
+    "Nothing reaches it" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien ne lui parvient"
+          }
+        }
+      }
+    },
     "Nothing recorded yet" : {
       "localizations" : {
         "fr" : {
@@ -6387,6 +7297,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rien en cours"
+          }
+        }
+      }
+    },
+    "Notice" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annonce"
           }
         }
       }
@@ -6492,6 +7412,16 @@
         }
       }
     },
+    "Only sessions an agent serves can be in a cluster: this one is read from this Mac's files." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seules les sessions servies par un agent peuvent être dans un cluster : celle-ci est lue dans les fichiers de ce Mac."
+          }
+        }
+      }
+    },
     "Only sessions an agent serves can join a pool: this one is read from this Mac's files." : {
       "localizations" : {
         "fr" : {
@@ -6568,6 +7498,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ouvrir dans %@"
+          }
+        }
+      }
+    },
+    "Open invites" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitations ouvertes"
           }
         }
       }
@@ -6652,6 +7592,16 @@
         }
       }
     },
+    "Opening the cluster…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouverture du cluster…"
+          }
+        }
+      }
+    },
     "Opens Tonton's hero screen" : {
       "localizations" : {
         "fr" : {
@@ -6668,6 +7618,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ouvre et ferme l’encoche depuis n’importe où."
+          }
+        }
+      }
+    },
+    "Opens the cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre le cluster"
           }
         }
       }
@@ -6722,6 +7682,16 @@
         }
       }
     },
+    "Owner" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Propriétaire"
+          }
+        }
+      }
+    },
     "PINNED" : {
       "localizations" : {
         "fr" : {
@@ -6739,6 +7709,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Papier"
+          }
+        }
+      }
+    },
+    "Passed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passée"
           }
         }
       }
@@ -6769,6 +7749,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Coller une image du presse-papiers (⌘⇧V)"
+          }
+        }
+      }
+    },
+    "Paste the invite from the clipboard" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coller l’invitation depuis le presse-papiers"
+          }
+        }
+      }
+    },
+    "Paste the link someone sent you. Then put your sessions in, one by one, from the cluster's roster." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collez le lien qu’on vous a envoyé. Puis ajoutez vos sessions une par une depuis l’équipe du cluster."
           }
         }
       }
@@ -6819,6 +7819,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En pause"
+          }
+        }
+      }
+    },
+    "People read here; their own Claudes post." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les personnes lisent ici ; leurs propres Claude publient."
           }
         }
       }
@@ -6924,6 +7934,16 @@
         }
       }
     },
+    "Playable build" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version jouable"
+          }
+        }
+      }
+    },
     "Plays with the banner." : {
       "localizations" : {
         "fr" : {
@@ -6991,6 +8011,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Publie sur Discord, Slack ou tout service qui accepte un webhook JSON, en https uniquement."
+          }
+        }
+      }
+    },
+    "Posts reach it as they come" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les messages lui parviennent dès qu’ils arrivent"
           }
         }
       }
@@ -7066,12 +8096,92 @@
         }
       }
     },
+    "Put in" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter"
+          }
+        }
+      }
+    },
+    "Put in %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter à %@"
+          }
+        }
+      }
+    },
+    "Put in a cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter à un cluster"
+          }
+        }
+      }
+    },
+    "Put in a cluster…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter à un cluster…"
+          }
+        }
+      }
+    },
+    "Put it in another cluster too" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’ajouter aussi à un autre cluster"
+          }
+        }
+      }
+    },
+    "Put this session in a cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter cette session à un cluster"
+          }
+        }
+      }
+    },
     "Put this session in a pool" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mettre cette session dans un pool"
+          }
+        }
+      }
+    },
+    "Put your sessions in" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez vos sessions"
+          }
+        }
+      }
+    },
+    "QR code of the cluster invite" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code QR de l’invitation au cluster"
           }
         }
       }
@@ -7426,12 +8536,32 @@
         }
       }
     },
+    "Remove members on the relay's website" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer des membres sur le site du relais"
+          }
+        }
+      }
+    },
     "Remove tag" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retirer le tag"
+          }
+        }
+      }
+    },
+    "Remove the milestone" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer l’étape"
           }
         }
       }
@@ -7646,6 +8776,16 @@
         }
       }
     },
+    "Roster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Équipe"
+          }
+        }
+      }
+    },
     "Rubber stamp" : {
       "localizations" : {
         "fr" : {
@@ -7766,6 +8906,16 @@
         }
       }
     },
+    "Save the clock" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer l’horloge"
+          }
+        }
+      }
+    },
     "Scripts can send messages" : {
       "localizations" : {
         "fr" : {
@@ -7876,6 +9026,16 @@
         }
       }
     },
+    "Send them this link, or let them scan the code. It holds the cluster key: send it to people you trust." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyez-leur ce lien, ou faites-leur scanner le code. Il contient la clé du cluster : envoyez-le à des personnes de confiance."
+          }
+        }
+      }
+    },
     "Send “%@”" : {
       "localizations" : {
         "fr" : {
@@ -7932,6 +9092,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Envoyé"
+          }
+        }
+      }
+    },
+    "Sent to every member." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyée à chaque membre."
           }
         }
       }
@@ -8012,6 +9182,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sessions, machines, réglages…"
+          }
+        }
+      }
+    },
+    "Sessions: %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessions : %lld"
+          }
+        }
+      }
+    },
+    "Set the clock" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Régler l’horloge"
           }
         }
       }
@@ -8410,6 +9600,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Suspendre les alertes"
+          }
+        }
+      }
+    },
+    "Someone changed the clock meanwhile: check it and try again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quelqu’un a modifié l’horloge entre-temps : vérifiez-la et réessayez."
+          }
+        }
+      }
+    },
+    "Someone changed this document meanwhile: check it and try again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quelqu’un a modifié ce document entre-temps : vérifiez-le et réessayez."
           }
         }
       }
@@ -8920,6 +10130,26 @@
         }
       }
     },
+    "Take out" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer"
+          }
+        }
+      }
+    },
+    "Take out of the cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer du cluster"
+          }
+        }
+      }
+    },
     "Take the message back to the message field" : {
       "localizations" : {
         "fr" : {
@@ -9087,12 +10317,32 @@
         }
       }
     },
+    "The Claude Code and OpenCode sessions of several people tell each other what they do, ask, and hold files. Nobody drives anyone else's Claude." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les sessions Claude Code et OpenCode de plusieurs personnes se disent ce qu’elles font, posent des questions et réservent des fichiers. Personne ne pilote le Claude d’un autre."
+          }
+        }
+      }
+    },
     "The QR code could not be made. Copy the recovery key from Settings › Relay instead." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Impossible de créer le code QR. Copiez plutôt la clé de récupération depuis Réglages › Relais."
+          }
+        }
+      }
+    },
+    "The agent on %@ is too old for clusters. Update agent first." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’agent de %@ est trop ancien pour les clusters. Mettez d’abord l’agent à jour."
           }
         }
       }
@@ -9147,6 +10397,26 @@
         }
       }
     },
+    "The cluster is still opening: try again in a moment." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le cluster s’ouvre encore : réessayez dans un instant."
+          }
+        }
+      }
+    },
+    "The cluster's roster, feed, claims and clock" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’équipe, le fil, les réservations et l’horloge du cluster"
+          }
+        }
+      }
+    },
     "The current token stops working right away: every machine is signed out until you give it the new one. Other Macs signed in to this account need the new recovery key." : {
       "localizations" : {
         "fr" : {
@@ -9193,6 +10463,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La branche git du dossier de la session : %@"
+          }
+        }
+      }
+    },
+    "The invite could not be made. Try again in a moment." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’invitation n’a pas pu être créée. Réessayez dans un instant."
+          }
+        }
+      }
+    },
+    "The invite holds the cluster key: it stays on this Mac." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’invitation contient la clé du cluster : elle reste sur ce Mac."
+          }
+        }
+      }
+    },
+    "The invite link" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le lien d’invitation"
           }
         }
       }
@@ -9417,6 +10717,16 @@
         }
       }
     },
+    "This account is in no cluster yet. Make one or join one with the clusters button at the bottom of the notch." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce compte n’est encore dans aucun cluster. Créez-en un ou rejoignez-en un avec le bouton des clusters, en bas du notch."
+          }
+        }
+      }
+    },
     "This account is in no pool yet. Make one or join one on the relay's website." : {
       "localizations" : {
         "fr" : {
@@ -9453,6 +10763,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cette conversation ne peut plus être lue."
+          }
+        }
+      }
+    },
+    "This invite is for another relay: %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette invitation est pour un autre relais : %@."
+          }
+        }
+      }
+    },
+    "This is not a cluster invite: it starts with tontoncluster1." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce n’est pas une invitation à un cluster : elle commence par tontoncluster1."
           }
         }
       }
@@ -9513,6 +10843,26 @@
         }
       }
     },
+    "This post does not open with the keys you hold." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce message ne s’ouvre pas avec les clés que vous avez."
+          }
+        }
+      }
+    },
+    "This relay doesn't know clusters yet: it needs updating." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce relais ne connaît pas encore les clusters : il faut le mettre à jour."
+          }
+        }
+      }
+    },
     "This relay is too old for pools: it needs 0.8.0 or later." : {
       "localizations" : {
         "fr" : {
@@ -9553,6 +10903,26 @@
         }
       }
     },
+    "This session's clusters" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les clusters de cette session"
+          }
+        }
+      }
+    },
+    "Time is up" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le temps est écoulé"
+          }
+        }
+      }
+    },
     "Tink" : {
       "comment" : "A macOS alert sound",
       "localizations" : {
@@ -9570,6 +10940,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "À"
+          }
+        }
+      }
+    },
+    "To remove a member, use the relay's website: the cluster gets a new key there, which they never receive." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour retirer un membre, passez par le site du relais : le cluster y reçoit une nouvelle clé, que ce membre ne recevra jamais."
           }
         }
       }
@@ -9902,6 +11282,16 @@
         }
       }
     },
+    "Under a minute left" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moins d’une minute"
+          }
+        }
+      }
+    },
     "Undo" : {
       "localizations" : {
         "fr" : {
@@ -9972,6 +11362,16 @@
         }
       }
     },
+    "Until %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valable jusqu’au %@"
+          }
+        }
+      }
+    },
     "Until it finishes" : {
       "localizations" : {
         "fr" : {
@@ -9988,6 +11388,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jusqu’à %lld conversations, les plus récentes, sur ce Mac uniquement. La clé est à côté : une copie du seul dossier des archives est illisible, mais quiconque peut lire vos fichiers peut les lire."
+          }
+        }
+      }
+    },
+    "Up to 20 people, for a week" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jusqu’à 20 personnes, pendant une semaine"
           }
         }
       }
@@ -10142,6 +11552,16 @@
         }
       }
     },
+    "Uses left: %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilisations restantes : %lld"
+          }
+        }
+      }
+    },
     "Veteran Tonton" : {
       "localizations" : {
         "fr" : {
@@ -10212,12 +11632,32 @@
         }
       }
     },
+    "Waiting for its agent" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente de son agent"
+          }
+        }
+      }
+    },
     "Waiting for its agent to take the order…" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "En attente de son agent, qui doit prendre l’ordre…"
+          }
+        }
+      }
+    },
+    "Waiting for its owner" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente de son propriétaire"
           }
         }
       }
@@ -10312,12 +11752,32 @@
         }
       }
     },
+    "Website" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Site web"
+          }
+        }
+      }
+    },
     "What Claude is doing on each of your machines." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ce que fait Claude sur chacune de vos machines."
+          }
+        }
+      }
+    },
+    "What it is for, optional" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À quoi il sert, facultatif"
           }
         }
       }
@@ -10382,6 +11842,16 @@
         }
       }
     },
+    "When" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quand"
+          }
+        }
+      }
+    },
     "When Claude is done" : {
       "localizations" : {
         "fr" : {
@@ -10438,6 +11908,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quand ce projet se termine."
+          }
+        }
+      }
+    },
+    "Which posts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quels messages"
           }
         }
       }
@@ -10562,6 +12042,36 @@
         }
       }
     },
+    "You" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous"
+          }
+        }
+      }
+    },
+    "Your name in the cluster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre nom dans le cluster"
+          }
+        }
+      }
+    },
+    "Your name, as the others see it" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre nom, tel que les autres le voient"
+          }
+        }
+      }
+    },
     "Your note on this session" : {
       "localizations" : {
         "fr" : {
@@ -10578,6 +12088,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Votre téléphone ou un autre navigateur"
+          }
+        }
+      }
+    },
+    "Your team's sessions, together" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les sessions de votre équipe, ensemble"
           }
         }
       }
@@ -10778,6 +12298,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "se termine %@"
+          }
+        }
+      }
+    },
+    "failed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "échec"
           }
         }
       }
@@ -11118,6 +12648,16 @@
         }
       }
     },
+    "to %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pour %@"
+          }
+        }
+      }
+    },
     "to do" : {
       "localizations" : {
         "fr" : {
@@ -11164,6 +12704,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "erreur inconnue"
+          }
+        }
+      }
+    },
+    "until %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jusqu’à %@"
           }
         }
       }

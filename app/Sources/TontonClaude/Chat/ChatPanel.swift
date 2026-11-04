@@ -266,6 +266,7 @@ struct ChatHeader: View {
                 Text(session.status.label).font(.notch(11)).foregroundStyle(Color(nsColor: session.status.color)).fixedSize()
                 NoteButton(session: session)
                 PoolButton(session: session)
+                ClusterButton(session: session)
                 if store.isOnThisMac(session) { LocalFolderActions(session: session) }
                 if session.accepts(.interrupt) { interrupt }
                 if session.canChat && !session.menuCommands.isEmpty { commands }
