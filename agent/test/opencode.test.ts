@@ -8,6 +8,7 @@ import namesTable from '../../shared/test/opencode-tool-names.json'
 import { lines } from '../src/opencode/bridge'
 import { claudeToolName, mcpServerName, OpenCodeTracker, type SessionUpdate } from '../src/opencode/events'
 import { pluginSource } from '../src/opencode/plugin'
+import { BACKLOG_IMAGES, backlogImages } from '../src/transcript/images'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-opencode-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
@@ -539,6 +540,78 @@ describe('OpenCode 1', () => {
     expect(tool([3, null] as unknown as string[]).entries.find(entry => entry.kind === 'tool')).toMatchObject({
       name: 'unreal-engine_spawn_actor',
     })
+  })
+
+  test('a part is let go once its entries are sent, and a later update to it still works', () => {
+    const tracker = new OpenCodeTracker()
+    // What the bridge holds of the session, read past its privacy: the point is what stays in memory.
+    const held = () => [
+      ...((tracker as unknown as { sessions: Map<string, { parts: Map<string, unknown> }> }).sessions.get('ses_1')?.parts.keys() ?? []),
+    ]
+    const entries = (event: unknown) => tracker.handle(event).flatMap(update => update.entries)
+    const output = 'x'.repeat(1024 * 1024)
+    const bash = (status: string, extra: object = {}) =>
+      part({ id: 'p1', messageID: 'm1', type: 'tool', callID: 'c1', tool: 'bash', state: { status, input: { command: 'make' }, ...extra } })
+
+    entries({ type: 'session.created', properties: { info: session } })
+    entries(message('m1', 'assistant'))
+    expect(entries(bash('running'))).toMatchObject([{ id: 'p1', kind: 'tool', name: 'Bash', summary: 'make' }])
+    expect(held()).toEqual([])
+    expect(entries(bash('completed', { output }))).toEqual([
+      {
+        id: 'p1:result',
+        ts: new Date(1_700_000_000_000).toISOString(),
+        kind: 'tool_result',
+        toolUseId: 'c1',
+        text: `${'x'.repeat(2500)}\n… (${output.length - 4000} characters truncated)\n${'x'.repeat(1500)}`,
+        isError: false,
+      },
+    ])
+    expect(held()).toEqual([])
+    // OpenCode sends a part again, and its message with each step: nothing goes twice.
+    expect(entries(bash('completed', { output }))).toEqual([])
+    expect(entries(message('m1', 'assistant'))).toEqual([])
+
+    // Text waits for the end of its message, a part for its message.
+    expect(entries(part({ id: 'p2', messageID: 'm1', type: 'text', text: 'Built' }))).toEqual([])
+    expect(
+      entries(
+        part({ id: 'p3', messageID: 'm2', type: 'tool', callID: 'c3', tool: 'bash', state: { status: 'error', input: {}, error: 'no' } }),
+      ),
+    ).toEqual([])
+    expect(held()).toEqual(['p2', 'p3'])
+    expect(entries(message('m1', 'assistant', { time: { created: 1, completed: 2 } }))).toMatchObject([{ id: 'p2', text: 'Built' }])
+    expect(entries(message('m2', 'assistant'))).toMatchObject([{ id: 'p3' }, { id: 'p3:result', text: 'no', isError: true }])
+    expect(held()).toEqual([])
+    // Parts that make no entry are not kept either.
+    entries(part({ id: 'p4', messageID: 'm1', type: 'reasoning', text: 'thinking '.repeat(1000) }))
+    expect(held()).toEqual([])
+  })
+
+  test('its backlog holds images on its latest entries only, and its history says as before how many the others had', () => {
+    const png = 'iVBORw0KGgo='
+    const shots = Array.from({ length: BACKLOG_IMAGES + 5 }, (_, index) => ({
+      id: `shot_${index}`,
+      created: 1_700_000_000_000 + index,
+      type: 'session.tool.success',
+      data: {
+        sessionID: 'ses_1',
+        id: `call_${index}`,
+        content: [
+          { type: 'text', text: `shot ${index}` },
+          { type: 'file', mime: 'image/png', url: `data:image/png;base64,${png}` },
+        ],
+      },
+    }))
+    const { entries, tracker } = replay([{ type: 'session.created', properties: { info: session } }, ...shots])
+    const history = tracker.handle({ type: 'tonton.history', properties: { sessionID: 'ses_1', messages: [] } }).at(-1)?.history ?? []
+    expect(history.map(entry => 'images' in entry && entry.images?.length)).toEqual([
+      ...Array(5).fill(false),
+      ...Array(BACKLOG_IMAGES).fill(1),
+    ])
+    expect(backlogImages(history)).toEqual(backlogImages(entries))
+    // What went out live kept its images.
+    expect(entries.every(entry => 'images' in entry && entry.images?.length === 1)).toBe(true)
   })
 
   test('anything unexpected is skipped', () => {

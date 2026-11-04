@@ -1,6 +1,6 @@
 import type { Entry, ImageData, PermissionDetail, SessionCommand, SessionMeta, TokenCounts } from '../../../shared/protocol'
 import { cutText } from '../../../shared/text'
-import { entryImages } from '../transcript/images'
+import { entryImages, forgetOldImages } from '../transcript/images'
 import { cutToolResult, fileEdits, todoItems, toolSummary } from '../transcript/parser'
 
 // OpenCode's plugin events, turned into what the notch shows for a Claude Code session: entries, a status and the meta.
@@ -196,6 +196,7 @@ class TrackedSession {
   child = false
   /** OpenCode 1. */
   readonly messages = new Map<string, MessageInfo>()
+  /** The parts that can still make an entry: the rest, once sent, is let go (`hold`). */
   readonly parts = new Map<string, Part>()
   readonly deltas = new Map<string, string>()
   /** OpenCode 2 names a tool when its input starts, and calls it later by id. */
@@ -566,7 +567,9 @@ export class OpenCodeTracker {
       if (contextOf(usage) > 0) session.contextUsed = contextOf(usage)
     }
     // Parts can arrive before their message: they wait for its role.
-    const entries = [...session.parts.values()].filter(part => part.messageID === id).flatMap(part => this.partEntries(session, part))
+    const waiting = [...session.parts.values()].filter(part => part.messageID === id)
+    const entries = waiting.flatMap(part => this.partEntries(session, part))
+    for (const part of waiting) this.hold(session, part)
     return this.update(session, entries, undefined, usageChanged)
   }
 
@@ -575,8 +578,25 @@ export class OpenCodeTracker {
     const part = raw as Part & { sessionID?: unknown }
     const session = this.session(part.sessionID)
     if (!session || typeof part.id !== 'string' || typeof part.messageID !== 'string') return []
-    session.parts.set(part.id, part)
-    return this.update(session, this.partEntries(session, part), undefined, false)
+    const entries = this.partEntries(session, part)
+    this.hold(session, part)
+    return this.update(session, entries, undefined, false)
+  }
+
+  /**
+   * Holds a part only while a message.updated can still make an entry of it: its message has not come yet, or its text
+   * waits for the end of the message. The others go, a tool's output and attachments with them: one bridge serves every
+   * OpenCode session of the machine, and OpenCode sends the whole part again with each of its updates.
+   */
+  private hold(session: TrackedSession, part: Part) {
+    const prose = part.type === 'text' && !part.synthetic && !part.ignored
+    const makesEntries = prose || part.type === 'tool' || part.type === 'file'
+    if (makesEntries && (!session.messages.has(part.messageID) || (prose && !session.sent.has(part.id)))) {
+      session.parts.set(part.id, part)
+    } else {
+      session.parts.delete(part.id)
+      session.deltas.delete(part.id)
+    }
   }
 
   private delta(props: Fields): SessionUpdate[] {
@@ -789,8 +809,8 @@ export class OpenCodeTracker {
   private markSent(session: TrackedSession, entry: Entry): boolean {
     if (session.sent.has(entry.id)) return false
     session.sent.add(entry.id)
-    session.order.push(entry)
-    if (session.order.length > BACKLOG_SIZE) session.order = session.order.slice(-BACKLOG_SIZE)
+    // Past the latest entries, images are never sent again: as for Claude Code, they are let go.
+    session.order = forgetOldImages([...session.order, entry].slice(-BACKLOG_SIZE))
     if (entry.kind === 'user' || entry.kind === 'assistant') session.lastMessage = cutText(entry.text, MAX_LAST_MESSAGE_CHARS)
     return true
   }
