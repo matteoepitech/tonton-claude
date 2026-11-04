@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseAccountToken } from '../../../shared/account-token'
 import { defaultMachineName, loadConfig, paths, saveConfig, VERSION } from '../config'
@@ -9,16 +9,18 @@ import { installTrayFiles } from '../service/tray'
 import { useToken } from '../token'
 import { withoutTontonHooks } from './claude-settings'
 import { hasOpenCode, installOpenCodePlugin, openCodeConfigDir, removeOpenCodePlugin } from './opencode'
+import { readProfile } from './profile-file'
 import {
   currentSetup,
   readClaudeSettings,
+  removeLaunchers,
   type Setup,
   writeClaudeSettings,
   writeHooks,
   writeLauncherSettings,
   writeLaunchers,
 } from './setup'
-import { removeLauncher } from './shell-profile'
+import { BEGIN } from './shell-profile'
 import { installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
 
 const done = (message: string) => console.log(`  \x1b[32m✓\x1b[0m ${message}`)
@@ -94,7 +96,14 @@ function installHooks(setup: Setup) {
 function installLaunchers(setup: Setup) {
   writeLauncherSettings(setup)
   if (!setup.profiles.length) warn('no shell profile found: start claude with --dangerously-load-development-channels server:tonton')
-  for (const file of writeLaunchers(setup)) done(`claude launcher added to ${file}`)
+  // One profile out of reach (a folder Windows protects from unknown apps) must not stop the service from being set up.
+  for (const profile of setup.profiles) {
+    try {
+      for (const file of writeLaunchers({ ...setup, profiles: [profile] })) done(`claude launcher added to ${file}`)
+    } catch (error) {
+      warn(`could not add the claude launcher to ${profile.file}: ${error instanceof Error ? error.message : error}`)
+    }
+  }
 }
 
 export async function uninstall() {
@@ -108,9 +117,7 @@ export async function uninstall() {
   }
   unregisterMcpServer()
   done('MCP server removed')
-  for (const { file } of shellProfiles()) {
-    if (existsSync(file)) writeFileSync(file, removeLauncher(readFileSync(file, 'utf8')))
-  }
+  removeLaunchers(shellProfiles())
   done('claude launcher removed from shell profiles')
   removeOpenCodePlugin()
   done('OpenCode plugin removed')
@@ -133,7 +140,7 @@ export async function status() {
   )
   if (response?.ok) done('relay reachable, machine token accepted')
   else warn(response ? `relay answered ${response.status} (machine revoked?)` : `relay not reachable${proxy ? ' through the proxy' : ''}`)
-  const launchers = shellProfiles().filter(({ file }) => existsSync(file) && readFileSync(file, 'utf8').includes('# >>> tonton >>>'))
+  const launchers = shellProfiles().filter(({ file, shell }) => readProfile(file, shell)?.text.includes(BEGIN))
   if (launchers.length) done(`claude launcher in ${launchers.map(p => p.file).join(', ')}`)
   else warn('no claude launcher found in your shell profiles: run the install again')
   if (existsSync(join(openCodeConfigDir(), 'plugins', PLUGIN_FILE))) done('OpenCode plugin installed')

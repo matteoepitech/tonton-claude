@@ -10,8 +10,9 @@ import type { RelayConnection } from './channel/relay-connection'
 import { type AgentConfig, installedVersion, VERSION } from './config'
 import { HOOK_EVENTS, launcherSettings } from './install/claude-settings'
 import { hasOpenCode, installOpenCodePlugin } from './install/opencode'
+import { readProfile } from './install/profile-file'
 import { currentSetup, readClaudeSettings, type Setup, writeHooks, writeLauncherSettings, writeLaunchers } from './install/setup'
-import { BEGIN, launcherBlock } from './install/shell-profile'
+import { BEGIN, launcherBlock, type Shell } from './install/shell-profile'
 import { IS_WINDOWS, registerMcpServer } from './install/system'
 import { log } from './log'
 import { claimOnce } from './once'
@@ -232,17 +233,18 @@ function launcherCheck(setup: Setup): SetupCheck {
   const check = (ok: boolean, detail: string, fix?: SetupFix): SetupCheck => ({ id: 'launcher', label: 'claude launcher', ok, detail, fix })
   if (!setup.profiles.length)
     return check(false, 'No zsh, bash or PowerShell profile here: start claude with --dangerously-load-development-channels server:tonton.')
-  const read = (file: string) => {
+  // In the encoding the profile has: PowerShell's own tools write UTF-16.
+  const read = (file: string, shell: Shell) => {
     try {
-      return readFileSync(file, 'utf8')
+      return readProfile(file, shell)?.text ?? ''
     } catch {
       return ''
     }
   }
-  const current = setup.profiles.filter(({ file, shell }) => read(file).includes(launcherBlock(shell, setup.launcherSettings)))
+  const current = setup.profiles.filter(({ file, shell }) => read(file, shell).includes(launcherBlock(shell, setup.launcherSettings)))
   if (current.length === setup.profiles.length) return check(true, `In ${current.map(profile => profile.file).join(', ')}.`)
   const others = setup.profiles.filter(profile => !current.includes(profile))
-  const older = others.filter(({ file }) => read(file).includes(BEGIN))
+  const older = others.filter(({ file, shell }) => read(file, shell).includes(BEGIN))
   const detail = older.length
     ? `Out of date in ${older.map(profile => profile.file).join(', ')}.`
     : `Missing from ${others.map(profile => profile.file).join(', ')}: sessions started there can't take messages from the notch.`

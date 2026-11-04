@@ -59,10 +59,27 @@ function posixLauncher(settings: string): string {
 }`
 }
 
+const powershellQuote = (item: string) => `'${item.replace(/'/g, "''")}'`
+
+/**
+ * A PowerShell string in ASCII alone, so it reads the same whatever encoding PowerShell reads the profile in: Windows
+ * PowerShell 5.1 takes a file without a byte order mark for ANSI, and a profile in a code page is kept as it is.
+ */
+export function powershellString(text: string): string {
+  if (/^[\x20-\x7e]*$/.test(text)) return powershellQuote(text)
+  let body = ''
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index)
+    const char = text[index] ?? ''
+    if (code < 0x20 || code > 0x7e) body += `$([char]0x${code.toString(16).toUpperCase().padStart(4, '0')})`
+    else body += '`$"'.includes(char) ? `\`${char}` : char
+  }
+  return `"${body}"`
+}
+
 function powershellLauncher(settings: string): string {
-  const quote = (item: string) => `'${item.replace(/'/g, "''")}'`
-  const list = (items: string[]) => items.map(quote).join(', ')
-  const file = quote(settings)
+  const list = (items: string[]) => items.map(powershellQuote).join(', ')
+  const file = powershellString(settings)
   return `function claude {
   $real = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $real) { Write-Error 'claude not found in PATH'; return }
