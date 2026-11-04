@@ -22,11 +22,8 @@ const hero = (account: string, level: number, since: number, today: number): Clu
 })
 
 test('the members by XP since the start, with their level and title; one who does not share has no numbers', () => {
-  const ranks = rankClusterHeroes(
-    { heroes: [hero('a', 12, 340, 40), hero('b', 7, 1200, 0)] },
-    state.members,
-    Date.parse('2026-11-04T12:00:00Z'),
-  )
+  const heroes = [hero('a', 12, 340, 40), hero('b', 7, 1200, 0)]
+  const ranks = rankClusterHeroes({ heroes, entries: heroes }, state.members, undefined, Date.parse('2026-11-04T12:00:00Z'))
   const html = renderToStaticMarkup(<LeaderboardList ranks={ranks} state={state} account="a" />)
   const rows = html.split('<li').slice(1)
   expect(rows).toHaveLength(3)

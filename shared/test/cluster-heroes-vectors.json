@@ -208,10 +208,71 @@
         ],
         "updatedAt": "2026-11-04T12:00:00.000Z"
       }
+    },
+    {
+      "name": "another client of the member reads an older hero: level, since and today never go down, no level-up again",
+      "hero": {
+        "version": 1,
+        "xp": 900,
+        "sparks": 0,
+        "receipts": [],
+        "gains": [
+          {
+            "id": "0000000000000000000000000000000000000000000000000000000000000008",
+            "kind": "turn",
+            "day": "2026-11-04",
+            "xp": 40,
+            "sparks": 4,
+            "at": "2026-11-04T11:30:00Z"
+          }
+        ],
+        "owned": [],
+        "equipped": {},
+        "boosters": [],
+        "openings": {},
+        "upgrades": {}
+      },
+      "account": "acc-alice",
+      "from": "2026-11-02T12:00:00Z",
+      "previous": {
+        "account": "acc-alice",
+        "level": 5,
+        "today": 80,
+        "day": "2026-11-04",
+        "since": 463,
+        "from": "2026-11-02T12:00:00Z",
+        "base": 557,
+        "equipped": {},
+        "levelUps": [
+          {
+            "level": 5,
+            "at": "2026-11-04T12:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-11-04T12:00:00.000Z"
+      },
+      "now": "2026-11-04T12:05:00Z",
+      "expected": {
+        "account": "acc-alice",
+        "level": 5,
+        "today": 80,
+        "day": "2026-11-04",
+        "since": 463,
+        "from": "2026-11-02T12:00:00Z",
+        "base": 557,
+        "equipped": {},
+        "levelUps": [
+          {
+            "level": 5,
+            "at": "2026-11-04T12:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-11-04T12:05:00.000Z"
+      }
     }
   ],
   "ranking": {
-    "name": "by XP since the start, then level, then account; a stale day reads as no XP today; who does not share comes last",
+    "name": "by XP since the start, then level, then account; a stale day reads as no XP today, an earlier clock as none since; who does not share comes last",
     "board": {
       "heroes": [
         {
@@ -267,6 +328,18 @@
           "updatedAt": "2026-11-03T20:00:00Z"
         },
         {
+          "account": "acc-eve",
+          "level": 8,
+          "today": 0,
+          "day": "2026-11-04",
+          "since": 5000,
+          "from": "2026-10-20T00:00:00Z",
+          "base": 100,
+          "equipped": {},
+          "levelUps": [],
+          "updatedAt": "2026-11-04T08:00:00Z"
+        },
+        {
           "account": "acc-gone",
           "level": 9,
           "today": 0,
@@ -311,39 +384,58 @@
     },
     "members": [
       {
-        "account": "acc-carol"
+        "account": "acc-carol",
+        "joinedAt": "2026-10-01T00:00:00Z"
       },
       {
-        "account": "acc-alice"
+        "account": "acc-alice",
+        "joinedAt": "2026-10-01T00:00:00Z"
       },
       {
-        "account": "acc-bob"
+        "account": "acc-bob",
+        "joinedAt": "2026-10-01T00:00:00Z"
       },
       {
-        "account": "acc-dan"
+        "account": "acc-dan",
+        "joinedAt": "2026-10-01T00:00:00Z"
+      },
+      {
+        "account": "acc-eve",
+        "joinedAt": "2026-10-01T00:00:00Z"
       }
     ],
+    "clockStartedAt": "2026-11-02T12:00:00Z",
     "now": "2026-11-04T13:00:00Z",
-    "decodedAccounts": ["acc-bob", "acc-alice", "acc-dan", "acc-gone"],
+    "decodedAccounts": ["acc-bob", "acc-alice", "acc-dan", "acc-eve", "acc-gone"],
     "expected": [
       {
         "account": "acc-bob",
         "rank": 1,
+        "since": 300,
         "today": 40
       },
       {
         "account": "acc-alice",
         "rank": 2,
+        "since": 300,
         "today": 95
       },
       {
         "account": "acc-dan",
         "rank": 3,
+        "since": 120,
+        "today": 0
+      },
+      {
+        "account": "acc-eve",
+        "rank": 4,
+        "since": 0,
         "today": 0
       },
       {
         "account": "acc-carol",
         "rank": null,
+        "since": 0,
         "today": 0
       }
     ],

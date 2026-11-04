@@ -24,6 +24,7 @@ import {
   clusterHeroFrom,
   decodeClusterLeaderboard,
   sameClusterHero,
+  sealedClusterLeaderboard,
   withClusterHero,
 } from './cluster-heroes'
 import { clusterInviteLink, parseClusterInvite } from './cluster-link'
@@ -83,8 +84,8 @@ interface Opened extends ClusterDocs {
   vault: ClusterVault | null
   state: ClusterState | null
   problem: string | null
-  /** The hero this member last shared here, written again over a newer board after a conflict. */
-  sharing?: { hero: RPGState; now: number } | null
+  /** What this member last asked here, its hero or null to leave: made again over a newer board after a conflict. */
+  sharing?: { hero: RPGState | null }
 }
 
 export interface ClusterWatchOptions {
@@ -320,13 +321,20 @@ export class ClusterWatch {
     const account = this.options.account
     const me = opened.state.members.find(member => member.account === account)
     if (!me) return false
+    opened.sharing = { hero }
+    // A board that exists but does not open (a key this client lacks yet) is never written over: the others would go.
+    const doc = opened.state.docs.find(item => item.name === CLUSTER_LEADERBOARD)
+    if (doc && !opened.leaderboard) {
+      opened.problem = 'The leaderboard does not open with the keys you hold yet: nothing was changed.'
+      this.options.onChange()
+      return false
+    }
     const previous = opened.leaderboard?.heroes.find(entry => entry.account === account) ?? null
     const entry = hero ? clusterHeroEntry(hero, account, clusterHeroFrom(opened.clock?.startedAt, me.joinedAt), previous, now) : null
-    opened.sharing = hero ? { hero, now } : null
     if (sameClusterHero(previous, entry)) return true
     const board = withClusterHero(opened.leaderboard, account, entry)
-    const rev = opened.state.docs.find(doc => doc.name === CLUSTER_LEADERBOARD)?.rev ?? 0
-    return this.send(clusterId, { t: 'cluster_doc', clusterId, name: CLUSTER_LEADERBOARD, rev, blob: await opened.vault.seal(board) })
+    const blob = await opened.vault.seal(sealedClusterLeaderboard(board))
+    return this.send(clusterId, { t: 'cluster_doc', clusterId, name: CLUSTER_LEADERBOARD, rev: doc?.rev ?? 0, blob })
   }
 
   clearProblem(clusterId?: string) {
@@ -368,10 +376,9 @@ export class ClusterWatch {
         opened.state = await opened.vault.apply(opened.state, { t: 'cluster_doc', clusterId, doc: update.current })
         await this.openDocs(opened)
       }
-      // Another member's client wrote its own entry first: this one is put in the newer board, without asking anyone.
+      // Another member's client wrote its own entry first: this one is put in, or taken out of, the newer board.
       if (update.name === CLUSTER_LEADERBOARD) {
-        const sharing = opened.sharing
-        if (sharing) await this.shareHero(clusterId, sharing.hero, sharing.now)
+        if (opened.sharing) await this.shareHero(clusterId, opened.sharing.hero)
       } else opened.problem = `Someone changed the ${update.name} meanwhile: check it and try again.`
     } else if (opened.state && opened.vault) {
       const next = await opened.vault.apply(opened.state, update)
@@ -384,7 +391,7 @@ export class ClusterWatch {
       const startedAt = opened.clock?.startedAt
       if (update.t === 'cluster_doc') await this.openDocs(opened)
       // A clock that starts (again) is where this member's count starts: its entry follows at once.
-      if (opened.sharing && opened.clock?.startedAt !== startedAt) await this.shareHero(clusterId, opened.sharing.hero)
+      if (opened.sharing?.hero && opened.clock?.startedAt !== startedAt) await this.shareHero(clusterId, opened.sharing.hero)
       // The list says the name and how many members: both can change while the cluster is open.
       this.listed = this.listed.map(listed =>
         listed.summary.id === clusterId

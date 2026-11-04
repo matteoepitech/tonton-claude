@@ -215,7 +215,8 @@ describe('following clusters from a browser', () => {
       }))
       return { ...newRPGState(), xp, gains, owned: ['hat-rare'], equipped: { hat: 'hat-rare' } }
     }
-    const ranks = (m: Member) => rankClusterHeroes(m.watch.cluster(id)?.leaderboard ?? null, m.watch.cluster(id)?.state?.members ?? [])
+    const ranks = (m: Member) =>
+      rankClusterHeroes(m.watch.cluster(id)?.leaderboard ?? null, m.watch.cluster(id)?.state?.members ?? [], undefined)
 
     // Alice and Bob share at once over the same revision: one write crosses the other and is made again, alone.
     expect(await Promise.all([alice.watch.shareHero(id, hero(400, [60, 40])), bob.watch.shareHero(id, hero(250, [30]))])).toEqual([

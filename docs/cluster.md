@@ -212,12 +212,16 @@ what its Tonton wears, its XP of the UTC day, its XP since the clock started (or
 and its last ten level-ups. Never its inventory, its receipts, its sparks or what the work was. Sharing is each
 member's own choice, on the website's **Leaderboard** tab: a member who does not share is listed without numbers.
 
-A member's own clients write its entry while they follow the cluster, from the hero they read; they leave every other
-entry as they found it, and an entry that says the same is not written again. Two members who write at once cross
-revisions: the relay answers `cluster_conflict` and the client puts its entry in the newer board, without telling
-anyone. "Since" is the member's XP minus a base, its XP when the count started: worked out once from its timed gains
-(day-only receipts count from the next day), then kept, so it stays right after old gains are pruned. A new clock
-starts every count again. Ranks go by XP since the start, then level, then account id in code-unit order.
+A member's own clients write its entry while they follow the cluster, from the hero they read. They write every other
+entry back exactly as they found it, unknown fields and entries they cannot read included, and never write over a board
+that does not open with the keys they hold. An entry that says the same is not written again. Two members who write at
+once cross revisions: the relay answers `cluster_conflict` and the client puts its entry in, or takes it out of, the
+newer board, without telling anyone. "Since" is the member's XP minus a base, its XP when the count started: worked
+out once from its timed gains (day-only receipts count from the next day), then kept, so it stays right after old gains
+are pruned. For one start, the level and the XP since and of the day never go down, so a client that read an older
+hero changes nothing. A new clock starts every count again; until a member's client catches up, its entry from the
+earlier clock ranks with no XP since. Ranks go by XP since the start, then level, then account id in code-unit
+order.
 
 Level-ups come to the feed from that document ("Alice's Tonton reached level 12"), not from posts: apps never post,
 and a post from the agent would need a session of that member in the cluster. A member's rank moves while one of its

@@ -37,6 +37,11 @@ export interface ClusterHero {
 
 export interface ClusterLeaderboard {
   heroes: ClusterHero[]
+  /**
+   * Every entry as it was sealed, those this client cannot read and fields it does not know included: a write puts them
+   * back as they were, so an older client never strips what a newer one wrote.
+   */
+  entries: unknown[]
 }
 
 /** One line of the board: a member, with its numbers if it shares them. */
@@ -45,6 +50,8 @@ export interface ClusterRank {
   /** 1 for the first; null for a member who does not share. */
   rank: number | null
   hero: ClusterHero | null
+  /** Its XP since the current start: 0 while its entry still counts from an earlier clock. */
+  since: number
   /** Its XP of the current UTC day, 0 when its entry is from an earlier one. */
   today: number
 }
@@ -88,15 +95,19 @@ function hero(value: unknown): ClusterHero | null {
 export function decodeClusterLeaderboard(value: unknown): ClusterLeaderboard | null {
   const f = fields(value)
   if (!f || !Array.isArray(f.heroes)) return null
+  const entries = f.heroes.slice(0, MAX_HEROES)
   const seen = new Set<string>()
-  const heroes = f.heroes.flatMap(item => {
+  const heroes = entries.flatMap(item => {
     const read = hero(item)
     if (!read || seen.has(read.account)) return []
     seen.add(read.account)
     return [read]
   })
-  return { heroes: heroes.slice(0, MAX_HEROES) }
+  return { heroes, entries }
 }
+
+/** What is sealed: every entry as it was found, and this member's own as it now is. */
+export const sealedClusterLeaderboard = (board: ClusterLeaderboard): { heroes: unknown[] } => ({ heroes: board.entries })
 
 /** Where a member's count starts: the clock's start when the cluster has one, else when the member joined. */
 export function clusterHeroFrom(clockStartedAt: string | undefined, joinedAt: string): string {
@@ -111,7 +122,8 @@ function earnedSince(receipt: RPGReceipt, from: number): boolean {
 
 /**
  * This member's entry, from its hero. `previous` is its entry as the document has it: the base carries over while
- * `from` stays, and a level above the previous one is a level-up.
+ * `from` stays, and a level above the previous one is a level-up. Another of the member's clients may read an older hero:
+ * for the same start, the level, the XP since and of the day never go down, and a level is a level-up once.
  */
 export function clusterHeroEntry(
   state: RPGState,
@@ -124,12 +136,14 @@ export function clusterHeroEntry(
   const earned = [...state.receipts, ...(state.gains ?? [])]
     .filter(receipt => earnedSince(receipt, start))
     .reduce((sum, r) => sum + r.xp, 0)
-  const base = previous && previous.from === from ? Math.min(previous.base, state.xp) : Math.max(0, state.xp - earned)
-  const level = rpgLevel(state.xp)
+  const same = previous !== null && previous.from === from
+  const base = same ? previous.base : Math.max(0, state.xp - earned)
+  const level = Math.max(previous?.level ?? 1, rpgLevel(state.xp))
   const at = new Date(now).toISOString()
   const levelUps = [...(previous?.levelUps ?? [])]
-  if (previous && level > previous.level) levelUps.push({ level, at })
+  if (previous && level > previous.level && !levelUps.some(up => up.level === level)) levelUps.push({ level, at })
   const today = rpgToday(state, now)
+  const todayXP = previous?.day === today.day ? Math.max(previous.today, today.xp) : today.xp
   const equipped: Partial<Record<RPGSlot, string>> = {}
   for (const slot of RPG_SLOTS) {
     const id = state.equipped[slot]
@@ -138,9 +152,9 @@ export function clusterHeroEntry(
   return {
     account,
     level,
-    today: today.xp,
+    today: todayXP,
     day: today.day,
-    since: Math.max(0, state.xp - base),
+    since: Math.max(same ? previous.since : 0, state.xp - base, 0),
     from,
     base,
     equipped,
@@ -151,8 +165,9 @@ export function clusterHeroEntry(
 
 /** The document with this member's entry put in, replaced, or taken out (null). Every other entry stays as it was. */
 export function withClusterHero(board: ClusterLeaderboard | null, account: string, entry: ClusterHero | null): ClusterLeaderboard {
-  const others = (board?.heroes ?? []).filter(hero => hero.account !== account)
-  return { heroes: entry ? [...others, entry] : others }
+  const heroes = (board?.heroes ?? []).filter(hero => hero.account !== account)
+  const entries = (board?.entries ?? []).filter(item => fields(item)?.account !== account)
+  return entry ? { heroes: [...heroes, entry], entries: [...entries, entry] } : { heroes, entries }
 }
 
 /** Whether two entries say the same, the time they were written aside: an unchanged entry is not written again. */
@@ -175,29 +190,39 @@ export function sameClusterHero(a: ClusterHero | null, b: ClusterHero | null): b
 
 /**
  * Every member, ranked: those who share by XP since the start, then level, then account id in code-unit order, as
- * the pools' boards; then those who don't, without numbers, in the order given.
+ * the pools' boards; then those who don't, without numbers, in the order given. An entry that still counts from an
+ * earlier clock, whose member's clients were closed since, counts as no XP since this one started.
  */
 export function rankClusterHeroes(
   board: ClusterLeaderboard | null,
-  members: readonly { account: string }[],
+  members: readonly { account: string; joinedAt: string }[],
+  clockStartedAt: string | undefined,
   now: number = Date.now(),
 ): ClusterRank[] {
   const day = new Date(now).toISOString().slice(0, 10)
   const heroes = new Map((board?.heroes ?? []).map(hero => [hero.account, hero]))
   const sharing = members
     .flatMap(member => {
-      const found = heroes.get(member.account)
-      return found ? [found] : []
+      const hero = heroes.get(member.account)
+      if (!hero) return []
+      const since = hero.from === clusterHeroFrom(clockStartedAt, member.joinedAt) ? hero.since : 0
+      return [{ hero, since }]
     })
-    .sort((a, b) => b.since - a.since || b.level - a.level || (a.account < b.account ? -1 : a.account > b.account ? 1 : 0))
-  const ranked = sharing.map((hero, index) => ({
+    .sort(
+      (a, b) =>
+        b.since - a.since ||
+        b.hero.level - a.hero.level ||
+        (a.hero.account < b.hero.account ? -1 : a.hero.account > b.hero.account ? 1 : 0),
+    )
+  const ranked = sharing.map(({ hero, since }, index) => ({
     account: hero.account,
     rank: index + 1,
     hero,
+    since,
     today: hero.day === day ? hero.today : 0,
   }))
   const quiet = members.filter(member => !heroes.has(member.account))
-  return [...ranked, ...quiet.map(member => ({ account: member.account, rank: null, hero: null, today: 0 }))]
+  return [...ranked, ...quiet.map(member => ({ account: member.account, rank: null, hero: null, since: 0, today: 0 }))]
 }
 
 /** The members' level-ups for the feed, newest first: "Alice's Tonton reached level 12". Members only. */

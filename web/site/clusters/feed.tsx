@@ -62,7 +62,7 @@ export function Feed({ cluster, state }: ClusterTabProps) {
               replyTo={line.post.body?.replyTo ? answers.get(line.post.body.replyTo) : undefined}
             />
           ) : (
-            <li key={`${line.levelUp.account}-${line.levelUp.level}`} className="raised rounded-lg border bg-white px-3 py-2.5">
+            <li key={`${line.levelUp.account}-${line.levelUp.level}-${line.at}`} className="raised rounded-lg border bg-white px-3 py-2.5">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Badge variant="secondary">Level up</Badge>
                 <time className="ms-auto" dateTime={line.at} title={new Date(line.at).toLocaleString()}>

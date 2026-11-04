@@ -18,16 +18,21 @@ final class ClusterHeroesTests: XCTestCase {
         struct Rank: Decodable {
             let account: String
             let rank: Int?
+            let since: Int
             let today: Int
         }
         struct Ranking: Decodable {
             let members: [Member]
+            let clockStartedAt: String
             let now: String
             let decodedAccounts: [String]
             let expected: [Rank]
             let levelUps: [Line]
         }
-        struct Member: Decodable { let account: String }
+        struct Member: Decodable {
+            let account: String
+            let joinedAt: String
+        }
         struct Line: Decodable {
             let account: String
             let level: Int
@@ -42,7 +47,7 @@ final class ClusterHeroesTests: XCTestCase {
 
     func testEachEntryAsTheWebsiteWorksItOut() throws {
         let vectors = try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: url))
-        XCTAssertEqual(vectors.entries.count, 3)
+        XCTAssertEqual(vectors.entries.count, 4)
         for item in vectors.entries {
             let now = try XCTUnwrap(ClusterHeroes.date(item.now))
             let entry = ClusterHero(hero: item.hero, account: item.account, from: item.from, previous: item.previous, now: now)
@@ -57,9 +62,12 @@ final class ClusterHeroesTests: XCTestCase {
         let board = try XCTUnwrap(json["ranking"]?["board"].flatMap(ClusterLeaderboard.init(json:)))
         XCTAssertEqual(board.heroes.map(\.account), vectors.ranking.decodedAccounts)
         let members = vectors.ranking.members.map(\.account)
-        let ranks = board.ranked(members, now: try XCTUnwrap(ClusterHeroes.date(vectors.ranking.now)))
+        let ranks = board.ranked(
+            vectors.ranking.members.map { ($0.account, $0.joinedAt) }, clockStartedAt: vectors.ranking.clockStartedAt,
+            now: try XCTUnwrap(ClusterHeroes.date(vectors.ranking.now)))
         XCTAssertEqual(ranks.map(\.account), vectors.ranking.expected.map(\.account))
         XCTAssertEqual(ranks.map(\.rank), vectors.ranking.expected.map(\.rank))
+        XCTAssertEqual(ranks.map(\.since), vectors.ranking.expected.map(\.since))
         XCTAssertEqual(ranks.map(\.today), vectors.ranking.expected.map(\.today))
         // A member who does not share has no numbers.
         XCTAssertNil(ranks.first { $0.account == "acc-carol" }?.hero)
@@ -79,6 +87,10 @@ final class ClusterHeroesTests: XCTestCase {
         XCTAssertEqual(changed.heroes.filter { $0.account != "acc-bob" }, board.heroes.filter { $0.account != "acc-bob" })
         XCTAssertEqual(changed.heroes.first { $0.account == "acc-bob" }?.since, 999)
         XCTAssertFalse(board.with(nil, for: "acc-bob").heroes.contains { $0.account == "acc-bob" })
+        // What this client cannot read is written back as it was: the broken entry and the later duplicate stay sealed.
+        let sealed = try JSONDecoder().decode(ClusterJSON.self, from: JSONEncoder().encode(changed))
+        XCTAssertEqual(sealed["heroes"]?.array?.count, board.entries.count)
+        XCTAssertTrue(sealed["heroes"]?.array?.contains { $0["account"]?.string == "acc-bad" } == true)
         // Written again only when something but the time changed.
         var later = bob
         later.updatedAt = "2026-11-05T00:00:00.000Z"

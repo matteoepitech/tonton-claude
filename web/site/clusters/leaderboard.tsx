@@ -30,7 +30,7 @@ export function Leaderboard({ cluster, state, hero }: ClusterTabProps) {
   const watch = store.clusters
   const [busy, setBusy] = useState(false)
   const sharing = watch?.sharesHero(cluster.id) ?? false
-  const ranks = rankClusterHeroes(cluster.leaderboard, state.members)
+  const ranks = rankClusterHeroes(cluster.leaderboard, state.members, cluster.clock?.startedAt)
   const toggle = async () => {
     if (!watch) return
     setBusy(true)
@@ -101,7 +101,7 @@ function Row({ rank, name, you }: { rank: ClusterRank; name: string; you: boolea
       </span>
       {hero && (
         <span className="ms-auto flex flex-col items-end">
-          <strong className="tabular-nums">{hero.since.toLocaleString()} XP</strong>
+          <strong className="tabular-nums">{rank.since.toLocaleString()} XP</strong>
           <small className="text-xs text-muted-foreground tabular-nums">+{rank.today.toLocaleString()} today</small>
         </span>
       )}

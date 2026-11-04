@@ -8,6 +8,7 @@ import {
   decodeClusterLeaderboard,
   rankClusterHeroes,
   sameClusterHero,
+  sealedClusterLeaderboard,
   withClusterHero,
 } from '../cluster-heroes'
 import type { RPGState } from '../rpg'
@@ -30,8 +31,8 @@ test('the ranking and the feed’s level-ups, from a board with a duplicate, a b
   const { ranking } = vectors
   const board = decodeClusterLeaderboard(ranking.board)
   expect(board?.heroes.map(hero => hero.account)).toEqual(ranking.decodedAccounts)
-  const ranks = rankClusterHeroes(board, ranking.members, Date.parse(ranking.now))
-  expect(ranks.map(({ account, rank, today }) => ({ account, rank, today }))).toEqual(ranking.expected)
+  const ranks = rankClusterHeroes(board, ranking.members, ranking.clockStartedAt, Date.parse(ranking.now))
+  expect(ranks.map(({ account, rank, since, today }) => ({ account, rank, since, today }))).toEqual(ranking.expected)
   // A member who does not share has no numbers.
   expect(ranks.find(rank => rank.account === 'acc-carol')?.hero).toBeNull()
   expect(clusterLevelUps(board, ranking.members)).toEqual(ranking.levelUps)
@@ -51,10 +52,14 @@ const entry = (account: string, since: number): ClusterHero => ({
 })
 
 test('a member changes only its own entry', () => {
-  const board = { heroes: [entry('a', 1), entry('b', 2)] }
-  expect(withClusterHero(board, 'b', entry('b', 5)).heroes).toEqual([entry('a', 1), entry('b', 5)])
-  expect(withClusterHero(board, 'a', null).heroes).toEqual([entry('b', 2)])
-  expect(withClusterHero(null, 'c', entry('c', 1)).heroes).toEqual([entry('c', 1)])
+  // A newer client's field and an entry this client cannot read are written back as they were.
+  const newer = { ...entry('a', 1), mood: 'happy' }
+  const board = decodeClusterLeaderboard({ heroes: [newer, entry('b', 2), { account: 'z', level: 'unknown' }] })
+  const changed = withClusterHero(board, 'b', entry('b', 5))
+  expect(changed.heroes).toEqual([entry('a', 1), entry('b', 5)])
+  expect(sealedClusterLeaderboard(changed).heroes).toEqual([newer, { account: 'z', level: 'unknown' }, entry('b', 5)])
+  expect(withClusterHero(board, 'a', null).entries).toEqual([entry('b', 2), { account: 'z', level: 'unknown' }])
+  expect(withClusterHero(null, 'c', entry('c', 1)).entries).toEqual([entry('c', 1)])
 })
 
 test('an entry that says the same is not written again, whenever it was written', () => {
