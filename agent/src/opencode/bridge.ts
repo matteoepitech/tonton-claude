@@ -26,6 +26,7 @@ import { SessionPools } from '../channel/pools'
 import { entriesMessages, RelayConnection } from '../channel/relay-connection'
 import { SessionShares } from '../channel/shares'
 import { claimCommand, whyInvalid } from '../channel/terminal'
+import { EventDetector } from '../cluster/detect'
 import { clearGuardState, OpenCodeGuard } from '../cluster/guard'
 import { type AgentConfig, loadConfig, paths } from '../config'
 import { receiveDiagnoseRequest } from '../diagnose'
@@ -89,6 +90,8 @@ class Link {
   readonly clusters: SessionClusters
   readonly cluster: ClusterWork
   private readonly autoJoin: ClusterAutoJoin
+  /** Reads the session's shell calls as they come, for its clusters (agent/src/cluster/detect.ts). */
+  private detector: EventDetector | null = null
   /** Cluster posts for the next prompt, by cluster: OpenCode has no hook that adds to the prompt, the bridge holds them. */
   private deferred: { clusterId: string; text: string }[] = []
   private dropped = 0
@@ -224,6 +227,9 @@ class Link {
     const marked = entries.map(entry => this.markFromNotch(entry))
     this.entries = [...this.entries, ...marked].slice(-BACKLOG_SIZE)
     this.rpg.observe(this.sessionId, this.entries, this.pools.ids().length > 0, marked)
+    // Live entries only: OpenCode's own history, after a restart, comes through `reset`.
+    this.detector ??= new EventDetector(this.cwd() ?? process.cwd())
+    this.cluster.observe(this.detector.read(marked, id => this.tracker.command(this.sessionId, id)))
     if (marked.length) this.postEntries(marked, false)
     this.shares.entries(marked)
     if (marked.some(isTodoWrite)) this.postMeta()

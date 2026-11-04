@@ -10,11 +10,14 @@ import {
   type ClusterState,
   clusterDelivery,
   clusterPostIsFor,
+  decodeClusterClaims,
   decodeClusterNotes,
   newClusterItemId,
 } from '../../../shared/cluster'
 import type {
+  ClusterClaim,
   ClusterDelivery,
+  ClusterDocWire,
   ClusterPostBody,
   ClusterSessionProfile,
   ClusterTarget,
@@ -22,6 +25,8 @@ import type {
   ClusterUpdate,
 } from '../../../shared/cluster-protocol'
 import type { AgentMessage } from '../../../shared/protocol'
+import type { Detected } from '../cluster/detect'
+import { clearGuardState, type GuardCluster, writeGuardState } from '../cluster/guard'
 import { log } from '../log'
 import type { SessionClusters } from './clusters'
 import type { PoolToolSpec } from './pool-work'
@@ -40,6 +45,8 @@ export const MAX_ASK_MINUTES = 10
 export const MAX_POSTS_PER_MINUTE = 20
 /** How many times an hour posts may wake an idle session: past that, they wait for its next prompt. */
 export const WAKES_PER_HOUR = 20
+/** How long a file a session opened in Perforce or locked in Git LFS stays held, unless it lets it go first (#310). */
+export const CLAIM_HOURS = 2
 /** How long a change waits for the relay to confirm it. */
 const CONFIRM_MS = 10_000
 /** Posts cluster_inbox returns at most. */
@@ -163,6 +170,8 @@ export class ClusterWork {
   private sent: number[] = []
   private woken: number[] = []
   private active = false
+  /** What the guard file says now, to write it only when it changes. */
+  private guarded = ''
 
   constructor(
     private readonly clusters: SessionClusters,
@@ -448,6 +457,117 @@ export class ClusterWork {
     })
   }
 
+  // MARK: What the session's shell calls tell
+
+  /**
+   * Commits, pushes, submits, shelves, builds and test runs of this session's shell calls, and the files it opened or let
+   * go (agent/src/cluster/detect.ts): posted to every cluster it is in, and the files held or let go in each cluster's
+   * claims. Only what came live: a history read again would post it twice.
+   */
+  observe(detected: readonly Detected[]) {
+    if (!detected.length) return
+    for (const clusterId of this.clusters.ids()) {
+      const me = this.clusters.state(clusterId)?.sessions.find(session => session.session === this.sessionId())
+      if (!me) continue
+      for (const found of detected) {
+        if (this.limit()) {
+          log('cluster event left out: too many posts this minute', { cluster: clusterId, type: found.event.type })
+          continue
+        }
+        void this.postBody(clusterId, { kind: found.kind, text: found.text, event: found.event }, newClusterItemId())
+        if (found.kind === 'claim' && found.event.paths?.length) void this.updateClaims(clusterId, me, found)
+      }
+    }
+  }
+
+  /**
+   * The claims document with this session's files taken (`claim`) or let go (`release`), written over the revision read:
+   * when another writer got there first, once more over theirs. Lapsed claims go at the same time.
+   */
+  private async updateClaims(clusterId: string, me: ClusterSession, found: Detected, base?: ClusterDocWire | null): Promise<void> {
+    const vault = this.clusters.vault(clusterId)
+    const state = this.clusters.state(clusterId)
+    if (!vault || !state) return
+    const doc = base === undefined ? state.docs.find(item => item.name === 'claims') : base
+    const current = (doc ? await vault.read(doc.blob, decodeClusterClaims) : null)?.claims ?? []
+    const paths = new Set(found.event.paths)
+    const now = Date.now()
+    const mine = (claim: ClusterClaim) => claim.account === me.account && claim.session === me.session
+    const kept = current
+      .filter(claim => !claim.until || Date.parse(claim.until) > now)
+      .map(claim => (mine(claim) ? { ...claim, paths: claim.paths.filter(path => !paths.has(path)) } : claim))
+      .filter(claim => claim.paths.length > 0)
+    const taken: ClusterClaim[] =
+      found.event.type === 'claim'
+        ? [
+            {
+              id: newClusterItemId(),
+              paths: [...paths],
+              reason: found.text,
+              account: me.account,
+              session: me.session,
+              at: new Date(now).toISOString(),
+              until: new Date(now + CLAIM_HOURS * 3_600_000).toISOString(),
+            },
+          ]
+        : []
+    const rev = doc?.rev ?? 0
+    const answer = new Promise<ClusterDocWire | null | undefined>(resolve => {
+      const timer = setTimeout(() => {
+        stop()
+        resolve(undefined)
+      }, CONFIRM_MS)
+      const stop = this.clusters.listen(update => {
+        const done =
+          update.t === 'cluster_doc' && update.clusterId === clusterId && update.doc.name === 'claims' && update.doc.rev === rev + 1
+        const conflict = update.t === 'cluster_conflict' && update.clusterId === clusterId && update.name === 'claims'
+        if (!done && !conflict) return
+        clearTimeout(timer)
+        stop()
+        resolve(conflict ? update.current : undefined)
+      })
+    })
+    this.post(async () => ({
+      t: 'cluster_doc',
+      sessionId: this.sessionId(),
+      clusterId,
+      name: 'claims',
+      rev,
+      blob: await vault.seal({ claims: [...kept, ...taken] }),
+    }))
+    const conflict = await answer
+    if (conflict !== undefined && base === undefined) await this.updateClaims(clusterId, me, found, conflict)
+  }
+
+  /** What the session's guard reads before an edit (#310): the claims of every cluster it is in but its own, by holder. */
+  private async writeGuard() {
+    const sessionId = this.sessionId()
+    const clusters: GuardCluster[] = []
+    for (const clusterId of this.clusters.ids()) {
+      const state = this.clusters.state(clusterId)
+      const vault = this.clusters.vault(clusterId)
+      const me = state?.sessions.find(session => session.session === sessionId)
+      if (!state || !vault || !me) continue
+      const claims = (await vault.doc(state, 'claims', decodeClusterClaims))?.claims ?? []
+      const held = claims
+        .filter(claim => claim.account !== me.account || claim.session !== me.session)
+        .map(claim => ({
+          paths: claim.paths,
+          holder: `${this.memberName(state, claim.account)}'s Claude`,
+          session: claim.session,
+          ...(claim.reason ? { reason: claim.reason } : {}),
+          at: claim.at,
+          ...(claim.until ? { until: claim.until } : {}),
+        }))
+      if (held.length) clusters.push({ id: clusterId, ...(state.info?.name ? { name: state.info.name } : {}), claims: held })
+    }
+    const next = JSON.stringify(clusters)
+    if (next === this.guarded) return
+    this.guarded = next
+    if (clusters.length) writeGuardState({ sessionId, clusters })
+    else clearGuardState(sessionId)
+  }
+
   // MARK: Delivering
 
   private changed(clusterId: string) {
@@ -456,6 +576,7 @@ export class ClusterWork {
       this.active = active
       this.toolsChanged()
     }
+    void this.writeGuard().catch(error => log('cluster guard not written', { error: String(error) }))
     const state = this.clusters.state(clusterId)
     if (!state) {
       if (!this.clusters.ids().includes(clusterId)) this.forget(clusterId)

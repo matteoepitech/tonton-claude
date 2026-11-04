@@ -1,7 +1,7 @@
 // Claude's cluster tools and how posts reach it, against a relay that answers like the real one: an order only the
 // account key opens, the snapshot after the acknowledgement, every post and document sent back to the members.
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { ClusterVault, newClusterKey, sealClusterSessionOrder } from '../../shared/cluster'
+import { ClusterVault, decodeClusterClaims, newClusterKey, sealClusterSessionOrder } from '../../shared/cluster'
 import type {
   ClusterDelivery,
   ClusterDocWire,
@@ -15,6 +15,7 @@ import { newAccountKey } from '../../shared/crypto'
 import type { AgentMessage } from '../../shared/protocol'
 import { ClusterWork, clusterEnvelope, MAX_POSTS_PER_MINUTE, WAKES_PER_HOUR } from '../src/channel/cluster-work'
 import { SessionClusters } from '../src/channel/clusters'
+import { readGuardState } from '../src/cluster/guard'
 
 const ME = 'ses_me'
 const ANA = 'ses_ana'
@@ -26,6 +27,7 @@ const vault = new ClusterVault(clusterKey)
 class FakeRelay {
   seq = 0
   notes: ClusterDocWire | null = null
+  claims: ClusterDocWire | null = null
   sent: AgentMessage[] = []
   clusters!: SessionClusters
   sessions: ClusterSessionWire[] = []
@@ -47,10 +49,11 @@ class FakeRelay {
           { t: 'cluster_post', clusterId: CLUSTER, post: { id: message.id, seq: ++this.seq, ts: 'now', blob: message.blob, ...author } },
         ]
       case 'cluster_doc': {
-        if (message.rev !== (this.notes?.rev ?? 0))
-          return [{ t: 'cluster_conflict', clusterId: CLUSTER, name: 'notes', current: this.notes }]
-        this.notes = { name: 'notes', rev: message.rev + 1, updatedAt: 'now', blob: message.blob, ...author }
-        return [{ t: 'cluster_doc', clusterId: CLUSTER, doc: this.notes }]
+        const key = message.name === 'claims' ? 'claims' : 'notes'
+        const current = this[key]
+        if (message.rev !== (current?.rev ?? 0)) return [{ t: 'cluster_conflict', clusterId: CLUSTER, name: message.name, current }]
+        this[key] = { name: message.name, rev: message.rev + 1, updatedAt: 'now', blob: message.blob, ...author }
+        return [{ t: 'cluster_doc', clusterId: CLUSTER, doc: this[key] }]
       }
       case 'cluster_session_profile': {
         const session = { ...(this.sessions.find(s => s.session === ME) as ClusterSessionWire), profile: message.profile }
@@ -498,5 +501,101 @@ describe('tools', () => {
     await join()
     expect(await call('cluster_who', { cluster: 'Other' })).toBe('This session is not in the cluster Other.')
     expect(JSON.parse(await call('cluster_who', { cluster: 'Jam' })).id).toBe(CLUSTER)
+  })
+})
+
+describe("what the session's shell calls tell", () => {
+  const event = (type: string, extra: object = {}) => ({
+    kind: 'event' as const,
+    ts: 'now',
+    text: `${type} done`,
+    event: { type, ...extra },
+  })
+  const claim = (type: 'claim' | 'release', paths: string[]) => ({
+    kind: 'claim' as const,
+    ts: 'now',
+    text: type === 'claim' ? 'Opened in Perforce (p4 edit)' : 'Submitted',
+    event: { type, paths },
+  })
+  const posted = async () =>
+    Promise.all(
+      relay.sent
+        .filter(message => message.t === 'cluster_post')
+        .map(async message => vault.read((message as { blob: string }).blob, value => value as ClusterPostBody)),
+    )
+  const claims = async () => (relay.claims ? await vault.read(relay.claims.blob, decodeClusterClaims) : null)?.claims ?? []
+
+  test('an event is posted to the cluster; nothing outside one', async () => {
+    work.observe([event('submit', { ok: true, ref: '1234', count: 3 })])
+    await settle()
+    expect(relay.sent.filter(message => message.t === 'cluster_post')).toEqual([])
+    await join()
+    work.observe([event('submit', { ok: true, ref: '1234', count: 3 })])
+    await settle()
+    expect(await posted()).toEqual([{ kind: 'event', text: 'submit done', event: { type: 'submit', ok: true, ref: '1234', count: 3 } }])
+  })
+
+  test('files opened go in the claims, files submitted come out, and a conflicting writer is read first', async () => {
+    await join()
+    // Ana took a file meanwhile: the first write conflicts, the second keeps her claim.
+    relay.claims = {
+      name: 'claims',
+      rev: 1,
+      updatedAt: 'now',
+      account: 'acc_ana',
+      session: ANA,
+      blob: await vault.seal({
+        claims: [{ id: 'a1', paths: ['Content/Hero.uasset'], account: 'acc_ana', session: ANA, at: new Date().toISOString() }],
+      }),
+    }
+    work.observe([claim('claim', ['Content/Maps/Main.umap', 'Content/Maps/Sky.umap'])])
+    await settle()
+    expect((await claims()).map(c => [c.session, c.paths])).toEqual([
+      [ANA, ['Content/Hero.uasset']],
+      [ME, ['Content/Maps/Main.umap', 'Content/Maps/Sky.umap']],
+    ])
+    expect((await claims()).find(c => c.session === ME)?.until).toBeString()
+    work.observe([claim('release', ['Content/Maps/Main.umap'])])
+    await settle()
+    expect((await claims()).map(c => [c.session, c.paths])).toEqual([
+      [ANA, ['Content/Hero.uasset']],
+      [ME, ['Content/Maps/Sky.umap']],
+    ])
+    expect((await posted()).map(body => body?.kind)).toEqual(['claim', 'claim'])
+  })
+
+  test("the guard file holds the others' claims with their holders, never the session's own", async () => {
+    await join()
+    relay.claims = {
+      name: 'claims',
+      rev: 1,
+      updatedAt: 'now',
+      account: 'acc_ana',
+      session: ANA,
+      blob: await vault.seal({
+        claims: [
+          { id: 'a1', paths: ['Content/Hero.uasset'], reason: 'rigging', account: 'acc_ana', session: ANA, at: '2026-11-04T10:00:00Z' },
+          { id: 'm1', paths: ['Source/Api.cpp'], account: 'acc_me', session: ME, at: '2026-11-04T10:00:00Z' },
+        ],
+      }),
+    }
+    clusters.apply({ t: 'cluster_doc', clusterId: CLUSTER, doc: relay.claims })
+    await settle()
+    expect(readGuardState(ME)).toMatchObject({
+      sessionId: ME,
+      clusters: [
+        {
+          id: CLUSTER,
+          name: 'Jam',
+          block: false,
+          claims: [{ paths: ['Content/Hero.uasset'], holder: "Ana's Claude", session: ANA, reason: 'rigging', at: '2026-11-04T10:00:00Z' }],
+        },
+      ],
+    })
+    // Ana lets it go: the file goes away.
+    relay.claims = { ...relay.claims, rev: 2, blob: await vault.seal({ claims: [] }) }
+    clusters.apply({ t: 'cluster_doc', clusterId: CLUSTER, doc: relay.claims })
+    await settle()
+    expect(readGuardState(ME)).toBeNull()
   })
 })

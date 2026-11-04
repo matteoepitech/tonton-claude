@@ -228,9 +228,10 @@ export class ClusterStore {
     return rows.map(row => row.blob)
   }
 
+  /** In the order they joined; two that joined within one millisecond, in the order they were written. */
   members(clusterId: string): ClusterMemberWire[] {
     const rows = this.db
-      .query('SELECT account_id, role, joined_at, profile_blob FROM cluster_members WHERE cluster_id = ? ORDER BY joined_at')
+      .query('SELECT account_id, role, joined_at, profile_blob FROM cluster_members WHERE cluster_id = ? ORDER BY joined_at, rowid')
       .all(clusterId) as MemberRow[]
     return rows.map(row => this.toMember(clusterId, row))
   }
@@ -260,7 +261,7 @@ export class ClusterStore {
   }
 
   memberAccounts(clusterId: string): string[] {
-    const rows = this.db.query('SELECT account_id FROM cluster_members WHERE cluster_id = ? ORDER BY joined_at').all(clusterId) as {
+    const rows = this.db.query('SELECT account_id FROM cluster_members WHERE cluster_id = ? ORDER BY joined_at, rowid').all(clusterId) as {
       account_id: string
     }[]
     return rows.map(row => row.account_id)
@@ -507,14 +508,14 @@ export class ClusterStore {
 
   sessionRows(clusterId: string): ClusterSessionRow[] {
     const rows = this.db
-      .query('SELECT account_id, session_id, order_blob FROM cluster_sessions WHERE cluster_id = ? ORDER BY joined_at')
+      .query('SELECT account_id, session_id, order_blob FROM cluster_sessions WHERE cluster_id = ? ORDER BY joined_at, rowid')
       .all(clusterId) as { account_id: string; session_id: string; order_blob: string }[]
     return rows.map(row => ({ clusterId, accountId: row.account_id, sessionId: row.session_id, order: row.order_blob }))
   }
 
   sessions(clusterId: string): Omit<ClusterSessionWire, 'online' | 'ready' | 'status' | 'machine'>[] {
     const rows = this.db
-      .query('SELECT account_id, session_id, joined_at, profile_blob FROM cluster_sessions WHERE cluster_id = ? ORDER BY joined_at')
+      .query('SELECT account_id, session_id, joined_at, profile_blob FROM cluster_sessions WHERE cluster_id = ? ORDER BY joined_at, rowid')
       .all(clusterId) as { account_id: string; session_id: string; joined_at: string; profile_blob: string | null }[]
     return rows.map(row => ({ account: row.account_id, session: row.session_id, joinedAt: row.joined_at, profile: row.profile_blob }))
   }
