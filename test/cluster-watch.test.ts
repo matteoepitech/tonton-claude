@@ -239,11 +239,12 @@ describe('following clusters from a browser', () => {
 
     // Bob's agent earns a long turn: he passes Alice, at Alice's too, and his level-up is on the board for the feed.
     await eventually(() => ranks(bob).some(rank => rank.account === bob.account && rank.hero), 'bob reads his own entry')
-    expect(await bob.watch.shareHero(id, hero(320, [30, 65, 25]))).toBe(true)
+    expect(await bob.watch.shareHero(id, hero(420, [30, 65, 25, 100]))).toBe(true)
     const second = await eventually(() => {
       const board = ranks(alice)
       return board[0]?.account === bob.account && board
     }, 'bob first at alice')
+    // 420 − his base of 220: 200 since the start, past Alice's 100.
     expect(second.map(rank => [rank.account, rank.rank, rank.hero?.level ?? null])).toEqual([
       [bob.account, 1, 3],
       [alice.account, 2, 3],
@@ -261,7 +262,8 @@ describe('following clusters from a browser', () => {
     db.close()
     expect(typeof row.blob).toBe('string')
     for (const clear of ['since', 'level', 'hat-rare', 'heroes', bob.account]) expect(row.blob).not.toContain(clear)
-  })
+    // A third account, a cluster and five rounds of sealed writes: more than the default 5 seconds in a busy full run.
+  }, 30_000)
 
   test('a relay from before clusters says it needs updating', async () => {
     const old = new ClusterWatch({
