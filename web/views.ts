@@ -269,8 +269,17 @@ function permission(
     buttons.append(always)
   }
   buttons.append(allow)
-  const card = element('div', element('strong', `${request.toolName} wants to run`), element('pre', request.description), buttons)
+  const card = element('div', element('strong', `${request.toolName} wants to run`))
   card.className = 'permission'
+  // The description can be a tool's whole docstring: a few lines of it, then what the call will run, as on the Mac.
+  if (request.description) {
+    const about = element('p', request.description)
+    about.className = 'about'
+    about.title = request.description
+    card.append(about)
+  }
+  if (request.inputPreview) card.append(element('pre', request.inputPreview))
+  card.append(buttons)
   return card
 }
 

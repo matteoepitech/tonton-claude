@@ -278,7 +278,8 @@ function Checklist({ todos }: { todos: TodoItem[] }) {
   )
 }
 
-function PermissionCard({
+/** The description can be a tool's whole docstring: a few lines of it, then what the call will run, as on the Mac. */
+export function PermissionCard({
   session,
   request,
   machine,
@@ -293,9 +294,16 @@ function PermissionCard({
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-orange/40 bg-orange/10 p-3">
       <strong>{request.toolName} wants to run</strong>
-      <pre className="max-h-60 overflow-auto rounded-md bg-background/60 p-2 font-mono text-xs whitespace-pre-wrap">
-        {request.description}
-      </pre>
+      {request.description && (
+        <p className="line-clamp-3 text-sm wrap-anywhere text-muted-foreground" title={request.description}>
+          {request.description}
+        </p>
+      )}
+      {request.inputPreview && (
+        <pre className="max-h-40 overflow-auto rounded-md bg-background/60 p-2 font-mono text-xs wrap-anywhere whitespace-pre-wrap">
+          {request.inputPreview}
+        </pre>
+      )}
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" size="sm" onClick={() => client?.answer(session.id, request.requestId, false)}>
           Deny
