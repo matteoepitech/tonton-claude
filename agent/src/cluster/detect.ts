@@ -38,6 +38,8 @@ interface Found {
   reason?: string
   /** The command that took or let go of files: `p4 edit`, `git lfs unlock`. */
   via?: string
+  /** A commit made with `--amend`. */
+  amend?: boolean
   passed?: number
   failed?: number
 }
@@ -61,12 +63,16 @@ export class EventDetector {
   /** `root`: the session's project folder, for paths relative to it. */
   constructor(private readonly root?: string) {}
 
-  read(entries: Entry[]): Detected[] {
+  /**
+   * `commandOf` gives the whole command of a shell call (`ParsedLine.commands`, `OpenCodeTracker.command`): an entry's
+   * summary is one line, cut at 300 characters, and for some tools not the command at all.
+   */
+  read(entries: Entry[], commandOf: (toolUseId: string) => string | undefined = () => undefined): Detected[] {
     const detected: Detected[] = []
     for (const entry of entries) {
       if ((entry.kind === 'tool' || entry.kind === 'sub_tool') && SHELL_TOOLS.has(entry.name)) {
         if (this.done.has(entry.toolUseId)) continue
-        this.pending.set(entry.toolUseId, entry.summary)
+        this.pending.set(entry.toolUseId, commandOf(entry.toolUseId) ?? entry.summary)
         if (this.pending.size > MAX_PENDING) this.pending.delete(this.pending.keys().next().value ?? '')
       } else if (entry.kind === 'tool_result' || entry.kind === 'sub_result') {
         const command = this.pending.get(entry.toolUseId)
@@ -86,7 +92,9 @@ export class EventDetector {
   private count(found: Found): Found {
     const { event, branch } = found
     if (event.type === 'commit' && branch) {
-      this.unpushed.set(branch, { count: (this.unpushed.get(branch)?.count ?? 0) + 1, subject: found.subject })
+      // An amended commit takes the place of the last one: one more only when that one was pushed already.
+      const before = this.unpushed.get(branch)?.count ?? 0
+      this.unpushed.set(branch, { count: found.amend ? Math.max(before, 1) : before + 1, subject: found.subject })
     }
     if (event.type === 'push' && event.ok && event.ref) {
       const commits = (branch ? this.unpushed.get(branch) : undefined) ?? this.unpushed.get(event.ref)
@@ -99,8 +107,8 @@ export class EventDetector {
 }
 
 /**
- * The posts one shell call makes: `command` as the entry's summary has it (one line, maybe cut), `output` its result,
- * `isError` set when it exited with an error. A call that never ran (refused, interrupted, timed out) makes none.
+ * The posts one shell call makes: `command` whole, or as the entry's summary has it (one line, maybe cut), `output` its
+ * result, `isError` set when it exited with an error. A call that never ran or never ended makes none.
  */
 export function detect(command: string, output: string, isError: boolean, root?: string): Omit<Detected, 'ts'>[] {
   return findEvents(command, output, isError, root).map(post)
@@ -121,13 +129,12 @@ function findEvents(command: string, output: string, isError: boolean, root?: st
   }
 }
 
-/** Claude Code starts the result of a command that ran and failed with its exit code; other errors came before it ran. */
+/**
+ * A command that ran and failed starts its result with its exit code, in Claude Code and, as the agent reads it, in
+ * OpenCode. Any other error is a call that never ran or never ended: refused, interrupted, timed out, killed.
+ */
 function didNotRun(output: string, isError: boolean): boolean {
-  if (/^Command running in background/i.test(output)) return true
-  if (!isError || /^Exit code \d+/.test(output)) return false
-  return /^\s*(\[?Request interrupted|Interrupted|The user|User |Error: The user|Permission|Command timed out|Tool execution|The operation was aborted|.*\bhook\b)/i.test(
-    output,
-  )
+  return isError ? !/^Exit code \d+/.test(output) : /^Command (running in background|timed out)/i.test(output)
 }
 
 // Commands
@@ -140,26 +147,72 @@ interface Command {
   args: string[]
 }
 
-const WRAPPERS = new Set(['sudo', 'time', 'env', 'nice', 'nohup', 'command', 'exec', 'npx', 'bunx', 'pnpx', 'call', 'start'])
-const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'cmd', 'powershell', 'pwsh'])
-const SHELL_COMMAND_FLAGS = new Set(['-c', '/c', '/k', '-command'])
+/** Programs that run the command after them, and their options that take a value. */
+const WRAPPERS: Record<string, string[]> = {
+  sudo: ['-u', '-g', '-h', '-p', '-C', '-D', '-r', '-t', '-T', '-U'],
+  env: ['-u', '-C', '-S', '--unset', '--chdir'],
+  nice: ['-n', '--adjustment'],
+  nohup: [],
+  time: ['-f', '-o', '--format', '--output'],
+  exec: ['-a'],
+  command: [],
+  npx: ['-p', '--package'],
+  bunx: ['-p', '--package'],
+  pnpx: [],
+  call: [],
+}
+/** Shells, and the option after which their command comes: `bash -lc "…"`, `cmd /c …`, `pwsh -NoProfile -Command "…"`. */
+const SHELL_FLAGS: Record<string, RegExp> = {
+  bash: /^-[a-z]*c[a-z]*$/,
+  sh: /^-[a-z]*c[a-z]*$/,
+  zsh: /^-[a-z]*c[a-z]*$/,
+  dash: /^-[a-z]*c[a-z]*$/,
+  cmd: /^\/[ck]$/i,
+  powershell: /^-(c|command)$/i,
+  pwsh: /^-(c|command)$/i,
+}
 
 /** A command line cut into simple commands the way a shell reads it: quotes, `&&`, `||`, `;`, `|`, redirections. */
 export function commandsOf(line: string, depth = 0): Command[] {
   const commands: Command[] = []
   for (const words of wordsOf(line)) {
-    let at = 0
-    while (at < words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[at]) || WRAPPERS.has(programName(words[at])))) at++
+    const at = commandStart(words)
     if (at >= words.length) continue
     const word = words[at]
     const program = programName(word)
     const args = words.slice(at + 1)
-    // `bash -c "…"`, `cmd /c …`, `powershell -Command "…"`: the command is in the argument.
-    const flag = args.findIndex(arg => SHELL_COMMAND_FLAGS.has(arg.toLowerCase()))
-    if (SHELLS.has(program) && flag >= 0 && depth < 2) commands.push(...commandsOf(args.slice(flag + 1).join(' '), depth + 1))
+    const flag = SHELL_FLAGS[program] ? args.findIndex(arg => SHELL_FLAGS[program].test(arg)) : -1
+    // A POSIX shell runs the one argument after its flag; cmd and PowerShell join the rest.
+    const inner = /sh$/.test(program) ? (args[flag + 1] ?? '') : args.slice(flag + 1).join(' ')
+    if (flag >= 0 && depth < 2) commands.push(...commandsOf(inner, depth + 1))
     else commands.push({ program, word, args })
   }
   return commands
+}
+
+/** Past the variables set for the command and the programs that run it: `FOO=1 sudo -u bob nice -n 5 make`. */
+function commandStart(words: string[]): number {
+  let at = 0
+  while (at < words.length) {
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[at])) {
+      at++
+      continue
+    }
+    const wrapper = programName(words[at])
+    const valued = WRAPPERS[wrapper]
+    if (!valued) return at
+    // `command -v make` only says where make is.
+    if (wrapper === 'command' && /^-[vV]$/.test(words[at + 1] ?? '')) return words.length
+    at++
+    while (at < words.length && words[at].startsWith('-')) {
+      if (words[at] === '--') {
+        at++
+        break
+      }
+      at += valued.includes(words[at]) ? 2 : 1
+    }
+  }
+  return at
 }
 
 /** Backslashes stay unless they escape something a shell would read: Windows paths keep theirs. */
@@ -171,6 +224,8 @@ function wordsOf(line: string): string[][] {
   let word: string | null = null
   // The word after `>` or `<` is a file, not an argument.
   let redirected = false
+  // The lines of a here-document are text, not commands: they end at their delimiter's line.
+  const heredocs: string[] = []
   const end = () => {
     if (word !== null && redirected) redirected = false
     else if (word !== null) words.push(word)
@@ -197,11 +252,37 @@ function wordsOf(line: string): string[][] {
       }
       word = (word ?? '') + quoted
       i = j
-    } else if (/\s/.test(c)) {
+    } else if (c !== '\n' && /\s/.test(c)) {
       end()
     } else if (c === '\\' && i + 1 < line.length && ESCAPABLE.includes(line[i + 1])) {
       word = (word ?? '') + line[i + 1]
       i++
+    } else if (c === '<' && line[i + 1] === '<' && line[i + 2] !== '<') {
+      end()
+      i += line[i + 2] === '-' ? 3 : 2
+      while (line[i] === ' ' || line[i] === '\t') i++
+      const quote = line[i] === "'" || line[i] === '"' ? line[i] : ''
+      let delimiter = ''
+      if (quote) for (i++; i < line.length && line[i] !== quote; i++) delimiter += line[i]
+      else for (; i < line.length && !/[\s;&|<>()]/.test(line[i]); i++) delimiter += line[i]
+      if (!quote) i--
+      if (delimiter) heredocs.push(delimiter)
+    } else if (c === '\n' && heredocs.length) {
+      split()
+      for (const delimiter of heredocs.splice(0)) {
+        let next = line.indexOf('\n', i + 1)
+        while (
+          next >= 0 &&
+          line
+            .slice(i + 1, next)
+            .replace(/^\t+/, '')
+            .trimEnd() !== delimiter
+        ) {
+          i = next
+          next = line.indexOf('\n', i + 1)
+        }
+        i = next < 0 ? line.length : next
+      }
     } else if (c === '>' || c === '<') {
       // The 2 of `2>&1` is no argument either.
       if (word !== null && /^\d+$/.test(word)) word = null
@@ -242,37 +323,48 @@ function subcommandOf(command: Command, valued: Set<string>): { name: string; ar
 const GIT_VALUED = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace'])
 const P4_VALUED = new Set(['-c', '-C', '-d', '-H', '-p', '-P', '-u', '-x', '-z', '-r', '-Q', '-L', '-b'])
 
-// Git and Perforce: the output says what happened, the command only that it was git or p4. A summary is cut at 300
-// characters, so the `git push` after a long commit message can be missing from it while its output is there.
+// Git and Perforce: the output says what happened, the command only that it was git or p4. When only the summary is
+// known, cut at 300 characters, the `git push` after a long commit message can be missing from it while its output is
+// there.
 
 function vcsEvents(commands: Command[], line: string, output: string, isError: boolean, root?: string): Found[] {
-  const git = commands.filter(command => command.program === 'git').map(command => subcommandOf(command, GIT_VALUED)?.name)
-  const p4 = commands.filter(command => command.program === 'p4').map(command => subcommandOf(command, P4_VALUED))
-  const lfs = git.includes('lfs') || commands.some(command => command.program === 'git-lfs')
+  const isGit = commands.some(command => command.program === 'git')
+  const git = commands
+    .flatMap(command => (command.program === 'git' ? [subcommandOf(command, GIT_VALUED)] : []))
+    .filter(sub => sub !== null)
+  const p4 = commands.flatMap(command => (command.program === 'p4' ? [subcommandOf(command, P4_VALUED)] : [])).filter(sub => sub !== null)
+  const names = git.map(sub => sub.name)
+  const lfs = names.includes('lfs') || commands.some(command => command.program === 'git-lfs')
   const found: Found[] = []
-  if (git.length) found.push(...commits(output), ...pushes(output, git.includes('push') || line.endsWith('…')))
-  if (lfs) found.push(...lfsLocks(output, root))
-  if (p4.length) {
+  // A rebase prints the commits it rewrites: they are no new ones.
+  if (isGit && !names.includes('rebase'))
     found.push(
-      ...perforce(
+      ...commits(
         output,
-        isError,
-        p4.filter(sub => sub !== null),
-        root,
+        git.filter(sub => sub.name === 'commit'),
       ),
     )
+  if (isGit) {
+    const tagsOnly = git.some(sub => sub.name === 'push' && sub.args.includes('--tags'))
+    if (!tagsOnly) found.push(...pushes(output, names.includes('push') || line.endsWith('…')))
   }
+  if (lfs) found.push(...lfsLocks(output, root))
+  if (commands.some(command => command.program === 'p4')) found.push(...perforce(output, isError, p4, root))
   return found
 }
 
-/** `[main 1a2b3c4] Add the hero` then ` 3 files changed, …`: what amend, cherry-pick and revert print too. */
-function commits(output: string): Found[] {
-  return [...output.matchAll(/^\[(.+?) ([0-9a-f]{7,40})\] (.*)\n(?:.*\n){0,3}? (\d+) files? changed/gm)].map(match => {
+/**
+ * `[main 1a2b3c4] Add the hero` then ` 3 files changed, …`: what amend, cherry-pick and revert print too. The commits
+ * come in the order of the `git commit` commands, which say which ones amend.
+ */
+function commits(output: string, commitCommands: { args: string[] }[]): Found[] {
+  return [...output.matchAll(/^\[(.+?) ([0-9a-f]{7,40})\] (.*)\n(?:.*\n){0,3}? (\d+) files? changed/gm)].map((match, index) => {
     const branch = match[1].replace(/\s*\(root-commit\)/, '').trim()
     return {
       event: { type: 'commit', ok: true, ref: match[2], count: Number(match[4]) },
       branch: branch && !branch.startsWith('detached') ? branch : undefined,
       subject: cut(match[3].trim(), MAX_SUBJECT_CHARS),
+      ...(commitCommands[index]?.args.includes('--amend') ? { amend: true } : {}),
     }
   })
 }
@@ -288,8 +380,8 @@ function pushes(output: string, pushed: boolean): Found[] {
   for (const match of output.slice(to.index).matchAll(/^ ([ +*=!-]) (\[[^\]]+\]|\S+)\s+(\S+) -> (\S+)(?: \(([^)\n]*)\))?\s*$/gm)) {
     const [, flag, summary, source, target, reason] = match
     const ok = flag !== '!'
-    // Up to date, or a rejection read from a command that may not have pushed.
-    if (flag === '=' || (!ok && !pushed)) continue
+    // Up to date, a tag, or a rejection read from a command that may not have pushed.
+    if (flag === '=' || summary === '[new tag]' || /^refs\/tags\//.test(source) || (!ok && !pushed)) continue
     const branch = (ref: string) => cut(ref.replace(/^refs\/heads\//, ''), MAX_REF_CHARS)
     found.push({
       event: { type: 'push', ok, ref: branch(target) },
@@ -310,10 +402,13 @@ function lfsLocks(output: string, root?: string): Found[] {
   return found
 }
 
-/** Perforce's own lines, also after the `info:` that `p4 -s` puts in front. */
+/** Perforce's own lines, also after the `info:`, `error:` or `warning:` that `p4 -s` puts in front. */
 const P4_OPENED = /^(?:info\d?: )?(\/\/[^#\n]+)#(?:\d+|none) - (?:currently )?opened for (edit|add|delete|move\/add|move\/delete)/gm
 const P4_REVERTED = /^(?:info\d?: )?(\/\/[^#\n]+)#(?:\d+|none) - was \S+, (?:reverted|abandoned|deleted)/gm
 const P4_FILE = /^(?:info\d?: )?(?:edit|add|delete|branch|integrate|move\/add|move\/delete|import|purge|archive) (\/\/[^#\n]+)#\d+\s*$/gm
+/** A submit that failed, whatever its exit code says: `| tail` hides that one. */
+const P4_ABORTED =
+  /^(?:(?:error|warning)\d?: )?(?:Submit aborted|Submit validation failed|No files to submit)|must resolve|Out of date files|^exit: [1-9]/im
 
 function perforce(output: string, isError: boolean, subs: { name: string; args: string[] }[], root?: string): Found[] {
   const found: Found[] = []
@@ -323,12 +418,11 @@ function perforce(output: string, isError: boolean, subs: { name: string; args: 
   }
 
   const submit = subs.find(sub => sub.name === 'submit')
+  // Only Perforce's last line says a submit went through: a release on less would free files still open.
   const submitted = /^(?:info\d?: )?Change (\d+) (?:renamed change (\d+) and )?submitted\./m.exec(output)
-  const aborted = /^Submit aborted|^No files to submit|must resolve|Out of date files/m.test(output)
-  // The last line of a long submit can be cut from the result: its start says which change it was.
-  const submitting = isError || aborted ? null : /^(?:info\d?: )?Submitting change (\d+)\./m.exec(output)
-  if (submitted || submitting) {
-    const change = submitted ? (submitted[2] ?? submitted[1]) : (submitting?.[1] ?? '')
+  const aborted = P4_ABORTED.test(output)
+  if (submitted && !aborted) {
+    const change = submitted[2] ?? submitted[1]
     const paths = pathsOf(output, P4_FILE, root)
     const description = submit ? flagValue(submit.args, '-d') : undefined
     found.push({
@@ -347,7 +441,7 @@ function perforce(output: string, isError: boolean, subs: { name: string; args: 
   const shelved = /^(?:info\d?: )?Change (\d+) files shelved\./m.exec(output)
   if (shelved) {
     found.push({ event: { type: 'shelve', ok: true, ref: shelved[1], count: fileCount(output) ?? [...output.matchAll(P4_FILE)].length } })
-  } else if (subs.some(sub => sub.name === 'shelve') && (isError || /^No files to shelve/m.test(output))) {
+  } else if (subs.some(sub => sub.name === 'shelve') && (isError || /^(?:error\d?: )?No files to shelve/m.test(output))) {
     found.push({ event: { type: 'shelve', ok: false } })
   }
 
@@ -361,11 +455,11 @@ function submitFailure(output: string): string {
   if (/must resolve|must be resolved/i.test(output)) return 'files to resolve first'
   if (/No files to submit/i.test(output)) return 'nothing to submit'
   if (/exclusive|locked by/i.test(output)) return 'files locked by someone else'
-  if (/trigger/i.test(output)) return 'a server trigger refused it'
+  if (/trigger|Submit validation failed/i.test(output)) return 'a server trigger refused it'
   return 'it failed'
 }
 
-/** `Change 1234 created with 3 open file(s).` or `Locking 3 files ...`: near the start, so never cut. */
+/** `Change 1234 created with 3 open file(s).` or `Locking 3 files ...`: near the start, so kept when the middle is cut. */
 function fileCount(output: string): number | undefined {
   const match = /created with (\d+) open file|^(?:info\d?: )?Locking (\d+) files?/m.exec(output)
   return match ? Number(match[1] ?? match[2]) : undefined

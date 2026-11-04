@@ -3,13 +3,15 @@
 import { describe, expect, test } from 'bun:test'
 import { commandsOf, type Detected, detect, EventDetector, normalizePath, projectPath } from '../src/cluster/detect'
 import { OpenCodeTracker } from '../src/opencode/events'
-import { parseLine } from '../src/transcript/parser'
+import { cutToolResult, parseLine } from '../src/transcript/parser'
 
 interface Call {
   command: string
   output: string
   /** The exit code: Claude Code makes a result an error from it, OpenCode passes it in the tool's metadata. */
-  exit?: number
+  exit?: number | null
+  /** Claude Code's tool: PowerShell on Windows. */
+  tool?: 'Bash' | 'PowerShell'
 }
 
 const POSIX_ROOT = '/Users/ana/jam/Hero'
@@ -18,12 +20,12 @@ const WINDOWS_ROOT = 'C:\\Jam\\Hero'
 /** A Claude Code transcript: the assistant's Bash call, then the user line with its result. */
 function claudeCode(calls: Call[], root?: string): Detected[] {
   const detector = new EventDetector(root)
-  return calls.flatMap(({ command, output, exit = 0 }, index) => {
+  return calls.flatMap(({ command, output, exit = 0, tool = 'Bash' }, index) => {
     const call = {
       type: 'assistant',
       uuid: `a${index}`,
       timestamp: '2026-11-04T14:02:00Z',
-      message: { content: [{ type: 'tool_use', id: `toolu_${index}`, name: 'Bash', input: { command, description: 'Run it' } }] },
+      message: { content: [{ type: 'tool_use', id: `toolu_${index}`, name: tool, input: { command, description: 'Run it' } }] },
     }
     const content = exit ? `Exit code ${exit}\n${output}` : output
     const result = {
@@ -32,7 +34,8 @@ function claudeCode(calls: Call[], root?: string): Detected[] {
       timestamp: '2026-11-04T14:02:05Z',
       message: { content: [{ type: 'tool_result', tool_use_id: `toolu_${index}`, content, is_error: exit !== 0 }] },
     }
-    return detector.read([...parseLine(JSON.stringify(call)).entries, ...parseLine(JSON.stringify(result)).entries])
+    const parsed = parseLine(JSON.stringify(call))
+    return detector.read([...parsed.entries, ...parseLine(JSON.stringify(result)).entries], id => parsed.commands?.[id])
   })
 }
 
@@ -57,7 +60,8 @@ function openCode2(calls: Call[], root?: string): Detected[] {
         data: { ...data, content: [{ type: 'text', text: output }], metadata: { status: 'completed', truncated: false, exit } },
       },
     ]
-    return detector.read(events.flatMap(event => tracker.handle(event)).flatMap(update => update.entries))
+    const entries = events.flatMap(event => tracker.handle(event)).flatMap(update => update.entries)
+    return detector.read(entries, id => tracker.command('ses_1', id))
   })
 }
 
@@ -80,7 +84,8 @@ function openCode1(calls: Call[], root?: string): Detected[] {
       part({ status: 'running', input: { command } }),
       part({ status: 'completed', input: { command }, output, metadata: { output, exit, description: 'Run it' } }),
     ]
-    return detector.read(events.flatMap(event => tracker.handle(event)).flatMap(update => update.entries))
+    const entries = events.flatMap(event => tracker.handle(event)).flatMap(update => update.entries)
+    return detector.read(entries, id => tracker.command('ses_1', id))
   })
 }
 
@@ -452,6 +457,157 @@ const CASES: Case[] = [
       { kind: 'event', text: 'Tests failed: npm test (1 of 5 failed)', event: { type: 'test', ok: false, ref: 'npm test', count: 5 } },
     ],
   },
+
+  // What a review of the first version found.
+  {
+    name: 'commands on several lines',
+    calls: [
+      { command: 'cd web\nbun test', output: ' 12 pass\n 0 fail\n' },
+      { command: 'npm run build\nnpm test', output: 'built\nTests:       5 passed, 5 total\n' },
+      { command: 'cd repo\ngit push', output: 'To github.com:jam/hero.git\n   0a0a0a0..2222222  main -> main\n' },
+    ],
+    expected: [
+      { kind: 'event', text: 'Tests passed: bun test (12 tests)', event: { type: 'test', ok: true, ref: 'bun test', count: 12 } },
+      { kind: 'event', text: 'Build succeeded: npm run build', event: { type: 'build', ok: true, ref: 'npm run build' } },
+      { kind: 'event', text: 'Tests passed: npm test (5 tests)', event: { type: 'test', ok: true, ref: 'npm test', count: 5 } },
+      { kind: 'event', text: 'Pushed to main', event: { type: 'push', ok: true, ref: 'main' } },
+    ],
+  },
+  {
+    name: 'the lines of a here-document are no commands',
+    calls: [{ command: "cat > notes.md <<'EOF'\nmake all\nnpm test\nEOF\nmake hero", output: 'cc -o hero hero.c\n' }],
+    expected: [{ kind: 'event', text: 'Build succeeded: make hero', event: { type: 'build', ok: true, ref: 'make hero' } }],
+  },
+  {
+    name: 'the end of a long output says how it ended',
+    calls: [
+      { command: 'make 2>&1 | tee build.log', output: `${'cc -c file.c\n'.repeat(800)}make: *** [Makefile:12: all] Error 2\n` },
+      {
+        command: 'cargo test',
+        output: `${'test hero::rig ... ok\n'.repeat(400)}test result: FAILED. 399 passed; 1 failed; 0 ignored\n`,
+        exit: 101,
+      },
+      {
+        command: 'p4 submit -d "Props"',
+        output: `Submitting change 1300.\nLocking 300 files ...\n${'edit //depot/Hero/Content/Props/SM_Rock.uasset#2\n'.repeat(300)}Change 1300 submitted.\n`,
+      },
+    ],
+    root: POSIX_ROOT,
+    expected: [
+      { kind: 'event', text: 'Build failed: make', event: { type: 'build', ok: false, ref: 'make' } },
+      {
+        kind: 'event',
+        text: 'Tests failed: cargo test (1 of 400 failed)',
+        event: { type: 'test', ok: false, ref: 'cargo test', count: 400 },
+      },
+      {
+        kind: 'event',
+        text: 'Submitted change 1300 to Perforce: Props (300 files)',
+        event: { type: 'submit', ok: true, ref: '1300', count: 300 },
+      },
+      {
+        kind: 'claim',
+        text: 'Submitted, no longer held: Content/Props/SM_Rock.uasset',
+        event: { type: 'release', ref: '1300', paths: ['Content/Props/SM_Rock.uasset'] },
+      },
+    ],
+  },
+  {
+    name: 'a failure whose first line looks like a refusal is still a failure',
+    calls: [
+      { command: 'bun test', output: 'FAIL tests/hook.test.ts\n 3 pass\n 1 fail\n', exit: 1 },
+      { command: './build.sh', output: 'Permission denied: out/hero\n', exit: 1 },
+      { command: 'make', output: 'User code failed to compile\n', exit: 2 },
+    ],
+    expected: [
+      { kind: 'event', text: 'Tests failed: bun test (1 of 4 failed)', event: { type: 'test', ok: false, ref: 'bun test', count: 4 } },
+      { kind: 'event', text: 'Build failed: build.sh', event: { type: 'build', ok: false, ref: 'build.sh' } },
+      { kind: 'event', text: 'Build failed: make', event: { type: 'build', ok: false, ref: 'make' } },
+    ],
+  },
+  {
+    name: 'a refused submit, its exit code hidden, releases nothing',
+    calls: [
+      {
+        command: 'p4 submit -c 1240 | tail -3',
+        output: "Submitting change 1240.\nLocking 1 files ...\nSubmit validation failed -- fix problems then use 'p4 submit -c 1240'.\n",
+      },
+      {
+        command: 'p4 -s submit -c 1241',
+        output: "info: Submitting change 1241.\nerror: Submit aborted -- fix problems then use 'p4 submit -c 1241'.\nexit: 1\n",
+      },
+    ],
+    expected: [
+      {
+        kind: 'event',
+        text: 'Perforce submit of change 1240 failed: a server trigger refused it',
+        event: { type: 'submit', ok: false, ref: '1240' },
+      },
+      { kind: 'event', text: 'Perforce submit of change 1241 failed: it failed', event: { type: 'submit', ok: false, ref: '1241' } },
+    ],
+  },
+  {
+    name: 'shells with flags, and programs that run others',
+    calls: [
+      { command: 'bash -lc "make hero"', output: 'cc -o hero hero.c\n' },
+      { command: "sh -ec 'npm test'", output: 'Tests:       2 passed, 2 total\n' },
+      { command: 'sudo -u build make hero', output: 'ok\n' },
+      { command: 'npx -y vitest run', output: '      Tests  3 passed (3)\n' },
+      { command: 'env -i PATH=/bin make hero', output: 'ok\n' },
+      { command: 'command -v make', output: '/usr/bin/make\n' },
+    ],
+    expected: [
+      { kind: 'event', text: 'Build succeeded: make hero', event: { type: 'build', ok: true, ref: 'make hero' } },
+      { kind: 'event', text: 'Tests passed: npm test (2 tests)', event: { type: 'test', ok: true, ref: 'npm test', count: 2 } },
+      { kind: 'event', text: 'Build succeeded: make hero', event: { type: 'build', ok: true, ref: 'make hero' } },
+      { kind: 'event', text: 'Tests passed: vitest (3 tests)', event: { type: 'test', ok: true, ref: 'vitest', count: 3 } },
+      { kind: 'event', text: 'Build succeeded: make hero', event: { type: 'build', ok: true, ref: 'make hero' } },
+    ],
+  },
+  {
+    name: 'an amend and a rebase make no new commits to push',
+    calls: [
+      { command: 'git commit -m "Rig the hero"', output: '[main 1111111] Rig the hero\n 1 file changed, 1 insertion(+)\n' },
+      {
+        command: 'git commit --amend -m "Rig the hero, with sockets"',
+        output: '[main 3333333] Rig the hero, with sockets\n Date: Wed Nov 4 14:02:00 2026 +0100\n 2 files changed, 3 insertions(+)\n',
+      },
+      {
+        command: 'git rebase -i HEAD~1',
+        output:
+          '[detached HEAD 4444444] Rig the hero, sockets\n 2 files changed, 3 insertions(+)\nSuccessfully rebased and updated refs/heads/main.\n',
+      },
+      { command: 'git push --force-with-lease', output: 'To github.com:jam/hero.git\n + 1111111...4444444 main -> main (forced update)\n' },
+    ],
+    expected: [
+      {
+        kind: 'event',
+        text: 'Committed 1111111 on main: Rig the hero (1 file)',
+        event: { type: 'commit', ok: true, ref: '1111111', count: 1 },
+      },
+      {
+        kind: 'event',
+        text: 'Committed 3333333 on main: Rig the hero, with sockets (2 files)',
+        event: { type: 'commit', ok: true, ref: '3333333', count: 2 },
+      },
+      {
+        kind: 'event',
+        text: 'Pushed 1 commit to main: Rig the hero, with sockets',
+        event: { type: 'push', ok: true, ref: 'main', count: 1 },
+      },
+    ],
+  },
+  {
+    name: 'tags are no branches',
+    calls: [
+      { command: 'git push --tags', output: 'To github.com:jam/hero.git\n * [new tag]         v1.0 -> v1.0\n' },
+      {
+        command: 'git push --follow-tags',
+        output: 'To github.com:jam/hero.git\n   0a0a0a0..2222222  main -> main\n * [new tag]         v1.1 -> v1.1\n',
+      },
+    ],
+    expected: [{ kind: 'event', text: 'Pushed to main', event: { type: 'push', ok: true, ref: 'main' } }],
+  },
 ]
 
 for (const [source, run] of Object.entries(SOURCES)) {
@@ -479,20 +635,40 @@ for (const [source, run] of Object.entries(SOURCES)) {
 }
 
 describe('detect', () => {
-  test('a call that never ran makes nothing, even a build', () => {
-    expect(detect('npm run build', "The user doesn't want to proceed with this tool use.", true)).toEqual([])
-    expect(detect('npm run build', 'Command timed out after 2m 0.0s', true)).toEqual([])
+  test('a call that never ran or never ended makes nothing, even a build', () => {
+    // As Claude Code and OpenCode word them.
+    for (const output of [
+      "The user doesn't want to proceed with this tool use. The tool use was rejected.",
+      'Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Exit code 1]',
+      'Permission to use Bash with command make has been denied.',
+      '<tool_use_error>Blocked: sleep 30 followed by: make</tool_use_error>',
+      'Interrupted: the response that made this tool call was stopped',
+      '[Request interrupted by user for tool use]',
+      'Command timed out after 2m 0.0s',
+      'The user rejected permission to use this specific tool call.',
+      'Tool execution aborted',
+    ]) {
+      expect(detect('npm run build', output, true)).toEqual([])
+    }
+    expect(detect('npm run build', 'Command timed out after 2m 0.0s', false)).toEqual([])
     expect(detect('npm run build', 'Command running in background with ID: b1. Output is being written to: /tmp/b1', false)).toEqual([])
-    expect(detect('npm run build', 'PreToolUse:Bash hook error: blocked', true)).toEqual([])
   })
 
-  test('a long submit cut from the result still names its change', () => {
+  test('an OpenCode command stopped before it ended makes nothing', () => {
+    const output = 'Compiling Hero.cpp\n\n<bash_metadata>\nbash tool terminated command after exceeding timeout 120000 ms\n</bash_metadata>'
+    expect(openCode2([{ command: 'make', output, exit: null }])).toEqual([])
+    expect(openCode1([{ command: 'make', output, exit: null }])).toEqual([])
+  })
+
+  test('a long submit keeps its last line, and only that line releases files', () => {
     const files = Array.from({ length: 300 }, (_, i) => `edit //depot/Hero/Content/Props/SM_Rock${i}.uasset#2`).join('\n')
-    const output = `Submitting change 1300.\nLocking 300 files ...\n${files}`.slice(0, 4000)
-    const [submit, release] = detect('p4 submit -c 1300', output, false, POSIX_ROOT)
+    const output = `Submitting change 1300.\nLocking 300 files ...\n${files}\nChange 1300 submitted.\n`
+    const [submit, release] = detect('p4 submit -c 1300', cutToolResult(output), false, POSIX_ROOT)
     expect(submit.event).toEqual({ type: 'submit', ok: true, ref: '1300', count: 300 })
     expect(release.event.paths?.[0]).toBe('Content/Props/SM_Rock0.uasset')
     expect(release.text).toMatch(/and \d+ more$/)
+    // Without it, nothing says the files left the changelist.
+    expect(detect('p4 submit -c 1300', output.slice(0, 4000), false, POSIX_ROOT)).toEqual([])
   })
 
   test('only the parsed fields leave: no remote address, no output line', () => {
@@ -510,6 +686,40 @@ describe('detect', () => {
         expect(() => detect(command, output, false)).not.toThrow()
       }
     }
+  })
+})
+
+describe('Claude Code on Windows, through PowerShell', () => {
+  const powershell = (calls: Call[]) =>
+    claudeCode(
+      calls.map(call => ({ ...call, tool: 'PowerShell' as const })),
+      WINDOWS_ROOT,
+    )
+
+  test('its commands are read like Bash ones', () => {
+    const detected = powershell([
+      { command: 'git push origin main; Write-Host done', output: 'To github.com:jam/hero.git\n   0a0a0a0..2222222  main -> main\ndone\n' },
+      {
+        command: '& "C:\\Program Files\\Epic Games\\UE_5.4\\Engine\\Build\\BatchFiles\\Build.bat" HeroEditor Win64 Development -WaitMutex',
+        output: 'Result: Succeeded\r\nTotal execution time: 41.20 seconds\r\n',
+      },
+      { command: 'p4 edit Content\\Maps\\Main.umap', output: '//depot/Hero/Content/Maps/Main.umap#3 - opened for edit\r\n' },
+      { command: 'dotnet build Hero.sln', output: 'Build FAILED.\r\n    1 Error(s)\r\n', exit: 1 },
+    ])
+    expect(posted(detected)).toEqual([
+      { kind: 'event', text: 'Pushed to main', event: { type: 'push', ok: true, ref: 'main' } },
+      {
+        kind: 'event',
+        text: 'Build succeeded: UnrealBuildTool HeroEditor Win64 Development',
+        event: { type: 'build', ok: true, ref: 'UnrealBuildTool HeroEditor Win64 Development' },
+      },
+      {
+        kind: 'claim',
+        text: 'Opened for edit in Perforce: Content/Maps/Main.umap',
+        event: { type: 'claim', paths: ['Content/Maps/Main.umap'] },
+      },
+      { kind: 'event', text: 'Build failed: dotnet build', event: { type: 'build', ok: false, ref: 'dotnet build' } },
+    ])
   })
 })
 

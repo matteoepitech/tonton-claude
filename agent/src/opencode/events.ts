@@ -1,5 +1,5 @@
 import type { Entry, ImageData, PermissionDetail, SessionCommand, SessionMeta, TokenCounts } from '../../../shared/protocol'
-import { fileEdits, todoItems, toolSummary } from '../transcript/parser'
+import { cutToolResult, fileEdits, todoItems, toolSummary } from '../transcript/parser'
 
 // OpenCode's plugin events, turned into what the notch shows for a Claude Code session: entries, a status and the meta.
 // They are not a format Tonton controls either: anything unexpected is skipped, never thrown. Two families exist:
@@ -58,7 +58,6 @@ export interface CatalogModel {
   released?: number
 }
 
-const MAX_TOOL_RESULT_CHARS = 4000
 /** As for Claude Code: larger images stay out of the conversation. */
 const MAX_IMAGE_BASE64 = 4 * 1024 * 1024
 const MAX_LAST_MESSAGE_CHARS = 200
@@ -182,6 +181,8 @@ class TrackedSession {
   readonly deltas = new Map<string, string>()
   /** OpenCode 2 names a tool when its input starts, and calls it later by id. */
   readonly toolNames = new Map<string, string>()
+  /** The whole command of each shell call: its entry's summary is one line, and cut. */
+  readonly commands = new Map<string, string>()
   /** Cost and tokens per assistant message. */
   readonly usage = new Map<string, Usage>()
   readonly sent = new Set<string>()
@@ -229,6 +230,11 @@ export class OpenCodeTracker {
 
   cwd(sessionId: string): string | undefined {
     return this.sessions.get(sessionId)?.cwd
+  }
+
+  /** The whole command of a shell call the session made. It stays on the machine. */
+  command(sessionId: string, toolUseId: string): string | undefined {
+    return this.sessions.get(sessionId)?.commands.get(toolUseId)
   }
 
   /** The model the session last answered with, which OpenCode 1 needs to compact it. */
@@ -485,7 +491,7 @@ export class OpenCodeTracker {
     if (!session || !call) return []
     const raw = text(props.tool) ?? text(props.name) ?? session.toolNames.get(call) ?? 'tool'
     const input = (props.input && typeof props.input === 'object' ? props.input : {}) as Fields
-    return this.add(session, toolEntry(call, call, this.time(props.timestamp), raw, input))
+    return this.add(session, this.callEntry(session, call, call, this.time(props.timestamp), raw, input))
   }
 
   private toolEnded(props: Fields, failed: boolean): SessionUpdate[] {
@@ -497,8 +503,7 @@ export class OpenCodeTracker {
       ? (text((props.error as { message?: unknown } | undefined)?.message) ?? 'The tool failed')
       : content.flatMap(item => (item?.type === 'text' && typeof item.text === 'string' ? [item.text] : [])).join('\n')
     const images = imagesOf(content.filter(item => item?.type === 'file'))
-    const isError = failed || exitedWithError(props.metadata)
-    return this.add(session, resultEntry(`${call}:result`, call, this.time(props.timestamp), output, isError, images))
+    return this.add(session, resultEntry(`${call}:result`, call, this.time(props.timestamp), output, failed, props.metadata, images))
   }
 
   private step(props: Fields): SessionUpdate[] {
@@ -580,11 +585,11 @@ export class OpenCodeTracker {
       const { status } = part.state
       if (status !== 'running' && status !== 'completed' && status !== 'error') return []
       const call = part.callID ?? part.id
-      entries.push(toolEntry(part.id, call, ts, part.tool, part.state.input ?? {}))
+      entries.push(this.callEntry(session, part.id, call, ts, part.tool, part.state.input ?? {}))
       if (status !== 'running') {
         const output = status === 'error' ? (part.state.error ?? '') : (part.state.output ?? '')
-        const isError = status === 'error' || exitedWithError(part.state.metadata)
-        entries.push(resultEntry(`${part.id}:result`, call, ts, output, isError, imagesOf(part.state.attachments)))
+        const images = imagesOf(part.state.attachments)
+        entries.push(resultEntry(`${part.id}:result`, call, ts, output, status === 'error', part.state.metadata, images))
       }
     }
     return entries.filter(entry => this.markSent(session, entry))
@@ -718,7 +723,7 @@ export class OpenCodeTracker {
           metadata?: unknown
         }
         const input = (state.input && typeof state.input === 'object' ? state.input : {}) as Fields
-        this.markSent(session, toolEntry(call, call, ts, text(content.name) ?? 'tool', input))
+        this.markSent(session, this.callEntry(session, call, call, ts, text(content.name) ?? 'tool', input))
         if (state.status === 'completed' || state.status === 'error') {
           const output =
             state.status === 'error'
@@ -726,10 +731,7 @@ export class OpenCodeTracker {
               : (Array.isArray(state.content) ? (state.content as { type?: unknown; text?: unknown }[]) : [])
                   .flatMap(item => (item?.type === 'text' && typeof item.text === 'string' ? [item.text] : []))
                   .join('\n')
-          this.markSent(
-            session,
-            resultEntry(`${call}:result`, call, ts, output, state.status === 'error' || exitedWithError(state.metadata)),
-          )
+          this.markSent(session, resultEntry(`${call}:result`, call, ts, output, state.status === 'error', state.metadata))
         }
       }
     }
@@ -737,6 +739,16 @@ export class OpenCodeTracker {
 
   private add(session: TrackedSession, entry: Entry): SessionUpdate[] {
     return this.markSent(session, entry) ? this.update(session, [entry], undefined, false) : []
+  }
+
+  /** A tool call's entry, and its whole command when it runs one. */
+  private callEntry(session: TrackedSession, id: string, call: string, ts: string, tool: string, input: Fields): Entry {
+    const entry = toolEntry(id, call, ts, tool, input)
+    if (entry.kind === 'tool' && entry.name === 'Bash' && typeof input.command === 'string') {
+      session.commands.set(call, input.command)
+      if (session.commands.size > BACKLOG_SIZE) session.commands.delete(session.commands.keys().next().value ?? '')
+    }
+    return entry
   }
 
   /** True the first time: the relay keeps an entry once, so each goes once. */
@@ -774,18 +786,24 @@ function toolEntry(id: string, call: string, ts: string, tool: string, input: Fi
   }
 }
 
-function resultEntry(id: string, call: string, ts: string, output: string, isError: boolean, images: ImageData[] = []): Entry {
-  const cut =
-    output.length > MAX_TOOL_RESULT_CHARS
-      ? `${output.slice(0, MAX_TOOL_RESULT_CHARS)}\n… (${output.length - MAX_TOOL_RESULT_CHARS} characters truncated)`
-      : output
-  return { id, ts, kind: 'tool_result', toolUseId: call, text: cut, isError, ...(images.length ? { images } : {}) }
-}
-
-/** A shell command that ran and exited with an error is a completed tool for OpenCode, and an error for Claude Code. */
-function exitedWithError(metadata: unknown): boolean {
-  const exit = metadata && typeof metadata === 'object' ? (metadata as { exit?: unknown }).exit : undefined
-  return typeof exit === 'number' && exit !== 0
+/**
+ * A shell command that exited with an error is a completed tool for OpenCode. As in Claude Code, its result is an error
+ * that starts with its exit code; one stopped before it ended (a timeout, an abort) has no exit code, and is an error.
+ */
+function resultEntry(
+  id: string,
+  call: string,
+  ts: string,
+  output: string,
+  failed: boolean,
+  metadata: unknown,
+  images: ImageData[] = [],
+): Entry {
+  const exit = metadata && typeof metadata === 'object' && 'exit' in metadata ? (metadata as { exit: unknown }).exit : undefined
+  const exitCode = !failed && typeof exit === 'number' && exit !== 0 ? exit : undefined
+  const isError = failed || exitCode !== undefined || exit === null
+  const text = cutToolResult(exitCode !== undefined ? `Exit code ${exitCode}\n${output}` : output)
+  return { id, ts, kind: 'tool_result', toolUseId: call, text, isError, ...(images.length ? { images } : {}) }
 }
 
 /** The images among OpenCode's files: it passes them as data URLs. */
