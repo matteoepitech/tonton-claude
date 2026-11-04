@@ -16,7 +16,7 @@ import { latestTodos, taskProgress } from '../../../shared/todos'
 import { withAttachments } from '../channel'
 import { DIGEST_SIZE } from '../channel/cluster-digest'
 import { ClusterAutoJoin } from '../channel/cluster-joins'
-import { ClusterWork, clusterDigest, isClusterTool } from '../channel/cluster-work'
+import { ClusterWork, clusterDigest, isClusterTool, relayFiles } from '../channel/cluster-work'
 import { SessionClusters } from '../channel/clusters'
 import { branchOf, isTodoWrite, projectOf } from '../channel/conversation'
 import { PoolSafety } from '../channel/pool-safety'
@@ -182,6 +182,8 @@ class Link {
         busy: () => this.turnStarted !== null,
         // OpenCode asks as its own config says: no mode the bridge sees skips every prompt.
         skipsPrompts: () => false,
+        cwd: () => this.cwd() ?? process.cwd(),
+        files: relayFiles(config),
       },
       () => this.clusterSelf(),
     )

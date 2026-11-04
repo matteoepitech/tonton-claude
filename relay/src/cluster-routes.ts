@@ -6,8 +6,17 @@ import { broadcastCluster, clusterKeyRotated, leaveCluster, removeCluster } from
 import type { ClusterMemberKeys } from './clusters'
 import type { RelayContext } from './context'
 import { fail, json, readJson } from './http'
-import { MAX_CLUSTER_INFO_BYTES, MAX_CLUSTER_MEMBERS, MAX_POOL_INVITE_HOURS, MAX_POOL_INVITE_USES, MAX_POOL_KEY_BYTES } from './limits'
-import { isAccountId, isClusterId, isSealed, isText } from './validate'
+import {
+  MAX_CLUSTER_FILE_BLOB_BYTES,
+  MAX_CLUSTER_INFO_BYTES,
+  MAX_CLUSTER_MEMBERS,
+  MAX_POOL_INVITE_HOURS,
+  MAX_POOL_INVITE_USES,
+  MAX_POOL_KEY_BYTES,
+} from './limits'
+import { isAccountId, isClusterFileId, isClusterId, isSealed, isText } from './validate'
+
+const FILE_PATH = /^\/api\/(?:agent\/)?clusters\/([A-Za-z0-9_-]{12})\/files\/([A-Za-z0-9_-]{8,40})$/
 
 const CLUSTER_PATH =
   /^\/api\/clusters\/([A-Za-z0-9_-]{12})(\/leave|\/rotate|\/members(?:\/([A-Za-z0-9_-]{12})\/kick)?|\/invites(?:\/([A-Za-z0-9_-]{12}))?)?$/
@@ -18,6 +27,8 @@ export async function clusterRoute(ctx: RelayContext, req: Request, path: string
   if (path === '/api/clusters' && req.method === 'GET') return json(ctx.clusters.summaries(accountId))
   if (path === '/api/clusters/join' && req.method === 'POST') return joinCluster(ctx, req, accountId, ip)
 
+  const file = FILE_PATH.exec(path)
+  if (file && req.method === 'GET') return getFile(ctx, accountId, file[1], file[2])
   const match = CLUSTER_PATH.exec(path)
   if (!match) return null
   const [, clusterId, rest, kick, inviteId] = match
@@ -54,12 +65,31 @@ export async function clusterRoute(ctx: RelayContext, req: Request, path: string
  * What an enrolled machine may read of its account's clusters, for its agent to put its own sessions in: the summaries,
  * with the account's sealed copy of each key, and the members' sealed public keys. Nothing it could change.
  */
-export function agentClusterRoute(ctx: RelayContext, req: Request, path: string, accountId: string): Response {
+export async function agentClusterRoute(ctx: RelayContext, req: Request, path: string, accountId: string): Promise<Response> {
+  // A file its sessions share (docs/cluster.md, Files): the one thing a machine writes here.
+  const file = FILE_PATH.exec(path)
+  if (file && req.method === 'PUT') return putFile(ctx, req, accountId, file[1], file[2])
+  if (file && req.method === 'GET') return getFile(ctx, accountId, file[1], file[2])
   if (req.method !== 'GET') return fail(405, 'Read only.')
   if (path === '/api/agent/clusters') return json(ctx.clusters.summaries(accountId))
   const members = /^\/api\/agent\/clusters\/([A-Za-z0-9_-]{12})\/members$/.exec(path)
   if (members && ctx.clusters.role(members[1], accountId)) return json(ctx.clusters.members(members[1]))
   return fail(404, 'No such cluster.')
+}
+
+/** A member's file, sealed with the cluster key: the relay keeps its size and its time, never what it is. */
+async function putFile(ctx: RelayContext, req: Request, accountId: string, clusterId: string, id: string): Promise<Response> {
+  if (!ctx.clusters.role(clusterId, accountId)) return fail(404, 'No such cluster.')
+  if (!isClusterFileId(id)) return fail(400, 'Bad request.')
+  const body = await readJson<{ blob?: unknown }>(req, MAX_CLUSTER_FILE_BLOB_BYTES + 64)
+  if (!isSealed(body?.blob, MAX_CLUSTER_FILE_BLOB_BYTES)) return fail(413, 'This file is too big for the cluster.')
+  if (!ctx.clusters.putFile(clusterId, id, accountId, body.blob)) return fail(409, 'A file with this id is already in the cluster.')
+  return json({ ok: true })
+}
+
+function getFile(ctx: RelayContext, accountId: string, clusterId: string, id: string): Response {
+  const blob = ctx.clusters.role(clusterId, accountId) ? ctx.clusters.file(clusterId, id) : null
+  return blob ? json({ blob }) : fail(404, 'No such file.')
 }
 
 /** The keys a member publishes on creating or joining a cluster, or null when they are missing or too big. */

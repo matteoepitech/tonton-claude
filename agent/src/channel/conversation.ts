@@ -16,7 +16,7 @@ import { TranscriptWork, type WorkFacts } from '../transcript/work'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import { deferClusterPost, forgetClusterPosts } from './cluster-digest'
 import { ClusterAutoJoin } from './cluster-joins'
-import { ClusterWork } from './cluster-work'
+import { ClusterWork, relayFiles } from './cluster-work'
 import { SessionClusters } from './clusters'
 import { PoolSafety } from './pool-safety'
 import { poolUsage } from './pool-usage'
@@ -162,6 +162,8 @@ export class Conversation {
         forget: clusterId => forgetClusterPosts(link.sessionId, clusterId),
         busy: () => hookState().busy,
         skipsPrompts: () => hookState().skipsPrompts,
+        cwd: () => this.cwd(),
+        ...(config ? { files: relayFiles(config) } : {}),
       },
       () => this.clusterSelf(),
       () => cluster.toolsChanged(),

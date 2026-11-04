@@ -273,6 +273,22 @@ describe('clusters on the relay', () => {
     expect((await api('/api/clusters', alice.machine)).status).toBe(401)
   })
 
+  test("a member's machine keeps a sealed file for the cluster; members read it, others never", async () => {
+    const { alice, bob, id } = await twoMembers()
+    const put = (token: string, fileId: string, blob: string) => api(`/api/agent/clusters/${id}/files/${fileId}`, token, 'PUT', { blob })
+    expect((await put(bob.machine, 'file00001', 'sealed-bytes')).body).toEqual({ ok: true })
+    expect((await put(bob.machine, 'file00001', 'again')).status).toBe(409)
+    expect((await api(`/api/agent/clusters/${id}/files/file00001`, alice.machine)).body).toEqual({ blob: 'sealed-bytes' })
+    expect((await api(`/api/clusters/${id}/files/file00001`, alice.token)).body).toEqual({ blob: 'sealed-bytes' })
+    expect((await api(`/api/clusters/${id}/files/nofile0001`, alice.token)).status).toBe(404)
+    // An app writes no file, a stranger reads none, and a file over the cap is refused.
+    expect((await api(`/api/clusters/${id}/files/file00002`, alice.token, 'PUT', { blob: 'x' })).status).toBe(404)
+    const stranger = await account()
+    expect((await api(`/api/agent/clusters/${id}/files/file00001`, stranger.machine)).status).toBe(404)
+    expect((await put(stranger.machine, 'file00003', 'x')).status).toBe(404)
+    expect((await put(bob.machine, 'file00004', 'x'.repeat(14 * 1024 * 1024 + 1))).status).toBe(413)
+  })
+
   test('documents take a revision: a stale write gets the current one back; apps and sessions both write them', async () => {
     const { id, aliceAgent, bobApp, aliceApp } = await twoMembers()
     bobApp.send({ t: 'cluster_doc', clusterId: id, name: 'clock', rev: 0, blob: 'sealed-clock' })

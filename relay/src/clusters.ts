@@ -18,6 +18,7 @@ import type { PoolKeyWrapWire } from '../../shared/pool-keys'
 import {
   CLUSTER_SNAPSHOT_POSTS,
   MAX_CLUSTER_DOCS,
+  MAX_CLUSTER_FILES_BYTES,
   MAX_CLUSTER_INVITES,
   MAX_CLUSTER_MEMBERS,
   MAX_CLUSTER_POSTS,
@@ -589,6 +590,35 @@ export class ClusterStore {
       .query('SELECT name, rev, updated_at, account_id, session_id, machine_id, blob FROM cluster_docs WHERE cluster_id = ? ORDER BY name')
       .all(clusterId) as DocRow[]
     return rows.map(toDoc)
+  }
+
+  // MARK: Files
+
+  /** A sealed file, kept under its id; older files go until the cluster's total fits. False when the id is taken. */
+  putFile(clusterId: string, id: string, accountId: string, blob: string): boolean {
+    return this.db.transaction(() => {
+      if (this.db.query('SELECT 1 FROM cluster_files WHERE cluster_id = ? AND id = ?').get(clusterId, id)) return false
+      this.db
+        .query('INSERT INTO cluster_files (cluster_id, id, account_id, size, created_at, blob) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(clusterId, id, accountId, blob.length, now(), blob)
+      const rows = this.db
+        .query('SELECT id, size FROM cluster_files WHERE cluster_id = ? ORDER BY created_at DESC, rowid DESC')
+        .all(clusterId) as { id: string; size: number }[]
+      let total = 0
+      for (const row of rows) {
+        total += row.size
+        if (total > MAX_CLUSTER_FILES_BYTES)
+          this.db.query('DELETE FROM cluster_files WHERE cluster_id = ? AND id = ?').run(clusterId, row.id)
+      }
+      return true
+    })()
+  }
+
+  file(clusterId: string, id: string): string | null {
+    const row = this.db.query('SELECT blob FROM cluster_files WHERE cluster_id = ? AND id = ?').get(clusterId, id) as {
+      blob: string
+    } | null
+    return row?.blob ?? null
   }
 
   // MARK: Snapshot

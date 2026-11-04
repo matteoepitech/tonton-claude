@@ -67,3 +67,6 @@ export const isClusterItemId = (value: unknown): value is string => typeof value
 
 /** The name of a cluster's shared document: `notes`, `claims`, `clock`, or a later one of the same shape. */
 export const isClusterDocName = (value: unknown): value is string => typeof value === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(value)
+
+/** The id a session gives a file it shares. */
+export const isClusterFileId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(value)

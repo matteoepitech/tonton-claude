@@ -30,8 +30,8 @@ import type {
   ClusterTool,
   ClusterUpdate,
 } from './cluster-protocol'
-import { type AccountKey, newAccountKey, open, seal } from './crypto'
-import { PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
+import { type AccountKey, newAccountKey, open, openBytes, seal, sealBytes } from './crypto'
+import { blobVersion, PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
 import type { Sealed, SessionStatus } from './protocol'
 
 const KEY = /^[A-Za-z0-9_-]{43}$/
@@ -48,6 +48,30 @@ export const newClusterKey = newAccountKey
 
 /** A new cluster's id: 12 base64url characters, like the relay's own ids. */
 export const newClusterId = (): string => bytesToBase64Url(crypto.getRandomValues(new Uint8Array(9)))
+
+/** The largest file a session shares, before sealing (docs/cluster.md, Files). */
+export const MAX_CLUSTER_FILE_BYTES = 10 * 1024 * 1024
+
+/** A file's bytes sealed with the latest cluster key, its version in front after version 1, like every cluster blob. */
+export async function sealClusterFile(keyring: PoolKeyring, bytes: Uint8Array<ArrayBuffer>): Promise<Sealed> {
+  const key = keyring.current
+  if (!key) throw new Error('no cluster key')
+  const sealed = await sealBytes(key, bytes)
+  return keyring.version === 1 ? sealed : `${keyring.version}:${sealed}`
+}
+
+/** Throws when the version is not held or the bytes do not open with it. */
+export function openClusterFile(keyring: PoolKeyring, blob: Sealed): Promise<Uint8Array> {
+  const key = keyring.key(blobVersion(blob))
+  if (!key) return Promise.reject(new Error('no cluster key for this version'))
+  return openBytes(key, blob.replace(/^\d{1,6}:/, ''))
+}
+
+/** Hex SHA-256, as a file's reference names its bytes. */
+export async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+  return [...digest].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
 
 /** A random id for a post or a claim. */
 export const newClusterItemId = (): string => bytesToBase64Url(crypto.getRandomValues(new Uint8Array(12)))
