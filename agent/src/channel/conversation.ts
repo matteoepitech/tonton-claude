@@ -8,7 +8,7 @@ import { type AgentConfig, paths } from '../config'
 import { gitBranch } from '../git'
 import type { AgentRPG } from '../rpg'
 import { setPoolMode, setPoolRules } from '../rules'
-import { backlogImages } from '../transcript/images'
+import { backlogImages, forgetOldImages } from '../transcript/images'
 import { type ParsedLine, parseLine } from '../transcript/parser'
 import { Subagents } from '../transcript/subagents'
 import { Tailer } from '../transcript/tailer'
@@ -242,7 +242,7 @@ export class Conversation {
   /** A line from the agent in the conversation, such as why a command from the notch was not typed. */
   notice(text: string) {
     const entry: Entry = { id: `notice-${crypto.randomUUID()}`, ts: new Date().toISOString(), kind: 'system', text }
-    this.entries.push(entry)
+    this.remember([entry])
     this.postEntries([entry], false)
     this.shares.entries([entry])
   }
@@ -290,7 +290,7 @@ export class Conversation {
         metaChanged = true
       }
     }
-    this.entries = [...this.entries, ...fresh].slice(-BACKLOG_SIZE)
+    this.remember(fresh)
     if (!initial) this.rpg?.observe(this.link.sessionId, this.entries, this.pools.ids().length > 0, fresh)
     if (initial) return this.announce()
     // What its shell calls tell its clusters: commits, pushes, submits, builds, files opened (agent/src/cluster/detect.ts).
@@ -398,6 +398,11 @@ export class Conversation {
       sessionId: this.link.sessionId,
       request: { requestId, ts, blob: await seal(this.key, detail) },
     }))
+  }
+
+  /** Adds to the backlog. Past its latest entries, images are never sent again: they are let go as entries get there. */
+  private remember(fresh: Entry[]) {
+    this.entries = forgetOldImages([...this.entries, ...fresh].slice(-BACKLOG_SIZE))
   }
 
   /** Several messages when they would be too big for one. */

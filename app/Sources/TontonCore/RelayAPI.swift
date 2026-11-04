@@ -99,7 +99,8 @@ public struct RelayAPI: Sendable {
         relay.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
-    private func request<T: Decodable>(
+    /// Also used by the cluster routes (ClusterAPI.swift).
+    func request<T: Decodable>(
         _ method: String, _ base: String, _ path: String, token: String?, body: Data? = nil, as type: T.Type
     ) async throws -> T {
         guard let url = URL(string: base + path) else { throw RelayError(message: String(core: "Invalid relay URL.")) }

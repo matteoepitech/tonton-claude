@@ -81,6 +81,14 @@ struct SessionListView: View {
                                     store.selectedId = s.id
                                     state.poolOf = s.id
                                 }
+                                // Opens the cluster popover in the chat header, once the account is in a cluster.
+                                if !ClusterStore.shared.boards.isEmpty {
+                                    Button(ClusterStore.shared.memberships(of: s.id).isEmpty ? "Put in a cluster…" : "Cluster…") {
+                                        store.selectedId = s.id
+                                        (state.showClusters, state.showHero) = (false, false)
+                                        state.clusterOf = s.id
+                                    }
+                                }
                                 Menu("Sound when \(s.project) finishes") {
                                     Toggle("Event sound", isOn: projectSound(s.project, nil))
                                     Divider()

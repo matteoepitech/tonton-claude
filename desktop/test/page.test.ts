@@ -23,6 +23,8 @@ test('the page stands alone, holds no token, and nothing a session says can beco
   expect(page).not.toMatch(/<script[^>]+src=/)
   // The socket goes out bare: the main process adds the token (src/main/relay-auth.ts).
   expect(page).not.toContain('bearer.')
-  const code = readFileSync(join(desktop, 'src/renderer/island.ts'), 'utf8')
-  expect(code).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/)
+  for (const source of ['island.ts', 'hero.ts', 'hero-sync.ts', '../../../web/hero.ts']) {
+    const code = readFileSync(join(desktop, 'src/renderer', source), 'utf8')
+    expect(code).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/)
+  }
 })

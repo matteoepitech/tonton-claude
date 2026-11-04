@@ -15,6 +15,8 @@ struct ExpandedView: View {
                 // Sessions of this Mac show up without an account, so the list comes first.
                 if store.visibleSessions.isEmpty && state.showHero {
                     HeroScreen().padding(.horizontal, 14).padding(.top, 6)
+                } else if store.visibleSessions.isEmpty && state.showClusters && settings.isConfigured {
+                    ClustersPanel().padding(.trailing, 8)
                 } else if !settings.isConfigured && store.visibleSessions.isEmpty {
                     CenteredMessage(
                         icon: "sparkles", title: "No sessions running",
@@ -33,6 +35,8 @@ struct ExpandedView: View {
                         Rectangle().fill(Theme.line(0.08)).frame(width: 1)
                         if state.showHero {
                             HeroScreen().padding(.horizontal, 14).padding(.top, 6)
+                        } else if state.showClusters {
+                            ClustersPanel()
                         } else if let s = store.selected {
                             ChatPanel(session: s).id(s.id)
                         } else {
@@ -84,6 +88,7 @@ struct ExpandedView: View {
             Spacer(minLength: 12)
             if settings.showCosts { TodayCost(usage: store.usage) }
             if settings.isConfigured {
+                ClustersButton()
                 Button {
                     state.showNewSession.toggle()
                 } label: {

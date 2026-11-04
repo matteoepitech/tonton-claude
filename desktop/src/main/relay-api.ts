@@ -1,12 +1,13 @@
 // The relay's HTTP calls the island makes, from the main process: creating an account, checking a recovery key, the
-// join secret of the account token, and the few cluster routes the page needs. Like RelayAPI.swift. The end-to-end key is
-// made here and never sent.
+// join secret of the account token, the hero's sealed document, and the few cluster routes the page needs. Like
+// RelayAPI.swift. The end-to-end key is made here and never sent; the hero and the clusters are sealed and opened by the
+// page, which never sees the token.
 
 import { encodeAccountToken } from '../../../shared/account-token'
 import { newAccountKey } from '../../../shared/crypto'
 import type { RecoveredAccount } from '../../../shared/recovery-key'
 import { RELEASES_URL } from '../../../shared/version'
-import type { ClusterAnswer, ClusterCall } from '../bridge'
+import type { ClusterAnswer, ClusterCall, RPGRequest, RPGResponse } from '../bridge'
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -45,6 +46,35 @@ export function installCommand(platform: 'windows' | 'unix', token: string): str
   return platform === 'windows'
     ? `$env:TONTON_TOKEN='${token}'; irm ${releases}/install.ps1 | iex`
     : `curl -fsSL ${releases}/install.sh | TONTON_TOKEN='${token}' sh`
+}
+
+/** The relay keeps a hero up to 4 MiB (MAX_RPG_BYTES in relay/src/limits.ts); the JSON around the blob adds a little. */
+const MAX_RPG_BODY = 5 * 1024 * 1024
+const RPG_TIMEOUT_MS = 15_000
+
+/** What the page may ask of `/api/rpg`, or null for anything else: the page is not trusted with any other route. */
+export function parseRPGRequest(value: unknown): RPGRequest | null {
+  if (typeof value !== 'object' || value === null) return null
+  const { method, body } = value as { method?: unknown; body?: unknown }
+  if (method === 'GET') return { method }
+  if (method === 'PUT' && typeof body === 'string' && body.length <= MAX_RPG_BODY) return { method, body }
+  return null
+}
+
+/** The hero's document, read or replaced with the account's token. Its status goes back as is: 404 is an older relay, 409 a stale revision. */
+export async function rpgRequest(account: RecoveredAccount, request: RPGRequest, fetcher: Fetch): Promise<RPGResponse> {
+  try {
+    const response = await fetcher(`${account.relay}/api/rpg`, {
+      method: request.method,
+      headers: { authorization: `Bearer ${account.token}`, ...(request.method === 'PUT' ? { 'content-type': 'application/json' } : {}) },
+      body: request.method === 'PUT' ? request.body : undefined,
+      signal: AbortSignal.timeout(RPG_TIMEOUT_MS),
+    })
+    const body = await response.text()
+    return { status: response.status, body: body.length <= MAX_RPG_BODY ? body : '' }
+  } catch {
+    return null
+  }
 }
 
 const CLUSTER_MEMBERS = /^\/api\/clusters\/[A-Za-z0-9_-]{12}\/members$/

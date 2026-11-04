@@ -28,14 +28,35 @@ export function backlogImages(entries: Entry[], { latest = BACKLOG_IMAGES, budge
   const backlog = [...entries]
   for (let index = entries.length - 1; index >= 0; index--) {
     const entry = entries[index]
-    if (!('images' in entry) || !entry.images?.length) continue
-    const { kept, dropped } = index >= entries.length - latest ? fit(entry.images, left) : { kept: [], dropped: entry.images.length }
+    const images = 'images' in entry ? (entry.images ?? []) : []
+    const before = forgotten.get(entry) ?? 0
+    if (!images.length && !before) continue
+    const { kept, dropped } = index >= entries.length - latest ? fit(images, left) : { kept: [], dropped: images.length }
     left -= base64Length(kept)
-    if (!dropped) continue
-    const { images: _images, ...rest } = entry
-    backlog[index] = { ...rest, text: notLoaded(rest.text, dropped), ...(kept.length ? { images: kept } : {}) } as Entry
+    if (!dropped && !before) continue
+    // Only the entries of these kinds have images.
+    const { images: _images, ...rest } = entry as Extract<Entry, { kind: 'user' | 'tool_result' }>
+    backlog[index] = { ...rest, text: notLoaded(rest.text, before + dropped), ...(kept.length ? { images: kept } : {}) } as Entry
   }
   return backlog
+}
+
+/** How many images an entry of a backlog had before `forgetOldImages` let them go. */
+const forgotten = new WeakMap<Entry, number>()
+
+/**
+ * The backlog an agent keeps: past its latest entries, images are never sent again, so they are let go instead of staying
+ * in memory with the 400 entries. Each entry remembers how many it had, for `backlogImages` to say so as before, and its
+ * text stays as it was, for the last message of the meta.
+ */
+export function forgetOldImages(entries: Entry[], latest = BACKLOG_IMAGES): Entry[] {
+  return entries.map((entry, index) => {
+    if (index >= entries.length - latest || !('images' in entry) || !entry.images?.length) return entry
+    const { images, ...rest } = entry
+    const light = rest as Entry
+    forgotten.set(light, images.length)
+    return light
+  })
 }
 
 /** The images that fit in `budget`, in order, each under the size of one image. */
