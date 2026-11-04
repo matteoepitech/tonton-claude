@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { cpus, freemem, homedir, networkInterfaces, totalmem } from 'node:os'
 import { join } from 'node:path'
 import type { ClaudePlan, MachineHealth } from '../../../shared/protocol'
+import { claudeConfigDir } from '../config'
 import { hasOpenCode } from '../install/opencode'
 
 type Battery = MachineHealth['battery']
@@ -110,7 +111,7 @@ export function wakeTargets(interfaces: Interfaces = networkInterfaces()): NonNu
  */
 export function installedTools(
   has: { claude: () => boolean; opencode: () => boolean } = {
-    claude: () => existsSync(join(homedir(), '.claude')) || Bun.which('claude') !== null,
+    claude: () => existsSync(claudeConfigDir()) || Bun.which('claude') !== null,
     opencode: () => hasOpenCode(),
   },
 ): NonNullable<MachineHealth['tools']> {

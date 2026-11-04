@@ -30,6 +30,9 @@ export const paths = {
   claudeSettings: join(homedir(), '.claude', 'settings.json'),
 }
 
+/** Claude Code's own folder, with its transcripts: CLAUDE_CONFIG_DIR moves it from ~/.claude. */
+export const claudeConfigDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+
 export interface AgentConfig {
   server: string
   /** Account the machine joined, from its token. */

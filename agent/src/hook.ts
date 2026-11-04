@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { seal } from '../../shared/crypto'
 import type { HookPost } from '../../shared/protocol'
@@ -8,6 +8,9 @@ import { type AgentConfig, loadConfig, paths } from './config'
 import { log } from './log'
 import { clearSessionRules, matchingRule, modeAllows, poolMode, poolRules, readRules, sessionRules } from './rules'
 import { runningTasksIn } from './transcript/background'
+
+/** A link left by a claude that ended without its SessionEnd hook, killed or with its terminal closed. */
+const LINK_MAX_AGE_MS = 7 * 24 * 3600_000
 
 interface HookInput {
   hook_event_name: string
@@ -35,7 +38,9 @@ export async function runHook() {
     if (!event.session_id) return
     // Before each edit: it has to be quick, and the session is linked by then.
     if (event.hook_event_name === 'PreToolUse') return guardEdit(event)
-    linkSession(event)
+    if (event.hook_event_name === 'SessionEnd') unlinkSession(event.session_id)
+    else linkSession(event)
+    if (event.hook_event_name === 'SessionStart') pruneLinks(paths.run)
     if (event.hook_event_name === 'PermissionRequest') return approveByRule(event)
     if (event.hook_event_name === 'SessionEnd') {
       clearSessionRules(event.session_id)
@@ -122,4 +127,30 @@ function linkSession(event: HookInput) {
   // Hooks get Claude Code's environment, so they know whether it runs in tmux; its channel may not.
   const link = { sessionId: event.session_id, transcriptPath: event.transcript_path ?? null, cwd: event.cwd ?? null, tmux: terminalOf() }
   writeFileSync(join(paths.run, `${process.ppid}.json`), JSON.stringify(link), { mode: 0o600 })
+}
+
+/**
+ * The link goes with its session: a claude started later with the same pid, which Windows hands out again soon, must not
+ * follow the old session. Only if it still names it: after /clear, the next session's SessionStart may have come first.
+ */
+function unlinkSession(sessionId: string) {
+  const file = join(paths.run, `${process.ppid}.json`)
+  try {
+    if ((JSON.parse(readFileSync(file, 'utf8')) as { sessionId?: unknown }).sessionId === sessionId) rmSync(file, { force: true })
+  } catch {
+    // No link, or one being written.
+  }
+}
+
+/** Removes links no hook has touched for a week. Each hook event rewrites its session's link. */
+export function pruneLinks(run: string, now = Date.now()) {
+  try {
+    for (const file of readdirSync(run)) {
+      const path = join(run, file)
+      const modified = /^\d+\.json$/.test(file) ? statSync(path, { throwIfNoEntry: false })?.mtimeMs : undefined
+      if (modified !== undefined && now - modified > LINK_MAX_AGE_MS) rmSync(path, { force: true })
+    }
+  } catch {
+    // No run folder yet: nothing to prune.
+  }
 }

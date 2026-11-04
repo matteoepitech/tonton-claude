@@ -1,12 +1,13 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { paths } from '../config'
+import { claudeConfigDir, paths } from '../config'
 import type { TerminalPane } from './terminal'
 
 const POLL_MS = 700
 /** Before giving up on the hook link and guessing from the working directory. */
 const GUESS_AFTER_MS = 4000
+/** Claude Code cuts longer project folder names, and ends them with a hash of the path. */
+const PROJECT_NAME_MAX = 200
 
 export interface SessionLink {
   sessionId: string
@@ -59,16 +60,41 @@ export class SessionLinkWatcher {
 
   private guessFromCwd(): SessionLink | null {
     const cwd = process.cwd()
-    const dir = join(homedir(), '.claude', 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'))
+    const newest = newestTranscript(cwd)
+    if (!newest || newest.modified < this.startedAt - 5000) return null
+    return { sessionId: newest.sessionId, transcriptPath: newest.file, cwd }
+  }
+}
+
+/**
+ * The newest transcript Claude Code keeps for `cwd`. Its folder is the path with every character but letters and digits
+ * as `-`; past 200 characters, the name is cut and followed by a hash this agent can't compute, so any folder that starts
+ * the same way may be it.
+ */
+export function newestTranscript(
+  cwd: string,
+  projects = join(claudeConfigDir(), 'projects'),
+): { sessionId: string; file: string; modified: number } | null {
+  const name = cwd.replace(/[^a-zA-Z0-9]/g, '-')
+  const prefix = `${name.slice(0, PROJECT_NAME_MAX)}-`
+  let folders = [name]
+  try {
+    if (name.length > PROJECT_NAME_MAX) folders = readdirSync(projects).filter(folder => folder.startsWith(prefix))
+  } catch {
+    return null
+  }
+  let newest: { sessionId: string; file: string; modified: number } | null = null
+  for (const folder of folders) {
     try {
-      const newest = readdirSync(dir)
-        .filter(file => file.endsWith('.jsonl'))
-        .map(file => ({ file, modified: statSync(join(dir, file)).mtimeMs }))
-        .sort((a, b) => b.modified - a.modified)[0]
-      if (!newest || newest.modified < this.startedAt - 5000) return null
-      return { sessionId: newest.file.replace(/\.jsonl$/, ''), transcriptPath: join(dir, newest.file), cwd }
+      for (const file of readdirSync(join(projects, folder))) {
+        if (!file.endsWith('.jsonl')) continue
+        const path = join(projects, folder, file)
+        const modified = statSync(path).mtimeMs
+        if (!newest || modified > newest.modified) newest = { sessionId: file.slice(0, -'.jsonl'.length), file: path, modified }
+      }
     } catch {
-      return null
+      // No transcript for this folder yet.
     }
   }
+  return newest
 }
