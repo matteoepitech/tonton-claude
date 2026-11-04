@@ -1,17 +1,22 @@
 // The transcripts Claude Code writes for subagents, next to the session's: `<session>/subagents/agent-<id>.jsonl`, each
 // with a `.meta.json` naming the Task call that started it. Their calls reach the app under that call.
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, type Stats, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Entry } from '../../../shared/protocol'
 import { parseLine } from './parser'
 import { Tailer } from './tailer'
 
 const SCAN_MS = 2000
-/** Subagents followed at once. Finished ones are let go, so new ones always get a place. */
+/** Subagents followed at once. Quiet ones are paused, so new ones always get a place. */
 const MAX_FOLLOWED = 20
-/** A subagent whose transcript hasn't moved for this long is done: its tailer stops. */
+/**
+ * A subagent whose transcript hasn't moved for this long is paused: its tailer stops, so a session that started many
+ * subagents doesn't keep polling them all, and starts again where it was once the file moves.
+ */
 const IDLE_MS = 2 * 60_000
+/** Paused subagents whose file is still looked at. Past this, the ones paused first are let go for good. */
+const MAX_PAUSED = 100
 /**
  * Calls sent per Task. The relay keeps one history per session, shared with the conversation: a subagent that makes
  * hundreds of calls must not push the conversation out of it. Past this, one line says there were more.
@@ -63,9 +68,17 @@ interface Followed {
   transcript: string
 }
 
+interface Paused extends Followed {
+  /** The file when its tailer stopped: once its size or its date changes, the subagent is at work again. */
+  size: number
+  mtimeMs: number
+}
+
 export class Subagents {
   private readonly followed = new Map<string, Followed>()
-  /** Subagents let go once done, never followed again. */
+  /** Quiet subagents, in the order they were paused: one running a long build makes no call for minutes. */
+  private readonly paused = new Map<string, Paused>()
+  /** Subagents let go for good, past `MAX_PAUSED`: never followed again. */
   private readonly done = new Set<string>()
   private readonly budget = new StepBudget()
   private timer: Timer | null = null
@@ -89,16 +102,26 @@ export class Subagents {
     if (this.timer) clearInterval(this.timer)
     for (const { tailer } of this.followed.values()) tailer.stop()
     this.followed.clear()
+    this.paused.clear()
   }
 
-  private scan(now = Date.now()) {
+  /** Pauses the quiet subagents, resumes those whose file moved, and follows new ones. Runs every `SCAN_MS` once started. */
+  scan(now = Date.now()) {
     const backlog = !this.scanned
     this.scanned = true
-    for (const [agentId, { tailer, transcript }] of this.followed) {
-      if (now - modified(transcript) < IDLE_MS) continue
-      tailer.stop()
-      this.followed.delete(agentId)
-      this.done.add(agentId)
+    for (const [agentId, followed] of this.followed) {
+      const file = stats(followed.transcript)
+      if (file && now - file.mtimeMs < IDLE_MS) continue
+      this.pause(agentId, followed, file)
+    }
+    for (const [agentId, { tailer, transcript, size, mtimeMs }] of this.paused) {
+      if (this.followed.size >= MAX_FOLLOWED) break
+      const file = stats(transcript)
+      if (!file || (file.size === size && file.mtimeMs === mtimeMs)) continue
+      // The tailer goes on from its offset: what was sent before is not sent again.
+      this.paused.delete(agentId)
+      tailer.start()
+      this.followed.set(agentId, { tailer, transcript })
     }
     let names: string[]
     try {
@@ -108,12 +131,12 @@ export class Subagents {
     }
     for (const name of names) {
       const agentId = AGENT_FILE.exec(name)?.[1]
-      if (!agentId || this.followed.has(agentId) || this.done.has(agentId) || this.followed.size >= MAX_FOLLOWED) continue
+      if (!agentId || this.followed.size >= MAX_FOLLOWED) continue
+      if (this.followed.has(agentId) || this.paused.has(agentId) || this.done.has(agentId)) continue
       const parent = this.parentOf(join(this.folder, name))
       const transcript = join(this.folder, `agent-${agentId}.jsonl`)
       if (!parent || !existsSync(transcript)) continue
-      // A subagent that was done before the session was followed: its calls are read once, then it is let go.
-      const finished = backlog && now - modified(transcript) >= IDLE_MS
+      const file = stats(transcript)
       const tailer = new Tailer(transcript, {
         lines: (lines, initial) => {
           const entries = this.budget.take(subEntries(lines, agentId, parent))
@@ -122,12 +145,21 @@ export class Subagents {
         reset: () => {},
       })
       tailer.start()
-      if (finished) {
-        tailer.stop()
-        this.done.add(agentId)
-      } else {
-        this.followed.set(agentId, { tailer, transcript })
-      }
+      // A subagent quiet before the session was followed: its calls are read once, then it waits for its file to move.
+      if (backlog && (!file || now - file.mtimeMs >= IDLE_MS)) this.pause(agentId, { tailer, transcript }, file)
+      else this.followed.set(agentId, { tailer, transcript })
+    }
+  }
+
+  /** `file` is the transcript seen before the tailer's read, or with nothing left to read: any line it has not read changes it. */
+  private pause(agentId: string, followed: Followed, file: Stats | null) {
+    followed.tailer.stop()
+    this.followed.delete(agentId)
+    this.paused.set(agentId, { ...followed, size: file?.size ?? 0, mtimeMs: file?.mtimeMs ?? 0 })
+    for (const [oldest] of this.paused) {
+      if (this.paused.size <= MAX_PAUSED) break
+      this.paused.delete(oldest)
+      this.done.add(oldest)
     }
   }
 
@@ -142,10 +174,10 @@ export class Subagents {
   }
 }
 
-function modified(path: string): number {
+function stats(path: string): Stats | null {
   try {
-    return statSync(path).mtimeMs
+    return statSync(path)
   } catch {
-    return 0
+    return null
   }
 }
