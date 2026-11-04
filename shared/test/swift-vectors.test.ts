@@ -3,6 +3,8 @@
 import { describe, expect, test } from 'bun:test'
 import { parseAccountToken } from '../account-token'
 import { chatItems } from '../chat'
+import { ClusterVault, decodeClusterClaims, decodeClusterPostBody, openClusterGrant, openClusterSessionOrder } from '../cluster'
+import { parseClusterInvite } from '../cluster-link'
 import { open } from '../crypto'
 import { modelFamily, modelName } from '../model'
 import { openPoolGrant, openPoolSessionOrder } from '../pool'
@@ -89,6 +91,47 @@ describe('vectors from the Swift implementation', () => {
     // As the agent checks it: for this session and this pool only.
     expect(await openPoolSessionOrder(vectors.key, blob('pool session order'), 's1', 'pool00000001')).toMatchObject({ version: 1 })
     expect(await openPoolSessionOrder(vectors.key, blob('pool session order'), 's2', 'pool00000001')).toBeNull()
+  })
+
+  test('the cluster invite, key grant, session order, post and claims the app makes are read as the app wrote them', async () => {
+    const { text, pool, ...fields } = vectors.clusterInvite
+    expect(parseClusterInvite(text)).toEqual({ ...fields, cluster: pool })
+    const blob = (name: string) => vectors.blobs.find(b => b.name === name)?.blob ?? ''
+    expect(await openClusterGrant(vectors.key, blob('cluster key grant'), 'clus00000001')).toEqual({
+      clusterId: 'clus00000001',
+      key: 'k'.repeat(43),
+      version: 1,
+    })
+    // As the agent checks it: for this session and this cluster only, with the delivery its owner chose.
+    expect(await openClusterSessionOrder(vectors.key, blob('cluster session order'), 's1', 'clus00000001')).toMatchObject({
+      key: 'k'.repeat(43),
+      version: 1,
+      delivery: 'digest',
+      liveWithoutPrompts: true,
+    })
+    expect(await openClusterSessionOrder(vectors.key, blob('cluster session order'), 's2', 'clus00000001')).toBeNull()
+    // The vectors' key stands for version 1 of a cluster key.
+    const cluster = new ClusterVault(vectors.key)
+    expect(await cluster.read(blob('cluster post'), decodeClusterPostBody)).toEqual({
+      kind: 'event',
+      text: 'Submitted the hero rig ✅',
+      to: [{ account: 'bob000000001', session: 's1' }],
+      topic: 'art',
+      event: { type: 'submit', ok: true, ref: '1234', paths: ['Content/Characters/Hero/SK_Hero.uasset'], count: 3 },
+    })
+    expect(await cluster.read(blob('cluster claims'), decodeClusterClaims)).toEqual({
+      claims: [
+        {
+          id: 'claim0000001',
+          paths: ['Content/Maps/Main.umap'],
+          reason: 'lighting pass',
+          account: 'bob000000001',
+          session: 's1',
+          at: '2026-11-04T10:00:00Z',
+          until: '2026-11-04T12:00:00Z',
+        },
+      ],
+    })
   })
 
   test("the order that puts one of the account's machines in a pool is read as the app wrote it, by that machine only", async () => {

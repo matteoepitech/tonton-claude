@@ -34,7 +34,36 @@ final class VectorTests: XCTestCase {
             PoolInvite(string: invite.text),
             PoolInvite(relay: invite.relay, pool: invite.pool, token: invite.token, key: invite.key, version: invite.version))
         try Self.checkPoolKeys(vectors.poolKeys, accountKey: vectors.key)
+        let clusterInvite = vectors.clusterInvite
+        XCTAssertEqual(
+            ClusterInvite(string: clusterInvite.text),
+            ClusterInvite(
+                relay: clusterInvite.relay, cluster: clusterInvite.pool, token: clusterInvite.token, key: clusterInvite.key,
+                version: clusterInvite.version))
+        try Self.checkCluster(vectors)
     }
+
+    /// The cluster blobs, sealed with the vectors' key as version 1 of a cluster key, read as the app reads them.
+    private static func checkCluster(_ vectors: Vectors) throws {
+        let blob = { (name: String) in vectors.blobs.first { $0.name == name }?.blob }
+        let cluster = try ClusterVault(key: vectors.key)
+        XCTAssertEqual(cluster.post(blob("cluster post")), clusterPost)
+        XCTAssertEqual(cluster.read(blob("cluster claims"), as: ClusterClaims.self), clusterClaims)
+        let vault = SessionVault(key: try E2E.key(fromBase64URL: vectors.key))
+        let order = try XCTUnwrap(
+            vault.openClusterSessionOrder(try XCTUnwrap(blob("cluster session order")), sessionId: "s1", clusterId: "clus00000001"))
+        XCTAssertEqual([order.delivery?.rawValue, order.liveWithoutPrompts.map(String.init)], ["digest", "true"])
+        XCTAssertEqual(vault.clusterKey(from: try XCTUnwrap(blob("cluster key grant")), clusterId: "clus00000001")?.version, 1)
+    }
+
+    static let clusterPost = ClusterPostBody(
+        kind: .event, text: "Submitted the hero rig ✅", to: [ClusterTarget(account: "bob000000001", session: "s1")], topic: "art",
+        event: ClusterEvent(type: "submit", ok: true, ref: "1234", paths: ["Content/Characters/Hero/SK_Hero.uasset"], count: 3))
+    static let clusterClaims = ClusterClaims(claims: [
+        ClusterClaim(
+            id: "claim0000001", paths: ["Content/Maps/Main.umap"], reason: "lighting pass", account: "bob000000001", session: "s1",
+            at: "2026-11-04T10:00:00Z", until: "2026-11-04T12:00:00Z")
+    ])
 
     /// The pool keys the web made (shared/test/pool-keys-ts.json, written by shared/test/pool-keys.test.ts) open here too.
     func testPoolKeysFromTheWebOpenHere() throws {
@@ -166,6 +195,18 @@ final class VectorTests: XCTestCase {
                     shareId: "abcdefghijkl", sessionId: "s1", shareKey: String(repeating: "k", count: 43),
                     expiresAt: "2026-10-26T10:00:00.000Z")
             ),
+            ("cluster post", try ClusterVault(key: keyText).seal(clusterPost)),
+            ("cluster claims", try ClusterVault(key: keyText).seal(clusterClaims)),
+            (
+                "cluster session order",
+                try vault.sealClusterSessionOrder(
+                    clusterId: "clus00000001", sessionId: "s1", key: String(repeating: "k", count: 43), version: 1, delivery: .digest,
+                    liveWithoutPrompts: true, issuedAt: issuedAt)
+            ),
+            (
+                "cluster key grant",
+                try vault.sealClusterKeyGrant(clusterId: "clus00000001", key: String(repeating: "k", count: 43), version: 1)
+            ),
             ("pool key grant", try vault.sealPoolKeyGrant(poolId: "pool00000001", key: String(repeating: "k", count: 43), version: 1)),
             (
                 "pool session order",
@@ -183,6 +224,10 @@ final class VectorTests: XCTestCase {
         ]
         let invite = PoolInvite(
             relay: "https://relay.example.com/tonton", pool: "pool00000001", token: "tp_abcdefghijkl_" + String(repeating: "t", count: 43),
+            key: String(repeating: "k", count: 43), version: 2)
+        let clusterInvite = ClusterInvite(
+            relay: "https://relay.example.com/tonton", cluster: "clus00000001",
+            token: "tc_abcdefghijkl_" + String(repeating: "t", count: 43),
             key: String(repeating: "k", count: 43), version: 2)
         let share = ShareLink(
             relay: "https://relay.example.com/tonton", token: "ts_abcdefghijkl_" + String(repeating: "t", count: 43),
@@ -203,7 +248,10 @@ final class VectorTests: XCTestCase {
             shareLink: Vectors.Share(text: share.string, relay: share.relay, token: share.token, key: share.key),
             poolInvite: Vectors.Invite(
                 text: invite.string, relay: invite.relay, pool: invite.pool, token: invite.token, key: invite.key, version: invite.version),
-            poolKeys: poolKeys)
+            poolKeys: poolKeys,
+            clusterInvite: Vectors.Invite(
+                text: clusterInvite.string, relay: clusterInvite.relay, pool: clusterInvite.cluster, token: clusterInvite.token,
+                key: clusterInvite.key, version: clusterInvite.version))
     }
 
     /// Two members' key pairs, an admin's wrap of version 2 for the member, and a blob sealed with version 2.
@@ -398,4 +446,6 @@ private struct Vectors: Codable {
     let shareLink: Share
     let poolInvite: Invite
     let poolKeys: PoolKeys
+    /// A cluster invite, in the pool invite's shape: `pool` holds the cluster's id.
+    let clusterInvite: Invite
 }
