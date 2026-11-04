@@ -399,6 +399,40 @@ describe('OpenCode 1', () => {
     ])
   })
 
+  test('a shell command that exits with an error is an error, as in Claude Code', () => {
+    const shell = (id: string, exit: unknown) => ({
+      id,
+      created: 1,
+      type: 'session.tool.success',
+      data: { sessionID: 'ses_1', id, content: [{ type: 'text', text: 'out' }], metadata: { status: 'completed', exit } },
+    })
+    const bash = (id: string, exit: unknown) =>
+      part({
+        id,
+        messageID: 'm1',
+        type: 'tool',
+        callID: id,
+        tool: 'bash',
+        state: { status: 'completed', input: {}, output: 'out', metadata: { exit } },
+      })
+    const { entries } = replay([
+      message('m1', 'assistant'),
+      shell('c1', 0),
+      shell('c2', 2),
+      shell('c3', null),
+      bash('c4', 0),
+      bash('c5', 1),
+    ])
+    const results = entries.filter(entry => entry.kind === 'tool_result')
+    expect(results.map(entry => [entry.toolUseId, entry.kind === 'tool_result' && entry.isError])).toEqual([
+      ['c1', false],
+      ['c2', true],
+      ['c3', false],
+      ['c4', false],
+      ['c5', true],
+    ])
+  })
+
   test('anything unexpected is skipped', () => {
     const tracker = new OpenCodeTracker()
     for (const event of [null, 3, 'x', {}, { type: 'message.updated' }, { type: 'message.part.updated', properties: { part: 5 } }]) {

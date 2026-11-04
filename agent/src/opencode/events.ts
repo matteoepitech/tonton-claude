@@ -146,7 +146,15 @@ interface Part {
   time?: { start?: number; end?: number }
   callID?: string
   tool?: string
-  state?: { status?: string; input?: Fields; output?: string; error?: string; time?: { start?: number }; attachments?: unknown }
+  state?: {
+    status?: string
+    input?: Fields
+    output?: string
+    error?: string
+    time?: { start?: number }
+    attachments?: unknown
+    metadata?: unknown
+  }
   mime?: string
   url?: string
   filename?: string
@@ -489,7 +497,8 @@ export class OpenCodeTracker {
       ? (text((props.error as { message?: unknown } | undefined)?.message) ?? 'The tool failed')
       : content.flatMap(item => (item?.type === 'text' && typeof item.text === 'string' ? [item.text] : [])).join('\n')
     const images = imagesOf(content.filter(item => item?.type === 'file'))
-    return this.add(session, resultEntry(`${call}:result`, call, this.time(props.timestamp), output, failed, images))
+    const isError = failed || exitedWithError(props.metadata)
+    return this.add(session, resultEntry(`${call}:result`, call, this.time(props.timestamp), output, isError, images))
   }
 
   private step(props: Fields): SessionUpdate[] {
@@ -574,7 +583,8 @@ export class OpenCodeTracker {
       entries.push(toolEntry(part.id, call, ts, part.tool, part.state.input ?? {}))
       if (status !== 'running') {
         const output = status === 'error' ? (part.state.error ?? '') : (part.state.output ?? '')
-        entries.push(resultEntry(`${part.id}:result`, call, ts, output, status === 'error', imagesOf(part.state.attachments)))
+        const isError = status === 'error' || exitedWithError(part.state.metadata)
+        entries.push(resultEntry(`${part.id}:result`, call, ts, output, isError, imagesOf(part.state.attachments)))
       }
     }
     return entries.filter(entry => this.markSent(session, entry))
@@ -700,7 +710,13 @@ export class OpenCodeTracker {
         this.markSent(session, { id: `${id}:${ordinal++}`, ts, kind: 'assistant', text: content.text as string })
       } else if (content?.type === 'tool' && text(content.id)) {
         const call = content.id as string
-        const state = (content.state ?? {}) as { status?: unknown; input?: unknown; content?: unknown; error?: { message?: unknown } }
+        const state = (content.state ?? {}) as {
+          status?: unknown
+          input?: unknown
+          content?: unknown
+          error?: { message?: unknown }
+          metadata?: unknown
+        }
         const input = (state.input && typeof state.input === 'object' ? state.input : {}) as Fields
         this.markSent(session, toolEntry(call, call, ts, text(content.name) ?? 'tool', input))
         if (state.status === 'completed' || state.status === 'error') {
@@ -710,7 +726,10 @@ export class OpenCodeTracker {
               : (Array.isArray(state.content) ? (state.content as { type?: unknown; text?: unknown }[]) : [])
                   .flatMap(item => (item?.type === 'text' && typeof item.text === 'string' ? [item.text] : []))
                   .join('\n')
-          this.markSent(session, resultEntry(`${call}:result`, call, ts, output, state.status === 'error'))
+          this.markSent(
+            session,
+            resultEntry(`${call}:result`, call, ts, output, state.status === 'error' || exitedWithError(state.metadata)),
+          )
         }
       }
     }
@@ -761,6 +780,12 @@ function resultEntry(id: string, call: string, ts: string, output: string, isErr
       ? `${output.slice(0, MAX_TOOL_RESULT_CHARS)}\n… (${output.length - MAX_TOOL_RESULT_CHARS} characters truncated)`
       : output
   return { id, ts, kind: 'tool_result', toolUseId: call, text: cut, isError, ...(images.length ? { images } : {}) }
+}
+
+/** A shell command that ran and exited with an error is a completed tool for OpenCode, and an error for Claude Code. */
+function exitedWithError(metadata: unknown): boolean {
+  const exit = metadata && typeof metadata === 'object' ? (metadata as { exit?: unknown }).exit : undefined
+  return typeof exit === 'number' && exit !== 0
 }
 
 /** The images among OpenCode's files: it passes them as data URLs. */
