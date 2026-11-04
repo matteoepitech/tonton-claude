@@ -128,4 +128,37 @@ describe('waitsForBackground', () => {
     ).toBeNull()
     expect(waitsForBackground({ hook_event_name: 'Stop', transcript_path: join(dir, 'missing.jsonl') })).toBeNull()
   })
+
+  test('a screenshot of several megabytes after the start of a task does not hide it', () => {
+    const screenshot = JSON.stringify({
+      type: 'user',
+      timestamp: at(20),
+      message: {
+        role: 'user',
+        content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(5 * 1024 * 1024) } }],
+      },
+    })
+    const running = transcript([shell('bi8o5pw7k', 30), screenshot, result('ok', 10)])
+    expect(waitsForBackground({ hook_event_name: 'Stop', transcript_path: running })).toBe('Waiting for 1 background task')
+    const over = transcript([shell('bi8o5pw7k', 30), screenshot, notification('bi8o5pw7k', 'completed')])
+    expect(waitsForBackground({ hook_event_name: 'Stop', transcript_path: over })).toBeNull()
+    // The screenshot as the first line of the file, and as the last one.
+    expect(waitsForBackground({ hook_event_name: 'Stop', transcript_path: transcript([screenshot, shell('x123456', 0)]) })).toBe(
+      'Waiting for 1 background task',
+    )
+    expect(waitsForBackground({ hook_event_name: 'Stop', transcript_path: transcript([shell('x123456', 30), screenshot]) })).toBe(
+      'Waiting for 1 background task',
+    )
+  })
+
+  test('the read stops at the first line older than the tasks that count', () => {
+    // Lines come in order, so what is before such a line is older still: a task written out of order shows it is not read.
+    const old = result('ok', BACKGROUND_TTL_MS / 60_000 + 5)
+    expect(waitsForBackground({ hook_event_name: 'Stop', transcript_path: transcript([old, shell('x123456', 1)]) })).toBe(
+      'Waiting for 1 background task',
+    )
+    expect(
+      waitsForBackground({ hook_event_name: 'Stop', transcript_path: transcript([shell('x123456', 1), old, result('ok', 0)]) }),
+    ).toBeNull()
+  })
 })
