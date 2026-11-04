@@ -22,6 +22,7 @@ import { SessionPools } from '../channel/pools'
 import { RelayConnection } from '../channel/relay-connection'
 import { SessionShares } from '../channel/shares'
 import { claimCommand, whyInvalid } from '../channel/terminal'
+import { clearGuardState, OpenCodeGuard } from '../cluster/guard'
 import { type AgentConfig, loadConfig, paths } from '../config'
 import { receiveDiagnoseRequest } from '../diagnose'
 import { postHook } from '../hook'
@@ -49,7 +50,7 @@ export type PluginCommand =
   | { op: 'interrupt'; sessionID: string; directory?: string }
   | { op: 'history'; sessionID: string; directory?: string }
   | { op: 'models' }
-  /** The answer to a pool tool OpenCode called (`tonton.tool`). */
+  /** The answer to a pool tool OpenCode called (`tonton.tool`), or to an edit it is about to make (`tonton.guard`). */
   | { op: 'tool_result'; callID: string; output: string }
 
 type Send = (command: PluginCommand) => void
@@ -362,6 +363,7 @@ export async function runOpenCode() {
   const send: Send = command => process.stdout.write(`${JSON.stringify(command)}\n`)
   const tracker = new OpenCodeTracker()
   const links = new Map<string, Link>()
+  const guard = new OpenCodeGuard()
   // Status changes go out in order, each after the previous one.
   let statuses: Promise<void> = Promise.resolve()
   send({ op: 'models' })
@@ -411,6 +413,12 @@ export async function runOpenCode() {
     } catch {
       continue
     }
+    const edit = guardCall(event)
+    if (edit) {
+      const output = guard.answer(edit.sessionID, edit.tool, edit.args, tracker.cwd(edit.sessionID))
+      send({ op: 'tool_result', callID: edit.callID, output })
+      continue
+    }
     const tool = poolToolCall(event)
     if (tool) {
       const link = links.get(tool.sessionID)
@@ -429,6 +437,7 @@ export async function runOpenCode() {
   await Promise.all(
     [...links.values()].map(async link => {
       await postHook(config, { hook_event_name: 'SessionEnd', session_id: link.sessionId }).catch(() => {})
+      clearGuardState(link.sessionId)
       await link.flushed()
       link.stop()
     }),
@@ -444,6 +453,16 @@ export function poolToolCall(event: unknown): { callID: string; sessionID: strin
   if (typeof callID !== 'string' || typeof sessionID !== 'string' || typeof name !== 'string') return null
   const plain = args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {}
   return { callID, sessionID, name, args: plain }
+}
+
+/** An edit OpenCode is about to make, through the plugin: `{ type: 'tonton.guard', data: { callID, sessionID, tool, args } }`. */
+export function guardCall(event: unknown): { callID: string; sessionID: string; tool: string; args: Record<string, unknown> } | null {
+  const fields = event as { type?: unknown; data?: Record<string, unknown> } | null
+  if (fields?.type !== 'tonton.guard' || !fields.data) return null
+  const { callID, sessionID, tool, args } = fields.data
+  if (typeof callID !== 'string' || typeof sessionID !== 'string' || typeof tool !== 'string') return null
+  const plain = args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {}
+  return { callID, sessionID, tool, args: plain }
 }
 
 /** The sessions the launcher left for a bridge, each taken once, with the model of a pool task's session. */

@@ -16,6 +16,8 @@ export const paths = {
   rules: join(HOME, 'rules.json'),
   /** What "Allow for this session" allowed, one file per Claude Code session until it ends. */
   sessionRules: join(HOME, 'session-rules'),
+  /** The claims of the clusters a session is in, read by its guard before each edit: one file per session. */
+  clusterGuard: join(HOME, 'cluster-guard'),
   /** Passed to claude by the launcher with --settings. */
   launcherSettings: join(HOME, 'claude-settings.json'),
   /** Images sent from the notch, handed to Claude as file paths. */
