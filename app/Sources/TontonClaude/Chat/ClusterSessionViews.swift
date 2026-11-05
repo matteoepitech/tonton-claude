@@ -45,21 +45,33 @@ struct ClusterSessionPanel: View {
     @EnvironmentObject var store: SessionStore
     @EnvironmentObject var notch: NotchState
     @ObservedObject private var clusters = ClusterStore.shared
+    /// The cluster Open asked for, shown once the popover is gone.
+    @State private var opening: String?
 
     var body: some View {
         ClusterSessionContent(
             session: session, memberships: clusters.memberships(of: session.id), joinable: clusters.joinable(for: session.id),
             why: store.whyNotCluster(session), noCluster: clusters.boards.isEmpty,
             open: { clusterId in
-                clusters.opened = clusterId
+                // The cluster page takes the chat's place, and with it the button this popover hangs from. Switching in
+                // the same update left the popover without its anchor and the column unchanged until the notch was
+                // opened again (#357): it closes first.
+                opening = clusterId
                 notch.clusterOf = nil
-                notch.showHero = false
-                notch.showClusters = true
             }
         )
         .padding(14)
         .frame(width: 340)
         .task { await clusters.refresh() }
+        .onDisappear {
+            guard let clusterId = opening else { return }
+            opening = nil
+            Task { @MainActor in
+                clusters.opened = clusterId
+                notch.showHero = false
+                notch.showClusters = true
+            }
+        }
     }
 }
 
