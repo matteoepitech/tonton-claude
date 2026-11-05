@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import OSLog
 import TontonCore
@@ -34,6 +35,9 @@ final class ClusterStore: ObservableObject {
     /// The key versions this member already published its public key under, so a snapshot does not send it twice.
     private var republished: Set<String> = []
     private let api = RelayAPI()
+    /// Whether this member asked to share its Tonton, per cluster, until the board says it: made again after a crossed write.
+    private var sharing: [String: Bool] = [:]
+    private var heroChanges: AnyCancellable?
 
     /// The clusters, by name.
     var ordered: [ClusterBoard] { boards.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending } }
@@ -46,6 +50,10 @@ final class ClusterStore: ObservableObject {
         self.account = account
         self.vault = vault
         self.send = send
+        // A hero that changes moves its entry on every leaderboard it is on.
+        heroChanges = RPGStore.shared.$hero.removeDuplicates().sink { [weak self] _ in
+            Task { @MainActor in self?.keepHeroes() }
+        }
         // The relay forgot what a dropped socket followed.
         for clusterId in boards.keys { send(["t": "cluster_subscribe", "clusterId": clusterId]) }
         Task { await refresh() }
@@ -58,6 +66,8 @@ final class ClusterStore: ObservableObject {
         problem = nil
         supported = true
         republished = []
+        sharing = [:]
+        heroChanges = nil
     }
 
     /// Lists the clusters again: one joined on the website shows up, one left there goes.
@@ -87,6 +97,7 @@ final class ClusterStore: ObservableObject {
         guard let account, let vault else { return }
         let clusterId = update.clusterId
         guard var board = boards[clusterId] else { return }
+        let startedAt = board.clock?.startedAt
         guard board.take(update, account: account.accountId, vault: vault) else {
             boards[clusterId] = nil
             forget(clusterId)
@@ -99,6 +110,12 @@ final class ClusterStore: ObservableObject {
             send?(["t": "cluster_subscribe", "clusterId": clusterId])
         case .snapshot:
             republish(board)
+            keepHero(in: clusterId)
+        case .conflict(_, let name, _) where name == ClusterHeroes.document:
+            keepHero(in: clusterId)
+        case .doc where board.clock?.startedAt != startedAt:
+            // A clock that starts (again) is where every count starts.
+            keepHero(in: clusterId)
         case .error(_, let message):
             Logger.app.error("cluster \(clusterId): \(message)")
         default:
@@ -217,6 +234,48 @@ final class ClusterStore: ObservableObject {
         guard let board = boards[clusterId], board.isOwner, board.state != nil else { return false }
         return seal(clusterId) {
             ["t": "cluster_doc", "clusterId": clusterId, "name": "clock", "rev": board.clockRev, "blob": try board.vault.seal(clock)]
+        }
+    }
+
+    // MARK: The leaderboard
+
+    func sharesHero(in clusterId: String) -> Bool {
+        guard let accountId else { return false }
+        return sharing[clusterId] ?? boards[clusterId]?.sharesHero(account: accountId) ?? false
+    }
+
+    /// Puts this member's Tonton on the cluster's leaderboard, or takes it off: its entry follows its hero from then on.
+    func shareHero(_ shared: Bool, in clusterId: String) {
+        sharing[clusterId] = shared
+        keepHero(in: clusterId)
+    }
+
+    private func keepHeroes() {
+        for clusterId in boards.keys { keepHero(in: clusterId) }
+    }
+
+    /// Writes this member's entry when what the board says differs from its hero, or from its choice.
+    private func keepHero(in clusterId: String) {
+        guard let accountId, let board = boards[clusterId], board.state != nil else { return }
+        let shared = sharesHero(in: clusterId)
+        let rpg = RPGStore.shared
+        // The hero must be the committed one: an entry is never written from an empty hero still loading.
+        guard !shared || rpg.ready else { return }
+        switch board.share(shared ? rpg.hero : nil, account: accountId) {
+        case .write(let rev, let next):
+            seal(clusterId) {
+                [
+                    "t": "cluster_doc", "clusterId": clusterId, "name": ClusterHeroes.document, "rev": rev,
+                    "blob": try board.vault.seal(next),
+                ]
+            }
+        case .unchanged:
+            // The board says what was asked: from now on it is the board that says it.
+            sharing[clusterId] = nil
+        case .unreadable:
+            boards[clusterId]?.problem = String(localized: "The leaderboard does not open with the keys you hold yet: nothing was changed.")
+        case .notOpen:
+            break
         }
     }
 

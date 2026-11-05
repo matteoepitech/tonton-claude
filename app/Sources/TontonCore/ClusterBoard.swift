@@ -57,6 +57,8 @@ public struct ClusterBoard: Equatable, Sendable {
             problem = message
         case .conflict(_, let name, let current):
             if let current, let state { self.state = vault.apply(.doc(clusterId: id, current), to: state) }
+            // The leaderboard is written again over the newer board (ClusterStore), without asking anyone.
+            guard name != ClusterHeroes.document else { return true }
             problem =
                 name == "clock"
                 ? String(core: "Someone changed the clock meanwhile: check it and try again.")

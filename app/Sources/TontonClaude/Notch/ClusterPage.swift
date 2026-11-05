@@ -3,17 +3,19 @@ import SwiftUI
 import TontonCore
 
 // A cluster's page in the notch (#312): its name and clock, the invite for the owner, then its tabs: who is there and
-// doing what, the feed, the claims, the notes, the clock and the members (ClusterTabs.swift). Live: every change of the
+// doing what, the feed, the leaderboard, the claims, the notes, the clock and the members (ClusterTabs.swift,
+// ClusterLeaderboardView.swift). Live: every change of the
 // cluster draws it again. People read here; only their own sessions post.
 
 enum ClusterTab: String, CaseIterable, Identifiable {
-    case roster, feed, claims, notes, clock, members
+    case roster, feed, leaderboard, claims, notes, clock, members
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .roster: String(localized: "Roster")
         case .feed: String(localized: "Feed")
+        case .leaderboard: String(localized: "Leaderboard")
         case .claims: String(localized: "Claims")
         case .notes: String(localized: "Notes")
         case .clock: String(localized: "Clock")
@@ -124,7 +126,8 @@ struct ClusterTabContent: View {
         if let state = board.state {
             switch tab {
             case .roster: ClusterRoster(board: board, state: state, account: account, sessions: sessions, candidates: candidates)
-            case .feed: ClusterFeed(state: state)
+            case .feed: ClusterFeed(state: state, levelUps: board.levelUps)
+            case .leaderboard: ClusterLeaderboardView(board: board, account: account)
             case .claims: ClusterClaimsList(state: state, claims: board.claims?.claims ?? [])
             case .notes: ClusterNotesView(notes: board.notes)
             case .clock: ClusterClockView(board: board)
@@ -361,6 +364,8 @@ struct ClusterPutInRow: View {
 /// What the sessions posted, newest first: messages, questions and answers, events, claims, files and notices.
 struct ClusterFeed: View {
     let state: ClusterState
+    /// The members' level-ups, from the leaderboard: apps never post them.
+    var levelUps: [ClusterLevelUpLine] = []
     @State private var kind: ClusterPostKind?
     /// The feed shows this many posts at most: the relay keeps 5000, the app the latest 500.
     private static let shown = 150
@@ -391,11 +396,61 @@ struct ClusterFeed: View {
                 Spacer(minLength: 4)
                 Text("People read here; their own Claudes post.").font(.notch(9.5)).foregroundStyle(Theme.tertiary).lineLimit(1)
             }
-            if posts.isEmpty {
+            let lines = ClusterFeedLine.weave(Array(posts.prefix(Self.shown)), kind == nil ? levelUps : [])
+            if lines.isEmpty {
                 Text("Nothing posted yet.").font(.notch(11)).foregroundStyle(Theme.tertiary).padding(.top, 4)
             }
-            ForEach(posts.prefix(Self.shown)) { post in ClusterPostView(post: post, state: state) }
+            ForEach(lines) { line in
+                switch line {
+                case .post(let post): ClusterPostView(post: post, state: state)
+                case .levelUp(let up): levelUp(up)
+                }
+            }
         }
+    }
+}
+
+extension ClusterFeed {
+    fileprivate func levelUp(_ up: ClusterLevelUpLine) -> some View {
+        HStack(spacing: 5) {
+            PoolChip(text: String(localized: "Level up"), systemImage: "sparkles", tint: Theme.accent)
+            Text("\(ClusterModel.memberName(state, account: up.account))’s Tonton reached level \(up.level)")
+                .font(.notch(10.5, weight: .semibold)).lineLimit(1)
+            Spacer(minLength: 4)
+            if let date = ClusterModel.date(up.at) {
+                Text(verbatim: ClusterSessionRow.ago(date)).font(.notch(9.5)).foregroundStyle(Theme.tertiary).lineLimit(1).fixedSize()
+            }
+        }
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A line of the feed: a post, or a member's level-up woven in by time.
+enum ClusterFeedLine: Identifiable {
+    case post(ClusterState.Post)
+    case levelUp(ClusterLevelUpLine)
+
+    var id: String {
+        switch self {
+        case .post(let post): post.id
+        case .levelUp(let up): "level-\(up.account)-\(up.level)-\(up.at)"
+        }
+    }
+
+    /// Posts in the relay's order and level-ups by time, both newest first.
+    static func weave(_ posts: [ClusterState.Post], _ ups: [ClusterLevelUpLine]) -> [ClusterFeedLine] {
+        var lines: [ClusterFeedLine] = []
+        var next = ups.startIndex
+        let time = { (text: String) in ClusterModel.date(text) ?? .distantPast }
+        for post in posts {
+            while next < ups.endIndex, time(ups[next].at) > time(post.ts) {
+                lines.append(.levelUp(ups[next]))
+                next += 1
+            }
+            lines.append(.post(post))
+        }
+        return lines + ups[next...].map(ClusterFeedLine.levelUp)
     }
 }
 
