@@ -16,7 +16,7 @@ import type {
 } from '../../shared/cluster-protocol'
 import { newAccountKey } from '../../shared/crypto'
 import type { AgentMessage } from '../../shared/protocol'
-import { ClusterWork, clusterEnvelope, MAX_POSTS_PER_MINUTE, WAKES_PER_HOUR } from '../src/channel/cluster-work'
+import { ClusterWork, clockMarks, clusterEnvelope, MAX_POSTS_PER_MINUTE, WAKES_PER_HOUR } from '../src/channel/cluster-work'
 import { SessionClusters } from '../src/channel/clusters'
 import { readGuardState } from '../src/cluster/guard'
 
@@ -88,6 +88,8 @@ let skipsPrompts: boolean
 let toolsChanged: number
 /** The session's project folder, and what the relay keeps of shared files. */
 let project: string
+/** The time the session's clock reads. */
+let clockNow: number
 let stored: Map<string, string>
 
 async function join(order: { delivery?: ClusterDelivery; liveWithoutPrompts?: boolean } = {}, sessionId = ME, key = accountKey) {
@@ -159,6 +161,7 @@ beforeEach(() => {
   busy = false
   skipsPrompts = false
   toolsChanged = 0
+  clockNow = Date.now()
   project = mkdtempSync(joinPath(tmpdir(), 'tonton-cluster-project-'))
   stored = new Map()
   work = new ClusterWork(
@@ -172,6 +175,7 @@ beforeEach(() => {
       busy: () => busy,
       skipsPrompts: () => skipsPrompts,
       cwd: () => project,
+      now: () => clockNow,
       files: {
         put: async (clusterId, fileId, blob) => {
           stored.set(`${clusterId}/${fileId}`, blob)
@@ -718,5 +722,85 @@ describe('claims, events and waiting, by hand', () => {
     expect(await work.call('cluster_wait', { type: 'push', minutes: 0.005 })).toBe(
       'Nothing matching in 0.005 minutes. Go on without it, or wait again.',
     )
+  })
+})
+
+describe("the cluster's clock", () => {
+  const HOUR = 3_600_000
+  const now = Date.parse('2026-11-07T12:00:00Z')
+  const iso = (at: number) => new Date(at).toISOString()
+  // Started three hours ago, two hours left: half time is already past; a milestone in half an hour.
+  const clock = {
+    startedAt: iso(now - 3 * HOUR),
+    deadline: iso(now + 2 * HOUR),
+    milestones: [{ name: 'Art lock', at: iso(now + HOUR / 2) }],
+  }
+  // The session also looks at the clock when its document comes: at this time.
+  const setClock = async (value: object, rev = 1) => {
+    clockNow = now
+    clusters.apply({
+      t: 'cluster_doc',
+      clusterId: CLUSTER,
+      doc: { name: 'clock', rev, updatedAt: 'now', account: 'acc_ana', session: null, blob: await vault.seal(value) },
+    })
+    await settle()
+  }
+  const notices = () => live.filter(text => text.includes('from="Tonton"') && !text.includes('You are in'))
+
+  test('its marks: each milestone, half time, one hour and fifteen minutes before the deadline', () => {
+    expect(clockMarks(clock).map(mark => [mark.key.split(':')[0], iso(mark.at)])).toEqual([
+      ['half', iso(now - HOUR / 2)],
+      ['milestone', iso(now + HOUR / 2)],
+      ['hour', iso(now + HOUR)],
+      ['quarter', iso(now + 2 * HOUR - 15 * 60_000)],
+    ])
+    expect(clockMarks({ milestones: [{ name: 'x', at: 'never' }] })).toEqual([])
+  })
+
+  test('each mark is told once as it comes, never one already past when first seen, and not again after a restart', async () => {
+    busy = true
+    await join()
+    live = []
+    await setClock(clock)
+    await work.tickClock(now)
+    expect(notices()).toEqual([])
+    await work.tickClock(now + HOUR / 2 + 1000)
+    expect(notices()).toHaveLength(1)
+    expect(notices()[0]).toContain(`Milestone: Art lock. The deadline is ${clock.deadline}, in 1 h 30 min.`)
+    await work.tickClock(now + HOUR / 2 + 2000)
+    expect(notices()).toHaveLength(1)
+    await work.tickClock(now + HOUR + 1000)
+    expect(notices().at(-1)).toContain('One hour left before the deadline')
+
+    // The same session after a restart remembers what it was told.
+    const again = new ClusterWork(
+      clusters,
+      () => ME,
+      () => {},
+      { live: text => live.push(text), defer: () => {}, forget: () => {}, busy: () => true, skipsPrompts: () => false, now: () => now },
+      () => ({ tool: 'claude' }),
+    )
+    await again.tickClock(now + HOUR + 2000)
+    expect(notices()).toHaveLength(2)
+    await again.tickClock(now + 2 * HOUR - 14 * 60_000)
+    expect(notices().at(-1)).toContain('Fifteen minutes left')
+    expect(notices()).toHaveLength(3)
+  })
+
+  test('an idle session gets the mark with its next prompt; a muted one, nothing', async () => {
+    await join()
+    deferred = []
+    await setClock({ deadline: iso(now + HOUR + 60_000) })
+    await work.tickClock(now)
+    await work.tickClock(now + 2 * 60_000)
+    expect(deferred.some(text => text.includes('One hour left'))).toBe(true)
+  })
+
+  test('a muted session is told nothing', async () => {
+    await join({ delivery: 'muted' })
+    await setClock({ deadline: iso(now + HOUR + 60_000) })
+    await work.tickClock(now)
+    await work.tickClock(now + 2 * 60_000)
+    expect([...live, ...deferred].some(text => text.includes('One hour left'))).toBe(false)
   })
 })
