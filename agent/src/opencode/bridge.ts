@@ -273,12 +273,15 @@ class Link {
     this.safety.usageChanged()
   }
 
-  /** Turns that ended and pushes, from the tracker, for XP. The time waited on permissions comes off the last turn. */
+  /**
+   * Turns that ended, and the slices of the one still going, from the tracker, for XP. The time waited on permissions
+   * comes off the last turn that ended; the tracker took it off the slices already.
+   */
   earn(update: SessionUpdate) {
     const turns = [...(update.turns ?? [])]
-    const last = turns.at(-1)
-    if (last) {
-      turns[turns.length - 1] = { ...last, seconds: Math.max(0, last.seconds - this.waitedMs / 1000) }
+    const last = turns.findLastIndex(turn => !turn.slice)
+    if (last >= 0) {
+      turns[last] = { ...turns[last], seconds: Math.max(0, turns[last].seconds - this.waitedMs / 1000) }
       this.waitedMs = 0
     }
     this.rpg.work(this.sessionId, { turns, cwd: this.cwd() }, this.inPool())
@@ -328,7 +331,11 @@ class Link {
 
   close(requestId: string) {
     const asked = this.pending.get(requestId)
-    if (asked) this.waitedMs += Math.max(0, Date.now() - Date.parse(asked.ts))
+    if (asked) {
+      const waited = Math.max(0, Date.now() - Date.parse(asked.ts))
+      this.waitedMs += waited
+      this.tracker.waited(this.sessionId, waited)
+    }
     if (!this.pending.delete(requestId)) return
     this.relay.post(async () => ({ t: 'permission_closed', sessionId: this.sessionId, requestId: shortId(requestId) }))
   }

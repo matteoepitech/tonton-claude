@@ -71,6 +71,8 @@ export interface LineWork {
   turnId?: string
   /** The folder the session ran in when it wrote this line. */
   cwd?: string
+  /** When the line was written: a turn still going earns its work time as it goes (agent/src/rpg-slices.ts). */
+  at?: string
   /** TaskCreate and TaskUpdate calls: their entry has no field for the task. */
   tasks?: TaskCall[]
 }
@@ -140,6 +142,7 @@ export function parseLine(raw: string, { sidechain = false }: { sidechain?: bool
 
   const id = line.uuid ?? `${line.type}-${line.timestamp}`
   const ts = line.timestamp ?? new Date().toISOString()
+  if (typeof line.timestamp === 'string' && !Number.isNaN(Date.parse(line.timestamp))) addWork(result, { at: line.timestamp })
   if (line.type === 'system' && line.subtype === 'turn_duration') {
     result.turn = turnTime(line)
     if (result.turn) addWork(result, { turnId: id })

@@ -3,6 +3,7 @@
 // give the same facts in the same order, whether the agent follows the session live or the backfill reads it weeks later.
 
 import type { Entry } from '../../../shared/protocol'
+import { TurnSlices } from '../rpg-slices'
 import type { ParsedLine, TaskCall } from './parser'
 
 /**
@@ -16,6 +17,8 @@ export interface TurnFact {
   seconds: number
   /** Started by its user, and neither interrupted nor failed. */
   prompted: boolean
+  /** Ten minutes of a turn still going (agent/src/rpg-slices.ts), not the turn itself. */
+  slice?: boolean
 }
 
 /** A checklist task marked done by a call that succeeded. `content` is normalized, as version 1 named it. */
@@ -38,10 +41,13 @@ interface OpenTurn {
   user: boolean
   broken: boolean
   waitedMs: number
+  /** The line that started it: its slices are named after it, since the line that ends it is not written yet. */
+  startId?: string
 }
 
 export class TranscriptWork {
   private turn: OpenTurn = { started: false, user: false, broken: false, waitedMs: 0 }
+  private readonly slices = new TurnSlices()
   /** TodoWrite calls, with the tasks they mark done. */
   private readonly todos = new Map<string, TaskFact[]>()
   /** TaskUpdate calls that mark a task done. */
@@ -66,17 +72,22 @@ export class TranscriptWork {
     if (start) {
       if (start.from === 'pool') this.pool = true
       // A line of its own starts a new turn: Claude Code only queues what arrives during one.
-      if (!start.queued) this.turn = { started: true, user: false, broken: false, waitedMs: 0 }
+      if (!start.queued) {
+        if (this.turn.startId) this.slices.forget(this.turn.startId)
+        this.turn = { started: true, user: false, broken: false, waitedMs: 0, startId: start.id }
+      }
       this.turn.started = true
       if (start.from === 'user') this.turn.user = true
     }
+    if (this.turn.startId && work.at && !parsed.turn) facts.turns.push(...this.slices.progress(this.turn.startId, Date.parse(work.at)))
     if (work.broken) this.turn.broken = true
     for (const call of work.tasks ?? []) this.task(call, parsed.entries)
     for (const entry of parsed.entries) this.entry(entry, facts)
     if (parsed.turn && work.turnId) {
       const seconds = Math.max(0, parsed.turn.seconds - this.turn.waitedMs / 1000)
       const prompted = this.turn.started && this.turn.user && !this.turn.broken
-      facts.turns.push({ id: work.turnId, at: parsed.turn.end, seconds, prompted })
+      const turn = { id: work.turnId, at: parsed.turn.end, seconds, prompted }
+      facts.turns.push(this.turn.startId ? this.slices.end(this.turn.startId, turn) : turn)
       this.turn = { started: false, user: false, broken: false, waitedMs: 0 }
     }
     return facts
@@ -90,6 +101,7 @@ export class TranscriptWork {
   /** Time the turn spent waiting on a permission prompt, as far as the agent can tell: it does not count as work. */
   waited(ms: number) {
     if (Number.isFinite(ms) && ms > 0) this.turn.waitedMs += ms
+    if (this.turn.startId) this.slices.waited(this.turn.startId, ms)
   }
 
   private entry(entry: Entry, facts: WorkFacts) {

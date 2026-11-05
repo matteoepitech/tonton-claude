@@ -61,6 +61,16 @@ final class HeroScreenTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(entry(.task).date).timeIntervalSince1970, 1_793_793_600)
     }
 
+    /// Claude Code writes milliseconds: those gains all showed at noon UTC (13:00 in Paris) instead of their own time.
+    func testAJournalTimeWithMillisecondsOrMinutesOnly() throws {
+        let precise = try XCTUnwrap(entry(.turn, at: "2026-11-04T15:42:10.123Z").date)
+        XCTAssertEqual(precise.timeIntervalSince1970, 1_793_806_930, accuracy: 0.001)
+        let minutes = try XCTUnwrap(entry(.turn, at: "2026-11-04T15:42Z").date)
+        XCTAssertEqual(minutes.timeIntervalSince1970, 1_793_806_920)
+        let nanos = try XCTUnwrap(entry(.turn, at: "2026-11-04T15:42:10.123456789Z").date)
+        XCTAssertEqual(nanos.timeIntervalSince1970, 1_793_806_930, accuracy: 0.001)
+    }
+
     func testTheBarsRunThroughTheUTCDay() throws {
         let day = RPG.Today(day: "2026-11-04", xp: 0, streak: 0, hours: Array(repeating: 0, count: 24))
         let start = try XCTUnwrap(day.start)

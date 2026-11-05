@@ -24,8 +24,19 @@ extension RPG.JournalEntry {
 
     /// When it was earned. Receipts from before times were kept only have their day: noon UTC places them on it.
     public var date: Date? {
-        if let at, let date = ISO8601DateFormatter().date(from: at) { return date }
+        if let at, let date = RPG.date(at) { return date }
         return ISO8601DateFormatter().date(from: day + "T12:00:00Z")
+    }
+}
+
+extension RPG {
+    /// A receipt's time in any form `utc` takes: minutes only, seconds, or fractions of a second. Claude Code's times carry
+    /// milliseconds, which the default ISO 8601 reader refuses: every gain of the journal fell back on noon UTC.
+    static func date(_ at: String) -> Date? {
+        guard utc(at) else { return nil }
+        var whole = at.replacingOccurrences(of: #"\.[0-9]+Z$"#, with: "Z", options: .regularExpression)
+        if whole.count == 17 { whole = String(whole.dropLast()) + ":00Z" }
+        return ISO8601DateFormatter().date(from: whole)
     }
 }
 
