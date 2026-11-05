@@ -244,7 +244,10 @@ describe('Claude Code', () => {
     writeGuardState(state(), join(home, 'cluster-guard'))
     const answer = JSON.parse(await hook(call('PreToolUse', '/Users/ana/jam/Hero/Content/Maps/Main.umap')))
     expect(answer.hookSpecificOutput).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'ask' })
-    expect(answer.hookSpecificOutput.permissionDecisionReason).toMatch(/^Content\/Maps\/Main\.umap is held by Bob's Claude since \d\d:\d\d/)
+    // The hook reads the machine's time: the claim's day is said once it is not today.
+    expect(answer.hookSpecificOutput.permissionDecisionReason).toMatch(
+      /^Content\/Maps\/Main\.umap is held by Bob's Claude since (\d{4}-\d\d-\d\d )?\d\d:\d\d/,
+    )
     expect(await hook(call('PreToolUse', '/Users/ana/jam/Hero/Content/Free.umap'))).toBe('')
     expect(await hook({ ...call('PreToolUse', '/Users/ana/jam/Hero/Content/Maps/Main.umap'), session_id: 'other' })).toBe('')
   })
