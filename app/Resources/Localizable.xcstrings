@@ -128,6 +128,16 @@
         }
       }
     },
+    "%@ finished" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ a terminé"
+          }
+        }
+      }
+    },
     "%@ in · %@ out" : {
       "localizations" : {
         "en" : {
@@ -212,6 +222,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ est arrêtée"
+          }
+        }
+      }
+    },
+    "%@ needs you" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ a besoin de vous"
           }
         }
       }
@@ -905,6 +925,22 @@
         }
       }
     },
+    "%lld h %@ min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld h %2$@ min"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld h %2$@ min"
+          }
+        }
+      }
+    },
     "%lld h %@ min left" : {
       "localizations" : {
         "en" : {
@@ -1283,6 +1319,22 @@
         }
       }
     },
+    "%lld of %lld done" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld done"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld sur %2$lld terminées"
+          }
+        }
+      }
+    },
     "%lld of %lld tasks done" : {
       "localizations" : {
         "en" : {
@@ -1311,6 +1363,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld sur %2$lld au travail"
+          }
+        }
+      }
+    },
+    "%lld s" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld s"
           }
         }
       }
@@ -1873,26 +1935,6 @@
         }
       }
     },
-    "A Claude session finished." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Une session Claude est terminée."
-          }
-        }
-      }
-    },
-    "A Claude session needs you: %@." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Une session Claude a besoin de vous : %@."
-          }
-        }
-      }
-    },
     "A Focus is on now." : {
       "localizations" : {
         "fr" : {
@@ -2049,6 +2091,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Une session"
+          }
+        }
+      }
+    },
+    "A session finished" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une session est terminée"
           }
         }
       }
@@ -2823,6 +2875,16 @@
         }
       }
     },
+    "Asks to use" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demande à utiliser"
+          }
+        }
+      }
+    },
     "At" : {
       "localizations" : {
         "fr" : {
@@ -3021,6 +3083,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Galet"
+          }
+        }
+      }
+    },
+    "Branch" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branche"
           }
         }
       }
@@ -3255,34 +3327,12 @@
         }
       }
     },
-    "Claude (%@ on %@) finished." : {
+    "Claude artifact" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Claude (%1$@ on %2$@) finished."
-          }
-        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude (%1$@ sur %2$@) a terminé."
-          }
-        }
-      }
-    },
-    "Claude (%@ on %@) needs you: %@." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Claude (%1$@ on %2$@) needs you: %3$@."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Claude (%1$@ sur %2$@) a besoin de vous : %3$@."
+            "value" : "Artifact Claude"
           }
         }
       }
@@ -6290,6 +6340,16 @@
         }
       }
     },
+    "Links" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liens"
+          }
+        }
+      }
+    },
     "Listening…" : {
       "localizations" : {
         "fr" : {
@@ -7444,16 +7504,6 @@
         }
       }
     },
-    "Off by default: it can quote your code." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Désactivé par défaut : il peut citer votre code."
-          }
-        }
-      }
-    },
     "Off: the notch asks you before the session starts a task the pool gives it. Permission prompts come to you either way." : {
       "localizations" : {
         "fr" : {
@@ -8207,6 +8257,16 @@
         }
       }
     },
+    "Project" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Projet"
+          }
+        }
+      }
+    },
     "Project names show on the image: check it before you share it." : {
       "localizations" : {
         "fr" : {
@@ -8233,6 +8293,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Message, avec des {champs}"
+          }
+        }
+      }
+    },
+    "Pull request #%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pull request #%@"
           }
         }
       }
@@ -9274,6 +9344,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Envoyé."
+          }
+        }
+      }
+    },
+    "Session cost" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coût de la session"
           }
         }
       }
@@ -12154,6 +12234,16 @@
         }
       }
     },
+    "With the Claude artifacts and pull requests it links to. Off by default: it can quote your code." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avec les artifacts Claude et les pull requests dont il donne le lien. Désactivé par défaut : il peut citer votre code."
+          }
+        }
+      }
+    },
     "Without it, open Tonton Claude from Spotlight to get back here." : {
       "localizations" : {
         "fr" : {
@@ -12180,6 +12270,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dossier de travail"
+          }
+        }
+      }
+    },
+    "Worked" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durée"
           }
         }
       }

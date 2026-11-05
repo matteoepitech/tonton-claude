@@ -177,7 +177,8 @@ struct NotchPane: View {
                     isOn: $settings.webhookIncludeNames)
                 Hairline()
                 ToggleRow(
-                    title: "Include Claude's last message", detail: "Off by default: it can quote your code.",
+                    title: "Include Claude's last message",
+                    detail: "With the Claude artifacts and pull requests it links to. Off by default: it can quote your code.",
                     isOn: $settings.webhookIncludeLastMessage)
             }
         }
@@ -234,7 +235,7 @@ private struct WebhookField: View {
         guard let url = Webhook.url(address) else { return }
         sending = true
         Task {
-            result = await WebhookNotifier.send(String(localized: "Tonton Claude will post here."), to: url)
+            result = await WebhookNotifier.send(Webhook.test(), to: url)
             sending = false
         }
     }
