@@ -1,5 +1,6 @@
 import type { Entry, ImageData, PermissionDetail, SessionCommand, SessionMeta, TokenCounts } from '../../../shared/protocol'
 import { cutText } from '../../../shared/text'
+import { TurnSlices } from '../rpg-slices'
 import { entryImages, forgetOldImages } from '../transcript/images'
 import { cutToolResult, fileEdits, isPoolPost, todoItems, toolSummary } from '../transcript/parser'
 import type { TurnFact } from '../transcript/work'
@@ -209,6 +210,8 @@ class TrackedSession {
   readonly turnsDone = new Set<string>()
   /** OpenCode 2 sends no messages: a turn runs from busy to idle, named by the prompt that started it. */
   busySince: number | undefined
+  /** The work of the turn still going, paid as it goes. */
+  readonly slices = new TurnSlices()
   prompt: { id: string; pool: boolean } | undefined
   broken = false
   /** OpenCode 1. */
@@ -506,12 +509,14 @@ export class OpenCodeTracker {
     const turns = this.finished(session)
     if (session.busySince !== undefined && session.messages.size === 0 && !session.child) {
       const prompt = session.prompt
-      turns.push({
-        id: prompt?.id ?? `${session.id}:${session.busySince}`,
+      const id = prompt?.id ?? `${session.id}:${session.busySince}`
+      const turn = {
+        id,
         at: this.time(),
         seconds: Math.max(0, (this.eventTime - session.busySince) / 1000),
         prompted: prompt !== undefined && !prompt.pool && !session.broken && !session.lastStatus?.startsWith('StopFailure:'),
-      })
+      }
+      turns.push(session.slices.end(id, turn))
     }
     session.busySince = undefined
     session.prompt = undefined
@@ -532,14 +537,49 @@ export class OpenCodeTracker {
       if (last.finish === 'tool-calls' && !last.error) continue
       session.turnsDone.add(id)
       const end = Math.max(...replies.map(reply => reply.completedAt ?? 0))
-      turns.push({
+      const turn = {
         id,
         at: new Date(end).toISOString(),
         seconds: Math.max(0, (end - user.created) / 1000),
         prompted: !user.pool && !replies.some(reply => reply.error),
-      })
+      }
+      turns.push(session.slices.end(id, turn))
     }
     return turns
+  }
+
+  /**
+   * The turn a session is working on, when it started, and how far it got: OpenCode 2's from busy to this event,
+   * OpenCode 1's latest prompt to the last of its answers, by their own times. An older prompt left unanswered earns
+   * nothing more.
+   */
+  private openTurn(session: TrackedSession): { id: string; since: number; now: number } | undefined {
+    if (session.child) return undefined
+    if (session.busySince !== undefined && session.messages.size === 0) {
+      return { id: session.prompt?.id ?? `${session.id}:${session.busySince}`, since: session.busySince, now: this.eventTime }
+    }
+    const users = [...session.messages].filter(([, message]) => message.role === 'user')
+    const latest = users.sort(([, a], [, b]) => a.created - b.created).at(-1)
+    if (!latest || session.turnsDone.has(latest[0])) return undefined
+    const [id, user] = latest
+    const replies = [...session.messages.values()].filter(message => message.role === 'assistant' && message.parentID === id)
+    const now = Math.max(user.created, ...replies.map(reply => reply.completedAt ?? reply.created))
+    return { id, since: user.created, now }
+  }
+
+  /** The slices of work the session's turn reached by this event. */
+  private progress(session: TrackedSession): TurnFact[] {
+    const open = this.openTurn(session)
+    if (!open) return []
+    session.slices.progress(open.id, open.since)
+    return session.slices.progress(open.id, open.now)
+  }
+
+  /** Time the session's turn waited on a permission prompt, answered from the bridge: it is no work. */
+  waited(sessionId: string, ms: number) {
+    const session = this.sessions.get(sessionId)
+    const open = session && this.openTurn(session)
+    if (session && open) session.slices.waited(open.id, ms)
   }
 
   /** The turns OpenCode 1's history holds, for the backfill: it sends no status. */
@@ -906,6 +946,7 @@ export class OpenCodeTracker {
     turns: TurnFact[] = [],
   ): SessionUpdate[] {
     if (session.child) return []
+    turns = [...turns, ...this.progress(session)]
     if (!entries.length && !status && !metaChanged && !turns.length) return []
     const textual = entries.some(entry => entry.kind === 'user' || entry.kind === 'assistant')
     return [{ sessionId: session.id, entries, status, metaChanged: metaChanged || textual, ...(turns.length ? { turns } : {}) }]

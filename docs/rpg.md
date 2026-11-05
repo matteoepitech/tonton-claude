@@ -11,7 +11,7 @@ tasks and pushes. Version 1 rewarded only checklist items and pool tasks, and Cl
 | Source | XP | Sparks | Identity and limit |
 | --- | ---: | ---: | --- |
 | Answered prompt: a turn its user typed (terminal, notch or website) that ends without failure | 5 | — | Session and turn; 1 XP if the turn worked less than 5 seconds |
-| Work time | 1 per minute the turn worked | — | Same receipt as the prompt; 60 minutes per turn at most, waits on a permission prompt excluded where the agent can tell |
+| Work time | 1 per minute the turn worked | — | Every 10 minutes of a turn still going, a receipt of its own (+10); the rest on the turn's receipt, 60 minutes at most there. Waits on a permission prompt excluded where the agent can tell |
 | First prompted turn of the UTC day | 20, plus 10 per day of streak | — | Account and UTC day; 50 at most, once a day for the whole account |
 | Commit pushed, or Perforce changelist submitted | 15 | — | Commit hash, or server and changelist; once each, whichever remote |
 | Completed checklist task (`TodoWrite`, `TaskUpdate` to completed, OpenCode's `todowrite`) | 10 | 1 | Session and normalized task text; once, even after reopening |
@@ -20,7 +20,12 @@ tasks and pushes. Version 1 rewarded only checklist items and pool tasks, and Cl
 | Won combat encounter | 15 | 2 | Run and encounter id; once per encounter |
 | Won boss fight | 75 | 10 | Run and boss id; once per boss |
 
-A turn earns one receipt: its prompt and its minutes together, so "13 minutes of work" reads as +18 XP (5 + 13).
+A short turn earns one receipt: its prompt and its minutes together, so "13 minutes of work" reads as +18 XP (5 + 13).
+A long one earns as it goes: each 10 minutes of work is a `turn` receipt of its own, named by the turn's first line
+and its rank, and shows up in the journal while Claude still works ("10 minutes of work", +10). When the turn ends,
+its receipt has the prompt and the minutes the slices left, so a turn of three hours earns its three hours
+(`agent/src/rpg-slices.ts`). A silence of more than 15 minutes between two lines of a turn counts 15: a crash or a
+sleeping Mac is no work.
 The streak counts the days in a row before this one that had a first turn: 20 XP on the first day, 30 on the second,
 40 on the third, 50 from the fourth. Work rewards (everything above but combat) earn one spark per 10 XP, rounded
 down per award; a full prompt alone earns none. These are tunable defaults, one set of constants: `RPG_RULES` in
