@@ -24,16 +24,6 @@
         }
       }
     },
-    "#%lld" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "n° %lld"
-          }
-        }
-      }
-    },
     "$" : {
       "localizations" : {
         "fr" : {
@@ -725,16 +715,6 @@
         }
       }
     },
-    "%lld contribution XP" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld XP de contribution"
-          }
-        }
-      }
-    },
     "%lld d" : {
       "localizations" : {
         "fr" : {
@@ -1235,6 +1215,22 @@
         }
       }
     },
+    "%lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld sur %lld"
+          }
+        }
+      }
+    },
     "%lld of %lld calls" : {
       "localizations" : {
         "en" : {
@@ -1489,22 +1485,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld au travail"
-          }
-        }
-      }
-    },
-    "%lld → %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld → %2$lld"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld → %lld"
           }
         }
       }
@@ -2924,6 +2904,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Comportement"
+          }
+        }
+      }
+    },
+    "Booster earned" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Booster obtenu"
+          }
+        }
+      }
+    },
+    "Booster to claim" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Booster à récupérer"
           }
         }
       }
@@ -7227,6 +7227,16 @@
         }
       }
     },
+    "Not enough sparks yet" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore assez d’étincelles"
+          }
+        }
+      }
+    },
     "Not set up" : {
       "localizations" : {
         "fr" : {
@@ -7899,16 +7909,6 @@
         }
       }
     },
-    "Period" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Période"
-          }
-        }
-      }
-    },
     "Permission requests" : {
       "localizations" : {
         "fr" : {
@@ -8438,6 +8438,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Partages en lecture seule"
+          }
+        }
+      }
+    },
+    "Reading the team's progress…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture de la progression de l’équipe…"
           }
         }
       }
@@ -9747,6 +9757,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La reconnaissance vocale n’est pas disponible pour cette langue pour le moment."
+          }
+        }
+      }
+    },
+    "Spend %lld sparks on the next rank" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dépenser %lld étincelles pour le rang suivant"
           }
         }
       }
@@ -12374,6 +12394,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "reprend dans %@"
+          }
+        }
+      }
+    },
+    "contribution XP" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XP de contribution"
           }
         }
       }

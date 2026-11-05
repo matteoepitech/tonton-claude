@@ -91,6 +91,9 @@ final class PoolStore: ObservableObject {
     /// The pools a session of this account can join: its role lets it post.
     var joinable: [PoolBoard] { ordered.filter { $0.summary.role != .viewer && $0.state != nil } }
 
+    /// This account's id: the Team page marks its own row.
+    var accountId: String? { account?.accountId }
+
     func websiteURL(of poolId: String) -> URL? {
         account.flatMap { PoolLinks.website(relay: $0.relay, pool: poolId) }
     }
