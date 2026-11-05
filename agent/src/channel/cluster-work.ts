@@ -4,7 +4,7 @@
 // the cluster, as its owner chose: live, in a digest at its next prompt, or not at all. There is no task and no order in
 // a cluster: other Claudes inform and ask, they never stand for the user (docs/cluster.md, The rule).
 
-import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import {
   type ClusterPostItem,
@@ -13,6 +13,7 @@ import {
   clusterDelivery,
   clusterPostIsFor,
   decodeClusterClaims,
+  decodeClusterClock,
   decodeClusterNotes,
   decodeClusterPostBody,
   MAX_CLUSTER_FILE_BYTES,
@@ -24,6 +25,7 @@ import {
 import { ClusterApi } from '../../../shared/cluster-api'
 import type {
   ClusterClaim,
+  ClusterClock,
   ClusterDelivery,
   ClusterDocWire,
   ClusterPostBody,
@@ -231,6 +233,65 @@ export const CLUSTER_INSTRUCTIONS = [
   'A cluster and a pool are separate: never pass the posts of one to the other.',
 ].join(' ')
 
+/** How often each cluster's clock is looked at: a mark is told at most this late. */
+export const CLOCK_TICK_MS = 30_000
+/** Marks a session remembers having been told, per cluster. */
+const MAX_TOLD_MARKS = 200
+
+/** A moment of a cluster's clock, and what each session is told when it comes. */
+export interface ClockMark {
+  /** Names the mark and its time: a deadline or a milestone moved is a new mark. */
+  key: string
+  at: number
+  text: string
+}
+
+/** `2 h 30 min`, `45 min`. */
+const duration = (ms: number) => {
+  const minutes = Math.max(0, Math.round(ms / 60_000))
+  const hours = Math.floor(minutes / 60)
+  return hours ? `${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}` : `${minutes} min`
+}
+
+/**
+ * The marks of a clock (#315): each milestone, half the time between its start and the deadline, one hour and fifteen
+ * minutes before the deadline. Marks without a valid time are left out.
+ */
+export function clockMarks(clock: ClusterClock): ClockMark[] {
+  const marks: ClockMark[] = []
+  const deadline = clock.deadline ? Date.parse(clock.deadline) : Number.NaN
+  const until = (at: number) => (Number.isNaN(deadline) ? '' : ` The deadline is ${clock.deadline}, in ${duration(deadline - at)}.`)
+  for (const milestone of clock.milestones ?? []) {
+    const at = Date.parse(milestone.at)
+    if (!Number.isNaN(at))
+      marks.push({ key: `milestone:${milestone.name}:${milestone.at}`, at, text: `Milestone: ${milestone.name}.${until(at)}` })
+  }
+  if (Number.isNaN(deadline)) return marks
+  const start = clock.startedAt ? Date.parse(clock.startedAt) : Number.NaN
+  if (!Number.isNaN(start) && start < deadline) {
+    const at = start + (deadline - start) / 2
+    marks.push({ key: `half:${clock.startedAt}:${clock.deadline}`, at, text: `Half the time is gone.${until(at)}` })
+  }
+  marks.push({
+    key: `hour:${clock.deadline}`,
+    at: deadline - 3_600_000,
+    text: `One hour left before the deadline (${clock.deadline}). Finish what is started rather than start something new, and keep the build working.`,
+  })
+  marks.push({
+    key: `quarter:${clock.deadline}`,
+    at: deadline - 900_000,
+    text: `Fifteen minutes left before the deadline (${clock.deadline}). Put in what works now.`,
+  })
+  return marks.sort((a, b) => a.at - b.at)
+}
+
+/** What a session remembers of a cluster's clock, on disk so that a restart tells nothing twice. */
+interface ClockMemory {
+  /** When the session first saw each mark: one already past then is never told late. */
+  seen: Record<string, number>
+  told: string[]
+}
+
 /** How the session's tool hands Claude a post. */
 export interface ClusterHooks {
   /** Now: in the current turn if Claude works, or waking it. */
@@ -247,6 +308,8 @@ export interface ClusterHooks {
   cwd?(): string
   /** The relay's store of shared files. Missing: the tools say files need the agent. */
   files?: ClusterFileStore
+  /** The time, for the clock's marks. Missing: the machine's. */
+  now?(): number
 }
 
 /** Where shared files go, sealed (`ClusterApi.putFile` and `file`). */
@@ -292,6 +355,9 @@ export class ClusterWork {
   private active = false
   /** What the guard file says now, to write it only when it changes. */
   private guarded = ''
+  /** Per cluster, the clock's revision last looked at, and what the session remembers of its marks. */
+  private readonly clockRevs = new Map<string, number>()
+  private readonly clocks = new Map<string, ClockMemory>()
 
   constructor(
     private readonly clusters: SessionClusters,
@@ -303,6 +369,8 @@ export class ClusterWork {
     private readonly toolsChanged: () => void = () => {},
   ) {
     clusters.onChange(clusterId => this.changed(clusterId))
+    const timer = setInterval(() => void this.tickClock(), CLOCK_TICK_MS)
+    timer.unref?.()
   }
 
   /** The tools, while the session is in a cluster. */
@@ -878,6 +946,70 @@ export class ClusterWork {
     else clearGuardState(sessionId)
   }
 
+  // MARK: The clock
+
+  /**
+   * Tells the session each mark of its clusters' clocks as it comes (#315), once each, after restarts too, as a notice
+   * from Tonton: at once while Claude works, else with its next prompt. A mark already past when the session first saw
+   * it (on joining, or when the owner changed the clock) is not told late.
+   */
+  async tickClock(now = this.hooks.now?.() ?? Date.now()): Promise<void> {
+    for (const clusterId of this.clusters.ids()) {
+      const state = this.clusters.state(clusterId)
+      const vault = this.clusters.vault(clusterId)
+      const me = state?.sessions.find(session => session.session === this.sessionId())
+      if (!state || !vault || !me) continue
+      const clock = await vault.doc(state, 'clock', decodeClusterClock).catch(() => null)
+      if (!clock) continue
+      const memory = this.clockMemory(clusterId)
+      let changed = false
+      for (const mark of clockMarks(clock)) {
+        if (memory.told.includes(mark.key)) continue
+        if (memory.seen[mark.key] === undefined) {
+          memory.seen[mark.key] = now
+          changed = true
+        }
+        if (mark.at > now) continue
+        memory.told = [...memory.told, mark.key].slice(-MAX_TOLD_MARKS)
+        changed = true
+        if (mark.at >= memory.seen[mark.key]) this.route(clusterId, me, clusterEnvelope('notice', 'Tonton', {}, mark.text), false)
+      }
+      if (changed) this.saveClockMemory(clusterId, memory)
+    }
+  }
+
+  private clockFile(clusterId: string): string {
+    const safe = (text: string) => text.replace(/[^\w-]/g, '_')
+    return join(homePaths.home, 'cluster', safe(clusterId), `clock-${safe(this.sessionId())}.json`)
+  }
+
+  private clockMemory(clusterId: string): ClockMemory {
+    const kept = this.clocks.get(clusterId)
+    if (kept) return kept
+    let memory: ClockMemory = { seen: {}, told: [] }
+    try {
+      const file = this.clockFile(clusterId)
+      const read = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Partial<ClockMemory>) : null
+      if (read && typeof read.seen === 'object' && read.seen && Array.isArray(read.told)) {
+        memory = { seen: read.seen as Record<string, number>, told: read.told.filter(key => typeof key === 'string') }
+      }
+    } catch (error) {
+      log('cluster clock memory unreadable', { error: String(error) })
+    }
+    this.clocks.set(clusterId, memory)
+    return memory
+  }
+
+  private saveClockMemory(clusterId: string, memory: ClockMemory) {
+    try {
+      const file = this.clockFile(clusterId)
+      mkdirSync(join(file, '..'), { recursive: true, mode: 0o700 })
+      writeFileSync(file, JSON.stringify(memory), { mode: 0o600 })
+    } catch (error) {
+      log('cluster clock memory not saved', { error: String(error) })
+    }
+  }
+
   // MARK: Delivering
 
   private changed(clusterId: string) {
@@ -896,6 +1028,11 @@ export class ClusterWork {
     if (!me) return
     this.announce(clusterId, me)
     this.followDelivery(clusterId)
+    const clock = state.docs.find(doc => doc.name === 'clock')
+    if (clock && clock.rev !== this.clockRevs.get(clusterId)) {
+      this.clockRevs.set(clusterId, clock.rev)
+      void this.tickClock()
+    }
     const notes = state.docs.find(doc => doc.name === 'notes')
     const seen = this.seen.get(clusterId)
     if (!seen) {
@@ -995,6 +1132,8 @@ export class ClusterWork {
     this.read.delete(clusterId)
     this.described.delete(clusterId)
     this.deliveries.delete(clusterId)
+    this.clockRevs.delete(clusterId)
+    this.clocks.delete(clusterId)
     for (const ask of this.asks.values()) if (ask.clusterId === clusterId) ask.answered(null)
     this.hooks.forget(clusterId)
   }

@@ -190,6 +190,17 @@ joining) and refuses any other (`clusterCall` in `desktop/src/main/relay-api.ts`
 An older relay answers 404: both say "This relay doesn't know clusters yet".
 
 
+## The clock
+
+The cluster's `clock` document holds a deadline, when the count started, and milestones ("Playable build", "Art lock",
+"Submit"); its owner sets them on the website or in the notch, and every member sees the same time left. Each cluster
+session's agent tells it, once each, at every milestone, at half time, one hour and fifteen minutes before the deadline
+(`clockMarks` in `agent/src/channel/cluster-work.ts`), as a notice from Tonton: at once while Claude works, else with its
+next prompt; a muted session gets nothing. The agent looks at the clock every 30 seconds and whenever it changes. A mark
+already past when a session first sees it (on joining, or when the deadline moves) is not told late, and what a session
+was told is kept under the agent's home (`cluster/<cluster>/clock-<session>.json`), so a restart tells nothing twice.
+Claude Code and OpenCode alike.
+
 ## Files
 
 `cluster_share` shares a file of the session's project, 10 MB at most: a screenshot, a crash log, a JSON spec, a small
