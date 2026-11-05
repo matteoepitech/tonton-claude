@@ -79,6 +79,8 @@ struct ExpandedView: View {
                 NewSessionPanel().padding(.top, max(state.notchSize.height, 30) + 24)
             }
         }
+        // Last, so an open dropdown is over the palette and every column.
+        .overlayPreferenceValue(NotchMenuAnchors.self) { anchors in NotchMenuOverlay(anchors: anchors) }
     }
 
     private var bottomBar: some View {

@@ -262,19 +262,25 @@ struct Composer: View {
     }
 
     private var templatesMenu: some View {
-        Menu {
-            ForEach(settings.promptTemplates) { template in
-                Button(template.name.isEmpty ? template.text : template.name) { use(template) }
+        NotchMenu(width: 230) {
+            var sections: [NotchMenuSection] = []
+            if !settings.promptTemplates.isEmpty {
+                sections.append(
+                    NotchMenuSection(
+                        items: settings.promptTemplates.map { template in
+                            NotchMenuItem(title: template.name.isEmpty ? template.text : template.name) { use(template) }
+                        }))
             }
-            if !settings.promptTemplates.isEmpty { Divider() }
-            Button("Edit templates…") { AppDelegate.shared?.showSettings(pane: .general) }
+            sections.append(
+                NotchMenuSection(items: [
+                    NotchMenuItem(title: String(localized: "Edit templates…"), systemImage: "slider.horizontal.3") {
+                        AppDelegate.shared?.showSettings(pane: .general)
+                    }
+                ]))
+            return sections
         } label: {
             Image(systemName: "text.badge.plus")
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
         .help("Insert a prompt template")
         .accessibilityLabel("Insert a template")
     }

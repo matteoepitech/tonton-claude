@@ -179,32 +179,30 @@ struct ChatHeader: View {
 
     /// Slash commands its agent runs: Claude Code sessions in tmux and OpenCode sessions, while the session waits for you.
     private var commands: some View {
-        Menu {
-            ForEach(session.menuCommands, id: \.self) { name in
-                Button(name.label) {
-                    if name.needsConfirmation { confirming = name } else { store.sendCommand(name, to: session.id) }
-                }
-            }
+        NotchMenu(width: 200) {
+            var sections = [
+                NotchMenuSection(
+                    items: session.menuCommands.map { name in
+                        NotchMenuItem(title: name.label) {
+                            if name.needsConfirmation { confirming = name } else { store.sendCommand(name, to: session.id) }
+                        }
+                    })
+            ]
             if session.commands.contains(.model) {
-                Divider()
                 // The tick is the family in use; picking it again still switches, to the latest model of that family.
-                Menu(SessionCommandName.model.label) {
-                    ForEach(ModelFamily.allCases, id: \.self) { family in
-                        Toggle(
-                            family.label,
-                            isOn: Binding(
-                                get: { session.modelFamily == family },
-                                set: { _ in store.sendCommand(.model, model: family, to: session.id) }))
-                    }
-                }
+                sections.append(
+                    NotchMenuSection(
+                        title: SessionCommandName.model.label,
+                        items: ModelFamily.allCases.map { family in
+                            NotchMenuItem(title: family.label, checked: session.modelFamily == family) {
+                                store.sendCommand(.model, model: family, to: session.id)
+                            }
+                        }))
             }
+            return sections
         } label: {
             Image(systemName: "terminal").font(.notch(11))
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
         .foregroundStyle(Theme.secondary)
         .disabled(!session.acceptsCommands)
         .help(session.acceptsCommands ? "Run a command in the session" : "Commands wait until the session is done")
@@ -271,25 +269,28 @@ struct ChatHeader: View {
                 if session.accepts(.interrupt) { interrupt }
                 if session.canChat && !session.menuCommands.isEmpty { commands }
                 ChangedFilesButton(session: session)
-                Menu {
-                    Button("Markdown…") { export(.markdown) }
-                    Button("HTML page…") { export(.html) }
+                NotchMenu(width: 190) {
+                    var sections = [
+                        NotchMenuSection(items: [
+                            NotchMenuItem(title: String(localized: "Markdown…"), systemImage: "doc.text") { export(.markdown) },
+                            NotchMenuItem(title: String(localized: "HTML page…"), systemImage: "safari") { export(.html) },
+                        ])
+                    ]
                     if store.canShare(session) {
-                        Divider()
                         // A teammate reads this session, and only it, in the web app. Nothing they do reaches it.
-                        Menu("Share read-only") {
-                            ForEach(ShareDuration.allCases) { duration in
-                                Button("For \(duration.label)") { share(for: duration) }
-                            }
-                        }
+                        sections.append(
+                            NotchMenuSection(
+                                title: String(localized: "Share read-only"),
+                                items: ShareDuration.allCases.map { duration in
+                                    NotchMenuItem(title: String(localized: "For \(duration.label)"), systemImage: "link") {
+                                        share(for: duration)
+                                    }
+                                }))
                     }
+                    return sections
                 } label: {
                     Image(systemName: "square.and.arrow.up").font(.notch(11))
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
                 .foregroundStyle(Theme.secondary)
                 .help("Export the conversation, images included, or share it read-only")
                 .accessibilityLabel("Export or share")
