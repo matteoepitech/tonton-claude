@@ -34,12 +34,7 @@ struct RPGArenaView: View {
     var body: some View {
         VStack(spacing: 12) {
             if let run = rpg.arena {
-                HStack {
-                    Text("Wave \(run.wave)/3").font(.headline)
-                    ProgressView(value: run.health, total: run.maxHealth)
-                    Text("Health \(Int(run.health))/\(Int(run.maxHealth))").monospacedDigit()
-                    Text("Pulse: \(Int(run.abilityCooldown.rounded(.up))) s").monospacedDigit()
-                }
+                hud(run)
                 ZStack {
                     Canvas { graphics, _ in
                         for enemy in run.enemies {
@@ -47,11 +42,12 @@ struct RPGArenaView: View {
                                 let radius = enemy.kind == .boss ? 70.0 : 40.0
                                 let area = CGRect(
                                     x: enemy.targetX - radius, y: enemy.targetY - radius, width: radius * 2, height: radius * 2)
-                                graphics.fill(Path(ellipseIn: area), with: .color(.orange.opacity(0.25)))
+                                graphics.fill(Path(ellipseIn: area), with: .color(Theme.warning.opacity(0.25)))
                                 graphics.stroke(
-                                    Path(ellipseIn: area), with: .color(.orange), style: StrokeStyle(lineWidth: 3, dash: [6, 4]))
+                                    Path(ellipseIn: area), with: .color(Theme.warning), style: StrokeStyle(lineWidth: 3, dash: [6, 4]))
                                 graphics.draw(
-                                    Text("!").font(.title.bold()).foregroundStyle(.white), at: CGPoint(x: enemy.targetX, y: enemy.targetY))
+                                    Text("!").font(.notch(22, weight: .heavy)).foregroundStyle(.white),
+                                    at: CGPoint(x: enemy.targetX, y: enemy.targetY))
                             }
                             let pixels =
                                 enemy.kind == .boss
@@ -85,33 +81,7 @@ struct RPGArenaView: View {
                     MascotView(status: .working, size: 32, hero: rpg.hero, animated: run.phase == .playing)
                         .opacity(run.hitFlash > 0 && !reduceMotion ? 0.5 : 1)
                         .position(x: run.x, y: run.y)
-                    if run.phase != .playing {
-                        VStack(spacing: 10) {
-                            if run.phase == .won {
-                                Text("Victory!").font(.largeTitle.bold())
-                                Text("Two waves and a boss: up to 105 XP, 14 sparks and a boss booster. Daily caps apply.")
-                                if run.claimed {
-                                    Text("Rewards saved. Upgrade Tonton for the next run.")
-                                } else {
-                                    Button("Claim victory rewards") { rpg.claimVictory() }.disabled(rpg.busy)
-                                }
-                            } else if run.phase == .lost {
-                                Text("Defeated").font(.largeTitle.bold())
-                                Text("No rewards lost. Try another route or upgrade Tonton.")
-                            } else {
-                                Text("Paused").font(.largeTitle.bold())
-                                Button("Resume") {
-                                    keys = []; rpg.arena?.resume()
-                                }
-                            }
-                            if run.phase == .lost || run.claimed {
-                                Button("New run") {
-                                    keys = []; rpg.startArena()
-                                }
-                            }
-                        }.multilineTextAlignment(.center).padding(24).background(
-                            .ultraThickMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    }
+                    if run.phase != .playing { endCard(run) }
                 }
                 .frame(width: 640, height: 400)
                 .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
@@ -121,13 +91,13 @@ struct RPGArenaView: View {
                 )
                 .accessibilityLabel("Combat arena. Move with arrows or WASD, attack with Space, pulse with E, pause with Escape.")
                 HStack {
-                    Text("Arrows / WASD: move · Space: attack · E: pulse · Esc: pause").font(.caption)
+                    Text("Arrows / WASD: move · Space: attack · E: pulse · Esc: pause").font(.notch(10.5)).foregroundStyle(Theme.tertiary)
                     Spacer()
-                    Button("Pause") { rpg.arena?.pause() }.disabled(run.phase != .playing)
+                    Button("Pause") { rpg.arena?.pause() }.buttonStyle(NotchButtonStyle()).disabled(run.phase != .playing)
                 }
-                if let error = rpg.error { Text(error).font(.caption).foregroundStyle(.orange) }
+                if let error = rpg.error { Text(error).font(.notch(11)).foregroundStyle(Theme.warning) }
             } else {
-                Text("Connect an account and start a run from Tonton's panel.")
+                Text("Connect an account and start a run from Tonton's panel.").font(.notch(12)).foregroundStyle(Theme.secondary)
             }
         }
         .padding(20).background(Theme.bg).foregroundStyle(Theme.text)
@@ -151,6 +121,68 @@ struct RPGArenaView: View {
                 if now - saved >= 1 { rpg.saveArena(); saved = now }
             }
         }
+    }
+
+    /// The wave, Tonton's health as a thin bar, and the pulse's cooldown, above the arena.
+    private func hud(_ run: RPGCombat) -> some View {
+        let share = run.maxHealth > 0 ? run.health / run.maxHealth : 0
+        return HStack(spacing: 12) {
+            PoolChip(text: String(localized: "Wave \(run.wave)/3"), systemImage: "flag.fill")
+            HStack(spacing: 6) {
+                Image(systemName: "heart.fill").font(.notch(11)).foregroundStyle(Theme.danger).accessibilityHidden(true)
+                HeroMeter(
+                    value: run.health, total: run.maxHealth, tint: share > 0.5 ? Theme.success : share > 0.25 ? Theme.warning : Theme.danger
+                )
+                .frame(width: 180)
+                Text("Health \(Int(run.health))/\(Int(run.maxHealth))").font(.notch(11, weight: .semibold)).monospacedDigit()
+            }
+            Spacer(minLength: 8)
+            Label {
+                Text("Pulse: \(Int(run.abilityCooldown.rounded(.up))) s").monospacedDigit()
+            } icon: {
+                Image(systemName: "sparkles")
+            }
+            .font(.notch(11, weight: .semibold))
+            .foregroundStyle(run.abilityCooldown > 0 ? Theme.secondary : AnyShapeStyle(Theme.accent))
+        }
+    }
+
+    /// Over the arena once it stops: victory and its rewards, defeat, or the pause.
+    private func endCard(_ run: RPGCombat) -> some View {
+        VStack(spacing: 10) {
+            if run.phase == .won {
+                Text("Victory!").font(.notch(26, weight: .heavy, design: .rounded)).foregroundStyle(Theme.success)
+                Text("Two waves and a boss: up to 105 XP, 14 sparks and a boss booster. Daily caps apply.")
+                    .font(.notch(12)).foregroundStyle(Theme.secondary)
+                if run.claimed {
+                    Text("Rewards saved. Upgrade Tonton for the next run.").font(.notch(12, weight: .semibold))
+                } else {
+                    Button("Claim victory rewards") { rpg.claimVictory() }.buttonStyle(NotchButtonStyle(kind: .primary)).disabled(rpg.busy)
+                }
+            } else if run.phase == .lost {
+                Text("Defeated").font(.notch(26, weight: .heavy, design: .rounded)).foregroundStyle(Theme.danger)
+                Text("No rewards lost. Try another route or upgrade Tonton.").font(.notch(12)).foregroundStyle(Theme.secondary)
+            } else {
+                Text("Paused").font(.notch(26, weight: .heavy, design: .rounded))
+                Button("Resume") {
+                    keys = []; rpg.arena?.resume()
+                }
+                .buttonStyle(NotchButtonStyle(kind: .primary))
+            }
+            if run.phase == .lost || run.claimed {
+                Button("New run") {
+                    keys = []; rpg.startArena()
+                }
+                .buttonStyle(NotchButtonStyle(kind: .primary))
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: 360)
+        .padding(24)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Theme.bg))
+        .background(RoundedRectangle(cornerRadius: 16).fill(Theme.surface).padding(-0.5))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.borderStrong))
+        .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
     }
 }
 
