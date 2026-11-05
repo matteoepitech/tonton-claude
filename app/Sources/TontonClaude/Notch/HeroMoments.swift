@@ -79,10 +79,14 @@ struct LevelUpMoment: View {
                 Text(RPG.title(level: level)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
             }
             Spacer(minLength: 8)
-            Label("A booster is waiting", systemImage: "shippingbox.fill")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.75))
-                .lineLimit(1)
+            Label(
+                hero.boosters.count > 1
+                    ? String(localized: "\(hero.boosters.count) boosters are waiting") : String(localized: "A booster is waiting"),
+                systemImage: "shippingbox.fill"
+            )
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.white.opacity(0.75))
+            .lineLimit(1)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

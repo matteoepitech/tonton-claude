@@ -123,7 +123,7 @@ struct HeroScreenContent: View {
             ScrollView { HeroJournal(entries: hero.journal(limit: 30), now: now).padding(.bottom, 8) }
         case .wardrobe:
             ScrollView { HeroWardrobe(hero: hero, preview: $preview, enabled: ready && !busy, equip: equip).padding(.bottom, 8) }
-        case .boosters: RPGRewardsView()
+        case .boosters: HeroBoosters()
         case .upgrades: RPGUpgradesView()
         case .team: RPGPoolView()
         }

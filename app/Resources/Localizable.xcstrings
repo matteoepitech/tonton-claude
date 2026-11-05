@@ -701,6 +701,26 @@
         }
       }
     },
+    "%lld boosters are waiting" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld boosters vous attendent"
+          }
+        }
+      }
+    },
+    "%lld boosters opened" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld boosters ouverts"
+          }
+        }
+      }
+    },
     "%lld calls by the subagent" : {
       "localizations" : {
         "en" : {
@@ -1251,6 +1271,22 @@
         }
       }
     },
+    "%lld new · +%lld sparks from duplicates" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld new · +%2$lld sparks from duplicates"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld nouveaux · +%2$lld étincelles des doublons"
+          }
+        }
+      }
+    },
     "%lld of %lld calls" : {
       "localizations" : {
         "en" : {
@@ -1663,16 +1699,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "+%lld XP aujourd’hui"
-          }
-        }
-      }
-    },
-    "+%lld sparks" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "+%lld étincelles"
           }
         }
       }
@@ -2233,6 +2259,16 @@
         }
       }
     },
+    "Achievement" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Succès"
+          }
+        }
+      }
+    },
     "Achievement unlocked" : {
       "localizations" : {
         "fr" : {
@@ -2613,6 +2649,16 @@
         }
       }
     },
+    "Already yours: +%lld sparks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous l’avez déjà : +%lld étincelles"
+          }
+        }
+      }
+    },
     "Also alert when a session goes from working to done." : {
       "localizations" : {
         "fr" : {
@@ -2944,6 +2990,16 @@
         }
       }
     },
+    "Booster" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Booster"
+          }
+        }
+      }
+    },
     "Boosters" : {
       "localizations" : {
         "fr" : {
@@ -2960,6 +3016,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chasseur de boss"
+          }
+        }
+      }
+    },
+    "Boss victory" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Victoire contre un boss"
           }
         }
       }
@@ -4549,16 +4615,6 @@
         }
       }
     },
-    "Duplicate converted to %lld sparks." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Doublon converti en %lld étincelles."
-          }
-        }
-      }
-    },
     "During a Focus" : {
       "localizations" : {
         "fr" : {
@@ -4595,16 +4651,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gagnez 1 000 XP pour obtenir un booster."
-          }
-        }
-      }
-    },
-    "Earned booster" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Booster gagné"
           }
         }
       }
@@ -6923,6 +6969,16 @@
         }
       }
     },
+    "No booster to open. Levels, bosses, achievements and team goals earn them." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun booster à ouvrir. Les niveaux, les boss, les succès et les objectifs d’équipe en rapportent."
+          }
+        }
+      }
+    },
     "No claims: nobody holds a file right now." : {
       "localizations" : {
         "fr" : {
@@ -7189,16 +7245,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pas encore de tâche"
-          }
-        }
-      }
-    },
-    "No unopened boosters. Earn levels, beat a boss or complete a team goal." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucun booster à ouvrir. Gagnez des niveaux, battez un boss ou terminez un objectif d’équipe."
           }
         }
       }
@@ -7474,12 +7520,12 @@
         }
       }
     },
-    "One cosmetic per booster. Common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%." : {
+    "One cosmetic per booster: common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%. A duplicate turns into sparks." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un cosmétique par booster. Commun 60 %, peu commun 25 %, rare 10 %, épique 4 %, légendaire 1 %."
+            "value" : "Un cosmétique par booster : commun 60 %, peu commun 25 %, rare 10 %, épique 4 %, légendaire 1 %. Un doublon se change en étincelles."
           }
         }
       }
@@ -7574,6 +7620,16 @@
         }
       }
     },
+    "Open all" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout ouvrir"
+          }
+        }
+      }
+    },
     "Open files in" : {
       "localizations" : {
         "fr" : {
@@ -7634,6 +7690,16 @@
         }
       }
     },
+    "Open the booster of %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir le booster de %@"
+          }
+        }
+      }
+    },
     "Open the file" : {
       "localizations" : {
         "fr" : {
@@ -7684,6 +7750,36 @@
         }
       }
     },
+    "Opened" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouverts"
+          }
+        }
+      }
+    },
+    "Opening %lld boosters…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouverture de %lld boosters…"
+          }
+        }
+      }
+    },
+    "Opening the booster…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouverture du booster…"
+          }
+        }
+      }
+    },
     "Opening the cluster…" : {
       "localizations" : {
         "fr" : {
@@ -7710,6 +7806,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ouvre et ferme l’encoche depuis n’importe où."
+          }
+        }
+      }
+    },
+    "Opens every booster at once" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre tous les boosters d’un coup"
           }
         }
       }
@@ -8123,16 +8229,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Session précédente / suivante"
-          }
-        }
-      }
-    },
-    "Previous openings" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ouvertures précédentes"
           }
         }
       }
@@ -8784,16 +8880,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reprendre la connexion"
-          }
-        }
-      }
-    },
-    "Revealing your cosmetic…" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Révélation de votre cosmétique…"
           }
         }
       }
@@ -9666,12 +9752,12 @@
         }
       }
     },
-    "Skip animation" : {
+    "Skip" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Passer l’animation"
+            "value" : "Passer"
           }
         }
       }
@@ -10344,6 +10430,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Équipe"
+          }
+        }
+      }
+    },
+    "Team goal" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objectif d’équipe"
           }
         }
       }
@@ -11850,6 +11946,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vague %lld/3"
+          }
+        }
+      }
+    },
+    "Wear them from the wardrobe." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portez-les depuis la garde-robe."
+          }
+        }
+      }
+    },
+    "Wearing it" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porté"
           }
         }
       }
