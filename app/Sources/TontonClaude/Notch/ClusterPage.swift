@@ -229,7 +229,7 @@ struct ClusterSessionRow: View {
     static func ago(_ date: Date) -> String { date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)) }
 }
 
-/// For one of the account's own sessions in the cluster: how it takes the posts, and the way out.
+/// For one of the account's own sessions in the cluster: how it takes the posts, and the way out, in plain sight.
 struct ClusterOwnMenu: View {
     let board: ClusterBoard
     let sessionId: String
@@ -238,38 +238,20 @@ struct ClusterOwnMenu: View {
 
     var body: some View {
         let choice = clusters.choice(for: sessionId, in: board.id)
-        Menu {
+        HStack(spacing: 5) {
             if let own {
-                Section("How it takes the posts") {
-                    ForEach(ClusterDelivery.allCases, id: \.self) { delivery in
-                        Toggle(delivery.label, isOn: picked(ClusterSessionChoice(delivery: delivery), now: choice, own))
-                    }
-                    Toggle(
-                        String(localized: "Live anyway, if it skips permission prompts"),
-                        isOn: picked(ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true), now: choice, own))
-                }
-                Text(ClusterSessionChoice.promptsNote)
-                Divider()
+                ClusterDeliveryMenu(choice: choice) { next in if next != choice { send(next, own) } }
+                    .help("How it takes the posts")
             }
-            Button("Take out of the cluster", role: .destructive) { clusters.takeOut(sessionId, of: board.id) }
-        } label: {
-            HStack(spacing: 3) {
-                Text(verbatim: choice.label).font(.notch(10, weight: .semibold))
-                Image(systemName: "chevron.down").font(.notch(7.5, weight: .bold))
+            Button {
+                clusters.takeOut(sessionId, of: board.id)
+            } label: {
+                Label("Take out", systemImage: "rectangle.portrait.and.arrow.right")
             }
+            .buttonStyle(NotchButtonStyle(kind: .destructive))
+            .help("It leaves the cluster and stops reading its posts")
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .fixedSize()
-        .foregroundStyle(Theme.secondary)
-        .help("How it takes the posts, or take it out of the cluster")
-        .accessibilityLabel("Delivery: \(choice.label)")
-    }
-
-    /// On when it is the delivery chosen; picking it sends the session a new order.
-    private func picked(_ option: ClusterSessionChoice, now choice: ClusterSessionChoice, _ session: SessionSummary) -> Binding<Bool> {
-        Binding(get: { option == choice }, set: { on in if on && option != choice { send(option, session) } })
     }
 
     private func send(_ choice: ClusterSessionChoice, _ session: SessionSummary) {
@@ -278,6 +260,35 @@ struct ClusterOwnMenu: View {
         } catch {
             clusters.report(error, in: board.id)
         }
+    }
+}
+
+/// Live, digest or muted, each with what it does, and Live anyway for a session that skips permission prompts.
+struct ClusterDeliveryMenu: View {
+    let choice: ClusterSessionChoice
+    let pick: (ClusterSessionChoice) -> Void
+
+    var body: some View {
+        NotchMenu(width: 250) {
+            let anyway = ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true)
+            return [
+                NotchMenuSection(
+                    title: String(localized: "How it takes the posts"),
+                    items: ClusterDelivery.allCases.map { delivery in
+                        let option = ClusterSessionChoice(delivery: delivery)
+                        return NotchMenuItem(title: delivery.label, detail: delivery.detail, checked: option == choice) { pick(option) }
+                    } + [
+                        NotchMenuItem(title: String(localized: "Live anyway, if it skips permission prompts"), checked: anyway == choice) {
+                            pick(anyway)
+                        }
+                    ],
+                    note: ClusterSessionChoice.promptsNote)
+            ]
+        } label: {
+            NotchMenuLabel(text: choice.label)
+        }
+        .foregroundStyle(Theme.text)
+        .accessibilityLabel("Delivery: \(choice.label)")
     }
 }
 
@@ -324,28 +335,8 @@ struct ClusterPutInRow: View {
             }
             .accessibilityElement(children: .combine)
             Spacer(minLength: 4)
-            Menu {
-                ForEach(ClusterDelivery.allCases, id: \.self) { delivery in
-                    Button("\(delivery.label): \(delivery.detail)") {
-                        clusters.setChoice(ClusterSessionChoice(delivery: delivery), for: session.id, in: board.id)
-                    }
-                }
-                Button("Live anyway, if it skips permission prompts") {
-                    clusters.setChoice(ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true), for: session.id, in: board.id)
-                }
-            } label: {
-                HStack(spacing: 3) {
-                    Text(verbatim: choice.label).font(.notch(10, weight: .semibold))
-                    Image(systemName: "chevron.down").font(.notch(7.5, weight: .bold))
-                }
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .foregroundStyle(Theme.secondary)
-            .help("How it takes the posts once in")
-            .accessibilityLabel("Delivery: \(choice.label)")
+            ClusterDeliveryMenu(choice: choice) { clusters.setChoice($0, for: session.id, in: board.id) }
+                .help("How it takes the posts once in")
             Button("Put in") {
                 do {
                     try clusters.put(session, in: board.id, choice: choice)
@@ -374,23 +365,18 @@ struct ClusterFeed: View {
         let posts = ClusterModel.feed(state, kind: kind)
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Menu {
-                    Button("Every post") { kind = nil }
-                    Divider()
-                    ForEach(ClusterPostKind.allCases, id: \.self) { item in
-                        Button(ClusterModel.kindLabel(item)) { kind = item }
-                    }
+                NotchMenu(width: 180) {
+                    [
+                        NotchMenuSection(items: [NotchMenuItem(title: String(localized: "Every post"), checked: kind == nil) { kind = nil }]
+                        ),
+                        NotchMenuSection(
+                            items: ClusterPostKind.allCases.map { item in
+                                NotchMenuItem(title: ClusterModel.kindLabel(item), checked: kind == item) { kind = item }
+                            }),
+                    ]
                 } label: {
-                    HStack(spacing: 3) {
-                        Text(verbatim: kind.map(ClusterModel.kindLabel) ?? String(localized: "Every post")).font(
-                            .notch(10.5, weight: .semibold))
-                        Image(systemName: "chevron.down").font(.notch(7.5, weight: .bold))
-                    }
+                    NotchMenuLabel(text: kind.map(ClusterModel.kindLabel) ?? String(localized: "Every post"), size: 10.5)
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
                 .foregroundStyle(Theme.text)
                 .accessibilityLabel("Which posts")
                 Spacer(minLength: 4)

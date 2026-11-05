@@ -145,6 +145,7 @@ final class NotchWindowController {
         if force { state.pinned = false }
         state.showPalette = false
         state.showNewSession = false
+        state.menu = nil
         guard !state.pinned, state.mode != .collapsed else { return }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { state.mode = .collapsed }
         overlapTask?.cancel()
@@ -561,6 +562,7 @@ final class NotchWindowController {
     /// Escape closes; ⌘1…⌘9 jump to a session in list order, pinned ones first; ⌘↑ and ⌘↓ move through the list; ⌘. stops
     /// the selected session while it works, like Escape in its terminal.
     private func handleKey(_ event: NSEvent) -> Bool {
+        if state.menu != nil, menuKey(event) { return true }
         if event.keyCode == UInt16(kVK_Escape) {
             // Escape closes the palette or the new session panel first, then the notch.
             if state.showPalette {
@@ -611,6 +613,23 @@ final class NotchWindowController {
         case kVK_UpArrow: store.selectedId = sessions[max(0, index - 1)].id
         case kVK_DownArrow: store.selectedId = sessions[min(sessions.count - 1, index + 1)].id
         default: return false
+        }
+        return true
+    }
+
+    /// An open dropdown takes Escape, the arrows and Return, as a menu does; any other key closes it and goes on.
+    private func menuKey(_ event: NSEvent) -> Bool {
+        switch Int(event.keyCode) {
+        case kVK_Escape: state.menu = nil
+        case kVK_UpArrow: state.menu?.move(by: -1)
+        case kVK_DownArrow: state.menu?.move(by: 1)
+        case kVK_Return, kVK_ANSI_KeypadEnter, kVK_Space:
+            guard let item = state.menu?.highlightedItem else { return true }
+            state.menu = nil
+            item.action()
+        default:
+            state.menu = nil
+            return false
         }
         return true
     }

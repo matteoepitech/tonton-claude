@@ -12,6 +12,8 @@ final class NotchState: ObservableObject {
     @Published var showPalette = false
     /// ⌘N: the panel that starts a session on a machine.
     @Published var showNewSession = false
+    /// The dropdown open over the notch (NotchMenu): one at a time.
+    @Published var menu: NotchMenuRequest?
     @Published var peekSession: SessionSummary?
     /// Shown in the banner instead of the session's status.
     @Published var peekText: String?
