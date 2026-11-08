@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { newAccountKey, open } from '../../shared/crypto'
 import type { HookPost } from '../../shared/protocol'
-import { type CodexHookInput, codexPid, codexStatus, link } from '../src/codex/hook'
+import { approveByRule, type CodexHookInput, codexPid, codexStatus, link } from '../src/codex/hook'
 
 const AGENT = join(import.meta.dir, '../src/main.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-codex-hook-'))
@@ -70,6 +70,39 @@ describe('the status of each event', () => {
       transcriptPath: null,
     })
     expect(link(input('UserPromptSubmit', { permission_mode: 'bypassPermissions' }), prompt).permissionMode).toBe('bypassPermissions')
+  })
+})
+
+describe('auto-approve rules', () => {
+  const rules = [
+    { tool: 'Bash', pattern: 'npm test' },
+    { tool: 'Edit', pattern: '' },
+  ]
+  const ask = (tool_name: string, tool_input: unknown): CodexHookInput => ({
+    hook_event_name: 'PermissionRequest',
+    session_id: 's1',
+    tool_name,
+    tool_input,
+  })
+
+  test("approve what they match, in Codex's names, and let the user answer the rest", () => {
+    const write = process.stdout.write
+    const printed: string[] = []
+    process.stdout.write = ((chunk: string) => printed.push(chunk) > 0) as typeof process.stdout.write
+    try {
+      expect(approveByRule(ask('exec_command', { cmd: 'npm test' }), rules)).toBe(true)
+      expect(approveByRule(ask('Bash', { command: ['bash', '-lc', 'npm test'] }), rules)).toBe(true)
+      expect(approveByRule(ask('exec_command', { cmd: 'npm test && rm -rf ~' }), rules)).toBe(false)
+      expect(approveByRule(ask('exec_command', {}), rules)).toBe(false)
+      expect(approveByRule(ask('apply_patch', { input: '*** Begin Patch' }), rules)).toBe(true)
+      expect(approveByRule(ask('web_search', {}), rules)).toBe(false)
+    } finally {
+      process.stdout.write = write
+    }
+    expect(printed).toHaveLength(3)
+    expect(JSON.parse(printed[0] ?? '')).toEqual({
+      hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } },
+    })
   })
 })
 

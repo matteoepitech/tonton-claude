@@ -12,7 +12,8 @@ import { terminalOf } from '../channel/terminal'
 import { loadConfig, paths } from '../config'
 import { postHook, pruneLinks } from '../hook'
 import { log } from '../log'
-import { codexToolName } from './tools'
+import { matchingRule, readRules, sessionRules } from '../rules'
+import { codexToolName, shellCommand } from './tools'
 
 /** Codex's hook input: the fields every event has, and those of some. */
 export interface CodexHookInput {
@@ -53,7 +54,7 @@ const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse'])
 
 /**
  * Called by Codex for each hook event it was told to run Tonton for. It must never get in the way of the session:
- * failures are logged, it prints nothing, and it always exits 0.
+ * failures are logged, it prints nothing but an approval by an auto-approve rule, and it always exits 0.
  */
 export async function runCodexHook() {
   const event = await readInput()
@@ -64,6 +65,7 @@ export async function runCodexHook() {
     const previous = readLink(file)
     writeLink(file, link(event, previous))
     if (event.hook_event_name === 'SessionStart') pruneLinks(paths.run)
+    if (event.hook_event_name === 'PermissionRequest' && approveByRule(event)) return
     const config = loadConfig()
     const status = codexStatus(event, previous?.event)
     if (config && status) await postHook(config, status.event, status.text)
@@ -172,6 +174,23 @@ function alive(pid: number): boolean {
 }
 
 /** apply_patch edits files; any other tool under the name the notch knows it by (./tools.ts). */
+/**
+ * Codex asks before this call: approve it when an auto-approve rule from the app, or one allowed for this session,
+ * matches, as Claude Code's hook does. True when it printed the approval; otherwise the user is asked, in the terminal
+ * or the notch. A session run by `tonton codex` gets the same from its channel (agent/src/codex/notch.ts).
+ */
+export function approveByRule(event: CodexHookInput, rules = [...(readRules()?.rules ?? []), ...sessionRules(event.session_id)]): boolean {
+  if (!event.tool_name) return false
+  const tool = toolName(event.tool_name)
+  const input = (event.tool_input && typeof event.tool_input === 'object' ? event.tool_input : {}) as Record<string, unknown>
+  const command = tool === 'Bash' ? shellCommand(input) : undefined
+  const rule = matchingRule(rules, tool, tool === 'Bash' ? { command } : input)
+  if (!rule || (tool === 'Bash' && !command)) return false
+  log('approved by an auto-approve rule', { tool })
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } }))
+  return true
+}
+
 const toolName = (tool: string | undefined) => (tool === 'apply_patch' ? 'Edit' : codexToolName(tool || 'a tool'))
 
 function readLink(file: string): CodexLink | null {

@@ -1,6 +1,7 @@
 import { runChannel } from './channel'
 import { CLUSTER_USAGE, runClusterCommand } from './cluster-cli'
 import { runCodexHook } from './codex/hook'
+import { runCodex } from './codex/wrapper'
 import { loadConfig, saveConfig, VERSION } from './config'
 import { runHook } from './hook'
 import { install, status, uninstall } from './install'
@@ -32,6 +33,9 @@ switch (command) {
     break
   case 'opencode':
     await runOpenCode()
+    break
+  case 'codex':
+    process.exitCode = await runCodex(args)
     break
   case 'statusline':
     await runStatusLine()

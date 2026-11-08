@@ -9,6 +9,7 @@ import type { AgentConfig } from '../src/config'
 import { paths } from '../src/config'
 import {
   claim,
+  codexKeysToTrust,
   descendsFrom,
   effectiveModel,
   fromHome,
@@ -175,18 +176,54 @@ describe.skipIf(process.platform === 'win32' || !hasTmux)('starting a session fr
 
   test('a start of a tool this agent cannot run is refused, not started as claude', async () => {
     const link = relay()
-    for (const [launchId, tool] of [
-      ['launch0013', 'codex'],
-      ['launch0014', 'aider'],
-    ])
-      await handleStartOrder(config, launchId, await seal(key, { launchId, machineId: 'm', cwd: project, issuedAt: now(), tool }), link, {
-        run,
-      })
-    await until(() => (link.messages.length === 2 ? true : undefined), 'two refusals')
+    const order = await seal(key, { launchId: 'launch0014', machineId: 'm', cwd: project, issuedAt: now(), tool: 'aider' })
+    await handleStartOrder(config, 'launch0014', order, link, { run })
+    await until(() => (link.messages.length === 1 ? true : undefined), 'the refusal')
     expect(link.messages.map(m => [m.state, m.opened.text])).toEqual([
-      ['failed', 'This agent cannot start Codex. Update it in Settings › Machines, then try again.'],
       ['failed', 'This agent cannot start that tool. Update it in Settings › Machines, then try again.'],
     ])
+  })
+
+  test('codex starts in tmux through tonton codex, its trust question goes to the notch, and its thread is the session', async () => {
+    if (!hasTmux) return
+    const link = relay()
+    // A shell that runs the command it is given, without the developer's profile.
+    const codexShell = join(dir, 'codex-shell')
+    writeFileSync(codexShell, '#!/bin/sh\nexec /bin/sh -c "$2"\n')
+    chmodSync(codexShell, 0o755)
+    const fake = join(import.meta.dir, 'fake-tonton-codex.ts')
+    const command = `FAKE_CODEX_TRUST=1 FAKE_CODEX_STAY_MS=20000 '${process.execPath}' '${fake}' '${run}'`
+    const order = await seal(key, { launchId: 'launch0015', machineId: 'm', cwd: project, issuedAt: now(), tool: 'codex' })
+    void handleStartOrder(config, 'launch0015', order, link, { run, shell: codexShell, codex: { installed: () => true, command } })
+    const asking = await until(() => questions(link)[0], 'the trust question')
+    expect(asking.opened.text).toStartWith('Codex asks whether you trust the files in this folder.')
+    await handleStartAnswer(config, 'launch0015', await answer('launch0015', asking.opened.question, true))
+    const started = await until(() => link.messages.find(m => m.state === 'started'), 'the start')
+    expect(started.opened.sessionId).toBe('thread-1')
+    Bun.spawnSync(['tmux', 'kill-session', '-t', '=tonton-launch0015'], { env: tmuxEnv() })
+  }, 30_000)
+
+  test('without codex on the machine, its start fails and says so', async () => {
+    const link = relay()
+    const order = await seal(key, { launchId: 'launch0016', machineId: 'm', cwd: project, issuedAt: now(), tool: 'codex' })
+    await handleStartOrder(config, 'launch0016', order, link, { run, codex: { installed: () => false, command: '' } })
+    await until(() => link.messages.find(m => m.state === 'failed'), 'the failure')
+    expect(link.messages.find(m => m.state === 'failed')?.opened.text).toBe(
+      'codex was not found on this machine. Install it, then try again.',
+    )
+  })
+
+  test("Codex's cursor goes to its trust choice", () => {
+    const menu = (cursor: number) =>
+      [
+        '  Trust this folder?',
+        '',
+        `${cursor === 1 ? '›' : ' '} 1. Trust and continue`,
+        `${cursor === 2 ? '›' : ' '} 2. Keep current directory`,
+      ].join('\n')
+    expect(codexKeysToTrust(menu(1))).toEqual([])
+    expect(codexKeysToTrust(menu(2))).toEqual(['Up'])
+    expect(codexKeysToTrust('no menu here')).toEqual([])
   })
 
   test('a start runs once on the machine, whichever process gets it', async () => {

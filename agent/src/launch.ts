@@ -3,14 +3,16 @@
 // user's answer moves it on. OpenCode asks nothing: its session is made in its background service when it has one.
 // Pool machines start their sessions the same way (agent/src/service/pool-worker.ts), in the folder their owner chose.
 
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { open, seal } from '../../shared/crypto'
 import { isModelId } from '../../shared/pool-model'
 import type { StartAnswer, StartDetail, StartOrder, StartState } from '../../shared/protocol'
 import type { RelayConnection } from './channel/relay-connection'
+import { serverRecords } from './codex/wrapper'
 import { type AgentConfig, paths } from './config'
+import { binaryPath } from './install/system'
 import { log } from './log'
 import { claimOnce } from './once'
 import { usageFile } from './usage'
@@ -64,13 +66,18 @@ const ANSWER_AGAIN_MS = 4000
  * Claude Code draws its question before it reads the keyboard: keys sent too early are lost, and an Enter that comes
  * after them picks the No it selects first. So the cursor is moved again until the screen shows it on the yes.
  */
-export async function moveToYes(
+export const moveToYes = (capture: () => string, send: (keys: string[]) => void, sleep: (ms: number) => Promise<unknown> = Bun.sleep) =>
+  moveCursor(capture, send, keysToYes, sleep)
+
+/** Moves a menu's cursor with the keys `keysTo` reads on screen, and true once none are left to send. */
+async function moveCursor(
   capture: () => string,
   send: (keys: string[]) => void,
+  keysTo: (screen: string) => string[],
   sleep: (ms: number) => Promise<unknown> = Bun.sleep,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < MOVE_ATTEMPTS; attempt++) {
-    const keys = keysToYes(capture())
+    const keys = keysTo(capture())
     if (!keys.length) return true
     send(keys)
     await sleep(KEY_SETTLE_MS)
@@ -117,6 +124,8 @@ export interface LaunchOptions {
   home?: string
   /** How the installed OpenCode is found and reached. */
   openCode?: OpenCodeAccess
+  /** Whether `codex` is on the PATH of a login shell, and the command line that runs `tonton codex`. */
+  codex?: { installed(shell: string): boolean; command: string }
 }
 
 /** OpenCode 2's background service, which its terminals and Tonton's plugin connect to. */
@@ -170,10 +179,8 @@ export async function handleStartOrder(
   if (!order || order.launchId !== launchId || order.machineId !== config.machineId || typeof order.cwd !== 'string')
     return fail('The order is not sealed with the account key for this machine, or it expired.')
   // A newer app's tool: starting claude instead would not be what the user picked.
-  if (order.tool !== undefined && order.tool !== 'opencode')
-    return fail(
-      `This agent cannot start ${order.tool === 'codex' ? 'Codex' : 'that tool'}. Update it in Settings › Machines, then try again.`,
-    )
+  if (order.tool !== undefined && order.tool !== 'opencode' && order.tool !== 'codex')
+    return fail('This agent cannot start that tool. Update it in Settings › Machines, then try again.')
   const cwd = fromHome(order.cwd, options.home)
   if (!isAbsolute(cwd) || !isDirectory(cwd)) return fail(`${order.cwd} is not a folder on this machine.`)
   if (process.platform === 'win32') return fail('Starting sessions from the notch needs tmux, which Windows does not have.')
@@ -181,15 +188,14 @@ export async function handleStartOrder(
   if (running >= MAX_RUNNING) return fail('Too many sessions are starting on this machine. Try again in a minute.')
   running++
   try {
-    if (order.tool === 'opencode') await runOpenCodeLaunch(launchId, cwd, report, options)
-    else {
-      // Each question goes to the notch, and waits for the user's answer to it.
-      const confirm = (text: string, question: string) => {
-        report('asking', { text, question })
-        return waitForAnswer(launchId, question)
-      }
-      await runLaunch(launchId, cwd, report, confirm, { ...options, run })
+    // Each question goes to the notch, and waits for the user's answer to it.
+    const confirm = (text: string, question: string) => {
+      report('asking', { text, question })
+      return waitForAnswer(launchId, question)
     }
+    if (order.tool === 'opencode') await runOpenCodeLaunch(launchId, cwd, report, options)
+    else if (order.tool === 'codex') await runCodexLaunch(launchId, cwd, report, confirm, { ...options, run })
+    else await runLaunch(launchId, cwd, report, confirm, { ...options, run })
   } finally {
     running--
   }
@@ -347,6 +353,99 @@ async function runLaunch(
     ? `claude did not show up in the notch. It still runs: tmux attach -t ${name} on this machine to see it.`
     : 'claude stopped before it was ready.'
   return failed(report, `${left}\n\n${lastLines(screen)}`)
+}
+
+/** What Codex asks while starting in a folder it does not trust yet, as it reads on screen. */
+export const CODEX_QUESTIONS = [{ markers: ['Trust this folder?'], text: 'Codex asks whether you trust the files in this folder.' }]
+
+/** The arrow keys that move Codex's menu cursor (`›`) to its trust choice, none when it is there or no such menu shows. */
+export function codexKeysToTrust(screen: string): string[] {
+  const lines = screen.split('\n')
+  const cursor = lines.findIndex(line => /^\s*›/.test(line))
+  const trust = lines.findIndex(line => /^\s*(›\s*)?\d+\.\s*Trust and continue\b/.test(line))
+  return cursor < 0 || trust < 0 ? [] : moves(cursor, trust, 'Down', 'Up')
+}
+
+const installedCodex = {
+  installed: (shell: string) => exec([shell, '-lic', 'codex --version']).ok,
+  command: '',
+}
+
+/**
+ * Codex in tmux, through `tonton codex`: its TUI on an app-server Tonton reaches, so the notch drives the session as the
+ * terminal does. The session id is the first thread the server starts in the folder, which `tonton codex` records; its
+ * trust question, when the folder is new to Codex, goes to the notch like Claude Code's.
+ */
+async function runCodexLaunch(
+  launchId: string,
+  cwd: string,
+  report: Report,
+  confirmed: Confirm,
+  options: LaunchOptions & { run: string },
+  name = `tonton-${launchId}`,
+  model?: string,
+): Promise<string | null> {
+  const access = options.codex ?? installedCodex
+  const shell = options.shell ?? (process.env.SHELL || '/bin/sh')
+  if (!access.installed(shell)) return failed(report, 'codex was not found on this machine. Install it, then try again.')
+  const startedAt = Date.now()
+  const tonton = access.command || `'${binaryPath().replaceAll("'", "'\\''")}' codex`
+  const command = model ? `${tonton} -m ${model}` : tonton
+  const created = tmux(['new-session', '-d', '-s', name, '-c', cwd.replaceAll('#', '##'), '-x', '200', '-y', '50', shell, '-lic', command])
+  if (!created.ok) return failed(report, `tmux could not start: ${created.output}`)
+  const pane = `=${name}:`
+  const belongs = paneProcess(tmux(['display-message', '-p', '-t', pane, '#{pane_pid}']).output)
+  const folder = realFolder(cwd)
+  report('starting')
+  const answered = new Map<string, number>()
+  let screen = ''
+  let deadline = startedAt + START_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    await Bun.sleep(POLL_MS)
+    const thread = serverRecords(options.run)
+      .filter(record => belongs(record.serverPid))
+      .flatMap(record => record.threads)
+      .find(t => t.cwd !== undefined && realFolder(t.cwd) === folder)
+    if (thread) {
+      report('started', { text: `Running in tmux session ${name}.`, sessionId: thread.id })
+      return thread.id
+    }
+    const capture = tmux(['capture-pane', '-p', '-t', pane])
+    if (!capture.ok) return failed(report, `codex stopped before it was ready.\n\n${lastLines(screen)}`)
+    screen = capture.output
+    const question = CODEX_QUESTIONS.find(
+      q => Date.now() - (answered.get(q.text) ?? Number.NEGATIVE_INFINITY) > ANSWER_AGAIN_MS && q.markers.some(m => screen.includes(m)),
+    )
+    if (!question) continue
+    const shown = lastLines(screen)
+    if (!(await confirmed(`${question.text}\n\n${shown}`, crypto.randomUUID()))) {
+      tmux(['kill-session', '-t', `=${name}`])
+      return failed(report, 'Cancelled.')
+    }
+    if (lastLines(tmux(['capture-pane', '-p', '-t', pane]).output) !== shown) continue
+    const onTrust = await moveCursor(
+      () => tmux(['capture-pane', '-p', '-t', pane]).output,
+      keys => tmux(['send-keys', '-t', pane, ...keys]),
+      codexKeysToTrust,
+    )
+    if (!onTrust) continue
+    tmux(['send-keys', '-t', pane, 'Enter'])
+    answered.set(question.text, Date.now())
+    deadline = Date.now() + START_TIMEOUT_MS
+  }
+  const left = tmux(['has-session', '-t', `=${name}`]).ok
+    ? `codex did not show up in the notch. It still runs: tmux attach -t ${name} on this machine to see it.`
+    : 'codex stopped before it was ready.'
+  return failed(report, `${left}\n\n${lastLines(screen)}`)
+}
+
+/** A folder as Codex names it: by its real path (`/private/var/…` for `/var/…` on macOS). */
+function realFolder(path: string): string {
+  try {
+    return realpathSync(path).replace(/[\\/]+$/, '')
+  } catch {
+    return path.replace(/[\\/]+$/, '')
+  }
 }
 
 const failed = (report: Report, text: string): null => {
