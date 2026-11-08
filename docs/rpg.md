@@ -1,11 +1,11 @@
 # Tonton's progression (rules version 2)
 
 One account has one Tonton. Every machine contributes to it. A hackathon never resets the hero. Work rewards apply
-equally to Claude Code and OpenCode. Cosmetics change appearance; combat upgrades change combat statistics.
+equally to Claude Code, OpenCode and Codex. Cosmetics change appearance; combat upgrades change combat statistics.
 
 ## Rewards
 
-Rules version 2 rewards the work Claude Code and OpenCode actually do: answered prompts, minutes of work, finished
+Rules version 2 rewards the work Claude Code, OpenCode and Codex actually do: answered prompts, minutes of work, finished
 tasks and pushes. Version 1 rewarded only checklist items and pool tasks, and Claude Code rarely writes a checklist.
 
 | Source | XP | Sparks | Identity and limit |
@@ -14,7 +14,7 @@ tasks and pushes. Version 1 rewarded only checklist items and pool tasks, and Cl
 | Work time | 1 per minute the turn worked | — | Every 10 minutes of a turn still going, a receipt of its own (+10); the rest on the turn's receipt, 60 minutes at most there. Waits on a permission prompt excluded where the agent can tell |
 | First prompted turn of the UTC day | 20, plus 10 per day of streak | — | Account and UTC day; 50 at most, once a day for the whole account |
 | Commit pushed, or Perforce changelist submitted | 15 | — | Commit hash, or server and changelist; once each, whichever remote |
-| Completed checklist task (`TodoWrite`, `TaskUpdate` to completed, OpenCode's `todowrite`) | 10 | 1 | Session and normalized task text; once, even after reopening |
+| Completed checklist task (`TodoWrite`, `TaskUpdate` to completed, OpenCode's `todowrite`, Codex's `update_plan`) | 10 | 1 | Session and normalized task text; once, even after reopening |
 | Completed pool task | 50 | 5 | Pool and task id; once for the assignee at completion |
 | Accepted review | 20 | 2 | Pool and task id; once for the reviewer at acceptance |
 | Won combat encounter | 15 | 2 | Run and encounter id; once per encounter |
@@ -60,14 +60,15 @@ implementation owns the resulting stat multipliers.
 
 ### How the agent finds the work
 
-The agent reads Claude Code's transcripts and OpenCode's events as they come. A Claude Code turn is named by the
+The agent reads Claude Code's transcripts, OpenCode's events and Codex's rollouts as they come. A Claude Code turn is named by the
 `turn_duration` line that ends it. The `origin` of the line that starts it says who did: `human` and the notch are its
 user, while task notifications, scheduled wakeups and other sessions' messages are not. An OpenCode 1 turn is a user message and
 the answers that name it as their parent, from the prompt to the last answer. An OpenCode 2 turn runs from busy to
-idle and is named by its prompt. A pool post is its `<pool kind=…>` envelope in both tools. Time waiting on a
+idle and is named by its prompt. A Codex turn runs from its rollout's `task_started` to its `task_complete` or
+`turn_aborted`, and is named by its turn id. A pool post is its `<pool kind=…>` envelope in every tool. Time waiting on a
 permission prompt comes off the turn when the agent sees the answer: OpenCode's prompts, and Claude Code's answered
 from the notch, the website or the phone. A Claude Code prompt answered in its own terminal can't be timed.
-`TodoWrite`, OpenCode's `todowrite` and `TaskUpdate` to completed are tasks. `TaskUpdate` uses the subject it gives,
+`TodoWrite`, OpenCode's `todowrite`, Codex's `update_plan` and `TaskUpdate` to completed are tasks. `TaskUpdate` uses the subject it gives,
 or the one `TaskCreate` gave that task. Pushes and submits come from what a shell call printed
 (`agent/src/cluster/detect.ts`). A push counts the session's own commits on that branch since its last push, else
 the head the push names. Each commit counts once by its hash, so pushing it again or to another remote earns nothing
@@ -79,7 +80,9 @@ Only new work earns live. When the agent starts following a session (a new chann
 bridge meeting a session halfway), what it reads first only tells it where the session is. The welcome backfill pays
 the past once. A minute after the background service starts with an updated agent, it reads this machine's last 14
 days, once per relay and account. That covers every Claude Code transcript, including sessions started without
-Tonton's channel, and OpenCode 1's database, read-only. It uses the same code as the live agent, so every reward has
+Tonton's channel, OpenCode 1's database, and Codex's rollouts (plain, or `.jsonl.zst` once Codex compressed them),
+read-only. Machines that had their backfill before Codex was supported read their Codex rollouts once more, under a
+marker of their own. It uses the same code as the live agent, so every reward has
 the identity the live agent would give it and nothing counts twice. A marker and a lock in the agent's `rpg` folder
 keep it to one run. It runs again at the next start if a reward could not be kept. Subagents' transcripts and
 sessions are left out, as live: their work is inside their parent's turn. OpenCode 2 history is not backfilled, and a

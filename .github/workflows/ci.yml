@@ -20,6 +20,9 @@ jobs:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bun run check
+      # Codex itself, pinned, so the tests against a real Codex run too: its app-server finds Tonton's hooks and computes
+      # the trust hashes the diagnosis checks (agent/test/codex.test.ts). The other Codex tests use stand-ins.
+      - run: npm install --global @openai/codex@0.142.2
       - run: bun test
       - run: sh -n scripts/install.sh && sh -n scripts/install-relay.sh
 

@@ -72,10 +72,15 @@ and timing.
   install goes on with a warning, and `claude` from that PowerShell starts without the channel.
 - When OpenCode is set up, adds `tonton-claude.js` to its plugins folder (`~/.config/opencode/plugins`). OpenCode loads it
   on its next start (`opencode service restart` with OpenCode 2), and its sessions show up next to Claude Code's.
+- When Codex is set up (`~/.codex`, `$CODEX_HOME`, or `codex` on the PATH), adds Tonton's hooks to `hooks.json` and the
+  `tonton` MCP server to `config.toml` in that folder, and leaves the rest of both files as it was. Codex only runs a hook
+  its user trusts: open `/hooks` in Codex once and trust Tonton's. `tonton status` and the diagnosis say when they are not
+  trusted yet.
 
 `tonton status` checks the connection, `tonton uninstall` removes everything. From the Mac, Settings › Machines ›
 **Diagnose** runs the same kind of checks on a machine and offers a **Repair** for each step of the install that is off:
-the background service, the hooks, the MCP server, the launcher, the status line and the OpenCode plugin. A repair never
+the background service, the hooks, the MCP server, the launcher, the status line, the OpenCode plugin and Codex's hooks
+and MCP server. A repair never
 rewrites a `settings.json` that is not valid JSON, nor hooks the user turned off. The agent logs what it does to
 `~/.tonton/tonton.log`, never what Claude writes: Settings › Machines › **Show agent log** reads its last 300 lines from the
 Mac, sealed on the way, with the account key, the machine's credential, tokens and proxy passwords taken out.
@@ -94,6 +99,13 @@ the previous agent until claude restarts.
 | `claude` in a terminal (launcher installed) | ✅ | ✅ | ✅ |
 | Any other way (IDE, script, cmd.exe…) | ✅ | read only | — |
 | OpenCode (1 or 2) | ✅ | ✅ | ✅ |
+| Codex from the notch, or `tonton codex` in a terminal | ✅ | ✅ | ✅ |
+| `codex` in a terminal | ✅ | read only | auto-approve rules only |
+
+`tonton codex` runs Codex's own TUI on an app-server of its own, on a unix socket in `~/.tonton/run/codex` that only you
+can open, and Tonton drives the session through that server as the TUI does: whichever answers a permission first wins.
+It passes its arguments to Codex, and runs Codex's other commands (`codex exec`, `codex login`…) as they are. On Windows
+it runs plain `codex`.
 
 On first launch, Claude Code asks you to confirm "I am using this for local development": channels are still a research preview.
 
