@@ -20,6 +20,8 @@ const DRAIN_BATCH = 500
 const PENDING_LIMIT = 10_000
 /** Written once the welcome backfill of rules version 2 is done for this relay and account. */
 const BACKFILL_DONE = 'backfill-v2'
+/** Written once Codex's rollouts were read too: a machine that had the welcome backfill before Codex gets it once. */
+const BACKFILL_CODEX_DONE = 'backfill-codex-v1'
 /** A backfill that held its lock this long died: another process may take over. */
 const BACKFILL_STALE_MS = 30 * 60_000
 
@@ -79,13 +81,16 @@ export class AgentRPG {
   }
 
   /**
-   * The welcome backfill, once per relay and account on this machine: two weeks of Claude Code and OpenCode work, as
-   * pending rewards like any other. False when it already ran, or another process of the machine is running it.
+   * The welcome backfill, once per relay and account on this machine: two weeks of Claude Code, OpenCode and Codex work,
+   * as pending rewards like any other. Where it ran before Codex was read, it reads Codex's alone, once. False when it
+   * already ran, or another process of the machine is running it.
    */
   async backfill(sources: BackfillSources = backfillSources(), now = Date.now()): Promise<boolean> {
     const done = join(this.directory, BACKFILL_DONE)
+    const codexDone = join(this.directory, BACKFILL_CODEX_DONE)
     const lock = `${done}.lock`
-    if (existsSync(done)) return false
+    const codexOnly = existsSync(done)
+    if (codexOnly && (existsSync(codexDone) || !sources.codex)) return false
     mkdirSync(this.directory, { recursive: true, mode: 0o700 })
     try {
       writeFileSync(lock, String(process.pid), { flag: 'wx', mode: 0o600 })
@@ -98,8 +103,9 @@ export class AgentRPG {
       }
     }
     try {
-      await this.earn(await backfillRewards(sources, now))
-      writeFileSync(done, new Date(now).toISOString(), { mode: 0o600 })
+      await this.earn(await backfillRewards(codexOnly ? { codex: sources.codex } : sources, now))
+      if (!codexOnly) writeFileSync(done, new Date(now).toISOString(), { mode: 0o600 })
+      writeFileSync(codexDone, new Date(now).toISOString(), { mode: 0o600 })
       return true
     } finally {
       rmSync(lock, { force: true })

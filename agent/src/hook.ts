@@ -163,12 +163,15 @@ function unlinkSession(sessionId: string) {
   }
 }
 
-/** Removes links no hook has touched for a week. Each hook event rewrites its session's link. */
+/**
+ * Removes links no hook has touched for a week, and the codex pids Windows hooks keep (agent/src/codex/hook.ts). Each
+ * hook event rewrites its session's link.
+ */
 export function pruneLinks(run: string, now = Date.now()) {
   try {
     for (const file of readdirSync(run)) {
       const path = join(run, file)
-      const modified = /^\d+\.json$/.test(file) ? statSync(path, { throwIfNoEntry: false })?.mtimeMs : undefined
+      const modified = /^(\d+\.json|codex-[\w-]+\.pid)$/.test(file) ? statSync(path, { throwIfNoEntry: false })?.mtimeMs : undefined
       if (modified !== undefined && now - modified > LINK_MAX_AGE_MS) rmSync(path, { force: true })
     }
   } catch {

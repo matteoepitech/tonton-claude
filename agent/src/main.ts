@@ -1,5 +1,6 @@
 import { runChannel } from './channel'
 import { CLUSTER_USAGE, runClusterCommand } from './cluster-cli'
+import { runCodexHook } from './codex/hook'
 import { loadConfig, saveConfig, VERSION } from './config'
 import { runHook } from './hook'
 import { install, status, uninstall } from './install'
@@ -21,12 +22,13 @@ ${CLUSTER_USAGE}
 const [command, ...args] = process.argv.slice(2)
 
 switch (command) {
+  // Codex runs `hook codex` and `channel codex` (agent/src/install/codex.ts); Claude Code runs them bare.
   case 'hook':
-    await runHook()
+    await (args[0] === 'codex' ? runCodexHook() : runHook())
     process.exit(0)
     break
   case 'channel':
-    await runChannel()
+    await runChannel(args[0] === 'codex' ? 'codex' : 'claude')
     break
   case 'opencode':
     await runOpenCode()

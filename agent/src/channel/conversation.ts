@@ -1,11 +1,16 @@
-import { basename } from 'node:path'
+import { statSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { seal } from '../../../shared/crypto'
 import type { ContextUsage, Entry, PermissionDetail, SealedEntry, TokenCounts, TurnTime } from '../../../shared/protocol'
 import { cutText } from '../../../shared/text'
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { EventDetector } from '../cluster/detect'
+import { homeOfRollout, threadName } from '../codex/home'
+import { type CodexLine, type CodexRateLimits, CodexRollout } from '../codex/rollout'
 import { type AgentConfig, paths } from '../config'
 import { gitBranch } from '../git'
+import { postHook } from '../hook'
+import { log } from '../log'
 import type { AgentRPG } from '../rpg'
 import { setPoolMode, setPoolRules } from '../rules'
 import { backlogImages, forgetOldImages } from '../transcript/images'
@@ -43,6 +48,14 @@ interface PendingPermission extends PermissionDetail {
 
 /** State of the session this channel serves, and the messages that keep the relay in sync with it. */
 export class Conversation {
+  /** A Codex session: its rollout is read instead of a Claude Code transcript (agent/src/codex/rollout.ts). */
+  private readonly codex: boolean
+  /** Codex's rollouts are read with what came before in them: calls are matched to their output. */
+  private rollout: CodexRollout | null
+  /** The name a Codex user gave the thread, and when its index was last read. */
+  private codexName: { name?: string; read: number } = { read: 0 }
+  /** The plan's usage Codex last reported, for its limits (#373). */
+  codexLimits: CodexRateLimits | undefined
   private entries: Entry[] = []
   private title: string | undefined
   private costUSD: number | undefined
@@ -99,8 +112,10 @@ export class Conversation {
     /** Hands Claude what its clusters send it, and tells Claude Code the cluster tools changed. */
     cluster: { live(text: string): void; toolsChanged(): void } = { live: () => {}, toolsChanged: () => {} },
     /** The machine's setup, for the clusters its owner put this session's folder in; none in the tests. */
-    config?: AgentConfig,
+    private readonly config?: AgentConfig,
   ) {
+    this.codex = link.tool === 'codex'
+    this.rollout = this.codex ? new CodexRollout() : null
     this.shares = new SessionShares(
       () => link.sessionId,
       key,
@@ -114,7 +129,7 @@ export class Conversation {
       post,
       text => pool.deliver(text),
       () => ({
-        tool: 'claude',
+        tool: this.codex ? 'codex' : 'claude',
         model: this.model,
         usage: poolUsage({ tokens: this.tokens, ...this.usage }),
         // The plan's windows from the status line: the pool plans around them (agent/src/channel/pool-limits.ts).
@@ -129,6 +144,7 @@ export class Conversation {
       () => ({ costUSD: this.costUSD, turns: this.turns }),
       {
         interrupt: () => {
+          if (this.codex) return 'Tonton cannot stop a Codex session yet.'
           const command = {
             name: 'interrupt' as const,
             sessionId: link.sessionId,
@@ -183,6 +199,7 @@ export class Conversation {
           lines: (lines, initial) => this.onLines(lines, initial),
           reset: () => {
             this.entries = []
+            this.rollout = this.codex ? new CodexRollout() : null
             this.workLog = new TranscriptWork()
             this.pushes = new EventDetector()
             this.tokens = undefined
@@ -191,9 +208,11 @@ export class Conversation {
           },
         })
       : null
-    this.subagents = link.transcriptPath
-      ? new Subagents(link.transcriptPath, (entries, backlog) => this.onSubEntries(entries, backlog))
-      : null
+    // Codex's subagents write rollouts of their own, which their parent's does not name.
+    this.subagents =
+      link.transcriptPath && !this.codex
+        ? new Subagents(link.transcriptPath, (entries, backlog) => this.onSubEntries(entries, backlog))
+        : null
   }
 
   start() {
@@ -201,7 +220,8 @@ export class Conversation {
     this.subagents?.start()
     if (this.tailer) this.tailer.start()
     else this.announce()
-    this.usageTimer = setInterval(() => this.readUsage(), USAGE_POLL_MS)
+    // Codex has no status line: its usage is in the rollout.
+    if (!this.codex) this.usageTimer = setInterval(() => this.readUsage(), USAGE_POLL_MS)
     this.autoJoin?.start()
   }
 
@@ -216,7 +236,8 @@ export class Conversation {
   /** How this session shows in its clusters: the folder's name, never its path. */
   private clusterSelf() {
     const cwd = this.cwd()
-    return { tool: 'claude' as const, model: this.model, project: projectOf(cwd), machine: this.machine, ...branchOf(cwd) }
+    const tool = this.codex ? ('codex' as const) : ('claude' as const)
+    return { tool, model: this.model, project: projectOf(cwd), machine: this.machine, ...branchOf(cwd) }
   }
 
   /** Everything the relay needs after a (re)connection. */
@@ -224,7 +245,8 @@ export class Conversation {
     const { sessionId } = this.link
     const cwd = this.cwd()
     const backlog = [...backlogImages(this.entries), ...this.subEntries]
-    const info = { machine: this.machine, platform: process.platform, cwd, project: projectOf(cwd) }
+    const tool = this.codex ? { tool: 'codex' as const } : {}
+    const info = { machine: this.machine, platform: process.platform, cwd, project: projectOf(cwd), ...tool }
     this.post(async () => ({ t: 'hello', sessionId, info: await seal(this.key, info), channel: this.canChat }))
     this.postEntries(backlog, true)
     this.postMeta()
@@ -270,8 +292,11 @@ export class Conversation {
     const commands: Record<string, string> = {}
     const work: WorkFacts = { turns: [], tasks: [] }
     let metaChanged = false
+    let status: 'working' | 'idle' | undefined
     for (const line of lines) {
-      const parsed = parseLine(line)
+      const parsed: CodexLine = this.rollout ? this.rollout.line(line) : parseLine(line)
+      if (parsed.rateLimits) this.codexLimits = parsed.rateLimits
+      if (parsed.status) status = parsed.status
       fresh.push(...parsed.entries)
       Object.assign(commands, parsed.commands)
       const facts = this.workLog.line(parsed)
@@ -314,6 +339,7 @@ export class Conversation {
     this.cluster.observe(this.detector.read(fresh, id => commands[id]))
 
     const { sessionId } = this.link
+    if (status) this.postStatus(status)
     if (fresh.length) this.postEntries(fresh, false)
     this.shares.entries(fresh)
     if (metaChanged || fresh.some(e => e.kind === 'assistant' || e.kind === 'user' || isTodoWrite(e))) this.postMeta()
@@ -379,23 +405,24 @@ export class Conversation {
 
   private postMeta() {
     const last = this.entries.findLast(e => e.kind === 'assistant' || e.kind === 'user')
+    const title = (this.codex ? this.threadName() : undefined) ?? this.title
     const meta = {
-      title: this.title,
+      title,
       costUSD: this.costUSD,
       tokens: this.tokens,
       context: this.context,
       lastMessage: last && 'text' in last ? cutText(last.text, 200) : undefined,
       ...this.usage,
-      terminal: Boolean(this.link.tmux),
-      // Without tmux nothing can be typed: the notch offers no command.
-      commands: this.link.tmux ? [...COMMANDS] : [],
+      // Without tmux nothing can be typed: the notch offers no command. Nothing is typed in Codex yet.
+      terminal: Boolean(this.link.tmux) && !this.codex,
+      commands: this.link.tmux && !this.codex ? [...COMMANDS] : [],
       model: this.model,
       ...branchOf(this.cwd()),
       tasks: taskProgress(latestTodos(this.entries)) ?? undefined,
       turns: this.turns.length ? this.turns : undefined,
     }
     this.post(async () => ({ t: 'meta', sessionId: this.link.sessionId, meta: await seal(this.key, meta) }))
-    this.shares.setInfo({ project: projectOf(this.cwd()), title: this.title })
+    this.shares.setInfo({ project: projectOf(this.cwd()), title, ...(this.codex ? { tool: 'codex' as const } : {}) })
     this.work.descriptionChanged()
     this.cluster.descriptionChanged()
     this.safety.usageChanged()
@@ -403,6 +430,25 @@ export class Conversation {
 
   private cwd(): string {
     return this.link.cwd ?? process.cwd()
+  }
+
+  /**
+   * A turn of Codex started or ended, as its rollout says. Its hooks say so too once its user trusted them; until then,
+   * and when a turn fails or is interrupted, which run no Stop hook, the rollout is all there is.
+   */
+  private postStatus(status: 'working' | 'idle') {
+    if (!this.codex || !this.config) return
+    const event = { hook_event_name: status === 'working' ? 'UserPromptSubmit' : 'Stop', session_id: this.link.sessionId }
+    void postHook(this.config, event).catch(error => log('codex status failed', String(error)))
+  }
+
+  /** The name a Codex user gave the thread with /rename, read again when Codex's index of names changes. */
+  private threadName(): string | undefined {
+    const home = this.link.transcriptPath ? homeOfRollout(this.link.transcriptPath) : undefined
+    if (!home) return undefined
+    const modified = statSync(join(home, 'session_index.jsonl'), { throwIfNoEntry: false })?.mtimeMs ?? 0
+    if (modified !== this.codexName.read) this.codexName = { name: threadName(home, this.link.sessionId), read: modified }
+    return this.codexName.name
   }
 
   private postPermission(requestId: string) {
