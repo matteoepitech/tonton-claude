@@ -167,7 +167,11 @@ describe('Codex through the relay', () => {
       branch: 'hero-branch',
       terminal: false,
       commands: [],
+      // Its ChatGPT plan's windows, apart from Claude's.
+      codexFiveHourLimit: { usedPercent: 12, resetsAt: new Date(1_793_800_000_000).toISOString() },
+      codexSevenDayLimit: { usedPercent: 3, resetsAt: new Date(1_794_300_000_000).toISOString() },
     })
+    expect(meta.fiveHourLimit).toBeUndefined()
     expect(meta.costUSD).toBeUndefined()
   })
 

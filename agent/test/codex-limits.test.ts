@@ -1,35 +1,39 @@
 import { describe, expect, test } from 'bun:test'
-import { codexLimits } from '../src/codex/limits'
-
-const at = (iso: string) => Date.parse(iso) / 1000
+import { codexPlanWindows } from '../src/codex/limits'
+import { CodexRollout } from '../src/codex/rollout'
 
 describe("Codex's plan windows", () => {
-  test('a rollout snapshot gives the 5-hour and the weekly window, by their length', () => {
-    const rollout = {
-      limit_id: 'codex',
-      primary: { used_percent: 42.5, window_minutes: 300, resets_at: at('2026-11-08T15:00:00Z') },
-      secondary: { used_percent: 7, window_minutes: 10080, resets_at: at('2026-11-12T09:00:00Z') },
-      plan_type: 'plus',
+  test("a rollout's token_count gives the 5-hour and the weekly window, by their length", () => {
+    const line = {
+      timestamp: '2026-11-08T10:00:00.000Z',
+      type: 'event_msg',
+      payload: {
+        type: 'token_count',
+        info: null,
+        rate_limits: {
+          limit_id: 'codex',
+          primary: { used_percent: 42.5, window_minutes: 300, resets_at: Date.parse('2026-11-08T15:00:00Z') / 1000 },
+          secondary: { used_percent: 7, window_minutes: 10080, resets_at: Date.parse('2026-11-12T09:00:00Z') / 1000 },
+          plan_type: 'plus',
+        },
+      },
     }
-    expect(codexLimits(rollout)).toEqual({
-      fiveHour: { usedPercent: 42.5, resetsAt: '2026-11-08T15:00:00.000Z' },
-      sevenDay: { usedPercent: 7, resetsAt: '2026-11-12T09:00:00.000Z' },
+    const parsed = new CodexRollout().line(JSON.stringify(line))
+    expect(codexPlanWindows(parsed.rateLimits)).toEqual({
+      codexFiveHourLimit: { usedPercent: 42.5, resetsAt: '2026-11-08T15:00:00.000Z' },
+      codexSevenDayLimit: { usedPercent: 7, resetsAt: '2026-11-12T09:00:00.000Z' },
     })
   })
 
-  test("the app-server's snapshot reads the same, and windows without a length go by their place", () => {
-    expect(codexLimits({ primary: { usedPercent: 101, resetsAt: at('2026-11-08T15:00:00Z') }, secondary: null })).toEqual({
-      fiveHour: { usedPercent: 100, resetsAt: '2026-11-08T15:00:00.000Z' },
+  test('windows without a length go by their place, and what cannot be read is left out', () => {
+    expect(codexPlanWindows({ primary: { usedPercent: 101, resetsAt: '2026-11-08T15:00:00.000Z' } })).toEqual({
+      codexFiveHourLimit: { usedPercent: 100, resetsAt: '2026-11-08T15:00:00.000Z' },
     })
-    expect(
-      codexLimits({ primary: { usedPercent: 3, windowDurationMins: 10080, resetsAt: at('2026-11-12T09:00:00Z') } }).sevenDay?.usedPercent,
-    ).toBe(3)
-  })
-
-  test('what cannot be read is left out', () => {
-    expect(codexLimits(null)).toEqual({})
-    expect(codexLimits({ primary: { used_percent: 'a lot' }, secondary: { used_percent: 5, window_minutes: 60, resets_at: 1 } })).toEqual(
-      {},
+    expect(codexPlanWindows({ secondary: { usedPercent: 3, resetsAt: '2026-11-12T09:00:00.000Z' } }).codexSevenDayLimit?.usedPercent).toBe(
+      3,
     )
+    expect(codexPlanWindows({ primary: { usedPercent: 5, windowMinutes: 60, resetsAt: '2026-11-08T15:00:00.000Z' } })).toEqual({})
+    expect(codexPlanWindows({ primary: { usedPercent: 5 } })).toEqual({})
+    expect(codexPlanWindows(undefined)).toEqual({})
   })
 })

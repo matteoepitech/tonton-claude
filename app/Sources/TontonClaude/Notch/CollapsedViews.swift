@@ -92,7 +92,7 @@ struct PeekView: View {
             Color.clear.frame(height: state.notchSize.height)
             if let s = state.peekSession {
                 HStack(spacing: 8) {
-                    StatusDot(status: s.status, limit: s.fiveHourLimit)
+                    StatusDot(status: s.status, limit: s.fiveHourLimit, tool: s.codingTool)
                     Text("\(s.machine) · \(s.displayName)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
                     Text(state.peekText ?? s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }

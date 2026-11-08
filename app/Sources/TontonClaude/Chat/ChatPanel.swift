@@ -248,7 +248,7 @@ struct ChatHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                StatusDot(status: session.status, limit: session.fiveHourLimit)
+                StatusDot(status: session.status, limit: session.fiveHourLimit, tool: session.codingTool)
                 Text(session.displayName).font(.notch(13, weight: .bold)).lineLimit(1)
                 Text("·").font(.notch(12)).foregroundStyle(Theme.secondary).accessibilityHidden(true)
                 ToolMark(tool: session.codingTool, size: 10)

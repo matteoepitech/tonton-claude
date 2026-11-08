@@ -1,50 +1,38 @@
-// Codex's plan windows (ChatGPT plans: a 5-hour one and a weekly one), as its rollouts write them in `token_count`
-// events (`rate_limits`, snake_case) and its app-server sends them (`account/rateLimits/updated`, camelCase). Read as
-// Claude's windows are, but sent apart from them (SessionMeta.codexFiveHourLimit): they are another account's plan.
+// Codex's plan windows (ChatGPT plans: a 5-hour one and a weekly one), as the rollout parser reads them from
+// `token_count` events. They go in the session's meta apart from Claude's (SessionMeta.codexFiveHourLimit): they are
+// another account's plan, which an app reading the session as Claude Code must not count as its Claude plan.
 
 import type { UsageLimit } from '../../../shared/protocol'
-
-export interface CodexLimits {
-  fiveHour?: UsageLimit
-  sevenDay?: UsageLimit
-}
+import type { CodexRateLimits, CodexRateWindow } from './rollout'
 
 const FIVE_HOURS = 300
 const ONE_WEEK = 7 * 24 * 60
 
-const number = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined)
-
-/** One window: its use, its length in minutes, and when it resets (seconds since 1970), whichever spelling. */
-function window(value: unknown): { limit: UsageLimit; minutes?: number } | null {
-  if (!value || typeof value !== 'object') return null
-  const w = value as Record<string, unknown>
-  const used = number(w.used_percent ?? w.usedPercent)
-  const resets = number(w.resets_at ?? w.resetsAt)
-  if (used === undefined || resets === undefined) return null
-  const minutes = number(w.window_minutes ?? w.windowDurationMins)
-  return {
-    limit: { usedPercent: Math.min(100, Math.max(0, used)), resetsAt: new Date(resets * 1000).toISOString() },
-    ...(minutes === undefined ? {} : { minutes }),
-  }
+export interface CodexPlanWindows {
+  codexFiveHourLimit?: UsageLimit
+  codexSevenDayLimit?: UsageLimit
 }
 
+const limit = (window: CodexRateWindow): UsageLimit | null =>
+  window.resetsAt && Number.isFinite(Date.parse(window.resetsAt))
+    ? { usedPercent: Math.min(100, Math.max(0, window.usedPercent)), resetsAt: window.resetsAt }
+    : null
+
 /**
- * The 5-hour and weekly windows of a rate-limit snapshot. Each goes by its length when Codex gives it, else by its
- * place: primary is the short one, secondary the weekly one. A window of another length is left out.
+ * The 5-hour and weekly windows of Codex's latest reading. Each goes by its length when Codex gives it, else by its
+ * place: primary is the short one, secondary the weekly one. A window of another length, or without a reset time, is left out.
  */
-export function codexLimits(snapshot: unknown): CodexLimits {
-  if (!snapshot || typeof snapshot !== 'object') return {}
-  const s = snapshot as Record<string, unknown>
-  const found: CodexLimits = {}
-  for (const [place, value] of [
-    ['primary', s.primary],
-    ['secondary', s.secondary],
+export function codexPlanWindows(limits: CodexRateLimits | undefined): CodexPlanWindows {
+  const found: CodexPlanWindows = {}
+  for (const [place, window] of [
+    ['primary', limits?.primary],
+    ['secondary', limits?.secondary],
   ] as const) {
-    const read = window(value)
-    if (!read) continue
-    const minutes = read.minutes ?? (place === 'primary' ? FIVE_HOURS : ONE_WEEK)
-    if (minutes === FIVE_HOURS) found.fiveHour = read.limit
-    else if (minutes === ONE_WEEK) found.sevenDay = read.limit
+    const read = window && limit(window)
+    if (!window || !read) continue
+    const minutes = window.windowMinutes ?? (place === 'primary' ? FIVE_HOURS : ONE_WEEK)
+    if (minutes === FIVE_HOURS) found.codexFiveHourLimit = read
+    else if (minutes === ONE_WEEK) found.codexSevenDayLimit = read
   }
   return found
 }
