@@ -2,6 +2,8 @@
 // agent/src/transcript/parser.ts does for Claude Code's transcripts: each line is `{ timestamp, type, payload }`, with
 // `type` one of session_meta, turn_context, response_item, event_msg or compacted (RolloutItem in
 // codex-rs/protocol/src/protocol.rs). It is not a public format either: anything unexpected is skipped, never thrown.
+// The Mac reads the rollouts of the sessions no agent reports the same way, with the same entry ids
+// (app/Sources/TontonCore/CodexRollout.swift): keep the two in step.
 //
 // A prompt is in the rollout twice, as the model's input (a `message` response item) and as the user's (a `user_message`
 // event): the event is the one shown, the model's input only lends it its images. An answer is a `message` response item;

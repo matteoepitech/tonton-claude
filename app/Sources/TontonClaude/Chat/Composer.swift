@@ -29,8 +29,12 @@ struct Composer: View {
             return session.agentOnline
                 ? String(localized: "Read only: click Update agent for this machine to message its OpenCode sessions.")
                 : String(localized: "Session offline: history only.")
-        // A Codex started plainly: only one run by `tonton codex`, as the notch starts them, takes messages.
+        // A Codex started plainly: only one run by `tonton codex`, as the notch starts them, takes messages. One read from
+        // this Mac's own files has no agent to start it with yet.
         case .codex:
+            if session.machineId == LocalSessions.machineId {
+                return String(localized: "Read only: install the agent on this Mac, then start Codex from the notch to message it.")
+            }
             return session.agentOnline
                 ? String(localized: "Read only: start Codex from the notch, or with tonton codex in a terminal, to message it.")
                 : String(localized: "Session offline: history only.")

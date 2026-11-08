@@ -1,5 +1,5 @@
 {
-  "about": "Codex's tool names, with the namespace of an MCP tool, under Claude Code's. Checked by agent/test/codex-rollout.test.ts; a Swift reader of Codex's rollouts checks it too.",
+  "about": "Codex's tool names, with the namespace of an MCP tool, under Claude Code's. Checked by agent/test/codex-rollout.test.ts and app/Tests/TontonCoreTests/CodexRolloutTests.swift.",
   "cases": [
     { "tool": "exec_command", "name": "Bash" },
     { "tool": "shell_command", "name": "Bash" },
