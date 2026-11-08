@@ -1,7 +1,9 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { open } from '../../../shared/crypto'
 import type { PromptPayload, RelayToAgent, SessionCommand } from '../../../shared/protocol'
+import { CodexNotch } from '../codex/notch'
+import { readServerRecord } from '../codex/wrapper'
 import { loadConfig, paths } from '../config'
 import { receiveDiagnoseRequest } from '../diagnose'
 import { postHook } from '../hook'
@@ -13,6 +15,7 @@ import { addSessionRules, openSessionRules, receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
 import { isClusterTool } from './cluster-work'
 import { Conversation } from './conversation'
+import { saveToInbox } from './inbox'
 import { ChannelServer } from './mcp'
 import { RelayConnection } from './relay-connection'
 import { type SessionLink, SessionLinkWatcher } from './session-link'
@@ -64,7 +67,11 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
     log('channel: not enrolled, staying idle')
     return
   }
-  const canChat = !codex && process.env.TONTON_CHANNEL === '1'
+  // A Codex run by `tonton codex` is this process's parent, an app-server the notch reaches through `tonton codex`'s
+  // socket; a plain `codex` has none, and the notch only shows its session.
+  const server = codex ? readServerRecord(process.ppid) : null
+  const notch = server ? new CodexNotch(server.socket, config.key, () => conversation) : null
+  const canChat = codex ? notch !== null : process.env.TONTON_CHANNEL === '1'
   const rpg = new AgentRPG(config)
   log('channel started', { parent: process.ppid, canChat, cwd: process.cwd(), ...(codex ? { tool } : {}) })
 
@@ -95,8 +102,8 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
   })
 
   const onRelayMessage = async (message: Extract<RelayToAgent, { t: 'prompt' | 'verdict' }>) => {
-    // Its hello says it cannot chat: nothing from the notch has a way into a Codex session yet.
-    if (codex) return log('channel: dropped a message for a Codex session', { kind: message.t })
+    // A plain codex: its hello says it cannot chat, so the notch sends nothing, and anything that comes is dropped.
+    if (codex) return notch ? notch.receive(message) : log('channel: dropped a message for a Codex session', { kind: message.t })
     if (message.t === 'verdict') {
       if (message.behavior === 'allow' && message.rule && conversation) {
         const { sessionId } = conversation.link
@@ -153,6 +160,7 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
       config,
     )
     conversation.start()
+    notch?.follow(link.sessionId)
   }
 
   relay.connect()
@@ -171,14 +179,7 @@ function unlink(file: string, sessionId: string) {
 /** Images and files from the notch are written to the inbox and handed to Claude as paths it can Read. */
 export function withAttachments(prompt: PromptPayload): string {
   if (!prompt.images.length) return prompt.text
-  mkdirSync(paths.inbox, { recursive: true, mode: 0o700 })
-  const files = prompt.images.map((image, index) => {
-    const extension = image.mediaType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png'
-    const name = basename(image.name || 'image').replace(/[^\w.-]/g, '_')
-    const file = join(paths.inbox, `${Date.now()}-${index}-${name}${/\.\w+$/.test(name) ? '' : `.${extension}`}`)
-    writeFileSync(file, Buffer.from(image.data, 'base64'), { mode: 0o600 })
-    return file
-  })
+  const files = saveToInbox(prompt.images).map(file => file.path)
   return `${prompt.text}\n\n[Attached from the notch: ${files.join(', ')}]`
 }
 

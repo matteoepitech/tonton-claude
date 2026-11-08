@@ -94,6 +94,44 @@ export interface CodexWrapperOptions {
   codex?: string[]
 }
 
+/** Codex's commands that are not its TUI on a new session (`codex --help`): they run as they are. */
+const SUBCOMMANDS = new Set([
+  'exec',
+  'e',
+  'review',
+  'login',
+  'logout',
+  'mcp',
+  'plugin',
+  'mcp-server',
+  'app-server',
+  'remote-control',
+  'app',
+  'completion',
+  'update',
+  'doctor',
+  'sandbox',
+  'debug',
+  'apply',
+  'a',
+  'resume',
+  'archive',
+  'delete',
+  'unarchive',
+  'fork',
+  'cloud',
+  'exec-server',
+  'features',
+  'help',
+])
+
+/** The subcommand the arguments name, if any: the first that is not an option or an option's value. */
+export function subcommandOf(args: readonly string[]): string | null {
+  const first = args.find(arg => !arg.startsWith('-'))
+  if (args.some(arg => arg === '--help' || arg === '-h' || arg === '--version' || arg === '-V')) return 'help'
+  return first !== undefined && SUBCOMMANDS.has(first) ? first : null
+}
+
 /** Runs Codex's TUI for the user, through an app-server Tonton can reach. The TUI's exit code. */
 export async function runCodex(args: string[], options: CodexWrapperOptions = {}): Promise<number> {
   const codex = options.codex ?? ['codex']
@@ -104,6 +142,7 @@ export async function runCodex(args: string[], options: CodexWrapperOptions = {}
     return await Bun.spawn([...codex, ...args], { stdio: ['inherit', 'inherit', 'inherit'], env: { ...process.env } }).exited
   }
   if (process.platform === 'win32') return plain('Windows')
+  if (subcommandOf(args)) return plain('a subcommand, not the TUI')
   const dir = codexRun(run)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   chmodSync(dir, 0o700)

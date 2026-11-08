@@ -6,6 +6,7 @@ import { cutText } from '../../../shared/text'
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { EventDetector } from '../cluster/detect'
 import { homeOfRollout, threadName } from '../codex/home'
+import { CODEX_COMMANDS } from '../codex/notch'
 import { type CodexLine, type CodexRateLimits, CodexRollout } from '../codex/rollout'
 import { type AgentConfig, paths } from '../config'
 import { gitBranch } from '../git'
@@ -280,6 +281,13 @@ export class Conversation {
     this.postPermission(requestId)
   }
 
+  /** No longer asked: answered in the terminal, or its turn ended. The notch, the website and the phone take it away. */
+  closePermission(requestId: string) {
+    if (!this.pending.has(requestId)) return
+    this.resolvePermission(requestId)
+    this.post(async () => ({ t: 'permission_closed', sessionId: this.link.sessionId, requestId }))
+  }
+
   /** Answered from the notch, the website or the phone: from the request to the answer, the turn waited and did not work. */
   resolvePermission(requestId: string) {
     const asked = this.pending.get(requestId)
@@ -413,9 +421,10 @@ export class Conversation {
       context: this.context,
       lastMessage: last && 'text' in last ? cutText(last.text, 200) : undefined,
       ...this.usage,
-      // Without tmux nothing can be typed: the notch offers no command. Nothing is typed in Codex yet.
+      // Without tmux nothing can be typed: the notch offers no command. Codex takes its commands from its app-server,
+      // when `tonton codex` runs it (canChat), and nothing is ever typed in it.
       terminal: Boolean(this.link.tmux) && !this.codex,
-      commands: this.link.tmux && !this.codex ? [...COMMANDS] : [],
+      commands: this.codex ? (this.canChat ? [...CODEX_COMMANDS] : []) : this.link.tmux ? [...COMMANDS] : [],
       model: this.model,
       ...branchOf(this.cwd()),
       tasks: taskProgress(latestTodos(this.entries)) ?? undefined,

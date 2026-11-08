@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { codexRun, readServerRecord, runCodex, serverRecords, startedThread } from '../src/codex/wrapper'
+import { codexRun, readServerRecord, runCodex, serverRecords, startedThread, subcommandOf } from '../src/codex/wrapper'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-codex-'))
 const run = join(dir, 'run')
@@ -43,6 +43,17 @@ describe('tonton codex', () => {
     expect(readFileSync(out, 'utf8').trim()).toBe('["-m","gpt-5-codex"]')
     expect(serverRecords(run)).toEqual([])
     expect(existsSync(record?.socket ?? '')).toBe(false)
+  })
+
+  test("Codex's subcommands run as they are; only its TUI goes through an app-server", async () => {
+    expect(subcommandOf(['exec', 'fix the build'])).toBe('exec')
+    expect(subcommandOf(['--version'])).toBe('help')
+    expect(subcommandOf(['-m', 'gpt-5-codex'])).toBeNull()
+    expect(subcommandOf(['fix the build'])).toBeNull()
+    rmSync(out, { force: true })
+    process.env.FAKE_CODEX_OUT = out
+    expect(await runCodex(['login'], { run, codex: fake })).toBe(0)
+    expect(readFileSync(out, 'utf8').trim()).toBe('plain ["login"]')
   })
 
   test('a thread that cannot be read is not one', () => {
