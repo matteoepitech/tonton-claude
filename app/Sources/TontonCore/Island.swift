@@ -77,6 +77,8 @@ public struct IslandLine: Equatable, Sendable {
     public let machine: String?
     /// What it needs when it needs the user, otherwise its status.
     public let text: String
+    /// From its sealed info: Claude Code when the blob is missing or does not say.
+    public var tool: CodingTool = .claudeCode
 
     /// Without the key: the states alone.
     public static func placeholders(_ state: IslandState) -> [IslandLine] {
@@ -85,6 +87,11 @@ public struct IslandLine: Equatable, Sendable {
                 id: $0.id, status: $0.status, project: "Session", machine: nil, text: SessionSummary.statusText(nil, status: $0.status))
         }
     }
+}
+
+extension Array where Element == IslandLine {
+    /// The island shows sessions of several tools: each line then says which runs it, as the notch's list does.
+    public var mixesTools: Bool { Set(map(\.tool)).count > 1 }
 }
 
 extension SessionVault {
@@ -96,7 +103,7 @@ extension SessionVault {
             // The island's state carries no permission request: a text that does not name the tool shows the status.
             return IslandLine(
                 id: session.id, status: session.status, project: info?.project ?? "Session", machine: info?.machine,
-                text: SessionSummary.statusText(detail, status: session.status))
+                text: SessionSummary.statusText(detail, status: session.status), tool: CodingTool(info?.tool))
         }
     }
 }

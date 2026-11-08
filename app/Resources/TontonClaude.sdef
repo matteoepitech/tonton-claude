@@ -2,8 +2,8 @@
 <!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
 <!-- Tonton Claude's AppleScript dictionary. Shortcuts uses it through its Run AppleScript action. -->
 <dictionary title="Tonton Claude Terminology">
-  <suite name="Tonton Claude Suite" code="TtCl" description="The Claude Code sessions in the notch.">
-    <command name="session list" code="TtClSLst" description="Every session in the notch, live ones first, as records: session (its id), project, machine, status, title, folder, and cost when costs are shown.">
+  <suite name="Tonton Claude Suite" code="TtCl" description="The Claude Code, OpenCode and Codex sessions in the notch.">
+    <command name="session list" code="TtClSLst" description="Every session in the notch, live ones first, as records: session (its id), project, machine, status, title, folder, tool (claude, opencode or codex), and cost when costs are shown.">
       <cocoa class="TontonSessionListCommand"/>
       <result type="any" description="A list of records."/>
     </command>

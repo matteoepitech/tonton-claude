@@ -7,7 +7,7 @@ const SHOWN = 20
 
 export function Journal({ hero, now }: { hero: RPGState; now: number }) {
   const entries = rpgJournal(hero, SHOWN)
-  if (!entries.length) return <Empty className="py-3">Finish a turn in Claude Code or OpenCode: Tonton earns XP for the work.</Empty>
+  if (!entries.length) return <Empty className="py-3">Finish a turn in Claude Code, OpenCode or Codex: Tonton earns XP for the work.</Empty>
   return (
     <section aria-label="Journal">
       <ol className="divide-y divide-dashed rounded-lg border bg-white px-3 text-sm">

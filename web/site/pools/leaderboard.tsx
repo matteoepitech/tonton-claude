@@ -3,7 +3,7 @@
 // each session's agent shares.
 import { TrophyIcon } from 'lucide-react'
 import { useState } from 'react'
-import { type LeaderPeriod, type LeaderRow, leaderboard } from '../../../shared'
+import { codingToolLabel, type LeaderPeriod, type LeaderRow, leaderboard } from '../../../shared'
 import { Empty, Toolbar } from '../common'
 import { compact, duration } from '../format'
 import { cn } from '../ui/cn'
@@ -72,7 +72,7 @@ function Table({ rows, withTool }: { rows: LeaderRow[]; withTool: boolean }) {
             <tr key={row.key} className={cn('border-t', index === 0 && row.tasksDone > 0 && 'bg-primary/10')}>
               <td className="px-3 py-2">{index === 0 && row.tasksDone > 0 ? <TrophyIcon className="size-4 text-warning" /> : index + 1}</td>
               <td className="px-3 py-2 font-medium">{row.name}</td>
-              {withTool && <td className="px-3 py-2">{row.tool === 'opencode' ? 'OpenCode' : 'Claude Code'}</td>}
+              {withTool && <td className="px-3 py-2">{codingToolLabel(row.tool)}</td>}
               <td className="px-3 py-2">{row.tasksDone}</td>
               <td className="px-3 py-2">{duration(row.secondsWorked)}</td>
               <td className="px-3 py-2">{row.costUSD === undefined ? '—' : `$${row.costUSD.toFixed(2)}`}</td>

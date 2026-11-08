@@ -3,6 +3,9 @@
 
 export type Status = 'starting' | 'working' | 'waiting' | 'permission' | 'idle' | 'error' | 'ended' | 'offline'
 
+/** The coding tool that runs a session, as the app names it in a record (`CodingTool.command`). */
+export type Tool = 'claude' | 'opencode' | 'codex'
+
 export interface Session {
   session: string
   project: string
@@ -10,9 +13,23 @@ export interface Session {
   status: Status
   title: string
   folder: string
+  /** `claude` with apps from before the field, which only listed the tool in the notch. */
+  tool: Tool
   /** Only when Settings › General › Show costs is on. */
   cost?: string
 }
+
+export const tools: Record<Tool, string> = { claude: 'Claude Code', opencode: 'OpenCode', codex: 'Codex' }
+
+/** The list has sessions of several tools: each one then says which runs it, as in the notch. */
+export const mixesTools = (sessions: Session[]): boolean => new Set(sessions.map(s => s.tool)).size > 1
+
+/**
+ * What Raycast's search looks in besides the project: the machine, the title and the tool by its name and its command,
+ * so "codex" finds Codex's sessions and "code" Claude Code's.
+ */
+export const keywords = (session: Session): string[] =>
+  [...new Set([session.machine, session.title, tools[session.tool], ...tools[session.tool].split(' '), session.tool])].filter(Boolean)
 
 export const statuses: Record<Status, { label: string; color: string }> = {
   starting: { label: 'Starting', color: '#8A8F98' },
@@ -56,6 +73,8 @@ export function parseSessions(output: string): Session[] {
     if (typeof fields.session !== 'string' || typeof fields.project !== 'string') return []
     const text = (key: string) => (typeof fields[key] === 'string' ? (fields[key] as string) : '')
     const status = text('status') in statuses ? (text('status') as Status) : 'offline'
+    // A tool this extension does not know yet reads as Claude Code, as it does in the app.
+    const tool = Object.hasOwn(tools, text('tool')) ? (text('tool') as Tool) : 'claude'
     const session: Session = {
       session: fields.session,
       project: fields.project,
@@ -63,6 +82,7 @@ export function parseSessions(output: string): Session[] {
       status,
       title: text('title'),
       folder: text('folder'),
+      tool,
     }
     if (text('cost')) session.cost = text('cost')
     return [session]

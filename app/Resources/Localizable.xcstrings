@@ -4999,12 +4999,12 @@
         }
       }
     },
-    "Finish a turn with Claude Code or OpenCode and Tonton earns his first XP." : {
+    "Finish a turn with Claude Code, OpenCode or Codex and Tonton earns his first XP." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Terminez un tour avec Claude Code ou OpenCode et Tonton gagne ses premiers XP."
+            "value" : "Terminez un tour avec Claude Code, OpenCode ou Codex et Tonton gagne ses premiers XP."
           }
         }
       }
@@ -8588,6 +8588,16 @@
         }
       }
     },
+    "Read only: the notch can't message this Codex session." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture seule : l’encoche ne peut pas écrire à cette session Codex."
+          }
+        }
+      }
+    },
     "Read the log again" : {
       "localizations" : {
         "fr" : {
@@ -10689,6 +10699,16 @@
         }
       }
     },
+    "The coding tools the agent found on this machine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les outils de code que l’agent a trouvés sur cette machine"
+          }
+        }
+      }
+    },
     "The current token stops working right away: every machine is signed out until you give it the new one. Other Macs signed in to this account need the new recovery key." : {
       "localizations" : {
         "fr" : {
@@ -10839,12 +10859,12 @@
         }
       }
     },
-    "The model Claude Code uses in this session" : {
+    "The model %@ uses in this session" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le modèle que Claude Code utilise dans cette session"
+            "value" : "Le modèle que %@ utilise dans cette session"
           }
         }
       }

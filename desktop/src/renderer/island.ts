@@ -13,6 +13,7 @@ import {
   liveActivityText,
   mostUrgent,
   needsAttention,
+  otherToolLabel,
   RelayClient,
   type Session,
   type SocketLike,
@@ -429,8 +430,9 @@ function sessionsBar(title: HTMLElement, live: Session[], count: HTMLElement, ga
     return [...(urgent ? [dot(urgent)] : []), title, ...tail, more]
   }
   if (peek) {
-    // Like the notch's banner: where it runs, and its status.
-    title.append(element('strong', `${peek.machine} · ${peek.name ?? peek.project}`), element('small', STATUS_LABELS[peek.status]))
+    // Like the notch's banner: where it runs, and its status, with its tool when it is not Claude Code.
+    const status = [STATUS_LABELS[peek.status], otherToolLabel(peek.tool)].filter(Boolean).join(' · ')
+    title.append(element('strong', `${peek.machine} · ${peek.name ?? peek.project}`), element('small', status))
     return [dot(peek.status), title, ...tail]
   }
   if (levelUp) {

@@ -11,6 +11,7 @@ import {
   memberName,
   moved,
   type OpenPool,
+  otherToolLabel,
   type PoolState,
   type PoolTaskItem,
   type PoolTaskState,
@@ -203,7 +204,7 @@ function TaskEditor({
               {sessions.map(session => (
                 <option key={`${session.account}/${session.session}`} value={`${session.account}/${session.session}`}>
                   {sessionName(state, session)}
-                  {session.profile?.tool === 'opencode' ? ' (OpenCode)' : ''}
+                  {otherToolLabel(session.profile?.tool) ? ` (${otherToolLabel(session.profile?.tool)})` : ''}
                 </option>
               ))}
               {!known && <option value={draft.assignee}>A session that left the pool</option>}

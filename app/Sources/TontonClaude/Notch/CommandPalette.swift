@@ -76,7 +76,9 @@ struct CommandPalette: View {
         let sessions = store.orderedSessions.map { session in
             Item(
                 id: "session-\(session.id)", icon: "bubble.left", title: session.displayName,
-                detail: "\(session.machine) · \(session.title ?? session.status.label)"
+                // The tool when it is not Claude Code, so "codex" finds Codex's sessions here as in the list.
+                detail: [session.machine, session.codingTool.otherLabel, session.title ?? session.status.label].compactMap { $0 }
+                    .joined(separator: " · ")
             ) {
                 store.selectedId = session.id
                 state.showHero = false

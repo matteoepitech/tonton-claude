@@ -32,7 +32,8 @@ final class PermissionNotifications {
     /// The session's first pending request, with its buttons. One notification per request: posting again replaces it.
     func post(_ session: SessionSummary, request: PermissionRequest, store: SessionStore) {
         let content = UNMutableNotificationContent()
-        content.title = "\(session.machine) · \(session.displayName)"
+        // The tool too when it is not Claude Code: whoever runs several sees which one asks.
+        content.title = [session.machine, session.displayName, session.codingTool.otherLabel].compactMap { $0 }.joined(separator: " · ")
         content.subtitle = String(localized: "Allow \(ToolLabel.text(request.toolName))?")
         content.body = String(request.description.prefix(200))
         content.userInfo = PermissionNotification.userInfo(sessionId: session.id, requestId: request.requestId)

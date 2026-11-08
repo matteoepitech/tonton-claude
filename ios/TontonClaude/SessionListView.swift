@@ -4,18 +4,23 @@ import TontonCore
 struct SessionListView: View {
     @Environment(PhoneStore.self) private var store
     @State private var settingsShown = false
+    /// By project, machine, title or tool, as in the notch: "codex" lists Codex's sessions.
+    @State private var query = ""
 
     var body: some View {
         @Bindable var store = store
+        let sessions = store.feed.sessions.filter { $0.matches(query.trimmingCharacters(in: .whitespaces)) }
+        // The tool of each session only says something when several are listed.
+        let mixed = store.feed.sessions.mixesTools
         NavigationStack(path: $store.path) {
             List {
                 if store.connection != .connected {
                     Section { ConnectionBanner(state: store.connection).font(.subheadline) }
                 }
-                ForEach(SessionGroup.groups(store.feed.sessions)) { group in
+                ForEach(SessionGroup.groups(sessions)) { group in
                     Section(group.kind.title) {
                         ForEach(group.sessions) { session in
-                            NavigationLink(value: session.id) { SessionRow(session: session) }
+                            NavigationLink(value: session.id) { SessionRow(session: session, tool: mixed ? session.codingTool : nil) }
                                 .swipeActions {
                                     if !session.status.isLive {
                                         Button("Remove", role: .destructive) { store.dismiss(session.id) }
@@ -30,8 +35,11 @@ struct SessionListView: View {
                     ContentUnavailableView(
                         "No sessions", systemImage: "terminal",
                         description: Text("Start claude on a machine of this account and it shows up here."))
+                } else if sessions.isEmpty && !store.feed.sessions.isEmpty {
+                    ContentUnavailableView.search(text: query)
                 }
             }
+            .searchable(text: $query, prompt: "Project, machine or tool")
             .refreshable { store.reconnect() }
             .navigationTitle("Sessions")
             .navigationDestination(for: String.self) { id in SessionView(sessionId: id) }
@@ -52,6 +60,8 @@ struct SessionListView: View {
 
 struct SessionRow: View {
     let session: SessionSummary
+    /// Shown when the list has sessions of several tools.
+    var tool: CodingTool?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -61,7 +71,13 @@ struct SessionRow: View {
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(session.status.tint.opacity(0.15)))
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    if let tool {
+                        Image(systemName: tool.symbol)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel(tool.label)
+                    }
                     Text(session.displayName).font(.headline).lineLimit(1)
                     Spacer(minLength: 8)
                     Text(session.lastActivity, format: .relative(presentation: .named))

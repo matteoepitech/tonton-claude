@@ -17,6 +17,7 @@ import {
   menuCommands,
   modelName,
   needsAttention,
+  otherToolLabel,
   type RelayClient,
   type Session,
   STATUS_LABELS,
@@ -25,7 +26,7 @@ import {
   toolLabel,
 } from '../../../shared'
 import type { SessionCommand, TodoItem } from '../../../shared/protocol'
-import { InlineText, Loading, Markdown, StatusDot } from '../common'
+import { InlineText, Loading, Markdown, StatusDot, ToolIcon } from '../common'
 import { Button } from '../ui/button'
 import { cn } from '../ui/cn'
 import { Confirm } from '../ui/dialog'
@@ -91,7 +92,7 @@ export function ChatHeader({
     session.machine,
     session.branch ? `⎇ ${session.branch}` : null,
     session.model ? modelName(session.model) : null,
-    session.tool === 'opencode' ? 'OpenCode' : null,
+    otherToolLabel(session.tool),
   ]
   return (
     <div className="flex flex-wrap items-center gap-2.5 border-b px-4 py-2.5">
@@ -102,7 +103,10 @@ export function ChatHeader({
       )}
       <StatusDot status={session.status} />
       <span className="flex min-w-0 flex-col">
-        <strong className="truncate font-medium">{session.name ?? session.project}</strong>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <ToolIcon tool={session.tool} />
+          <strong className="truncate font-medium">{session.name ?? session.project}</strong>
+        </span>
         <small className="truncate text-xs text-muted-foreground">{details.filter(Boolean).join(' · ')}</small>
       </span>
       <em className="ms-auto text-xs text-muted-foreground not-italic">

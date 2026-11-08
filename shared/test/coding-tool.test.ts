@@ -6,9 +6,42 @@ import { decodeClusterSessionProfile } from '../cluster'
 import { decodePoolEventBody, decodePoolSessionProfile, poolTaskSize } from '../pool'
 import { decodePoolMachineProfile, machinePlanLabel } from '../pool-machines'
 import type { PoolMachineProfile } from '../pool-protocol'
-import { CODING_TOOLS, codingToolLabel, isCodingTool } from '../session'
+import { CODING_TOOLS, codingToolLabel, codingToolOf, isCodingTool, mixesTools, otherToolLabel, sessionMatches } from '../session'
 
 describe('coding tools', () => {
+  test('a session names its tool beside its details only when it is not Claude Code', () => {
+    expect(codingToolOf('codex')).toBe('codex')
+    expect(codingToolOf(null)).toBe('claude')
+    expect(codingToolOf('aider')).toBe('claude')
+    expect(otherToolLabel('codex')).toBe('Codex')
+    expect(otherToolLabel('opencode')).toBe('OpenCode')
+    expect(otherToolLabel('claude')).toBeNull()
+    expect(otherToolLabel(null)).toBeNull()
+    expect(otherToolLabel('aider')).toBeNull()
+  })
+
+  test('a list mixes tools when two of them run its sessions, missing and unknown counting as Claude Code', () => {
+    expect(mixesTools([{ tool: null }, { tool: 'codex' }])).toBe(true)
+    expect(mixesTools([{ tool: 'opencode' }, { tool: 'codex' }])).toBe(true)
+    expect(mixesTools([{ tool: null }, { tool: 'claude' }, { tool: 'aider' }])).toBe(false)
+    expect(mixesTools([{ tool: 'codex' }, { tool: 'codex' }])).toBe(false)
+    expect(mixesTools([])).toBe(false)
+  })
+
+  test('the session search finds a tool by its name, like the notch', () => {
+    const codex = { name: null, project: 'shop', machine: 'Mac', title: 'Fix the cart', tool: 'codex' }
+    const claude = { name: 'Front', project: 'web', machine: 'PC', title: null, tool: null }
+    expect(sessionMatches(codex, 'codex')).toBe(true)
+    expect(sessionMatches(codex, ' CODEX ')).toBe(true)
+    expect(sessionMatches(claude, 'codex')).toBe(false)
+    expect(sessionMatches(claude, 'claude code')).toBe(true)
+    expect(sessionMatches(codex, 'cart')).toBe(true)
+    expect(sessionMatches(claude, 'front')).toBe(true)
+    expect(sessionMatches(claude, 'pc')).toBe(true)
+    expect(sessionMatches(codex, '')).toBe(true)
+    expect(sessionMatches(codex, 'opencode')).toBe(false)
+  })
+
   test('each tool has its name, and anything else reads as Claude Code, as in the app', () => {
     expect(CODING_TOOLS).toEqual(['claude', 'opencode', 'codex'])
     expect(CODING_TOOLS.map(codingToolLabel)).toEqual(['Claude Code', 'OpenCode', 'Codex'])

@@ -29,9 +29,9 @@ struct SessionsLiveActivity: Widget {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(island.lines.prefix(2), id: \.id) { line in
                             if let url = Island.url(for: line.id) {
-                                Link(destination: url) { SessionLine(line: line) }
+                                Link(destination: url) { SessionLine(line: line, showsTool: island.mixesTools) }
                             } else {
-                                SessionLine(line: line)
+                                SessionLine(line: line, showsTool: island.mixesTools)
                             }
                         }
                         if island.lines.isEmpty {
@@ -65,6 +65,8 @@ struct Island {
 
     var top: IslandLine? { lines.first }
     var status: SessionStatus { state.status ?? .idle }
+    /// Each line marks its tool only when Claude Code is not the only one, as the notch's list does.
+    var mixesTools: Bool { lines.mixesTools }
     /// Opens the session that needs the user most.
     var url: URL? { top.flatMap { Self.url(for: $0.id) } }
 
@@ -85,7 +87,7 @@ struct LockScreenView: View {
                 }
                 Spacer(minLength: 0)
             }
-            ForEach(island.lines, id: \.id) { line in SessionLine(line: line) }
+            ForEach(island.lines, id: \.id) { line in SessionLine(line: line, showsTool: island.mixesTools) }
             if stale {
                 Text("Open Tonton Claude to see where the sessions are.").font(.caption2).foregroundStyle(.white.opacity(0.5))
             }
@@ -96,6 +98,7 @@ struct LockScreenView: View {
 
 struct SessionLine: View {
     let line: IslandLine
+    var showsTool = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -103,6 +106,12 @@ struct SessionLine: View {
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(line.status.tint)
                 .frame(width: 14)
+            if showsTool {
+                Image(systemName: line.tool.symbol)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .accessibilityLabel(line.tool.label)
+            }
             Text(line.project).font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
             if let machine = line.machine {
                 Text(machine).font(.caption).foregroundStyle(.white.opacity(0.5)).lineLimit(1)

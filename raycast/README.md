@@ -1,6 +1,8 @@
 # Tonton Claude for Raycast
 
-**Claude Sessions** lists the Claude Code sessions in the notch, the ones that need you first. From the list:
+**Claude Sessions** lists the sessions in the notch, the ones that need you first. Search by project, machine, title or
+tool: "codex" lists the Codex sessions. When the list mixes Claude Code, OpenCode and Codex, each row shows its tool. From
+the list:
 
 - **Send Message** (↩) writes to a session, as if you typed in the notch.
 - **Quick Reply** (⌘ R) sends one of the quick replies from Settings › General.

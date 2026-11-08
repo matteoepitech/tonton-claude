@@ -352,7 +352,8 @@ export class HeroPage {
 
   private journal(hero: RPGState): HTMLElement {
     const entries = rpgJournal(hero, 20)
-    if (!entries.length) return element('div', element('p', 'Finish a turn in Claude Code or OpenCode: Tonton earns XP for the work.'))
+    if (!entries.length)
+      return element('div', element('p', 'Finish a turn in Claude Code, OpenCode or Codex: Tonton earns XP for the work.'))
     const list = element(
       'ol',
       ...entries.map(entry => {

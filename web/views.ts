@@ -6,6 +6,8 @@ import {
   type ClientState,
   changedFiles,
   chatItems,
+  codingToolLabel,
+  codingToolOf,
   displayStatusText,
   type Entry,
   foldSummary,
@@ -15,17 +17,20 @@ import {
   type Machine,
   machineFoldKey,
   menuCommands,
+  mixesTools,
   modelName,
   needsAttention,
+  otherToolLabel,
   type RelayClient,
   type Session,
   type SharedView,
   STATUS_LABELS,
+  sessionMatches,
   sessionRuleFor,
   shownPath,
   toolLabel,
 } from '../shared'
-import type { SessionCommand, SessionStatus, TaskProgress, TodoItem } from '../shared/protocol'
+import type { CodingTool, SessionCommand, SessionStatus, TaskProgress, TodoItem } from '../shared/protocol'
 import { element, inline, renderMarkdown } from './markdown'
 
 // MARK: Sessions
@@ -36,23 +41,36 @@ export interface ListFolding {
   toggle(key: string): void
 }
 
-/** The sessions, grouped by machine. With `fold`, a click on a machine folds its sessions, as in the notch. */
+/** What is typed in the list's search, kept across renders. */
+let query = ''
+
+/**
+ * The sessions, grouped by machine, under a search that also finds a tool ("codex"). With `fold`, a click on a machine
+ * folds its sessions, as in the notch; a search shows every match, folded or not.
+ */
 export function renderList(list: HTMLElement, current: ClientState, onPick: (session: Session) => void, fold?: ListFolding) {
+  const searching = query.trim() !== ''
+  const shown = current.sessions.filter(session => sessionMatches(session, query))
+  // The tool of each session only says something when several are listed.
+  const mixed = mixesTools(current.sessions)
   const groups = new Map<string, Session[]>()
-  for (const session of current.sessions) groups.set(session.machine, [...(groups.get(session.machine) ?? []), session])
+  for (const session of shown) groups.set(session.machine, [...(groups.get(session.machine) ?? []), session])
   const children: HTMLElement[] = []
   if (!current.sessions.length) children.push(element('p', current.connection === 'connected' ? 'No sessions yet.' : 'Connecting…'))
+  else if (!shown.length) children.push(element('p', `No session matches “${query.trim()}”.`))
   for (const [machine, sessions] of groups) {
-    const folded = fold?.folded.has(machineFoldKey(machine)) ?? false
+    const folded = !searching && (fold?.folded.has(machineFoldKey(machine)) ?? false)
     children.push(fold ? machineHeader(machine, sessions, folded, fold) : element('h2', machine))
     if (folded) continue
     for (const session of sessions) {
+      const name = element('strong', session.name ?? session.project)
+      if (mixed) name.prepend(toolMark(session.tool))
       const row = element(
         'button',
         dot(session.status),
         element(
           'span',
-          element('strong', session.name ?? session.project),
+          name,
           element('small', needsAttention(session.status) ? displayStatusText(session) : (session.title ?? STATUS_LABELS[session.status])),
         ),
         ...(session.tasks ? [progress(session.tasks)] : []),
@@ -64,7 +82,46 @@ export function renderList(list: HTMLElement, current: ClientState, onPick: (ses
       children.push(row)
     }
   }
-  list.replaceChildren(...children)
+  if (!current.sessions.length) {
+    list.replaceChildren(...children)
+    return
+  }
+  // The field stays while the rows change under it: a new one would take the caret away in the middle of a word.
+  const field = searchField(list, () => renderList(list, current, onPick, fold))
+  if (list.firstElementChild !== field) list.replaceChildren(field)
+  while (field.nextSibling) field.nextSibling.remove()
+  list.append(...children)
+}
+
+/** The search above the list: the one already there, or a new one. */
+function searchField(list: HTMLElement, rerender: () => void): HTMLInputElement {
+  const kept = list.firstElementChild
+  const field = kept instanceof HTMLInputElement && kept.classList.contains('search') ? kept : element('input')
+  if (field !== kept) {
+    field.type = 'search'
+    field.className = 'search'
+    field.placeholder = 'Search sessions'
+    field.title = 'By project, machine, title or tool'
+    field.setAttribute('aria-label', 'Search sessions')
+    field.value = query
+  }
+  field.oninput = () => {
+    query = field.value
+    rerender()
+  }
+  return field
+}
+
+/** Text marks for the notch's symbols of each tool: an asterisk, braces, a prompt. */
+const TOOL_MARKS: Record<CodingTool, string> = { claude: '✳', opencode: '{}', codex: '>_' }
+
+/** Which tool runs a session, before its name, when the list mixes tools. */
+function toolMark(tool: string | null): HTMLElement {
+  const mark = element('i', TOOL_MARKS[codingToolOf(tool)])
+  mark.className = 'tool-mark'
+  mark.title = codingToolLabel(tool)
+  mark.setAttribute('aria-label', codingToolLabel(tool))
+  return mark
 }
 
 function machineHeader(machine: string, sessions: Session[], folded: boolean, fold: ListFolding): HTMLElement {
@@ -119,7 +176,7 @@ export function renderChat(chat: HTMLElement, current: ClientState, client: Rela
     session.machine,
     session.branch ? `⎇ ${session.branch}` : null,
     session.model ? modelName(session.model) : null,
-    session.tool === 'opencode' ? 'OpenCode' : null,
+    otherToolLabel(session.tool),
   ]
   const header = element(
     'div',
@@ -341,7 +398,7 @@ export function renderShared(view: SharedView, status: HTMLElement, chat: HTMLEl
   status.dataset.state = view.connection === 'connected' ? 'connected' : 'offline'
   const previous = chat.querySelector('.messages')
   if (previous) stickToBottom = previous.scrollHeight - previous.scrollTop - previous.clientHeight < 40
-  const details = [view.title, view.tool === 'opencode' ? 'OpenCode' : null].filter(Boolean).join(' · ')
+  const details = [view.title, otherToolLabel(view.tool)].filter(Boolean).join(' · ')
   const header = element(
     'div',
     ...(view.status ? [dot(view.status)] : []),
