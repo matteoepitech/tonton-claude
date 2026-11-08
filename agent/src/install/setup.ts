@@ -7,6 +7,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { paths } from '../config'
 import { type ClaudeSettings, launcherSettings, withTontonHooks } from './claude-settings'
+import { codexHome } from './codex'
 import { openCodeConfigDir } from './opencode'
 import { launcherEncoding, readProfile, writeProfile } from './profile-file'
 import { removeLauncher, type Shell, withLauncher } from './shell-profile'
@@ -26,6 +27,8 @@ export interface Setup {
   run: string
   profiles: { file: string; shell: Shell }[]
   openCode: string
+  /** Codex's folder, where its hooks and MCP server go. */
+  codex: string
 }
 
 export function currentSetup(): Setup {
@@ -40,6 +43,7 @@ export function currentSetup(): Setup {
     run: paths.run,
     profiles: shellProfiles(),
     openCode: openCodeConfigDir(),
+    codex: codexHome(),
   }
 }
 

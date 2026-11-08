@@ -39,6 +39,7 @@ beforeEach(() => {
     run: join(home, '.tonton', 'run'),
     profiles: [{ file: join(home, '.zshrc'), shell: 'posix' }],
     openCode: join(home, '.config', 'opencode'),
+    codex: join(home, '.codex'),
   }
   const calls: string[] = []
   access = {
@@ -118,6 +119,37 @@ describe('a machine where nothing is installed', () => {
     const diagnosis = (await ask({ fix: 'opencode' }))?.diagnosis
     expect(check(diagnosis, 'opencode')).toMatchObject({ ok: true })
     expect(readFileSync(join(setup.openCode, 'plugins', PLUGIN_FILE), 'utf8')).toContain(setup.binary)
+  })
+})
+
+describe('Codex', () => {
+  test('is checked once it is there, and its repair writes the hooks and the MCP server but never trusts them', async () => {
+    mkdirSync(setup.codex, { recursive: true })
+    expect(check((await ask())?.diagnosis, 'codex')).toMatchObject({ label: 'Codex', ok: false, fix: 'codex' })
+    const diagnosis = (await ask({ fix: 'codex' }))?.diagnosis
+    expect(diagnosis?.fixed).toEqual({
+      fix: 'codex',
+      ok: true,
+      text: 'Hooks and MCP server written. Codex runs the hooks once you trust them in /hooks.',
+    })
+    const codex = check(diagnosis, 'codex')
+    expect(codex).toMatchObject({ ok: false, detail: expect.stringContaining('open /hooks in Codex') })
+    expect(codex).not.toHaveProperty('fix')
+    const hooks = JSON.parse(readFileSync(join(setup.codex, 'hooks.json'), 'utf8'))
+    expect(hooks.hooks.SessionStart[0].hooks[0].command).toContain(setup.binary)
+    const config = readFileSync(join(setup.codex, 'config.toml'), 'utf8')
+    expect(config).toContain('[mcp_servers.tonton]')
+    expect(config).not.toContain('trusted_hash')
+  })
+
+  test('a config.toml that is not TOML is left alone', async () => {
+    mkdirSync(setup.codex, { recursive: true })
+    writeFileSync(join(setup.codex, 'config.toml'), 'model = ')
+    const diagnosis = (await ask({ fix: 'codex' }))?.diagnosis
+    expect(diagnosis?.fixed).toMatchObject({ fix: 'codex', ok: false })
+    expect(check(diagnosis, 'codex')).toMatchObject({ ok: false })
+    expect(check(diagnosis, 'codex')).not.toHaveProperty('fix')
+    expect(readFileSync(join(setup.codex, 'config.toml'), 'utf8')).toBe('model = ')
   })
 })
 
