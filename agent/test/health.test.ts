@@ -99,10 +99,13 @@ describe('machine health', () => {
 })
 
 describe('installedTools', () => {
-  test('the coding agents the notch can start here, Claude Code first', () => {
-    expect(installedTools({ claude: () => true, opencode: () => true })).toEqual(['claude', 'opencode'])
-    expect(installedTools({ claude: () => false, opencode: () => true })).toEqual(['opencode'])
-    expect(installedTools({ claude: () => true, opencode: () => false })).toEqual(['claude'])
+  test('the coding agents installed here, Claude Code first', () => {
+    const tools = (claude: boolean, opencode: boolean, codex: boolean) =>
+      installedTools({ claude: () => claude, opencode: () => opencode, codex: () => codex })
+    expect(tools(true, true, true)).toEqual(['claude', 'opencode', 'codex'])
+    expect(tools(false, true, false)).toEqual(['opencode'])
+    expect(tools(true, false, false)).toEqual(['claude'])
+    expect(tools(false, false, true)).toEqual(['codex'])
   })
 })
 

@@ -8,6 +8,8 @@ import { registerAutostart, restartService, runningServicePid, stopService } fro
 import { installTrayFiles } from '../service/tray'
 import { useToken } from '../token'
 import { withoutTontonHooks } from './claude-settings'
+import { codexHome, hasCodex, installCodex, removeCodex } from './codex'
+import { checkCodex } from './codex-check'
 import { hasOpenCode, installOpenCodePlugin, openCodeConfigDir, removeOpenCodePlugin } from './opencode'
 import { readProfile } from './profile-file'
 import {
@@ -21,7 +23,7 @@ import {
   writeLaunchers,
 } from './setup'
 import { BEGIN } from './shell-profile'
-import { installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
+import { binaryPath, installBinary, registerMcpServer, shellProfiles, unregisterMcpServer } from './system'
 
 const done = (message: string) => console.log(`  \x1b[32m✓\x1b[0m ${message}`)
 const warn = (message: string) => console.log(`  \x1b[33m!\x1b[0m ${message}`)
@@ -74,6 +76,7 @@ export async function install(args: string[]) {
       `OpenCode plugin added: ${installOpenCodePlugin(binary)}. Restart OpenCode to load it (\`opencode service restart\` with OpenCode 2).`,
     )
   }
+  if (hasCodex()) installCodexHooks(binary)
   await installTrayFiles()
   if (registerAutostart()) done('background service starts at login')
   else warn('no user systemd here: the background service does not start at login. Sessions still work.')
@@ -83,7 +86,7 @@ export async function install(args: string[]) {
   }
 
   console.log(`
-All set. Open a new terminal and run \x1b[1mclaude\x1b[0m (or \x1b[1mopencode\x1b[0m) as usual: the session shows up in your Mac's notch.
+All set. Open a new terminal and run \x1b[1mclaude\x1b[0m (or \x1b[1mopencode\x1b[0m, or \x1b[1mcodex\x1b[0m) as usual: the session shows up in your Mac's notch.
 On first launch, Claude Code asks you to confirm the development channel: pick "I am using this for local development".
 `)
 }
@@ -91,6 +94,15 @@ On first launch, Claude Code asks you to confirm the development channel: pick "
 function installHooks(setup: Setup) {
   if (writeHooks(setup)) done('hooks added to ~/.claude/settings.json')
   else warn(`${setup.claudeSettings} is not valid JSON, hooks not installed. Fix it and run the install again.`)
+}
+
+/** Codex reads its hooks and MCP servers when a session starts, and runs a hook only once its user trusts it. */
+function installCodexHooks(binary: string) {
+  const installed = installCodex(binary)
+  if (!installed.ok) return warn(`${installed.reason}: Codex hooks and MCP server not installed. Fix it and run the install again.`)
+  done(`Codex hooks added to ${installed.hooks}, MCP server "tonton" to ${installed.config}`)
+  const check = checkCodex(binary, codexHome())
+  if (!check.ok) warn(check.detail)
 }
 
 function installLaunchers(setup: Setup) {
@@ -121,6 +133,9 @@ export async function uninstall() {
   done('claude launcher removed from shell profiles')
   removeOpenCodePlugin()
   done('OpenCode plugin removed')
+  const codex = removeCodex(binaryPath())
+  if (!codex.ok) warn(`${codex.reason}: Codex hooks and MCP server left in place.`)
+  else if (codex.changed) done('Codex hooks and MCP server removed')
   for (const name of ['config.json', 'claude-settings.json', 'run', 'inbox', 'status.json', 'service.pid', 'tray.ps1', 'tonton.ico'])
     rmSync(join(paths.home, name), { recursive: true, force: true })
   done(`files removed. The binary stays in ${paths.bin}: delete the folder by hand if you want.`)
@@ -145,6 +160,11 @@ export async function status() {
   else warn('no claude launcher found in your shell profiles: run the install again')
   if (existsSync(join(openCodeConfigDir(), 'plugins', PLUGIN_FILE))) done('OpenCode plugin installed')
   else if (hasOpenCode()) warn('OpenCode found without the Tonton plugin: run the install again')
+  if (hasCodex()) {
+    const codex = checkCodex(binaryPath(), codexHome())
+    if (codex.ok) done(`Codex: ${codex.detail}`)
+    else warn(`Codex: ${codex.detail}${codex.repair ? ' Run the install again.' : ''}`)
+  }
   const service = runningServicePid()
   if (service) done(`background service running (pid ${service})`)
   else warn('background service not running: run the install again')

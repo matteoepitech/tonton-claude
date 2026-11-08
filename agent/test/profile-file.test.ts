@@ -85,6 +85,7 @@ describe('writing the launcher', () => {
     run: join(home, '.tonton', 'run'),
     profiles: [{ file, shell }],
     openCode: join(home, '.config', 'opencode'),
+    codex: join(home, '.codex'),
   })
   const noReplacement = (bytes: Buffer) => expect(bytes.includes(Buffer.from([0xef, 0xbf, 0xbd]))).toBe(false)
 

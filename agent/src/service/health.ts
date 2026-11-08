@@ -2,8 +2,9 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { cpus, freemem, homedir, networkInterfaces, totalmem } from 'node:os'
 import { join } from 'node:path'
-import type { ClaudePlan, MachineHealth } from '../../../shared/protocol'
+import type { ClaudePlan, CodingTool, MachineHealth } from '../../../shared/protocol'
 import { claudeConfigDir } from '../config'
+import { hasCodex } from '../install/codex'
 import { hasOpenCode } from '../install/opencode'
 
 type Battery = MachineHealth['battery']
@@ -106,16 +107,17 @@ export function wakeTargets(interfaces: Interfaces = networkInterfaces()): NonNu
 }
 
 /**
- * The coding agents the notch can start here. The service may run with a short PATH (a LaunchAgent, a systemd unit), so
- * their configuration folders count too.
+ * The coding agents installed here: the notch starts the ones it can. The service may run with a short PATH (a LaunchAgent,
+ * a systemd unit), so their configuration folders count too.
  */
 export function installedTools(
-  has: { claude: () => boolean; opencode: () => boolean } = {
+  has: Record<CodingTool, () => boolean> = {
     claude: () => existsSync(claudeConfigDir()) || Bun.which('claude') !== null,
     opencode: () => hasOpenCode(),
+    codex: () => hasCodex(),
   },
 ): NonNullable<MachineHealth['tools']> {
-  return (['claude', 'opencode'] as const).filter(tool => has[tool]())
+  return (['claude', 'opencode', 'codex'] as const).filter(tool => has[tool]())
 }
 
 /** Where Claude Code keeps its state, the signed-in account among it. */

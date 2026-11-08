@@ -1,6 +1,6 @@
 // How this machine is set up, checked on request from the app (Settings › Machines › Diagnose): the agent and its
-// background service, the relay, and what the install step put in Claude Code and OpenCode. A repair redoes one part of
-// the install step, nothing the user would have to undo. Sealed both ways: the result names paths and the relay.
+// background service, the relay, and what the install step put in Claude Code, OpenCode and Codex. A repair redoes one
+// part of the install step, nothing the user would have to undo. Sealed both ways: the result names paths and the relay.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -9,6 +9,8 @@ import type { DiagnoseRequest, Diagnosis, SetupCheck, SetupFix } from '../../sha
 import type { RelayConnection } from './channel/relay-connection'
 import { type AgentConfig, installedVersion, VERSION } from './config'
 import { HOOK_EVENTS, launcherSettings } from './install/claude-settings'
+import { hasCodex, installCodex } from './install/codex'
+import { checkCodex } from './install/codex-check'
 import { hasOpenCode, installOpenCodePlugin } from './install/opencode'
 import { readProfile } from './install/profile-file'
 import { currentSetup, readClaudeSettings, type Setup, writeHooks, writeLauncherSettings, writeLaunchers } from './install/setup'
@@ -25,7 +27,7 @@ import { readStatus } from './service/status'
 const REQUEST_TTL_MS = 10 * 60_000
 /** As the relay checks it. Names the file that marks a repair as done. */
 const REQUEST_ID = /^[a-z0-9]{8,32}$/
-const FIXES: readonly string[] = ['service', 'hooks', 'mcp', 'launcher', 'statusline', 'opencode'] satisfies SetupFix[]
+const FIXES: readonly string[] = ['service', 'hooks', 'mcp', 'launcher', 'statusline', 'opencode', 'codex'] satisfies SetupFix[]
 const PING_TIMEOUT_MS = 10_000
 /** How long a started service has to show up before the checks run. */
 const SERVICE_START_MS = 5000
@@ -150,7 +152,7 @@ export async function diagnose(config: AgentConfig, setup: Setup, access: Machin
     launcherCheck(setup),
     statusLineCheck(setup),
   ]
-  return hasOpenCode(setup.openCode) ? [...checks, openCodeCheck(setup)] : checks
+  return [...checks, ...(hasOpenCode(setup.openCode) ? [openCodeCheck(setup)] : []), ...(hasCodex(setup.codex) ? [codexCheck(setup)] : [])]
 }
 
 function agentCheck(): SetupCheck {
@@ -274,6 +276,12 @@ function openCodeCheck(setup: Setup): SetupCheck {
   return check(false, current === null ? 'OpenCode is here without the Tonton plugin.' : 'Out of date.', 'opencode')
 }
 
+/** Tonton's hooks and MCP server in Codex, and whether the user trusted the hooks: Codex runs none before. */
+function codexCheck(setup: Setup): SetupCheck {
+  const { ok, detail, repair } = checkCodex(setup.binary, setup.codex)
+  return { id: 'codex', label: 'Codex', ok, detail, ...(repair ? { fix: 'codex' as const } : {}) }
+}
+
 interface Repair {
   ok: boolean
   text: string
@@ -313,9 +321,11 @@ function repairs(fix: string, setup: Setup, role: DiagnoseOptions['role'], acces
       return { ok: true, text: 'Plugin written. Restart OpenCode to load it.' }
     case 'service':
       return repairService(role, access)
-    case 'codex':
-      // Not in FIXES: this agent does not install Codex's hooks yet.
-      return { ok: false, text: 'This agent does not know that repair. Update it first.' }
+    case 'codex': {
+      const installed = installCodex(setup.binary, setup.codex)
+      if (!installed.ok) return { ok: false, text: `${installed.reason}: fix it by hand first.` }
+      return { ok: true, text: 'Hooks and MCP server written. Codex runs the hooks once you trust them in /hooks.' }
+    }
   }
 }
 
