@@ -12,8 +12,9 @@ struct ActivityDots: View {
     var body: some View {
         let live = store.visibleSessions.filter { $0.status.isLive }
         let urgent = SessionStatus.mostUrgent(live.map(\.status))
-        // Sessions of one account share the window; across accounts, the one closest to its limit matters most.
-        let limit = UsageLimit.fullest(live.map(\.fiveHourLimit))
+        // Sessions of one account share the window; across accounts, the one closest to its limit matters most. Claude's
+        // plan only: a Codex session's window is its ChatGPT plan's.
+        let limit = UsageLimit.fullest(live.filter { $0.codingTool != .codex }.map(\.fiveHourLimit))
         HStack(spacing: 0) {
             if state.showWings, let activity = state.liveActivity {
                 LiveActivityWings(session: activity, mascot: settings.showMascot, width: state.currentWingWidth)

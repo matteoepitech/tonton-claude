@@ -89,8 +89,9 @@ export class Vault {
       startedAt: parseDate(wire.startedAt),
       lastActivity: parseDate(wire.lastActivity),
       lastMessage: meta?.lastMessage ?? null,
-      fiveHourLimit: usageWindow(meta?.fiveHourLimit),
-      sevenDayLimit: usageWindow(meta?.sevenDayLimit),
+      // The windows of the plan the session runs on: a Codex session's are ChatGPT's, sent apart from Claude's.
+      fiveHourLimit: usageWindow(info?.tool === 'codex' ? meta?.codexFiveHourLimit : meta?.fiveHourLimit),
+      sevenDayLimit: usageWindow(info?.tool === 'codex' ? meta?.codexSevenDayLimit : meta?.sevenDayLimit),
       terminal: meta?.terminal ?? false,
       // Older agents type the original commands in tmux only, and never interrupt.
       commands: meta?.commands ? COMMANDS.filter(name => meta.commands?.includes(name)) : meta?.terminal ? [...ORIGINAL_COMMANDS] : [],

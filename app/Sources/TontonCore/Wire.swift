@@ -134,6 +134,9 @@ struct SessionMeta: Codable {
     let lastMessage: String?
     var fiveHourLimit: WireUsageLimit?
     var sevenDayLimit: WireUsageLimit?
+    /// A Codex session's windows, apart from Claude's: older apps read the session as Claude Code.
+    var codexFiveHourLimit: WireUsageLimit? = nil
+    var codexSevenDayLimit: WireUsageLimit? = nil
     var tokens: TokenCounts?
     var context: WireContext?
     /// Missing from older agents.

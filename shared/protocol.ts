@@ -92,6 +92,12 @@ export interface SessionMeta {
   fiveHourLimit?: UsageLimit
   /** The weekly window, like the 5-hour one. */
   sevenDayLimit?: UsageLimit
+  /**
+   * A Codex session's windows, of the ChatGPT plan Codex is signed in with. Apart from Claude's: an app that reads a
+   * Codex session as Claude Code never counts them as its Claude plan. Missing from older agents.
+   */
+  codexFiveHourLimit?: UsageLimit
+  codexSevenDayLimit?: UsageLimit
   /** The session runs in tmux, so the notch can type slash commands in it. Missing from older agents. */
   terminal?: boolean
   /**
