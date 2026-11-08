@@ -8594,6 +8594,16 @@
         }
       }
     },
+    "Read only: install the agent on this Mac, then start Codex from the notch to message it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture seule : installez l’agent sur ce Mac, puis lancez Codex depuis l’encoche pour lui écrire."
+          }
+        }
+      }
+    },
     "Read only: start Codex from the notch, or with tonton codex in a terminal, to message it." : {
       "localizations" : {
         "fr" : {

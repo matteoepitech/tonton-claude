@@ -4,7 +4,8 @@ import TontonCore
 import TontonMac
 
 /// Live state of the account's sessions and machines, fed by the relay socket and decrypted with the account key, plus
-/// the sessions of this Mac read from Claude Code's files, which need neither an account nor an agent.
+/// the sessions of this Mac read from Claude Code's, OpenCode's and Codex's own files, which need neither an account nor an
+/// agent.
 @MainActor
 final class SessionStore: ObservableObject {
     /// From the relay.
@@ -20,8 +21,7 @@ final class SessionStore: ObservableObject {
     }
 
     private static func merged(_ relay: [SessionSummary], _ local: [SessionSummary], _ dismissed: Set<String>) -> [SessionSummary] {
-        let relayIds = Set(relay.map(\.id))
-        return sorted(relay + local.filter { !relayIds.contains($0.id) && !dismissed.contains($0.id) })
+        sorted(SessionSummary.merged(relay: relay, local: local, dismissed: dismissed))
     }
     @Published private(set) var machines: [MachineInfo] = []
     /// Machines are offered the agent released with this app. Development builds (0.0.0) offer nothing.
@@ -92,6 +92,9 @@ final class SessionStore: ObservableObject {
     private let openCodeWatcher = OpenCodeLocalWatcher()
     private var claudeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
     private var openCodeHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
+    /// This Mac's Codex sessions, from Codex's rollouts. Read only: the agent's copy of a session, when it has one, can chat.
+    private let codexWatcher = CodexLocalWatcher()
+    private var codexHere: (sessions: [SessionSummary], entries: [String: [Entry]]) = ([], [:])
     /// Finished conversations kept on this Mac (Settings › Archive).
     let archive = ArchiveStore()
     /// Relay sessions that ended while not followed: archived once their whole history has come.
@@ -156,6 +159,11 @@ final class SessionStore: ObservableObject {
             self?.localChanged()
         }
         openCodeWatcher.start()
+        codexWatcher.onChange = { [weak self] sessions, entries in
+            self?.codexHere = (sessions, entries)
+            self?.localChanged()
+        }
+        codexWatcher.start()
         // A new set goes to every machine, and replaces the one the relay keeps for each.
         settings.$autoApproveRulesDate.dropFirst().removeDuplicates()
             .sink { [weak self] _ in
@@ -391,8 +399,10 @@ final class SessionStore: ObservableObject {
     }
 
     private func localChanged() {
-        let sessions = claudeHere.sessions + openCodeHere.sessions
-        let entries = claudeHere.entries.merging(openCodeHere.entries) { claude, _ in claude }
+        let sessions = claudeHere.sessions + openCodeHere.sessions + codexHere.sessions
+        let entries = [openCodeHere.entries, codexHere.entries].reduce(claudeHere.entries) { all, more in
+            all.merging(more) { first, _ in first }
+        }
         let relayIds = Set(relaySessions.map(\.id))
         let previous = Dictionary(localSessions.map { ($0.id, $0) }) { first, _ in first }
         localSessions = sessions
