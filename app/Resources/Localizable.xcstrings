@@ -3664,6 +3664,22 @@
         }
       }
     },
+    "Codex's 5-hour limit: %lld %% used, resets at %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Codex's 5-hour limit: %1$lld %% used, resets at %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de 5 heures de Codex : %1$lld %% utilisés, réinitialisation à %2$@"
+          }
+        }
+      }
+    },
     "Color" : {
       "localizations" : {
         "fr" : {

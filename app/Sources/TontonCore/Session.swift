@@ -70,7 +70,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let startedAt: Date
     public let lastActivity: Date
     public let lastMessage: String?
-    /// The 5-hour window of the Claude plan the session runs on. Nil with an API key, and with older agents.
+    /// The 5-hour window of the plan the session runs on: Claude's, or the ChatGPT plan of a Codex session. Nil with an API
+    /// key, and with older agents.
     public let fiveHourLimit: UsageLimit?
     /// The weekly window, like the 5-hour one.
     public let sevenDayLimit: UsageLimit?

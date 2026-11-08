@@ -426,13 +426,14 @@ struct SessionRow: View {
 
     /// When the session's 5-hour window runs out at the current pace, if before it resets.
     private func runsOut(at now: Date) -> Date? {
-        guard session.status.isLive, let limit = session.fiveHourLimit else { return nil }
+        // The forecast follows Claude's plan: a Codex session's window is its ChatGPT plan's.
+        guard session.status.isLive, session.codingTool != .codex, let limit = session.fiveHourLimit else { return nil }
         return forecast.runsOut(limit, at: now)
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            StatusDot(status: session.status, limit: session.fiveHourLimit).padding(.top, 5)
+            StatusDot(status: session.status, limit: session.fiveHourLimit, tool: session.codingTool).padding(.top, 5)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     if let tool { ToolMark(tool: tool, size: 9) }

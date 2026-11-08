@@ -135,6 +135,8 @@ export const decodeSessionMeta = decoder(
       lastMessage: optional(f.lastMessage, text),
       fiveHourLimit: optional(f.fiveHourLimit, usageLimit),
       sevenDayLimit: optional(f.sevenDayLimit, usageLimit),
+      codexFiveHourLimit: optional(f.codexFiveHourLimit, usageLimit),
+      codexSevenDayLimit: optional(f.codexSevenDayLimit, usageLimit),
       terminal: optional(f.terminal, flag),
       // Names this client does not know are kept here; the vault drops them.
       commands: optional(f.commands, value => list(value, text)) as SessionMeta['commands'],

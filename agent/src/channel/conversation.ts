@@ -6,6 +6,7 @@ import { cutText } from '../../../shared/text'
 import { latestTodos, taskProgress } from '../../../shared/todos'
 import { EventDetector } from '../cluster/detect'
 import { homeOfRollout, threadName } from '../codex/home'
+import { codexPlanWindows } from '../codex/limits'
 import { CODEX_COMMANDS } from '../codex/notch'
 import { type CodexLine, type CodexRateLimits, CodexRollout } from '../codex/rollout'
 import { type AgentConfig, paths } from '../config'
@@ -303,7 +304,11 @@ export class Conversation {
     let status: 'working' | 'idle' | undefined
     for (const line of lines) {
       const parsed: CodexLine = this.rollout ? this.rollout.line(line) : parseLine(line)
-      if (parsed.rateLimits) this.codexLimits = parsed.rateLimits
+      if (parsed.rateLimits) {
+        const before = JSON.stringify(codexPlanWindows(this.codexLimits))
+        this.codexLimits = parsed.rateLimits
+        if (JSON.stringify(codexPlanWindows(this.codexLimits)) !== before) metaChanged = true
+      }
       if (parsed.status) status = parsed.status
       fresh.push(...parsed.entries)
       Object.assign(commands, parsed.commands)
@@ -421,6 +426,8 @@ export class Conversation {
       context: this.context,
       lastMessage: last && 'text' in last ? cutText(last.text, 200) : undefined,
       ...this.usage,
+      // Codex's windows, apart from Claude's (shared/protocol.ts, SessionMeta).
+      ...(this.codex ? codexPlanWindows(this.codexLimits) : {}),
       // Without tmux nothing can be typed: the notch offers no command. Codex takes its commands from its app-server,
       // when `tonton codex` runs it (canChat), and nothing is ever typed in it.
       terminal: Boolean(this.link.tmux) && !this.codex,

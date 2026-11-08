@@ -12,8 +12,9 @@ struct ActivityDots: View {
     var body: some View {
         let live = store.visibleSessions.filter { $0.status.isLive }
         let urgent = SessionStatus.mostUrgent(live.map(\.status))
-        // Sessions of one account share the window; across accounts, the one closest to its limit matters most.
-        let limit = UsageLimit.fullest(live.map(\.fiveHourLimit))
+        // Sessions of one account share the window; across accounts, the one closest to its limit matters most. Claude's
+        // plan only: a Codex session's window is its ChatGPT plan's.
+        let limit = UsageLimit.fullest(live.filter { $0.codingTool != .codex }.map(\.fiveHourLimit))
         HStack(spacing: 0) {
             if state.showWings, let activity = state.liveActivity {
                 LiveActivityWings(session: activity, mascot: settings.showMascot, width: state.currentWingWidth)
@@ -91,7 +92,7 @@ struct PeekView: View {
             Color.clear.frame(height: state.notchSize.height)
             if let s = state.peekSession {
                 HStack(spacing: 8) {
-                    StatusDot(status: s.status, limit: s.fiveHourLimit)
+                    StatusDot(status: s.status, limit: s.fiveHourLimit, tool: s.codingTool)
                     Text("\(s.machine) · \(s.displayName)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
                     Text(state.peekText ?? s.status.label).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }

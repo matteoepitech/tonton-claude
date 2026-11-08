@@ -6,6 +6,8 @@ struct StatusDot: View {
     var size: CGFloat = 8
     /// Drawn as a ring around the dot.
     var limit: UsageLimit?
+    /// Whose plan the window is: Codex's is its ChatGPT plan's, and says so.
+    var tool: CodingTool = .claudeCode
     @State private var pulse = false
 
     var body: some View {
@@ -15,7 +17,7 @@ struct StatusDot: View {
             .opacity(status == .working && pulse ? 0.35 : 1)
             .animation(status == .working ? .easeInOut(duration: 0.8).repeatForever() : .default, value: pulse)
             .onAppear { pulse = true }
-            .overlay { if let limit { LimitRing(limit: limit, diameter: size + 6) } }
+            .overlay { if let limit { LimitRing(limit: limit, diameter: size + 6, codex: tool == .codex) } }
             .accessibilityElement()
             .accessibilityLabel(Spoken.status(status, limit: limit))
     }
@@ -25,6 +27,7 @@ struct StatusDot: View {
 struct LimitRing: View {
     let limit: UsageLimit
     let diameter: CGFloat
+    var codex = false
 
     var body: some View {
         TimelineView(.everyMinute) { context in
@@ -37,13 +40,27 @@ struct LimitRing: View {
                         .rotationEffect(.degrees(-90))
                 }
                 .frame(width: diameter, height: diameter)
-                .help(
-                    """
-                    5-hour limit: \(Int(limit.usedPercent.rounded())) % used, resets at \
-                    \(limit.resetsAt.formatted(date: .omitted, time: .shortened))
-                    """)
+                .help(codex ? codexHelp : claudeHelp)
             }
         }
+    }
+}
+
+extension LimitRing {
+    private var claudeHelp: String {
+        String(
+            localized: """
+                5-hour limit: \(Int(limit.usedPercent.rounded())) % used, resets at \
+                \(limit.resetsAt.formatted(date: .omitted, time: .shortened))
+                """)
+    }
+
+    private var codexHelp: String {
+        String(
+            localized: """
+                Codex's 5-hour limit: \(Int(limit.usedPercent.rounded())) % used, resets at \
+                \(limit.resetsAt.formatted(date: .omitted, time: .shortened))
+                """)
     }
 }
 

@@ -38,8 +38,9 @@ public struct SessionVault: Sendable {
             startedAt: ISO8601.parse(wire.startedAt) ?? .distantPast,
             lastActivity: ISO8601.parse(wire.lastActivity) ?? .distantPast,
             lastMessage: meta?.lastMessage,
-            fiveHourLimit: meta?.fiveHourLimit.flatMap(usageLimit),
-            sevenDayLimit: meta?.sevenDayLimit.flatMap(usageLimit),
+            // The windows of the plan the session runs on: a Codex session's are ChatGPT's, sent apart from Claude's.
+            fiveHourLimit: (info?.tool == "codex" ? meta?.codexFiveHourLimit : meta?.fiveHourLimit).flatMap(usageLimit),
+            sevenDayLimit: (info?.tool == "codex" ? meta?.codexSevenDayLimit : meta?.sevenDayLimit).flatMap(usageLimit),
             tokens: meta?.tokens,
             context: meta?.context.map { ContextUsage(usedTokens: $0.usedTokens, windowTokens: $0.windowTokens) },
             terminal: meta?.terminal ?? false,

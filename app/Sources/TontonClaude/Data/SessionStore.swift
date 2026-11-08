@@ -167,7 +167,10 @@ final class SessionStore: ObservableObject {
             .sink { [weak self] sessions, hidden in self?.scheduleLimitResets(sessions.filter { !hidden.contains($0.machine) }) }
             .store(in: &subscriptions)
         sessionsPublisher
-            .sink { [weak self] sessions in self?.forecast.record(sessions.filter(\.status.isLive).map(\.fiveHourLimit)) }
+            // The forecast is of the Claude plan: a Codex session's window is its ChatGPT plan's.
+            .sink { [weak self] sessions in
+                self?.forecast.record(sessions.filter { $0.status.isLive && $0.codingTool != .codex }.map(\.fiveHourLimit))
+            }
             .store(in: &subscriptions)
         limitLifted.sink { [weak self] sessions in self?.continueAfterLimit(sessions) }.store(in: &subscriptions)
         _ = usage

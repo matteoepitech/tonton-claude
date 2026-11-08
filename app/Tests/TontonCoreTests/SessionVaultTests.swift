@@ -64,6 +64,29 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertEqual(session.codingTool, .codex)
     }
 
+    /// Mirrors shared/test/codex-limits.test.ts.
+    func testCodexWindowsAreTheSessionsOwnAndApartFromClaudes() throws {
+        var meta = SessionMeta(
+            title: nil, costUSD: nil, lastMessage: nil, fiveHourLimit: WireUsageLimit(usedPercent: 40, resetsAt: "2026-11-08T15:00:00.000Z")
+        )
+        meta.codexFiveHourLimit = WireUsageLimit(usedPercent: 85.5, resetsAt: "2026-11-08T17:00:00.000Z")
+        meta.codexSevenDayLimit = WireUsageLimit(usedPercent: 12, resetsAt: "2026-11-12T09:00:00.000Z")
+        func session(tool: String?) throws -> SessionSummary {
+            let info = SessionInfo(machine: "PC", platform: "darwin", cwd: "/code/api", project: "api", tool: tool)
+            let wire = WireSession(
+                id: "s1", machineId: "m1", status: .working, agentOnline: true, canChat: true, info: try sealed(info),
+                meta: try sealed(meta),
+                statusDetail: nil, pendingPermissions: [], startedAt: "x", lastActivity: "x")
+            return vault.session(wire, machines: [])
+        }
+        let codex = try session(tool: "codex")
+        XCTAssertEqual(codex.fiveHourLimit?.usedPercent, 85.5)
+        XCTAssertEqual(codex.sevenDayLimit?.usedPercent, 12)
+        let claude = try session(tool: nil)
+        XCTAssertEqual(claude.fiveHourLimit?.usedPercent, 40)
+        XCTAssertNil(claude.sevenDayLimit)
+    }
+
     func testTheFiveHourLimitComesWithTheMeta() throws {
         let limit = WireUsageLimit(usedPercent: 83.5, resetsAt: "2026-10-20T12:00:00.000Z")
         let meta = SessionMeta(title: nil, costUSD: nil, lastMessage: nil, fiveHourLimit: limit)

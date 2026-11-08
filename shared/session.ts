@@ -122,7 +122,10 @@ export interface Session {
   startedAt: number | null
   lastActivity: number | null
   lastMessage: string | null
-  /** The 5-hour window of the Claude plan the session runs on. Null with an API key, and with older agents. */
+  /**
+   * The 5-hour window of the plan the session runs on: Claude's, or the ChatGPT plan of a Codex session. Null with an API
+   * key, and with older agents.
+   */
   fiveHourLimit: UsageWindow | null
   sevenDayLimit: UsageWindow | null
   /** Runs in tmux, so a client can have its agent type slash commands in it. */
