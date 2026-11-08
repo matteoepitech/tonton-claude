@@ -1,5 +1,5 @@
 {
-  "about": "How a tool's name reads in the notch, the island and the website. Checked by shared/test/tool-labels.test.ts and app/Tests/TontonCoreTests/ToolLabelTests.swift.",
+  "about": "How a tool's name reads in the notch, the island and the website, Codex's as the agent names them (shared/test/codex-tool-names.json). Checked by shared/test/tool-labels.test.ts and app/Tests/TontonCoreTests/ToolLabelTests.swift.",
   "cases": [
     { "name": "mcp__unreal-engine__spawn_actor", "label": "unreal-engine · spawn_actor" },
     { "name": "mcp__unrealMCP__create_blueprint", "label": "unrealMCP · create_blueprint" },
@@ -8,7 +8,10 @@
     { "name": "mcp__x", "label": "mcp__x" },
     { "name": "mcp____y", "label": "mcp____y" },
     { "name": "mcp__srv__", "label": "mcp__srv__" },
+    { "name": "mcp__tonton__cluster_status", "label": "tonton · cluster_status" },
+    { "name": "mcp__codex_apps__github_create_issue", "label": "codex_apps · github_create_issue" },
     { "name": "Bash", "label": "Bash" },
+    { "name": "write_stdin", "label": "write_stdin" },
     { "name": "unreal-engine_spawn_actor", "label": "unreal-engine_spawn_actor" },
     { "name": "", "label": "" }
   ]

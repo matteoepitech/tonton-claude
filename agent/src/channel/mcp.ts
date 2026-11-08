@@ -7,14 +7,15 @@ import { VERSION } from '../config'
 import { CLUSTER_INSTRUCTIONS, isClusterTool } from './cluster-work'
 import { ALL_POOL_TOOLS, POOL_INSTRUCTIONS, type PoolToolSpec } from './pool-work'
 
-const INSTRUCTIONS = [
+const CHANNEL_INSTRUCTIONS = [
   'The user can also drive this session remotely from Tonton Claude, a macOS notch app.',
   'Their messages arrive as <channel source="tonton" ...>. Treat each one exactly like a message typed in the terminal by the user.',
   'Answer normally: the user sees the whole conversation in the notch, so there is no reply tool to call.',
   'When a message mentions an attached image file path, open it with the Read tool to see it.',
-  POOL_INSTRUCTIONS,
-  CLUSTER_INSTRUCTIONS,
-].join(' ')
+]
+const INSTRUCTIONS = [...CHANNEL_INSTRUCTIONS, POOL_INSTRUCTIONS, CLUSTER_INSTRUCTIONS].join(' ')
+/** Codex has no channel: nothing from the notch arrives in the conversation (yet), only the tools are served. */
+const TOOL_INSTRUCTIONS = [POOL_INSTRUCTIONS, CLUSTER_INSTRUCTIONS].join(' ')
 
 /** The pool and cluster tools of the session, while it is in a pool or a cluster (see pool-work.ts, cluster-work.ts). */
 export interface ChannelTools {
@@ -43,20 +44,27 @@ const PermissionRequest = z.object({
   params: z.object({ request_id: z.string(), tool_name: z.string(), description: z.string(), input_preview: z.string() }),
 })
 
-/** The MCP side of the channel: Claude Code spawns it and talks to it over stdio. */
+/**
+ * The MCP side of the channel: Claude Code or Codex spawns it and talks to it over stdio. Only Claude Code's has the
+ * channel capabilities, which carry messages and permission prompts both ways; Codex's serves the tools.
+ */
 export class ChannelServer {
-  private readonly server = new Server(
-    { name: 'tonton', version: VERSION },
-    {
-      capabilities: { experimental: { 'claude/channel': {}, 'claude/channel/permission': {} }, tools: { listChanged: true } },
-      instructions: INSTRUCTIONS,
-    },
-  )
+  private readonly server: Server
 
   constructor(
     onPermissionRequest: (requestId: string, detail: PermissionDetail) => void,
     tools: ChannelTools = { list: () => [], call: async () => 'This session is not in a pool.' },
+    { channel = true }: { channel?: boolean } = {},
   ) {
+    this.server = new Server(
+      { name: 'tonton', version: VERSION },
+      channel
+        ? {
+            capabilities: { experimental: { 'claude/channel': {}, 'claude/channel/permission': {} }, tools: { listChanged: true } },
+            instructions: INSTRUCTIONS,
+          }
+        : { capabilities: { tools: { listChanged: true } }, instructions: TOOL_INSTRUCTIONS },
+    )
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: tools.list().map(spec => ({ name: spec.name, description: spec.description, inputSchema: inputSchema(spec) })),
     }))
@@ -82,9 +90,9 @@ export class ChannelServer {
     })
   }
 
-  /** Resolves once connected. The process exits when Claude Code closes the pipe. */
-  async connect() {
-    this.server.onclose = () => process.exit(0)
+  /** Resolves once connected. The process exits when Claude Code or Codex closes the pipe, after `closed` for Codex. */
+  async connect(closed: () => void = () => process.exit(0)) {
+    this.server.onclose = closed
     await this.server.connect(new StdioServerTransport())
   }
 

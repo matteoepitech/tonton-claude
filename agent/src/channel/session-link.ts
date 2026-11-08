@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { newestRollout } from '../codex/home'
 import { claudeConfigDir, paths } from '../config'
 import type { TerminalPane } from './terminal'
 
@@ -19,6 +20,8 @@ export interface SessionLink {
   event?: string
   /** Claude Code's permission mode, as the last hook said it. */
   permissionMode?: string
+  /** A Codex session, linked by Codex's hooks (agent/src/codex/hook.ts). Missing for Claude Code. */
+  tool?: 'codex'
 }
 
 /** Hook events after which Claude is in a turn: it took a prompt, or waits on a permission prompt within one. */
@@ -38,9 +41,9 @@ export function hookState(file = join(paths.run, `${process.ppid}.json`)): { bus
 }
 
 /**
- * Finds which Claude Code session this channel belongs to. Hooks and the channel are both children of the same
- * claude process, so hooks write `run/<parent pid>.json` and the channel reads its own. If no hook wrote it yet,
- * the newest transcript of the working directory is used.
+ * Finds which Claude Code or Codex session this channel belongs to. Hooks and the channel are both children of the same
+ * claude or codex process, so hooks write `run/<parent pid>.json` and the channel reads its own. If no hook wrote it yet,
+ * the newest transcript or rollout of the working directory is used: Codex runs no hook its user has not trusted.
  */
 export class SessionLinkWatcher {
   private current: SessionLink | null = null
@@ -48,7 +51,10 @@ export class SessionLinkWatcher {
   private readonly startedAt = Date.now()
   private readonly linkFile = join(paths.run, `${process.ppid}.json`)
 
-  constructor(private readonly onChange: (link: SessionLink) => void) {}
+  constructor(
+    private readonly onChange: (link: SessionLink) => void,
+    private readonly tool: 'claude' | 'codex' = 'claude',
+  ) {}
 
   start() {
     this.poll()
@@ -72,7 +78,8 @@ export class SessionLinkWatcher {
 
   private readLinkFile(): SessionLink | null {
     try {
-      return JSON.parse(readFileSync(this.linkFile, 'utf8')) as SessionLink
+      const link = JSON.parse(readFileSync(this.linkFile, 'utf8')) as SessionLink
+      return this.tool === 'codex' ? { ...link, tool: 'codex' } : link
     } catch {
       return null
     }
@@ -80,6 +87,11 @@ export class SessionLinkWatcher {
 
   private guessFromCwd(): SessionLink | null {
     const cwd = process.cwd()
+    if (this.tool === 'codex') {
+      // Codex starts its MCP servers in the session's folder, and writes the rollout at the first prompt.
+      const rollout = newestRollout(cwd, this.startedAt - 5000)
+      return rollout ? { sessionId: rollout.sessionId, transcriptPath: rollout.file, cwd, tool: 'codex' } : null
+    }
     const newest = newestTranscript(cwd)
     if (!newest || newest.modified < this.startedAt - 5000) return null
     return { sessionId: newest.sessionId, transcriptPath: newest.file, cwd }

@@ -1,7 +1,9 @@
-// The cluster's automatic events (#311) and claims (#310), read from shell calls the way Claude Code's transcripts and
-// OpenCode 1 and 2 give them: each command when it works and when it fails, with POSIX and Windows paths.
+// The cluster's automatic events (#311) and claims (#310), read from shell calls the way Claude Code's transcripts,
+// OpenCode 1 and 2 and Codex's rollouts give them: each command when it works and when it fails, with POSIX and Windows
+// paths.
 import { describe, expect, test } from 'bun:test'
 import { commandsOf, type Detected, detect, EventDetector, normalizePath, projectPath } from '../src/cluster/detect'
+import { CodexRollout } from '../src/codex/rollout'
 import { OpenCodeTracker } from '../src/opencode/events'
 import { cutToolResult, parseLine } from '../src/transcript/parser'
 
@@ -89,7 +91,36 @@ function openCode1(calls: Call[], root?: string): Detected[] {
   })
 }
 
-const SOURCES = { 'Claude Code': claudeCode, 'OpenCode 2': openCode2, 'OpenCode 1': openCode1 }
+/** Codex's rollout: an exec_command call, then its output after the header Codex writes, with the exit code. */
+function codex(calls: Call[], root?: string): Detected[] {
+  const rollout = new CodexRollout()
+  const detector = new EventDetector(root)
+  return calls.flatMap(({ command, output, exit = 0 }, index) => {
+    const lines = [
+      {
+        timestamp: '2026-11-04T14:02:00Z',
+        type: 'response_item',
+        payload: { type: 'function_call', name: 'exec_command', arguments: JSON.stringify({ cmd: command }), call_id: `call_${index}` },
+      },
+      {
+        timestamp: '2026-11-04T14:02:05Z',
+        type: 'response_item',
+        payload: {
+          type: 'function_call_output',
+          call_id: `call_${index}`,
+          output: `Chunk ID: 1a2b\nWall time: 0.5000 seconds\nProcess exited with code ${exit ?? 0}\nOriginal token count: 9\nOutput:\n${output}`,
+        },
+      },
+    ].map(line => rollout.line(JSON.stringify(line)))
+    const commands = Object.assign({}, ...lines.map(line => line.commands))
+    return detector.read(
+      lines.flatMap(line => line.entries),
+      id => commands[id],
+    )
+  })
+}
+
+const SOURCES = { 'Claude Code': claudeCode, 'OpenCode 2': openCode2, 'OpenCode 1': openCode1, Codex: codex }
 const posted = (detected: Detected[]) => detected.map(({ kind, text, event }) => ({ kind, text, event }))
 
 interface Case {

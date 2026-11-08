@@ -1,0 +1,27 @@
+{
+  "about": "Codex's tool names, with the namespace of an MCP tool, under Claude Code's. Checked by agent/test/codex-rollout.test.ts; a Swift reader of Codex's rollouts checks it too.",
+  "cases": [
+    { "tool": "exec_command", "name": "Bash" },
+    { "tool": "shell_command", "name": "Bash" },
+    { "tool": "shell", "name": "Bash" },
+    { "tool": "container.exec", "name": "Bash" },
+    { "tool": "local_shell", "name": "Bash" },
+    { "tool": "update_plan", "name": "TodoWrite" },
+    { "tool": "view_image", "name": "Read" },
+    { "tool": "web_search", "name": "WebSearch" },
+    { "tool": "spawn_agent", "name": "Task" },
+    { "tool": "request_user_input", "name": "AskUserQuestion" },
+    { "tool": "tool_search", "name": "ToolSearch" },
+    { "tool": "list_mcp_resources", "name": "ListMcpResourcesTool" },
+    { "tool": "read_mcp_resource", "name": "ReadMcpResourceTool" },
+    { "tool": "cluster_status", "namespace": "mcp__tonton", "name": "mcp__tonton__cluster_status" },
+    { "tool": "cluster_status", "namespace": "mcp__tonton__", "name": "mcp__tonton__cluster_status" },
+    { "tool": "create_issue", "namespace": "github", "name": "mcp__github__create_issue" },
+    { "tool": "_spawn_actor", "namespace": "mcp__unreal-engine_", "name": "mcp__unreal-engine__spawn_actor" },
+    { "tool": "mcp__github__create_issue", "name": "mcp__github__create_issue" },
+    { "tool": "apply_patch", "name": "apply_patch" },
+    { "tool": "write_stdin", "name": "write_stdin" },
+    { "tool": "wait_agent", "name": "wait_agent" },
+    { "tool": "constructor", "name": "constructor" }
+  ]
+}

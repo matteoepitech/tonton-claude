@@ -1,9 +1,10 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { open } from '../../../shared/crypto'
 import type { PromptPayload, RelayToAgent, SessionCommand } from '../../../shared/protocol'
 import { loadConfig, paths } from '../config'
 import { receiveDiagnoseRequest } from '../diagnose'
+import { postHook } from '../hook'
 import { handleStartAnswer, receiveStartOrder } from '../launch'
 import { log } from '../log'
 import { handleLogRequest } from '../logs'
@@ -21,29 +22,51 @@ const PARENT_CHECK_MS = 5000
 
 /**
  * MCP stdio server spawned by Claude Code, one per session: streams the conversation to the relay and
- * injects messages and permission answers coming back from the notch.
+ * injects messages and permission answers coming back from the notch. Codex spawns it as `channel codex`: the same, but
+ * Codex takes no message from an MCP server, so nothing from the notch goes in, and it has no SessionEnd hook, so the
+ * channel says the session ended when Codex stops it.
  */
-export async function runChannel() {
+export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
+  const codex = tool === 'codex'
   let conversation: Conversation | null = null
   // The pool tools and the cluster tools, side by side: a session can be in a pool and a cluster at once.
-  const mcp = new ChannelServer((requestId, detail) => conversation?.addPermission(requestId, detail), {
-    list: () => [...(conversation?.work.tools() ?? []), ...(conversation?.cluster.tools() ?? [])],
-    call: (name, args) =>
-      isClusterTool(name)
-        ? (conversation?.cluster.call(name, args) ?? Promise.resolve('This session is not in a cluster.'))
-        : (conversation?.work.call(name, args) ?? Promise.resolve('This session is not in a pool.')),
-  })
-  await mcp.connect()
-  exitWithParent()
-
+  const mcp = new ChannelServer(
+    (requestId, detail) => conversation?.addPermission(requestId, detail),
+    {
+      list: () => [...(conversation?.work.tools() ?? []), ...(conversation?.cluster.tools() ?? [])],
+      call: (name, args) =>
+        isClusterTool(name)
+          ? (conversation?.cluster.call(name, args) ?? Promise.resolve('This session is not in a cluster.'))
+          : (conversation?.work.call(name, args) ?? Promise.resolve('This session is not in a pool.')),
+    },
+    { channel: !codex },
+  )
   const config = loadConfig()
+  // Read now: once codex is gone, the channel's parent is another process.
+  const linkFile = join(paths.run, `${process.ppid}.json`)
+  let ending = false
+  // Codex stops its MCP servers when it exits: the session ends with it, as Claude Code's SessionEnd hook says.
+  const end = async () => {
+    if (ending) return
+    ending = true
+    const sessionId = conversation?.link.sessionId
+    if (config && sessionId) {
+      await postHook(config, { hook_event_name: 'SessionEnd', session_id: sessionId }).catch(() => {})
+      unlink(linkFile, sessionId)
+    }
+    process.exit(0)
+  }
+  if (codex) process.on('SIGTERM', () => void end())
+  await mcp.connect(codex ? () => void end() : undefined)
+  exitWithParent(codex ? () => void end() : undefined)
+
   if (!config) {
     log('channel: not enrolled, staying idle')
     return
   }
-  const canChat = process.env.TONTON_CHANNEL === '1'
+  const canChat = !codex && process.env.TONTON_CHANNEL === '1'
   const rpg = new AgentRPG(config)
-  log('channel started', { parent: process.ppid, canChat, cwd: process.cwd() })
+  log('channel started', { parent: process.ppid, canChat, cwd: process.cwd(), ...(codex ? { tool } : {}) })
 
   const relay: RelayConnection = new RelayConnection(config, 'channel', {
     connected: () => conversation?.announce(),
@@ -72,6 +95,8 @@ export async function runChannel() {
   })
 
   const onRelayMessage = async (message: Extract<RelayToAgent, { t: 'prompt' | 'verdict' }>) => {
+    // Its hello says it cannot chat: nothing from the notch has a way into a Codex session yet.
+    if (codex) return log('channel: dropped a message for a Codex session', { kind: message.t })
     if (message.t === 'verdict') {
       if (message.behavior === 'allow' && message.rule && conversation) {
         const { sessionId } = conversation.link
@@ -99,26 +124,48 @@ export async function runChannel() {
     if (!result.typed && result.why) conversation.notice(`/${command.name} was not run: ${result.why}`)
   }
 
+  // What its pools and clusters send a Codex session has no way in yet: it waits for the Codex delivery of #371 and #372.
+  const pool = codex
+    ? { deliver: () => {}, toolsChanged: () => void mcp.toolsChanged() }
+    : { deliver: (text: string) => void mcp.inject(text, 'pool'), toolsChanged: () => void mcp.toolsChanged() }
+  const cluster = codex
+    ? { live: () => {}, toolsChanged: () => void mcp.toolsChanged() }
+    : { live: (text: string) => void mcp.inject(text, 'cluster'), toolsChanged: () => void mcp.toolsChanged() }
+
   const follow = (link: SessionLink) => {
     log('following session', link)
+    const previous = conversation?.link
     conversation?.stop()
+    // A new thread in the same codex (`/new`): the one before ended, and no hook says so. Only one a hook linked: a guess
+    // from the folder may have been another codex's session.
+    if (codex && previous?.event && previous.sessionId !== link.sessionId)
+      void postHook(config, { hook_event_name: 'SessionEnd', session_id: previous.sessionId }).catch(() => {})
     conversation = new Conversation(
       link,
       config.machine,
       config.key,
       canChat,
       build => relay.post(build),
-      { deliver: text => void mcp.inject(text, 'pool'), toolsChanged: () => void mcp.toolsChanged() },
+      pool,
       config.machineId,
       rpg,
-      { live: text => void mcp.inject(text, 'cluster'), toolsChanged: () => void mcp.toolsChanged() },
+      cluster,
       config,
     )
     conversation.start()
   }
 
   relay.connect()
-  new SessionLinkWatcher(follow).start()
+  new SessionLinkWatcher(follow, tool).start()
+}
+
+/** The link goes with its session, as Claude Code's SessionEnd hook takes it (agent/src/hook.ts). */
+function unlink(file: string, sessionId: string) {
+  try {
+    if ((JSON.parse(readFileSync(file, 'utf8')) as { sessionId?: unknown }).sessionId === sessionId) rmSync(file, { force: true })
+  } catch {
+    // No link, or one being written.
+  }
 }
 
 /** Images and files from the notch are written to the inbox and handed to Claude as paths it can Read. */
@@ -136,14 +183,14 @@ export function withAttachments(prompt: PromptPayload): string {
 }
 
 /** stdin closing covers a normal exit of Claude Code; this covers crashes. */
-function exitWithParent() {
+function exitWithParent(gone: () => void = () => process.exit(0)) {
   const parent = process.ppid
   setInterval(() => {
     try {
       process.kill(parent, 0)
     } catch (error) {
-      // Only a missing process means Claude Code is gone; other errors mean the check is unsupported.
-      if ((error as NodeJS.ErrnoException).code === 'ESRCH') process.exit(0)
+      // Only a missing process means Claude Code or Codex is gone; other errors mean the check is unsupported.
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') gone()
     }
   }, PARENT_CHECK_MS)
 }
