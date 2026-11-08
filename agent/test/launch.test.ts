@@ -173,6 +173,22 @@ describe.skipIf(process.platform === 'win32' || !hasTmux)('starting a session fr
     expect(link.messages).toHaveLength(6)
   })
 
+  test('a start of a tool this agent cannot run is refused, not started as claude', async () => {
+    const link = relay()
+    for (const [launchId, tool] of [
+      ['launch0013', 'codex'],
+      ['launch0014', 'aider'],
+    ])
+      await handleStartOrder(config, launchId, await seal(key, { launchId, machineId: 'm', cwd: project, issuedAt: now(), tool }), link, {
+        run,
+      })
+    await until(() => (link.messages.length === 2 ? true : undefined), 'two refusals')
+    expect(link.messages.map(m => [m.state, m.opened.text])).toEqual([
+      ['failed', 'This agent cannot start Codex. Update it in Settings › Machines, then try again.'],
+      ['failed', 'This agent cannot start that tool. Update it in Settings › Machines, then try again.'],
+    ])
+  })
+
   test('a start runs once on the machine, whichever process gets it', async () => {
     const link = relay()
     const sealed = await order('launch0008', join(dir, 'missing'))

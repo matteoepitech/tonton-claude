@@ -42,7 +42,8 @@ import type {
   PoolUpdate,
   PoolUsage,
 } from './pool-protocol'
-import type { PermissionRule, Sealed, SessionStatus } from './protocol'
+import type { CodingTool, PermissionRule, Sealed, SessionStatus } from './protocol'
+import { isCodingTool } from './session'
 
 const KEY = /^[A-Za-z0-9_-]{43}$/
 const TASK_STATES: readonly PoolTaskState[] = ['todo', 'assigned', 'in_progress', 'review', 'done', 'blocked']
@@ -176,7 +177,7 @@ export function decodePoolMemberProfile(value: unknown): PoolMemberProfile | nul
 export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | null {
   const f = fields(value)
   if (!f) return null
-  const tool: PoolSessionProfile['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
+  const tool: PoolSessionProfile['tool'] = isCodingTool(f.tool) ? f.tool : undefined
   const takes: PoolSessionProfile['takes'] = f.takes === 'simple' || f.takes === 'large' ? f.takes : undefined
   return defined({
     area: text(f.area),
@@ -191,7 +192,7 @@ export function decodePoolSessionProfile(value: unknown): PoolSessionProfile | n
 }
 
 /** What kind of task a session takes: its owner's choice, or by its tool when it made none. */
-export function poolTaskSize(profile: PoolSessionProfile | null, tool: 'claude' | 'opencode'): PoolTaskSize {
+export function poolTaskSize(profile: PoolSessionProfile | null, tool: CodingTool): PoolTaskSize {
   return profile?.takes ?? (tool === 'opencode' ? 'simple' : 'large')
 }
 
@@ -287,7 +288,7 @@ export function decodePoolEventBody(value: unknown): PoolEventBody | null {
   const f = fields(value)
   const kind = text(f?.kind)
   if (!f || kind === undefined) return null
-  const tool: PoolEventBody['tool'] = f.tool === 'claude' || f.tool === 'opencode' ? f.tool : undefined
+  const tool: PoolEventBody['tool'] = isCodingTool(f.tool) ? f.tool : undefined
   return defined({
     kind,
     text: text(f.text),

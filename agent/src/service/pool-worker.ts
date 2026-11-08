@@ -223,6 +223,8 @@ export class PoolWorker {
     const { poolId, taskId } = slot
     const repo = this.pools.state(poolId)?.info?.repo
     if (!repo) return 'the pool has no repository to clone.'
+    // A profile from a newer app: this agent does not start Codex for pool tasks yet.
+    if (order.profile.tool === 'codex') return 'this agent cannot start Codex for pool tasks yet. Update it.'
     const prepare = this.options.prepare ?? prepareTaskTree
     const tree = await prepare(order.profile.workdir, repo, taskId, taskBranch(taskId, task.title, task.branch))
     if (typeof tree === 'string') return tree

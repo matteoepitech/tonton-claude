@@ -108,6 +108,7 @@ public enum ClusterModel {
         switch tool {
         case "claude": CodingTool.claudeCode.label
         case "opencode": CodingTool.openCode.label
+        case "codex": CodingTool.codex.label
         default: nil
         }
     }
@@ -206,7 +207,7 @@ public enum ClusterModel {
         }
         return ClusterSessionProfile(
             name: text(session.name ?? session.title), project: text(session.project), machine: text(session.machine),
-            tool: session.codingTool == .openCode ? "opencode" : "claude", model: text(session.model), branch: text(session.branch))
+            tool: session.codingTool.command, model: text(session.model), branch: text(session.branch))
     }
 
     // MARK: The clock

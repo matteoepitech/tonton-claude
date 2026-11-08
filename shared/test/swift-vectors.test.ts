@@ -10,6 +10,7 @@ import { modelFamily, modelName } from '../model'
 import { openPoolGrant, openPoolSessionOrder } from '../pool'
 import { parsePoolInvite } from '../pool-link'
 import { openPoolMachineOrder } from '../pool-machines'
+import type { StartOrder } from '../protocol'
 import { parseRPGState } from '../rpg'
 import { parseRPGPool } from '../rpg-pool'
 import { acceptsCommands, displayStatusText, type Session } from '../session'
@@ -148,6 +149,15 @@ describe('vectors from the Swift implementation', () => {
     const { machines, sessions } = await read()
     expect(withoutNulls(machines)).toEqual(vectors.expected.machines)
     expect(withoutNulls(sessions.map(projection))).toEqual(vectors.expected.sessions)
+  })
+
+  test('a Codex session and a Codex start name their tool as the agent reads it', async () => {
+    const { sessions } = await read()
+    expect(sessions.find(s => s.id === 's1')?.tool).toBe('codex')
+    const order = await open<StartOrder>(vectors.key, vectors.blobs.find(b => b.name === 'codex start order')?.blob ?? '')
+    expect(order.tool).toBe('codex')
+    const claude = await open<StartOrder>(vectors.key, vectors.blobs.find(b => b.name === 'start order')?.blob ?? '')
+    expect(claude.tool).toBeUndefined()
   })
 
   test('the conversation reads the same, and merges tool calls with their results the same way', async () => {

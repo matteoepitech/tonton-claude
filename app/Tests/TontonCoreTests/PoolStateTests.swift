@@ -165,6 +165,7 @@ final class PoolStateTests: XCTestCase {
         XCTAssertEqual(PoolTaskSize.of(profile, tool: .openCode), .simple)
         XCTAssertEqual(PoolTaskSize.of(PoolSessionProfile(takes: "large"), tool: .openCode), .large)
         XCTAssertEqual(PoolTaskSize.of(nil, tool: .claudeCode), .large)
+        XCTAssertEqual(PoolTaskSize.of(nil, tool: .codex), .large)
     }
 
     func testOnlyAgentsThatKnowPoolsAreOfferedToJoin() {

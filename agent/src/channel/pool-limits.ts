@@ -7,7 +7,7 @@
 import { LimitForecast } from '../../../shared/limit-forecast'
 import type { PoolState } from '../../../shared/pool'
 import type { PoolLimits, PoolLimitWindow, PoolTask } from '../../../shared/pool-protocol'
-import type { UsageLimit } from '../../../shared/protocol'
+import type { CodingTool, UsageLimit } from '../../../shared/protocol'
 
 /** How long a task takes when it does not say: a small one an hour, a large one three. */
 export const DEFAULT_HOURS = { simple: 1, large: 3 } as const
@@ -105,7 +105,7 @@ export function nearLimit(limits: PoolLimits | undefined, now = Date.now()): str
 }
 
 /** How pool_status and pool_overview show a session's plan. */
-export function limitsView(tool: 'claude' | 'opencode', limits: PoolLimits | undefined, now = Date.now()) {
+export function limitsView(tool: CodingTool, limits: PoolLimits | undefined, now = Date.now()) {
   if (tool === 'opencode') return 'no plan limit'
   if (!limits) return 'not shared yet'
   const runsOut = limits.runsOutAt ? Date.parse(limits.runsOutAt) : Number.NaN

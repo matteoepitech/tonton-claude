@@ -10,10 +10,10 @@ public struct UsageHistory: Codable, Equatable, Sendable {
         public let project: String
         public var costUSD: Double
         public var tokens: TokenCounts
-        /// `opencode`, or nil for Claude Code and for what was recorded before the app knew OpenCode.
+        /// `opencode` or `codex`, or nil for Claude Code and for what was recorded before the app knew OpenCode.
         public let tool: String?
 
-        /// "Claude Code" or "OpenCode", for the totals per tool.
+        /// "Claude Code", "OpenCode" or "Codex", for the totals per tool.
         public var toolName: String { CodingTool(tool).label }
     }
 

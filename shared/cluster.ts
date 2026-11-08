@@ -33,6 +33,7 @@ import type {
 import { type AccountKey, newAccountKey, open, openBytes, seal, sealBytes } from './crypto'
 import { blobVersion, PoolKeyring, type PoolKeyWrapWire } from './pool-keys'
 import type { Sealed, SessionStatus } from './protocol'
+import { isCodingTool } from './session'
 
 const KEY = /^[A-Za-z0-9_-]{43}$/
 const ROLES: readonly ClusterRole[] = ['owner', 'member']
@@ -179,7 +180,7 @@ export function decodeClusterSessionProfile(value: unknown): ClusterSessionProfi
     name: text(f.name, 200),
     project: text(f.project, 200),
     machine: text(f.machine, 200),
-    tool: f.tool === 'claude' || f.tool === 'opencode' ? (f.tool as ClusterTool) : undefined,
+    tool: isCodingTool(f.tool) ? (f.tool as ClusterTool) : undefined,
     model: text(f.model, 200),
     branch: text(f.branch, 200),
     status: text(f.status, 500),

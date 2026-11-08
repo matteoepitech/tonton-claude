@@ -3,7 +3,7 @@
 // key, which the members share and the relay never gets. Mirrors app/Sources/TontonCore/Pool.swift.
 
 import type { PoolKeyWrapWire } from './pool-keys'
-import type { ClaudePlan, PermissionRule, Sealed, SessionStatus } from './protocol'
+import type { ClaudePlan, CodingTool, PermissionRule, Sealed, SessionStatus } from './protocol'
 
 export type { PoolKeyWrapWire } from './pool-keys'
 
@@ -52,7 +52,7 @@ export interface PoolSessionProfile {
   repo?: string
   project?: string
   machine?: string
-  tool?: 'claude' | 'opencode'
+  tool?: CodingTool
   /** Older profiles only: the orchestrator is now the pool's `orchestrator` field, which only owners and admins set. */
   orchestrator?: boolean
   /**
@@ -190,7 +190,7 @@ export interface PoolEventBody {
   text?: string
   taskId?: string
   /** `session` events: the coding tool and the model, so the orchestrator assigns by capability. */
-  tool?: 'claude' | 'opencode'
+  tool?: CodingTool
   model?: string
   /** `usage` events. */
   usage?: PoolUsage
@@ -276,7 +276,7 @@ export interface PoolMachineProfile {
   /** The machine's name, as its owner calls it. */
   name?: string
   /** What its sessions run. */
-  tool: 'claude' | 'opencode'
+  tool: CodingTool
   /** How many sessions it runs at once for the pool, 1 to 8. */
   capacity: number
   /** The folder on the machine the pool's work goes in: the repository in `repo`, a git worktree per task in `tasks`. */

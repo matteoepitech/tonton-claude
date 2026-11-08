@@ -313,6 +313,9 @@ function repairs(fix: string, setup: Setup, role: DiagnoseOptions['role'], acces
       return { ok: true, text: 'Plugin written. Restart OpenCode to load it.' }
     case 'service':
       return repairService(role, access)
+    case 'codex':
+      // Not in FIXES: this agent does not install Codex's hooks yet.
+      return { ok: false, text: 'This agent does not know that repair. Update it first.' }
   }
 }
 

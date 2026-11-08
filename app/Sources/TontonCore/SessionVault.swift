@@ -121,7 +121,7 @@ public struct SessionVault: Sendable {
     ) throws -> String {
         let order = StartOrder(
             launchId: launchId, machineId: machineId, cwd: cwd, issuedAt: ISO8601DateFormatter().string(from: issuedAt),
-            tool: tool == .openCode ? "opencode" : nil)
+            tool: tool.wire)
         return try E2E.seal(order, with: key)
     }
 

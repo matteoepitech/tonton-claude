@@ -80,7 +80,8 @@ public struct SessionSummary: Identifiable, Equatable, Sendable {
     public let commands: Set<SessionCommandName>
     /// The API id of the model it uses (`claude-opus-4-5-20251101`). Nil with older agents, and before Claude Code says.
     public let model: String?
-    /// The coding agent running the session, as the agent reports it: `opencode`, or nil for Claude Code and older agents.
+    /// The coding agent running the session, as the agent reports it: `opencode` or `codex`, or nil for Claude Code and older
+    /// agents.
     public let tool: String?
     /// The git branch it works on, or the short commit when detached. Nil outside git and with older agents.
     public let branch: String?

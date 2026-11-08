@@ -19,7 +19,7 @@ import type {
   PoolUpdate,
   PoolUsage,
 } from '../../../shared/pool-protocol'
-import type { AgentMessage, UsageLimit } from '../../../shared/protocol'
+import type { AgentMessage, CodingTool, UsageLimit } from '../../../shared/protocol'
 import { log } from '../log'
 import { AUTOPILOT_GUIDE } from './pool-dispatch'
 import { PoolGit } from './pool-git'
@@ -150,7 +150,7 @@ const INBOX_SIZE = 20
 
 /** The session's coding tool and model, as the pool sees them. */
 export interface SessionDescription {
-  tool: 'claude' | 'opencode'
+  tool: CodingTool
   model?: string
   /** Its tokens and its account's windows, shared with the pool as `usage` events (pool-usage.ts). What it spent goes in `spend` events (pool-safety.ts). */
   usage?: PoolUsage

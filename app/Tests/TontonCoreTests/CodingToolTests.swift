@@ -16,14 +16,27 @@ final class CodingToolTests: XCTestCase {
     func testOlderAgentsAndUnknownToolsAreClaudeCode() {
         XCTAssertEqual(CodingTool(nil), .claudeCode)
         XCTAssertEqual(CodingTool("opencode"), .openCode)
+        XCTAssertEqual(CodingTool("codex"), .codex)
         XCTAssertEqual(CodingTool("aider"), .claudeCode)
         XCTAssertEqual(session("s", tool: "opencode").codingTool.label, "OpenCode")
+        XCTAssertEqual(session("s", tool: "codex").codingTool.label, "Codex")
+    }
+
+    func testEachToolHasTheNamesTheAgentsUse() {
+        XCTAssertEqual(CodingTool.allCases.map(\.command), ["claude", "opencode", "codex"])
+        XCTAssertEqual(CodingTool.allCases.map(\.wire), [nil, "opencode", "codex"])
+        XCTAssertEqual(CodingTool(command: "codex"), .codex)
+        XCTAssertNil(CodingTool(command: "aider"))
+        XCTAssertNil(CodingTool(command: nil))
+        XCTAssertEqual(Set(CodingTool.allCases.map(\.symbol)).count, CodingTool.allCases.count)
     }
 
     func testTheSearchFindsSessionsByTool() {
         XCTAssertTrue(session("s", tool: "opencode").matches("opencode"))
         XCTAssertTrue(session("s").matches("claude"))
         XCTAssertFalse(session("s").matches("opencode"))
+        XCTAssertTrue(session("s", tool: "codex").matches("codex"))
+        XCTAssertFalse(session("s", tool: "codex").matches("claude"))
         XCTAssertTrue(session("s").matches("login"))
         XCTAssertTrue(session("s").matches(""))
     }
@@ -31,6 +44,7 @@ final class CodingToolTests: XCTestCase {
     func testRowsShowTheToolOnlyWhenBothAreListed() {
         XCTAssertFalse([session("a"), session("b")].mixesTools)
         XCTAssertTrue([session("a"), session("b", tool: "opencode")].mixesTools)
+        XCTAssertTrue([session("a"), session("b", tool: "codex")].mixesTools)
     }
 
     func testUsageIsKeptAndTotalledPerTool() throws {
@@ -38,11 +52,13 @@ final class CodingToolTests: XCTestCase {
         calendar.timeZone = TimeZone(identifier: "Europe/Paris") ?? .current
         var history = UsageHistory()
         // The same project on the same machine, with both tools.
-        history.record([session("a", cost: 1.0), session("b", tool: "opencode", cost: 0.25)], at: now, calendar: calendar)
-        XCTAssertEqual(history.entries.count, 2)
+        history.record(
+            [session("a", cost: 1.0), session("b", tool: "opencode", cost: 0.25), session("c", tool: "codex", cost: 0.5)], at: now,
+            calendar: calendar)
+        XCTAssertEqual(history.entries.count, 3)
         let tools = history.totals(by: \.toolName, days: 1, until: now, calendar: calendar)
-        XCTAssertEqual(tools.map(\.name), ["Claude Code", "OpenCode"])
-        XCTAssertEqual(tools.map(\.costUSD), [1.0, 0.25])
+        XCTAssertEqual(Set(tools.map(\.name)), ["Claude Code", "OpenCode", "Codex"])
+        XCTAssertEqual(tools.first { $0.name == "Codex" }?.costUSD, 0.5)
         // usage.json from before this version has no tool: it counts as Claude Code.
         let old =
             #"{"entries":[{"day":"2026-10-25","machine":"PC","project":"api","costUSD":2,"tokens":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}}],"readings":{}}"#
@@ -67,6 +83,12 @@ final class CodingToolTests: XCTestCase {
         XCTAssertEqual(try machine(tools: ["aider"]).startableTools, [.claudeCode])
     }
 
+    func testCodexSessionsShowButTheNotchDoesNotStartThemYet() throws {
+        XCTAssertEqual(try machine(tools: ["claude", "opencode", "codex"]).startableTools, [.claudeCode, .openCode])
+        XCTAssertEqual(try machine(tools: ["codex"]).startableTools, [.claudeCode])
+        XCTAssertFalse(CodingTool.startable.contains(.codex))
+    }
+
     func testStartOrdersNameOpenCodeAndLeaveClaudeAsOlderAgentsKnowIt() throws {
         let key = SymmetricKey(size: .bits256)
         let vault = SessionVault(key: key)
@@ -76,6 +98,9 @@ final class CodingToolTests: XCTestCase {
         let opencode = try E2E.open(
             try vault.sealStartOrder(launchId: "l1", machineId: "m", cwd: "~/api", tool: .openCode), as: [String: String].self, with: key)
         XCTAssertEqual(opencode["tool"], "opencode")
+        let codex = try E2E.open(
+            try vault.sealStartOrder(launchId: "l1", machineId: "m", cwd: "~/api", tool: .codex), as: [String: String].self, with: key)
+        XCTAssertEqual(codex["tool"], "codex")
         let launch = SessionLaunch(id: "l1", machineId: "m", cwd: "~/api", tool: .openCode)
         XCTAssertEqual(launch.failed("no").tool, .openCode)
         XCTAssertEqual(launch.answered("q").tool, .openCode)

@@ -3,7 +3,7 @@
 
 import type { SocketLike } from './client'
 import { type AccountKey, open } from './crypto'
-import type { Entry, RelayToViewer, SealedEntry, SessionStatus } from './protocol'
+import type { CodingTool, Entry, RelayToViewer, SealedEntry, SessionStatus } from './protocol'
 import { STATUS_LABELS } from './session'
 import { Vault } from './vault'
 
@@ -12,7 +12,7 @@ export interface SharedView {
   status: SessionStatus | null
   project: string | null
   title: string | null
-  tool: 'opencode' | null
+  tool: Exclude<CodingTool, 'claude'> | null
   /** Null until the relay sent the copy. */
   entries: Entry[] | null
 }
@@ -139,7 +139,7 @@ export class ShareViewer {
       return {
         project: info.project,
         title: typeof info.title === 'string' ? info.title : null,
-        tool: info.tool === 'opencode' ? 'opencode' : null,
+        tool: info.tool === 'opencode' || info.tool === 'codex' ? info.tool : null,
       }
     } catch {
       return {}

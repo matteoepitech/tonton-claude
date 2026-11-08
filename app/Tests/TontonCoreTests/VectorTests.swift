@@ -125,7 +125,8 @@ final class VectorTests: XCTestCase {
         let sessions: [[String: Any]] = [
             [
                 "id": "s1", "machineId": "m1", "status": "permission", "agentOnline": true, "canChat": true,
-                "info": try sealed(SessionInfo(machine: "PC-Studio", platform: "win32", cwd: "C:\\code\\api", project: "api")),
+                "info": try sealed(
+                    SessionInfo(machine: "PC-Studio", platform: "win32", cwd: "C:\\code\\api", project: "api", tool: "codex")),
                 "meta": try sealed(meta), "statusDetail": try sealed(StatusDetail(text: "Claude needs your permission to use Bash")),
                 "pendingPermissions": [
                     ["requestId": "abcde", "ts": "2026-10-25T10:05:00.000Z", "blob": try sealed(permission)],
@@ -180,6 +181,10 @@ final class VectorTests: XCTestCase {
             ("model command", try vault.sealCommand(.model, model: .haiku, for: "s1", issuedAt: issuedAt)),
             ("update order", try vault.sealUpdateOrder(version: "0.9.2", issuedAt: issuedAt)),
             ("start order", try vault.sealStartOrder(launchId: "abcdefgh12", machineId: "m1", cwd: "~/code/api", issuedAt: issuedAt)),
+            (
+                "codex start order",
+                try vault.sealStartOrder(launchId: "abcdefgh13", machineId: "m1", cwd: "~/code/api", tool: .codex, issuedAt: issuedAt)
+            ),
             (
                 "start answer",
                 try vault.sealStartAnswer(launchId: "abcdefgh12", machineId: "m1", question: "q1", confirm: true, issuedAt: issuedAt)
@@ -333,7 +338,7 @@ final class VectorTests: XCTestCase {
             startedAt: milliseconds(s.startedAt), lastActivity: milliseconds(s.lastActivity), lastMessage: s.lastMessage,
             fiveHourLimit: limit(s.fiveHourLimit), sevenDayLimit: limit(s.sevenDayLimit), terminal: s.terminal,
             commands: s.commands.map(\.rawValue).sorted(), model: s.model, modelName: s.modelName, modelFamily: s.modelFamily?.rawValue,
-            acceptsCommands: s.acceptsCommands, branch: s.branch, tasks: s.tasks, name: s.name)
+            acceptsCommands: s.acceptsCommands, branch: s.branch, tasks: s.tasks, name: s.name, tool: s.tool)
     }
 
     /// Dates the app could not read are `distantPast`; TypeScript has null for them.
@@ -427,6 +432,7 @@ private struct Vectors: Codable {
         let branch: String?
         let tasks: TaskProgress?
         let name: String?
+        let tool: String?
     }
     struct ChatRow: Codable, Equatable { let kind: String; let id: String; let result: String? }
     struct Expected: Codable, Equatable {

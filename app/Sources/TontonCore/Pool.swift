@@ -162,7 +162,7 @@ public struct PoolSessionProfile: Codable, Equatable, Sendable {
     public var repo: String?
     public var project: String?
     public var machine: String?
-    /// `claude` or `opencode`.
+    /// `claude`, `opencode` or `codex`.
     public var tool: String?
     /// Older profiles only: the orchestrator is the pool's `orchestrator`, which only owners and admins set.
     public var orchestrator: Bool?
@@ -311,7 +311,7 @@ public struct PoolEventBody: Codable, Equatable, Sendable {
     public var kind: String
     public var text: String?
     public var taskId: String?
-    /// `session` events: `claude` or `opencode`, and the model, as the session's agent last posted them.
+    /// `session` events: `claude`, `opencode` or `codex`, and the model, as the session's agent last posted them.
     public var tool: String?
     public var model: String?
     /// `usage` events: its tokens and how much of its account's windows is left.

@@ -23,7 +23,7 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
     public static let capacities = 1...8
 
     public var name: String?
-    /// `claude` or `opencode`.
+    /// `claude`, `opencode` or `codex`.
     public var tool: String
     public var capacity: Int
     /// The folder on the machine the pool's work goes in: the repository, and a git worktree per task.
@@ -56,7 +56,7 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
         capacity = try c.decode(Int.self, forKey: .capacity)
         workdir = try c.decode(String.self, forKey: .workdir)
         mode = try c.decode(PoolMachineMode.self, forKey: .mode)
-        guard ["claude", "opencode"].contains(tool), Self.capacities.contains(capacity), Self.isWorkdir(workdir) else {
+        guard CodingTool(command: tool) != nil, Self.capacities.contains(capacity), Self.isWorkdir(workdir) else {
             throw DecodingError.dataCorruptedError(forKey: .workdir, in: c, debugDescription: "not a profile an agent runs")
         }
         name = try? c.decodeIfPresent(String.self, forKey: .name)
@@ -142,7 +142,7 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
     /// `Claude Max 20x`, `OpenCode`, `Claude Code` when its plan is not known: what the machine brings. Product names,
     /// the same in every language.
     public var planLabel: String {
-        if tool == "opencode" { return "OpenCode" }
+        if tool != "claude" { return CodingTool(tool).label }
         switch plan {
         case "max_20x": return "Claude Max 20x"
         case "max_5x": return "Claude Max 5x"
@@ -260,7 +260,7 @@ public struct PoolMachineForm: Equatable, Sendable {
 
     /// The form filled in with a profile, the automatic one for instance, for its owner to change.
     public init(_ profile: PoolMachineProfile) {
-        self.init(tool: profile.tool == "opencode" ? .openCode : .claudeCode, workdir: profile.workdir)
+        self.init(tool: CodingTool(profile.tool), workdir: profile.workdir)
         capacity = profile.capacity
         mode = profile.mode
         if let takes = profile.takes.flatMap(PoolTaskSize.init(rawValue:)) { self.takes = takes }
@@ -304,7 +304,7 @@ public struct PoolMachineForm: Equatable, Sendable {
         var seen = Set<String>()
         let unique = cleaned.filter { !$0.isEmpty && seen.insert($0).inserted }
         return PoolMachineProfile(
-            name: name, tool: tool == .openCode ? "opencode" : "claude", capacity: capacity,
+            name: name, tool: tool.command, capacity: capacity,
             workdir: workdir.trimmingCharacters(in: .whitespacesAndNewlines), mode: mode, takes: takes.rawValue,
             areas: unique.isEmpty ? nil : Array(unique.prefix(20)), models: modelPolicy, plan: tool == .claudeCode ? plan : nil)
     }
