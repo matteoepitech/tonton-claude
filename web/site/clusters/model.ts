@@ -29,7 +29,7 @@ export interface RosterMember {
   sessions: number
 }
 
-export const TOOL_LABELS: Record<ClusterTool, string> = { claude: 'Claude Code', opencode: 'OpenCode' }
+export const TOOL_LABELS: Record<ClusterTool, string> = { claude: 'Claude Code', opencode: 'OpenCode', codex: 'Codex' }
 
 export const POST_KINDS: Record<ClusterPostKind, string> = {
   message: 'Message',

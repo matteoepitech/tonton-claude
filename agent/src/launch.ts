@@ -169,6 +169,11 @@ export async function handleStartOrder(
   const order = await readOrder<StartOrder>(config.key, sealed)
   if (!order || order.launchId !== launchId || order.machineId !== config.machineId || typeof order.cwd !== 'string')
     return fail('The order is not sealed with the account key for this machine, or it expired.')
+  // A newer app's tool: starting claude instead would not be what the user picked.
+  if (order.tool !== undefined && order.tool !== 'opencode')
+    return fail(
+      `This agent cannot start ${order.tool === 'codex' ? 'Codex' : 'that tool'}. Update it in Settings › Machines, then try again.`,
+    )
   const cwd = fromHome(order.cwd, options.home)
   if (!isAbsolute(cwd) || !isDirectory(cwd)) return fail(`${order.cwd} is not a folder on this machine.`)
   if (process.platform === 'win32') return fail('Starting sessions from the notch needs tmux, which Windows does not have.')

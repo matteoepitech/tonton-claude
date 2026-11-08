@@ -5,7 +5,8 @@
 import type { PoolMember, PoolPostItem, PoolSession, PoolState } from './pool'
 import { memberName, sessionName, TASK_STATE_LABELS } from './pool-board'
 import type { PoolEventBody, PoolMessageBody, PoolRole, PoolTaskState, PoolUsage } from './pool-protocol'
-import type { SessionStatus } from './protocol'
+import type { CodingTool, SessionStatus } from './protocol'
+import { codingToolLabel } from './session'
 
 // MARK: Control center
 
@@ -18,7 +19,7 @@ export interface SessionCard {
   name: string
   machine?: string
   area?: string
-  tool: 'claude' | 'opencode'
+  tool: CodingTool
   model?: string
   orchestrator: boolean
   online: boolean
@@ -289,15 +290,14 @@ export function timeline(state: PoolState): TimelineItem[] {
       account: session.account,
       session: session.session,
       who: sessionName(state, session),
-      text: [session.profile?.area, session.profile?.tool === 'opencode' ? 'OpenCode' : 'Claude Code'].filter(Boolean).join(' · '),
+      text: [session.profile?.area, codingToolLabel(session.profile?.tool)].filter(Boolean).join(' · '),
       order: 1,
     })
   }
   for (const event of state.events) {
     const body = event.body
     if (!body || QUIET_KINDS.has(body.kind)) continue
-    const text =
-      body.kind === 'session' ? [body.tool === 'opencode' ? 'OpenCode' : 'Claude Code', body.model].filter(Boolean).join(' · ') : body.text
+    const text = body.kind === 'session' ? [codingToolLabel(body.tool), body.model].filter(Boolean).join(' · ') : body.text
     items.push({
       id: `event:${event.id}`,
       at: event.ts,
@@ -373,7 +373,7 @@ export interface LeaderRow {
   name: string
   account: string
   session?: string
-  tool?: 'claude' | 'opencode'
+  tool?: CodingTool
   tasksDone: number
   /** From each finished task's start to its end. */
   secondsWorked: number

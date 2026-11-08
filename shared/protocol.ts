@@ -9,6 +9,9 @@ import type { PoolAgentMessage, PoolAppMessage, PoolMachineMessage, PoolToAgent,
 
 export type Sealed = string // base64(nonce[12] | ciphertext | tag[16])
 
+/** The coding agents whose sessions Tonton shows. A session, a share or a start names its tool when it is not Claude Code. */
+export type CodingTool = 'claude' | 'opencode' | 'codex'
+
 export type SessionStatus = 'starting' | 'working' | 'waiting' | 'permission' | 'idle' | 'error' | 'ended' | 'offline'
 
 export interface ImageData {
@@ -57,7 +60,7 @@ export interface SessionInfo {
   cwd: string
   project: string
   /** The coding agent running the session. Missing for Claude Code, and from older agents. */
-  tool?: 'opencode'
+  tool?: Exclude<CodingTool, 'claude'>
 }
 /** How much of a Claude plan's usage window is spent, as Claude Code reports it. */
 export interface UsageLimit {
@@ -151,7 +154,7 @@ export interface MachineHealth {
    * the rest: the relay never sees the MAC addresses. Missing from older agents. */
   wake?: { mac: string; broadcast: string }[]
   /** The coding agents installed, which the notch can start there. Missing from older agents, which only start claude. */
-  tools?: ('claude' | 'opencode')[]
+  tools?: CodingTool[]
   /**
    * The Claude plan Claude Code is signed in with here, so a pool knows what the machine can take without asking its
    * owner (docs/pool-autopilot.md). Only the plan, never the account. Missing when Claude Code is not signed in, and from
@@ -191,8 +194,8 @@ export interface StartOrder {
   machineId: string
   cwd: string
   issuedAt: string
-  /** What to start. Missing: claude. The app only sends `opencode` to agents whose health lists it. */
-  tool?: 'opencode'
+  /** What to start. Missing: claude. The app only sends `opencode` or `codex` to agents whose health lists it. */
+  tool?: Exclude<CodingTool, 'claude'>
 }
 /** Sealed by the app: the user's answer to one question of one start, which the relay cannot reuse for another. */
 export interface StartAnswer {
@@ -235,8 +238,8 @@ export interface ShareOrder {
 export interface SharedInfo {
   project: string
   title?: string
-  /** `opencode`, missing for Claude Code. */
-  tool?: 'opencode'
+  /** `opencode` or `codex`, missing for Claude Code. */
+  tool?: Exclude<CodingTool, 'claude'>
 }
 /** A read-only share of one session, as the account lists it: never its token nor its key. */
 export interface ShareSummary {
@@ -281,7 +284,7 @@ export interface AgentLog {
   error?: string
 }
 /** What the app can ask a machine to repair, from Settings › Machines: each one redoes a part of the install step. */
-export type SetupFix = 'service' | 'hooks' | 'mcp' | 'launcher' | 'statusline' | 'opencode'
+export type SetupFix = 'service' | 'hooks' | 'mcp' | 'launcher' | 'statusline' | 'opencode' | 'codex'
 /** Sealed by the app: check how this machine is set up, after one repair if `fix` names it. Recent, and names its machine. */
 export interface DiagnoseRequest {
   requestId: string
@@ -291,7 +294,7 @@ export interface DiagnoseRequest {
 }
 /** One line of a diagnosis. */
 export interface SetupCheck {
-  /** `agent`, `service`, `relay`, `hooks`, `mcp`, `launcher`, `statusline` or `opencode`. Newer agents may add others. */
+  /** `agent`, `service`, `relay`, `hooks`, `mcp`, `launcher`, `statusline`, `opencode` or `codex`. Newer agents may add others. */
   id: string
   /** Shown as is, so an app can show a check it does not know. */
   label: string

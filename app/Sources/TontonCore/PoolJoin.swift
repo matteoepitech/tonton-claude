@@ -53,7 +53,7 @@ public struct PoolJoinForm: Equatable, Sendable {
         }
         return PoolSessionProfile(
             area: nonEmpty(area).map { $0.lowercased() }, skills: nonEmpty(skills), repo: nonEmpty(repo), project: session.project,
-            machine: session.machine, tool: session.codingTool == .openCode ? "opencode" : "claude", takes: takes.rawValue)
+            machine: session.machine, tool: session.codingTool.command, takes: takes.rawValue)
     }
 }
 

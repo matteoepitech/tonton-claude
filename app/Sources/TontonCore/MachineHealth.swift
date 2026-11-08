@@ -14,7 +14,7 @@ public struct MachineHealth: Codable, Equatable, Sendable {
     public let battery: Battery?
     /// Missing from older agents.
     public let wake: [WakeOnLAN.Target]?
-    /// The coding agents installed (`claude`, `opencode`). Missing from older agents, which only start claude.
+    /// The coding agents installed (`claude`, `opencode`, `codex`). Missing from older agents, which only start claude.
     public var tools: [String]? = nil
     /// The Claude plan Claude Code is signed in with there (`max_20x`, `max_5x`, `pro`, `team`, `enterprise`, `api`).
     /// Missing when it is not signed in, and from older agents.

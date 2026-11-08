@@ -1,7 +1,16 @@
 // Sessions and machines as a client shows them, once decrypted, with the rules the notch follows to label and order
 // them. The TypeScript twin of app/Sources/TontonCore/Session.swift, for the web, Windows and Linux apps.
 
-import type { MachineHealth, SessionCommand, SessionStatus, TaskProgress, TokenCounts } from './protocol'
+import type { CodingTool, MachineHealth, SessionCommand, SessionStatus, TaskProgress, TokenCounts } from './protocol'
+
+export const CODING_TOOLS: readonly CodingTool[] = ['claude', 'opencode', 'codex']
+
+export const isCodingTool = (value: unknown): value is CodingTool => CODING_TOOLS.includes(value as CodingTool)
+
+export const CODING_TOOL_LABELS: Record<CodingTool, string> = { claude: 'Claude Code', opencode: 'OpenCode', codex: 'Codex' }
+
+/** A session's tool as a person reads it. Missing, or a tool this client does not know, reads as Claude Code, like the app. */
+export const codingToolLabel = (tool: string | null | undefined): string => (isCodingTool(tool) ? CODING_TOOL_LABELS[tool] : 'Claude Code')
 
 export const STATUSES: readonly SessionStatus[] = ['starting', 'working', 'waiting', 'permission', 'idle', 'error', 'ended', 'offline']
 
@@ -99,7 +108,7 @@ export interface Session {
   commands: SessionCommand['name'][]
   /** The API id of the model it uses (`claude-opus-4-5-20251101`). Null with older agents, and before Claude Code says. */
   model: string | null
-  /** The coding agent running it: `opencode`, or null for Claude Code and older agents. */
+  /** The coding agent running it: `opencode` or `codex`, or null for Claude Code and older agents. */
   tool: string | null
   /** The git branch it works on, or the short commit when detached. Null outside git and with older agents. */
   branch: string | null

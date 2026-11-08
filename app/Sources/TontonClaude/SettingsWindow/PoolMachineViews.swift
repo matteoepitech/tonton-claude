@@ -115,7 +115,7 @@ struct AddToPoolView: View {
         let binding = Binding(get: { custom ?? form }, set: { custom = $0 })
         return Form {
             Picker("Runs", selection: binding.tool) {
-                ForEach(CodingTool.allCases, id: \.self) { tool in Text(tool.label).tag(tool) }
+                ForEach(CodingTool.startable, id: \.self) { tool in Text(tool.label).tag(tool) }
             }
             .onChange(of: binding.wrappedValue.tool) { _, tool in custom?.takes = .default(for: tool) }
             Stepper(value: binding.capacity, in: PoolMachineProfile.capacities) {

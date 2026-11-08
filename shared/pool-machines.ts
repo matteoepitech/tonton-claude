@@ -16,7 +16,7 @@ import type {
   PoolTaskSize,
 } from './pool-protocol'
 import type { ClaudePlan, MachineHealth, Sealed } from './protocol'
-import type { Machine } from './session'
+import { codingToolLabel, isCodingTool, type Machine } from './session'
 
 export const POOL_MACHINE_MODES: readonly PoolMachineMode[] = ['ask', 'edits', 'full']
 /** How many sessions a machine runs at once for one pool, at most. */
@@ -36,7 +36,7 @@ const text = (value: unknown, max: number): string | undefined => (typeof value 
 const defined = <T extends object>(value: T): T => Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T
 
 export const isPoolMachineMode = (value: unknown): value is PoolMachineMode => POOL_MACHINE_MODES.includes(value as PoolMachineMode)
-const isTool = (value: unknown): value is PoolMachineProfile['tool'] => value === 'claude' || value === 'opencode'
+const isTool = (value: unknown): value is PoolMachineProfile['tool'] => isCodingTool(value)
 const isSize = (value: unknown): value is PoolTaskSize => value === 'simple' || value === 'large'
 const PLAN = /^[a-z0-9_]{1,40}$/
 const isCapacity = (value: unknown): value is number =>
@@ -215,7 +215,7 @@ const PLAN_LABELS: Record<ClaudePlan, string> = {
 
 /** `Claude Max 20x`, `OpenCode`, `Claude Code` when its plan is not known: what a machine brings to the pool. */
 export function machinePlanLabel(profile: Pick<PoolMachineProfile, 'tool' | 'plan'> | null | undefined): string {
-  if (profile?.tool === 'opencode') return 'OpenCode'
+  if (profile?.tool && profile.tool !== 'claude') return codingToolLabel(profile.tool)
   return (profile?.plan && PLAN_LABELS[profile.plan]) ?? 'Claude Code'
 }
 

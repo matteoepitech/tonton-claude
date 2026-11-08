@@ -235,6 +235,13 @@ final class PoolMachineTests: XCTestCase {
         XCTAssertEqual(profile("claude", nil).planLabel, "Claude Code")
         XCTAssertEqual(profile("claude", "max_50x").planLabel, "Claude Code")
         XCTAssertEqual(profile("opencode", nil).planLabel, "OpenCode")
+        XCTAssertEqual(profile("codex", nil).planLabel, "Codex")
+        // Read from a newer app's profile; anything else is not a profile an agent runs.
+        let codex = #"{"tool":"codex","capacity":1,"workdir":"~/p","mode":"edits"}"#
+        XCTAssertEqual(try JSONDecoder().decode(PoolMachineProfile.self, from: Data(codex.utf8)).tool, "codex")
+        let aider = #"{"tool":"aider","capacity":1,"workdir":"~/p","mode":"edits"}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(PoolMachineProfile.self, from: Data(aider.utf8)))
+        XCTAssertEqual(PoolMachineForm(profile("codex", nil)).tool, .codex)
         // A plan that is not a plan's name is dropped when read.
         let sealed = #"{"tool":"claude","capacity":1,"workdir":"~/p","mode":"edits","plan":"<b>max</b>"}"#
         XCTAssertNil(try JSONDecoder().decode(PoolMachineProfile.self, from: Data(sealed.utf8)).plan)

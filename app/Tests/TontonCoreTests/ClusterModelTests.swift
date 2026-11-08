@@ -56,10 +56,23 @@ final class ClusterModelTests: XCTestCase {
         XCTAssertEqual(roster[0].machines.map(\.name), ["A machine"])
     }
 
+    func testAProfileKeepsTheToolsItKnows() throws {
+        func tool(_ value: String) throws -> String? {
+            let json = try JSONDecoder().decode(ClusterJSON.self, from: Data(#"{"project":"jam","tool":"\#(value)"}"#.utf8))
+            return ClusterSessionProfile(json: json)?.tool
+        }
+        XCTAssertEqual(try tool("claude"), "claude")
+        XCTAssertEqual(try tool("opencode"), "opencode")
+        XCTAssertEqual(try tool("codex"), "codex")
+        XCTAssertNil(try tool("aider"))
+    }
+
     func testTheRosterSaysWhatEachSessionIsDoing() {
         let profile = ClusterSessionProfile(
             project: "jam", machine: "Studio", tool: "opencode", model: "claude-opus-4-5-20251101", branch: "main", status: "rigging")
         XCTAssertEqual(ClusterModel.facts(profile), "jam · main · OpenCode · Opus 4.5")
+        let codex = ClusterSessionProfile(project: "jam", tool: "codex", model: "gpt-5-codex")
+        XCTAssertEqual(ClusterModel.facts(codex), "jam · Codex · gpt-5-codex")
         XCTAssertEqual(ClusterModel.facts(nil), "")
         XCTAssertEqual(ClusterModel.state(of: session("a", "s", online: false)), "Offline")
         XCTAssertEqual(ClusterModel.state(of: session("a", "s", ready: false)), "Waiting for its agent")
@@ -193,6 +206,11 @@ final class ClusterModelTests: XCTestCase {
             profile,
             ClusterSessionProfile(
                 name: "Rig", project: "jam", machine: "Studio", tool: "opencode", model: "claude-opus-4-5", branch: "main"))
+        let codex = SessionSummary(
+            id: "s3", machineId: "m1", machine: "Studio", platform: "darwin", cwd: "/x", project: "jam", title: nil, status: .working,
+            statusText: nil, agentOnline: true, canChat: true, pendingPermissions: [], costUSD: nil, startedAt: Date(),
+            lastActivity: Date(), lastMessage: nil, tool: "codex")
+        XCTAssertEqual(ClusterModel.profile(of: codex).tool, "codex")
         let offline = SessionSummary(
             id: "s2", machineId: "m1", machine: "Studio", platform: nil, cwd: "/x", project: "x", title: nil, status: .idle,
             statusText: nil, agentOnline: false, canChat: false, pendingPermissions: [], costUSD: nil, startedAt: Date(),

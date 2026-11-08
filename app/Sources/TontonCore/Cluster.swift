@@ -317,7 +317,7 @@ public struct ClusterSessionProfile: Codable, Equatable, Sendable, ClusterPayloa
     /// The project folder's name, never the full path.
     public var project: String?
     public var machine: String?
-    /// `claude` or `opencode`.
+    /// `claude`, `opencode` or `codex`.
     public var tool: String?
     public var model: String?
     public var branch: String?
@@ -338,7 +338,7 @@ public struct ClusterSessionProfile: Codable, Equatable, Sendable, ClusterPayloa
         let tool = json["tool"]?.string
         self.init(
             name: json["name"]?.text(200), project: json["project"]?.text(200), machine: json["machine"]?.text(200),
-            tool: tool == "claude" || tool == "opencode" ? tool : nil, model: json["model"]?.text(200), branch: json["branch"]?.text(200),
+            tool: CodingTool(command: tool)?.command, model: json["model"]?.text(200), branch: json["branch"]?.text(200),
             status: json["status"]?.text(500), statusAt: json["statusAt"]?.date)
     }
 }

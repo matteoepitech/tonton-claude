@@ -53,6 +53,17 @@ final class SessionVaultTests: XCTestCase {
         XCTAssertEqual(session.project, "shop")
     }
 
+    func testCodexSessionsSayItInTheirInfo() throws {
+        let info = SessionInfo(machine: "PC", platform: "darwin", cwd: "/code/shop", project: "shop", tool: "codex")
+        let json = """
+            {"id":"019a5c2e","machineId":"m1","status":"working","agentOnline":true,"canChat":false,"info":"\(try sealed(info))",
+             "meta":null,"statusDetail":null,"pendingPermissions":[],"startedAt":"2026-10-25T10:00:00Z","lastActivity":"2026-10-25T10:00:00Z"}
+            """
+        let session = vault.session(try JSONDecoder().decode(WireSession.self, from: Data(json.utf8)), machines: [])
+        XCTAssertEqual(session.tool, "codex")
+        XCTAssertEqual(session.codingTool, .codex)
+    }
+
     func testTheFiveHourLimitComesWithTheMeta() throws {
         let limit = WireUsageLimit(usedPercent: 83.5, resetsAt: "2026-10-20T12:00:00.000Z")
         let meta = SessionMeta(title: nil, costUSD: nil, lastMessage: nil, fiveHourLimit: limit)

@@ -5,12 +5,12 @@
 // Mirrors app/Sources/TontonCore/Cluster.swift.
 
 import type { PoolKeyWrapWire } from './pool-keys'
-import type { Sealed, SessionStatus } from './protocol'
+import type { CodingTool, Sealed, SessionStatus } from './protocol'
 
 export type ClusterRole = 'owner' | 'member'
 
 /** The coding tool of a session. */
-export type ClusterTool = 'claude' | 'opencode'
+export type ClusterTool = CodingTool
 
 /** Who wrote a post or a document, as the relay attests it from the socket it came on. */
 export interface ClusterAuthor {
