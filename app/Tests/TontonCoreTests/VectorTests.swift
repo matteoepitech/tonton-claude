@@ -105,12 +105,14 @@ final class VectorTests: XCTestCase {
         let health = MachineHealth(
             cpu: 0.23, memoryUsed: 12_025_908_428, memoryTotal: 17_179_869_184, battery: nil,
             wake: [WakeOnLAN.Target(mac: "a4:83:e7:12:34:56", broadcast: "192.168.1.255")], at: "2026-10-25T10:04:00.000Z")
-        let meta = SessionMeta(
+        var meta = SessionMeta(
             title: "Rate limit login ✅", costUSD: 0.84, lastMessage: "Deploying",
-            fiveHourLimit: WireUsageLimit(usedPercent: 83.5, resetsAt: "2026-10-25T12:00:00.000Z"),
+            fiveHourLimit: WireUsageLimit(usedPercent: 10, resetsAt: "2026-10-25T11:00:00.000Z"),
             tokens: TokenCounts(input: 1200, output: 340, cacheRead: 250_000, cacheWrite: 9000),
             context: WireContext(usedTokens: 250_000, windowTokens: nil), terminal: true, commands: ["compact", "model", "future"],
             model: "us.anthropic.claude-opus-4-5-20251101-v1:0", branch: "feat/rate-limit", tasks: TaskProgress(done: 2, total: 5))
+        // s1 is a Codex session: its window is its ChatGPT plan's, and Claude's field is not read for it.
+        meta.codexFiveHourLimit = WireUsageLimit(usedPercent: 83.5, resetsAt: "2026-10-25T12:00:00.000Z")
         let machines: [[String: Any]] = [
             [
                 "id": "m1", "name": try sealed(MachineName(name: "PC-Studio", platform: "win32")), "createdAt": "2026-10-25T10:00:00.000Z",
