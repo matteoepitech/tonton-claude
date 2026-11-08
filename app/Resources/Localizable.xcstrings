@@ -8578,22 +8578,22 @@
         }
       }
     },
+    "Read only: start Codex from the notch, or with tonton codex in a terminal, to message it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture seule : lancez Codex depuis l’encoche, ou avec tonton codex dans un terminal, pour lui écrire."
+          }
+        }
+      }
+    },
     "Read only: start claude from a new terminal to message this session." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lecture seule : lancez claude depuis un nouveau terminal pour écrire à cette session."
-          }
-        }
-      }
-    },
-    "Read only: the notch can't message this Codex session." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lecture seule : l’encoche ne peut pas écrire à cette session Codex."
           }
         }
       }

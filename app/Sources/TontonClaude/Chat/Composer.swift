@@ -29,10 +29,10 @@ struct Composer: View {
             return session.agentOnline
                 ? String(localized: "Read only: click Update agent for this machine to message its OpenCode sessions.")
                 : String(localized: "Session offline: history only.")
-        // Starting claude in a new terminal, the advice for Claude Code, would not help a Codex session.
+        // A Codex started plainly: only one run by `tonton codex`, as the notch starts them, takes messages.
         case .codex:
             return session.agentOnline
-                ? String(localized: "Read only: the notch can't message this Codex session.")
+                ? String(localized: "Read only: start Codex from the notch, or with tonton codex in a terminal, to message it.")
                 : String(localized: "Session offline: history only.")
         case .claudeCode: break
         }

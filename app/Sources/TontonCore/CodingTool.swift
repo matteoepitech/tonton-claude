@@ -20,8 +20,11 @@ public enum CodingTool: String, CaseIterable, Sendable {
         self = tool
     }
 
-    /// The tools the notch starts sessions of, and pool machines run. Codex sessions show, but are not started yet.
-    public static let startable: [CodingTool] = [.claudeCode, .openCode]
+    /// The tools the notch starts sessions of, where the machine's agent says it has them.
+    public static let startable: [CodingTool] = [.claudeCode, .openCode, .codex]
+
+    /// The tools a pool machine runs. Codex works in pools from a later version on.
+    public static let poolTools: [CodingTool] = [.claudeCode, .openCode]
 
     public var label: String {
         switch self {
