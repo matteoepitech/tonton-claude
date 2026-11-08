@@ -65,6 +65,25 @@ final class IslandTests: XCTestCase {
         XCTAssertEqual(other.lines(state).first?.project, "Session")
     }
 
+    /// The Live Activity marks each line's tool when Claude Code is not the only one.
+    func testALineKnowsItsToolFromTheSessionInfo() throws {
+        let key = try E2E.key(fromBase64URL: AgentBlobs.key)
+        let codex = try E2E.seal(
+            SessionInfo(machine: "Mac", platform: "darwin", cwd: "/code/shop", project: "shop", tool: "codex"), with: key)
+        let state = IslandState(
+            sessions: [
+                .init(id: "c", status: .working, info: codex, detail: nil),
+                .init(id: "a", status: .idle, info: AgentBlobs.info, detail: nil),
+                .init(id: "x", status: .idle, info: nil, detail: nil),
+            ], working: 1, attention: 0)
+        let lines = try AgentBlobs.vault().lines(state)
+        XCTAssertEqual(lines.map(\.tool), [.codex, .claudeCode, .claudeCode])
+        XCTAssertEqual(lines.first?.project, "shop")
+        XCTAssertTrue(lines.mixesTools)
+        XCTAssertFalse(Array(lines.dropFirst()).mixesTools)
+        XCTAssertFalse(IslandLine.placeholders(state).mixesTools)
+    }
+
     func testTheSummaryCountsWhatNeedsTheUserThenWhatWorks() {
         func state(_ working: Int, _ attention: Int, sessions: Int = 1) -> IslandState {
             IslandState(
@@ -101,6 +120,16 @@ final class PushTests: XCTestCase {
         XCTAssertEqual(alert.body, "Allow Bash? Run the tests\n{\"command\":\"npm test\"}")
         XCTAssertEqual(alert.request?.requestId, "r1")
         XCTAssertEqual(alert.request?.toolName, "Bash")
+    }
+
+    func testAnAlertFromCodexSaysSoAfterTheMachine() throws {
+        let key = try E2E.key(fromBase64URL: AgentBlobs.key)
+        let info = try E2E.seal(
+            SessionInfo(machine: "Mac", platform: "darwin", cwd: "/code/shop", project: "shop", tool: "codex"), with: key)
+        let push = try XCTUnwrap(PermissionPush(userInfo: userInfo(["sessionId": "s1", "requestId": "r1", "info": info])))
+        let alert = try XCTUnwrap(try AgentBlobs.vault().alert(for: push))
+        XCTAssertEqual(alert.title, "shop")
+        XCTAssertEqual(alert.subtitle, "Mac · Codex")
     }
 
     func testWhatDoesNotOpenKeepsTheGenericText() throws {

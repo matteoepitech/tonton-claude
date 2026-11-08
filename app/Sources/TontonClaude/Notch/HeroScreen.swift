@@ -138,7 +138,7 @@ struct HeroJournal: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if entries.isEmpty {
-                Text("Finish a turn with Claude Code or OpenCode and Tonton earns his first XP.")
+                Text("Finish a turn with Claude Code, OpenCode or Codex and Tonton earns his first XP.")
                     .font(.notch(12))
                     .foregroundStyle(Theme.secondary)
                     .padding(.vertical, 8)

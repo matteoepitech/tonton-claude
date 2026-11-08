@@ -11,7 +11,7 @@ import type {
   ClusterSessionProfile,
   ClusterTool,
 } from '../../../shared/cluster-protocol'
-import type { Session } from '../../../shared/session'
+import { CODING_TOOL_LABELS, codingToolOf, type Session } from '../../../shared/session'
 
 export interface RosterMachine {
   /** The machine's id when the relay attests it, else its name. */
@@ -29,7 +29,7 @@ export interface RosterMember {
   sessions: number
 }
 
-export const TOOL_LABELS: Record<ClusterTool, string> = { claude: 'Claude Code', opencode: 'OpenCode', codex: 'Codex' }
+export const TOOL_LABELS: Record<ClusterTool, string> = CODING_TOOL_LABELS
 
 export const POST_KINDS: Record<ClusterPostKind, string> = {
   message: 'Message',
@@ -182,7 +182,7 @@ const DELIVERY_KEY = 'tonton.clusterDelivery'
 
 /** What the cluster sees of one of this account's sessions: names and labels, never a full path. */
 export function profileOf(session: Session): ClusterSessionProfile {
-  const tool: ClusterTool = session.tool === 'opencode' ? 'opencode' : 'claude'
+  const tool: ClusterTool = codingToolOf(session.tool)
   return Object.fromEntries(
     Object.entries({
       name: session.name ?? session.title ?? undefined,

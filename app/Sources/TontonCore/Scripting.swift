@@ -48,12 +48,13 @@ public enum ScriptSessions {
     }
 
     /// One session as a script record, in a stable order. Labels are lowercase words that are not AppleScript terms (`id`
-    /// is one), so `session of item 1 of (session list)` compiles. Status is the raw value (`working`, `waiting`…), which
-    /// scripts can compare; the cost is only there when costs are shown.
+    /// is one), so `session of item 1 of (session list)` compiles. Status is the raw value (`working`, `waiting`…), and the
+    /// tool its command (`claude`, `opencode`, `codex`), which scripts can compare; the cost is only there when costs are
+    /// shown.
     public static func fields(_ session: SessionSummary, showCost: Bool) -> [(String, String)] {
         var fields = [
             ("session", session.id), ("project", session.project), ("machine", session.machine), ("status", session.status.rawValue),
-            ("title", session.title ?? ""), ("folder", session.cwd),
+            ("title", session.title ?? ""), ("folder", session.cwd), ("tool", session.codingTool.command),
         ]
         if showCost, let cost = session.costUSD { fields.append(("cost", String(format: "%.2f", cost))) }
         return fields

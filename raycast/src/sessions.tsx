@@ -1,9 +1,24 @@
 // The "Claude Sessions" command: the sessions in the notch, a message or a quick reply to one of them.
 import { Action, ActionPanel, Form, Icon, List, open, showToast, Toast, useNavigation } from '@raycast/api'
 import { runAppleScript, usePromise } from '@raycast/utils'
-import { parseReplies, parseSessions, type Session, scriptError, scripts, sorted, statuses } from './tonton'
+import {
+  keywords,
+  mixesTools,
+  parseReplies,
+  parseSessions,
+  type Session,
+  scriptError,
+  scripts,
+  sorted,
+  statuses,
+  type Tool,
+  tools,
+} from './tonton'
 
 const javascript = { language: 'JavaScript' as const }
+
+/** As close as Raycast's icons get to the notch's symbols: braces for OpenCode, a prompt for Codex, stars for its asterisk. */
+const toolIcons: Record<Tool, Icon> = { claude: Icon.Stars, opencode: Icon.Code, codex: Icon.Terminal }
 
 async function load(): Promise<{ sessions: Session[]; replies: string[] }> {
   const [sessions, replies] = await Promise.all([
@@ -31,6 +46,8 @@ async function send(session: Session, text: string): Promise<boolean> {
 export default function Command() {
   const { data, isLoading, error, revalidate } = usePromise(load)
   const sessions = data?.sessions ?? []
+  // The tool of each session only says something when several are listed.
+  const mixed = mixesTools(sessions)
 
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Search sessions">
@@ -46,25 +63,40 @@ export default function Command() {
           }
         />
       ) : (
-        <List.EmptyView icon={Icon.Terminal} title="No sessions" description="Sessions show up here once Claude Code runs." />
+        <List.EmptyView
+          icon={Icon.Terminal}
+          title="No sessions"
+          description="Sessions show up here once Claude Code, OpenCode or Codex runs."
+        />
       )}
       {sessions.map(session => (
-        <SessionItem key={session.session} session={session} replies={data?.replies ?? []} onSent={revalidate} />
+        <SessionItem key={session.session} session={session} showTool={mixed} replies={data?.replies ?? []} onSent={revalidate} />
       ))}
     </List>
   )
 }
 
-function SessionItem({ session, replies, onSent }: { session: Session; replies: string[]; onSent: () => void }) {
+function SessionItem({
+  session,
+  showTool,
+  replies,
+  onSent,
+}: {
+  session: Session
+  showTool: boolean
+  replies: string[]
+  onSent: () => void
+}) {
   const status = statuses[session.status]
   const accessories: List.Item.Accessory[] = [{ tag: { value: status.label, color: status.color } }]
   if (session.cost) accessories.unshift({ text: `$${session.cost}` })
+  if (showTool) accessories.unshift({ icon: toolIcons[session.tool], tooltip: tools[session.tool] })
   return (
     <List.Item
       icon={{ source: Icon.CircleFilled, tintColor: status.color }}
       title={session.project}
       subtitle={session.title}
-      keywords={[session.machine, session.title]}
+      keywords={keywords(session)}
       accessories={[{ text: session.machine, icon: Icon.Monitor }, ...accessories]}
       actions={
         <ActionPanel>
@@ -106,7 +138,10 @@ function MessageForm({ session, onSent }: { session: Session; onSent: () => void
         </ActionPanel>
       }
     >
-      <Form.Description title="Session" text={`${session.project} · ${session.machine} · ${statuses[session.status].label}`} />
+      <Form.Description
+        title="Session"
+        text={[session.project, session.machine, tools[session.tool], statuses[session.status].label].join(' · ')}
+      />
       <Form.TextArea id="text" title="Message" placeholder="What should Claude do?" autoFocus />
     </Form>
   )

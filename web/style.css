@@ -157,6 +157,23 @@ nav > p {
 .session.finished {
   opacity: 0.55;
 }
+/* The list's search, and the mark of the tool that runs a session when the list has several. */
+input.search {
+  display: block;
+  width: 100%;
+  margin: 4px 0 2px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+}
+.session .tool-mark {
+  margin-right: 5px;
+  font:
+    600 10px ui-monospace,
+    Menlo,
+    monospace;
+  font-style: normal;
+  color: var(--dim);
+}
 .dot {
   width: 8px;
   height: 8px;

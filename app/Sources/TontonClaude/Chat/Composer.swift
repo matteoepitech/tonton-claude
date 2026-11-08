@@ -24,10 +24,17 @@ struct Composer: View {
     @State private var typedBeforeDictation = ""
 
     private var readOnlyReason: String {
-        if session.tool == "opencode" {
+        switch session.codingTool {
+        case .openCode:
             return session.agentOnline
                 ? String(localized: "Read only: click Update agent for this machine to message its OpenCode sessions.")
                 : String(localized: "Session offline: history only.")
+        // Starting claude in a new terminal, the advice for Claude Code, would not help a Codex session.
+        case .codex:
+            return session.agentOnline
+                ? String(localized: "Read only: the notch can't message this Codex session.")
+                : String(localized: "Session offline: history only.")
+        case .claudeCode: break
         }
         if session.machineId == LocalSessions.machineId {
             return String(localized: "Read only: install the agent on this Mac (Settings › Machines) to reply from the notch.")

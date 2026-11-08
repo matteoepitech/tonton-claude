@@ -48,12 +48,17 @@ struct SessionView: View {
         VStack(spacing: 1) {
             Text(session?.displayName ?? "Session").font(.headline).lineLimit(1)
             if let session {
-                Text("\(session.machine) · \(session.displayStatusText)")
+                Text(subtitle(session))
                     .font(.caption)
                     .foregroundStyle(session.status.needsAttention ? session.status.tint : .secondary)
                     .lineLimit(1)
             }
         }
+    }
+
+    /// The machine, the tool when it is not Claude Code, which most sessions run, and the status.
+    private func subtitle(_ session: SessionSummary) -> String {
+        [session.machine, session.codingTool.otherLabel, session.displayStatusText].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func commands(_ session: SessionSummary) -> some View {

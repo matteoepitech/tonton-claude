@@ -7,6 +7,7 @@ import { BotIcon, CpuIcon, NetworkIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
   type ControlFilter,
+  codingToolLabel,
   controlCenter,
   filterControl,
   type MemberCard,
@@ -132,7 +133,7 @@ function Person({ card, you }: { card: MemberCard; you: boolean }) {
 }
 
 function SessionLine({ session }: { session: SessionCard }) {
-  const runsOn = [session.tool === 'opencode' ? 'OpenCode' : 'Claude Code', session.model].filter(Boolean).join(' · ')
+  const runsOn = [codingToolLabel(session.tool), session.model].filter(Boolean).join(' · ')
   return (
     <div className="flex items-start gap-2.5 rounded-lg bg-secondary/60 p-2">
       <StatusDot status={session.status ?? (session.online ? 'idle' : 'offline')} className="mt-1.5" />
@@ -321,7 +322,7 @@ function layout(state: PoolState): { nodes: Node<PeerData>[]; edges: Edge[] } {
       position: at(outer, angle),
       data: {
         label: talk.nodes.find(node => node.id === id)?.label ?? card?.name ?? 'A session',
-        detail: card ? (card.tool === 'opencode' ? 'OpenCode' : 'Claude Code') : undefined,
+        detail: card ? codingToolLabel(card.tool) : undefined,
         group: card?.group,
         kind: 'session',
       },

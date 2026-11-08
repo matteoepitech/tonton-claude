@@ -418,7 +418,7 @@ struct SessionRow: View {
     var machine: String?
     var machineStyle: MachineStyle?
     var shortcut: Int?
-    /// Shown when the list has sessions of both tools.
+    /// Shown when the list has sessions of several tools.
     var tool: CodingTool?
     var forecast = LimitForecast()
     /// Set while the user types a new name in place of the session's.
@@ -521,7 +521,7 @@ struct SessionRow: View {
     }
 }
 
-/// Which coding agent runs a session: Claude Code or OpenCode.
+/// Which coding agent runs a session: Claude Code, OpenCode or Codex.
 struct ToolMark: View {
     let tool: CodingTool
     var size: CGFloat = 10

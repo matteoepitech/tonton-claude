@@ -12,6 +12,29 @@ export const CODING_TOOL_LABELS: Record<CodingTool, string> = { claude: 'Claude 
 /** A session's tool as a person reads it. Missing, or a tool this client does not know, reads as Claude Code, like the app. */
 export const codingToolLabel = (tool: string | null | undefined): string => (isCodingTool(tool) ? CODING_TOOL_LABELS[tool] : 'Claude Code')
 
+/** A session's tool, read like `codingToolLabel`: missing or unknown is Claude Code. */
+export const codingToolOf = (tool: string | null | undefined): CodingTool => (isCodingTool(tool) ? tool : 'claude')
+
+/** The tool beside a session's other details: null for Claude Code, which most sessions run, like the chat headers did for OpenCode. */
+export const otherToolLabel = (tool: string | null | undefined): string | null =>
+  codingToolOf(tool) === 'claude' ? null : codingToolLabel(tool)
+
+/** Sessions of several tools are listed: each row then says which one runs it. Like `mixesTools` in the app. */
+export const mixesTools = (sessions: readonly { tool: string | null }[]): boolean =>
+  new Set(sessions.map(s => codingToolOf(s.tool))).size > 1
+
+/**
+ * The session search, ignoring case: its name, project, machine, title, or its tool, so "codex" lists Codex's sessions.
+ * Like `SessionSummary.matches` in the app.
+ */
+export function sessionMatches(session: Pick<Session, 'name' | 'project' | 'machine' | 'title' | 'tool'>, query: string): boolean {
+  const wanted = query.trim().toLocaleLowerCase()
+  if (!wanted) return true
+  return [session.name, session.project, session.machine, session.title, codingToolLabel(session.tool)].some(part =>
+    part?.toLocaleLowerCase().includes(wanted),
+  )
+}
+
 export const STATUSES: readonly SessionStatus[] = ['starting', 'working', 'waiting', 'permission', 'idle', 'error', 'ended', 'offline']
 
 export const STATUS_LABELS: Record<SessionStatus, string> = {

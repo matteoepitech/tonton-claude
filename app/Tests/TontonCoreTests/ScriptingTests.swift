@@ -6,12 +6,13 @@ final class ScriptingTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_793_005_200)
 
     private func session(
-        _ id: String, project: String = "api", status: SessionStatus = .working, canChat: Bool = true, minutesAgo: Double = 0
+        _ id: String, project: String = "api", status: SessionStatus = .working, canChat: Bool = true, minutesAgo: Double = 0,
+        tool: String? = nil
     ) -> SessionSummary {
         SessionSummary(
             id: id, machineId: "m", machine: "PC", platform: nil, cwd: "/code/\(project)", project: project, title: "Fix the login",
             status: status, statusText: nil, agentOnline: true, canChat: canChat, pendingPermissions: [], costUSD: 1.234,
-            startedAt: now, lastActivity: now.addingTimeInterval(-minutesAgo * 60), lastMessage: nil)
+            startedAt: now, lastActivity: now.addingTimeInterval(-minutesAgo * 60), lastMessage: nil, tool: tool)
     }
 
     func testFindsBySessionIdThenByProject() {
@@ -41,8 +42,17 @@ final class ScriptingTests: XCTestCase {
 
     func testRecordsShowTheCostOnlyWhenCostsAreShown() {
         let fields = ScriptSessions.fields(session("s1"), showCost: true)
-        XCTAssertEqual(fields.map(\.0), ["session", "project", "machine", "status", "title", "folder", "cost"])
-        XCTAssertEqual(fields.map(\.1), ["s1", "api", "PC", "working", "Fix the login", "/code/api", "1.23"])
+        XCTAssertEqual(fields.map(\.0), ["session", "project", "machine", "status", "title", "folder", "tool", "cost"])
+        XCTAssertEqual(fields.map(\.1), ["s1", "api", "PC", "working", "Fix the login", "/code/api", "claude", "1.23"])
         XCTAssertFalse(ScriptSessions.fields(session("s1"), showCost: false).contains { $0.0 == "cost" })
+    }
+
+    /// Raycast shows the tool and finds "codex" by it: the record names it the way scripts compare it.
+    func testRecordsNameTheToolByItsCommand() {
+        let tool = { (wire: String?) in ScriptSessions.fields(self.session("s1", tool: wire), showCost: false).first { $0.0 == "tool" }?.1 }
+        XCTAssertEqual(tool("codex"), "codex")
+        XCTAssertEqual(tool("opencode"), "opencode")
+        XCTAssertEqual(tool(nil), "claude")
+        XCTAssertEqual(tool("aider"), "claude", "a tool this app does not know reads as Claude Code")
     }
 }

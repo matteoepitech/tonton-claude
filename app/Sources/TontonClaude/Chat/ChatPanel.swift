@@ -228,7 +228,7 @@ struct ChatHeader: View {
             if branch, let name = session.branch { BranchLabel(branch: name) }
             if model, let name = session.modelName {
                 Text(name).font(.notch(10, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
-                    .help("The model Claude Code uses in this session")
+                    .help("The model \(session.codingTool.label) uses in this session")
             }
             if let context = session.context { ContextGauge(context: context) }
             if tokens, settings.showCosts, let counts = session.tokens {

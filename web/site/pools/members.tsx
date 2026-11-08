@@ -5,6 +5,7 @@ import { type FormEvent, type ReactNode, useState } from 'react'
 import {
   assignableRoles,
   canKick,
+  codingToolLabel,
   hackathonRoleLabel,
   memberName,
   type PoolRole,
@@ -120,7 +121,7 @@ function Sessions({ poolId, state, sessions, choose }: { poolId: string; state: 
           {sessions.map(session => {
             const profile = session.profile
             const what = [
-              profile?.tool === 'opencode' ? 'OpenCode' : profile?.tool === 'claude' ? 'Claude Code' : null,
+              profile?.tool ? codingToolLabel(profile.tool) : null,
               profile?.area ? hackathonRoleLabel(profile.area) : null,
               profile?.machine,
               profile?.skills,

@@ -52,6 +52,10 @@ public enum CodingTool: String, CaseIterable, Sendable {
         case .codex: "terminal"
         }
     }
+
+    /// Beside a session's other details, in a title or an alert: nil for Claude Code, which most sessions run. Like
+    /// `otherToolLabel` in shared/session.ts.
+    public var otherLabel: String? { self == .claudeCode ? nil : label }
 }
 
 extension SessionSummary {
@@ -68,6 +72,15 @@ extension SessionSummary {
 extension Array where Element == SessionSummary {
     /// Sessions of both tools are listed: each row then says which one runs it.
     public var mixesTools: Bool { Set(map(\.codingTool)).count > 1 }
+}
+
+extension MachineHealth {
+    /// The coding tools its agent says are installed, those this app knows, in the app's order. Empty from older agents,
+    /// which do not say.
+    public var codingTools: [CodingTool] {
+        guard let tools else { return [] }
+        return CodingTool.allCases.filter { tools.contains($0.command) }
+    }
 }
 
 extension MachineInfo {

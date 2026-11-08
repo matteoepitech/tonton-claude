@@ -83,6 +83,14 @@ final class CodingToolTests: XCTestCase {
         XCTAssertEqual(try machine(tools: ["aider"]).startableTools, [.claudeCode])
     }
 
+    /// Settings › Machines lists what each machine has, in the app's order, and only the tools the app knows.
+    func testAMachineSaysWhichToolsItHas() throws {
+        XCTAssertEqual(try machine(tools: ["codex", "claude"]).health?.codingTools, [.claudeCode, .codex])
+        XCTAssertEqual(try machine(tools: ["opencode", "aider"]).health?.codingTools, [.openCode])
+        XCTAssertEqual(try machine(tools: nil).health?.codingTools, [])
+        XCTAssertEqual(CodingTool.allCases.map(\.otherLabel), [nil, "OpenCode", "Codex"])
+    }
+
     func testCodexSessionsShowButTheNotchDoesNotStartThemYet() throws {
         XCTAssertEqual(try machine(tools: ["claude", "opencode", "codex"]).startableTools, [.claudeCode, .openCode])
         XCTAssertEqual(try machine(tools: ["codex"]).startableTools, [.claudeCode])

@@ -1,5 +1,5 @@
 // One session a teammate shared: its conversation, live, and nothing that could act on it.
-import { type SharedView, STATUS_LABELS } from '../../../shared'
+import { otherToolLabel, type SharedView, STATUS_LABELS } from '../../../shared'
 import { StatusDot } from '../common'
 import { useStore } from '../store'
 import { Button } from '../ui/button'
@@ -9,7 +9,7 @@ export function SharedSession() {
   const store = useStore()
   const view = store.shared as SharedView
   const relay = store.sharedRelay ? new URL(store.sharedRelay).host : ''
-  const details = [view.title, view.tool === 'opencode' ? 'OpenCode' : null].filter(Boolean).join(' · ')
+  const details = [view.title, otherToolLabel(view.tool)].filter(Boolean).join(' · ')
   return (
     <div className="flex h-full flex-col bg-white">
       <header className="flex items-center gap-3 border-b px-4 py-2.5">

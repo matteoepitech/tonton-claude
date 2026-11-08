@@ -102,8 +102,10 @@ extension SessionVault {
             PermissionRequest(
                 requestId: push.requestId, toolName: $0.toolName, description: $0.description, inputPreview: $0.inputPreview, ts: ts)
         }
+        // The machine, then the tool when it is not Claude Code: whoever runs several tools sees which one asks.
+        let subtitle = [info?.machine, CodingTool(info?.tool).otherLabel].compactMap { $0 }.joined(separator: " · ")
         return PermissionAlert(
-            title: info?.project ?? "Permission request", subtitle: info?.machine ?? "",
+            title: info?.project ?? "Permission request", subtitle: subtitle,
             body: request.map(Self.alertBody) ?? "Asks for a permission.",
             request: request)
     }

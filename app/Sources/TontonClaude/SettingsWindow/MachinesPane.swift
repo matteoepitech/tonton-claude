@@ -178,6 +178,7 @@ struct MachineRow: View {
                         .foregroundStyle(health.isStale() ? Theme.textFaint : Theme.textDim)
                         .help(health.isStale() ? "No report for a few minutes" : "Reported by the machine every minute")
                 }
+                if let tools = machine.health?.codingTools, !tools.isEmpty { MachineTools(tools: tools) }
                 if let error = store.updateErrors[machine.id] {
                     Text(error).font(.system(size: 11.5)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
                 }
@@ -269,6 +270,33 @@ struct MachineRow: View {
         default:
             let name = machine.name.uppercased()
             return name.contains("WIN") || name.hasPrefix("DESKTOP-") || name.contains("PC") ? "pc" : "laptopcomputer"
+        }
+    }
+}
+
+/// The coding tools a machine has, as its agent last reported them, with the symbols the notch marks their sessions with.
+struct MachineTools: View {
+    let tools: [CodingTool]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(tools, id: \.self) { tool in
+                Label(tool.label, systemImage: tool.symbol).labelStyle(MachineToolLabelStyle())
+            }
+        }
+        .font(.system(size: 11.5))
+        .foregroundStyle(Theme.textDim)
+        .accessibilityElement(children: .combine)
+        .help("The coding tools the agent found on this machine")
+    }
+}
+
+/// A small symbol close to its name.
+private struct MachineToolLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon.font(.system(size: 9.5, weight: .semibold))
+            configuration.title
         }
     }
 }

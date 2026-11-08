@@ -1,12 +1,26 @@
 // Pieces every page uses: a session's status dot, what Claude wrote, and the notes that say something is on its way or
 // went wrong. Text from sessions, tools and other members only ever goes in as text: web/markdown.ts builds the
 // Markdown with DOM nodes, never HTML.
-import { Loader2Icon } from 'lucide-react'
+import { AsteriskIcon, BracesIcon, Loader2Icon, type LucideIcon, TerminalIcon } from 'lucide-react'
 import { type ReactNode, useLayoutEffect, useRef } from 'react'
-import { STATUS_LABELS } from '../../shared'
-import type { SessionStatus } from '../../shared/protocol'
+import { codingToolLabel, codingToolOf, STATUS_LABELS } from '../../shared'
+import type { CodingTool, SessionStatus } from '../../shared/protocol'
 import { inline, renderMarkdown } from '../markdown'
 import { cn } from './ui/cn'
+
+/** The notch's symbols for each tool (`CodingTool.symbol` in the app): an asterisk, braces, a prompt. */
+const TOOL_ICONS: Record<CodingTool, LucideIcon> = { claude: AsteriskIcon, opencode: BracesIcon, codex: TerminalIcon }
+
+/** Which coding tool runs a session: missing or unknown is Claude Code. */
+export function ToolIcon({ tool, className }: { tool: string | null | undefined; className?: string }) {
+  const Icon = TOOL_ICONS[codingToolOf(tool)]
+  const label = codingToolLabel(tool)
+  return (
+    <Icon role="img" aria-label={label} className={cn('size-3 shrink-0 text-muted-foreground', className)}>
+      <title>{label}</title>
+    </Icon>
+  )
+}
 
 const DOT_COLORS: Record<SessionStatus, string> = {
   starting: 'bg-primary',
