@@ -15,8 +15,10 @@ import {
   codexFiles,
   codexHookGroup,
   codexHookPlace,
+  codexRunCommand,
   hasTontonCodexHooks,
   MCP_SERVER,
+  passesAgentEnvironment,
   readCodexConfig,
   readCodexHooks,
   runsAgentChannel,
@@ -133,6 +135,7 @@ function installProblems(hooks: CodexHooksFile, config: Record<string, unknown>,
   if (server === undefined) problems.push('the tonton MCP server is missing')
   else if (!runsAgentChannel(server, binary))
     problems.push(`the tonton MCP server runs ${String((server as { command?: unknown } | null)?.command)}, not this agent`)
+  else if (!passesAgentEnvironment(server)) problems.push('the tonton MCP server is out of date')
   return problems
 }
 
@@ -140,9 +143,10 @@ function installProblems(hooks: CodexHooksFile, config: Record<string, unknown>,
 function settingProblem(config: Record<string, unknown>, files: CodexFiles): string | null {
   if ((tomlValueAt(config, MCP_SERVER) as { enabled?: unknown } | undefined)?.enabled === false)
     return `The tonton MCP server is turned off in ${files.config} (enabled = false).`
+  // `hooks`, on unless turned off; `codex_hooks` is its older name, which `hooks` overrides when both are set.
   const features = tomlValueAt(config, ['features']) as Record<string, unknown> | undefined
-  const off = ['hooks', 'codex_hooks'].find(name => features?.[name] === false)
-  return off ? `Hooks are turned off in Codex: features.${off} is false in ${files.config}.` : null
+  const set = ['hooks', 'codex_hooks'].find(name => typeof features?.[name] === 'boolean')
+  return set && features?.[set] === false ? `Hooks are turned off in Codex: features.${set} is false in ${files.config}.` : null
 }
 
 /** Hooks the user did not trust in Codex's /hooks, or turned off there: only they can change that. */
@@ -164,7 +168,8 @@ function trustProblem(
     const hook = handlers[0]
     if (state?.enabled === false) off.push(event)
     else if (!state?.trustedHash) untrusted.push(event)
-    else if (state.trustedHash !== codexHookHash(event, matcher, hook?.command ?? '', hook?.timeout)) changed.push(event)
+    else if (state.trustedHash !== codexHookHash(event, matcher, (hook && codexRunCommand(hook, platform)) ?? '', hook?.timeout))
+      changed.push(event)
   }
   if (off.length) return `Turned off in Codex's /hooks: ${off.join(', ')}.`
   if (untrusted.length === CODEX_HOOK_EVENTS.length)

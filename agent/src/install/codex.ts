@@ -6,7 +6,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { removeTomlTable, setTomlTable, type TomlEdit } from './toml-table'
+import { PROXY_VARIABLES } from '../proxy'
+import { parseToml, removeTomlTable, setTomlTable, type TomlEdit, type TomlTable, tomlValueAt } from './toml-table'
 
 /** Codex's folder: `$CODEX_HOME`, else `~/.codex`, on every platform. */
 export function codexHome(env: Record<string, string | undefined> = process.env, home = homedir()): string {
@@ -32,25 +33,42 @@ export type CodexHookEvent = (typeof CODEX_HOOK_EVENTS)[number]
 /**
  * The tools an event's hook runs for, when not all. Before a tool call, only edits, as with Claude Code: a hook before
  * every call would slow every one down. `apply_patch` is Codex's edit tool, which matchers also reach as `Edit` and
- * `Write`. A matcher is part of what the user trusts: changing one makes them trust the hook again.
+ * `Write`. After a call, every tool: Codex has no event for an answered permission request, and the next PostToolUse is
+ * what tells the notch the turn goes on. A matcher is part of what the user trusts: changing one makes them trust the
+ * hook again.
  */
 const MATCHERS: Partial<Record<CodexHookEvent, string>> = { PreToolUse: 'apply_patch' }
 /** Seconds. Codex waits for a hook before it goes on, ten minutes unless told otherwise. */
 const HOOK_TIMEOUT = 5
 
 /**
- * What Codex runs for each of Tonton's hooks. Codex hands it to a shell (`$SHELL -lc`, `cmd /C` on Windows), and `exec`
- * makes the shell hand its pid over to the agent. cmd has no `exec`; Codex 0.142.2 also escapes quotes in a way cmd does
- * not read, so a path cmd takes as it is goes in without them.
+ * What Codex runs for each of Tonton's hooks. Codex hands it to the user's shell (`$SHELL -c`), and `exec` makes the
+ * shell hand its pid over to the agent, so the hook's parent is codex, as its channel's is (agent/src/codex/hook.ts). On
+ * Windows this is the command for `cmd /C`, which Codex only falls back to: cmd has no `exec`, and Codex 0.142.2 escapes
+ * quotes in a way cmd does not read, so a path cmd takes as it is goes in without them. See `codexHookCommandWindows`.
  */
 export function codexHookCommand(binary: string, platform: NodeJS.Platform = process.platform): string {
   if (platform === 'win32') return `${/^[^\s"&|<>^%()!,;=]+$/.test(binary) ? binary : `"${binary}"`} hook codex`
   return `exec '${binary.replace(/'/g, `'\\''`)}' hook codex`
 }
 
+/**
+ * What Codex runs on Windows (`command_windows`): it hands hooks to PowerShell (`powershell -NoProfile -Command`), which
+ * takes a quoted path followed by words as a string and a parse error, so the path goes through the call operator, in
+ * single quotes that Codex's escaping leaves alone.
+ */
+export const codexHookCommandWindows = (binary: string): string => `& '${binary.replace(/'/g, "''")}' hook codex`
+
+/** The command Codex runs and hashes for a hook on this platform: `command_windows` on Windows, when there is one. */
+export function codexRunCommand(hook: CodexHookHandler, platform: NodeJS.Platform = process.platform): string | undefined {
+  const windows = platform === 'win32' && typeof hook.command_windows === 'string' ? hook.command_windows : undefined
+  return windows ?? hook.command
+}
+
 export interface CodexHookHandler {
   type: string
   command?: string
+  command_windows?: string
   timeout?: number
   [key: string]: unknown
 }
@@ -68,7 +86,8 @@ export interface CodexHooksFile {
 
 /** Tonton's group for one event, as an install writes it. */
 export function codexHookGroup(event: CodexHookEvent, binary: string, platform: NodeJS.Platform = process.platform): CodexHookGroup {
-  const hook: CodexHookHandler = { type: 'command', command: codexHookCommand(binary, platform), timeout: HOOK_TIMEOUT }
+  const windows = platform === 'win32' ? { command_windows: codexHookCommandWindows(binary) } : {}
+  const hook: CodexHookHandler = { type: 'command', command: codexHookCommand(binary, platform), ...windows, timeout: HOOK_TIMEOUT }
   const matcher = MATCHERS[event]
   return matcher ? { matcher, hooks: [hook] } : { hooks: [hook] }
 }
@@ -183,8 +202,38 @@ export function readCodexConfig(file: string): string | null {
 
 export const MCP_SERVER = ['mcp_servers', 'tonton']
 
-/** The server Codex starts for each session, as config.toml holds it. */
-export const codexMcpServer = (binary: string) => ({ command: binary, args: ['channel', 'codex'] })
+/**
+ * What the channel needs from Codex's environment, which Codex does not pass on: it starts MCP servers with a few
+ * variables only (HOME, PATH, USER…). Tonton's own folder and switches, Codex's folder, and the proxy.
+ */
+export const CODEX_ENV_VARS = ['TONTON_HOME', 'TONTON_SERVICE', 'CODEX_HOME', ...PROXY_VARIABLES]
+
+/**
+ * The server Codex starts for each session, as config.toml holds it, given the one there now: the variables the user
+ * passes on too stay, in their order, and Tonton's go after. A list with entries this agent does not write (a table
+ * with a `source`) is the user's: it is left as it is.
+ */
+export function codexMcpServer(binary: string, current?: unknown): TomlTable {
+  const server = { command: binary, args: ['channel', 'codex'] }
+  const listed = isObject(current) ? current.env_vars : undefined
+  if (listed !== undefined && !isNameList(listed)) return server
+  const kept = listed ?? []
+  return { ...server, env_vars: [...kept, ...CODEX_ENV_VARS.filter(name => !kept.includes(name))] }
+}
+
+const isNameList = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
+
+/** Whether the server passes the channel what it needs from Codex's environment, or lists variables its own way. */
+export function passesAgentEnvironment(server: unknown): boolean {
+  const listed = isObject(server) ? server.env_vars : undefined
+  return listed !== undefined && (!isNameList(listed) || CODEX_ENV_VARS.every(name => listed.includes(name)))
+}
+
+/** The tonton server of a config.toml's text, undefined when there is none or the text is no TOML. */
+function currentServer(text: string): unknown {
+  const document = parseToml(text)
+  return document ? tomlValueAt(document, MCP_SERVER) : undefined
+}
 
 /** Whether a server of config.toml runs this agent's channel. Other keys, `enabled` among them, are the user's. */
 export function runsAgentChannel(server: unknown, binary: string): boolean {
@@ -199,7 +248,7 @@ export function installCodex(binary: string, dir = codexHome(), platform: NodeJS
   return editCodex(
     dir,
     hooks => withCodexHooks(hooks, binary, platform),
-    config => setTomlTable(config, MCP_SERVER, codexMcpServer(binary)),
+    config => setTomlTable(config, MCP_SERVER, codexMcpServer(binary, currentServer(config))),
   )
 }
 

@@ -4,13 +4,29 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { CODEX_HOOK_EVENTS, codexHome, codexHookCommand, hasCodex, installCodex, readCodexHooks, removeCodex } from '../src/install/codex'
+import {
+  CODEX_ENV_VARS,
+  CODEX_HOOK_EVENTS,
+  codexHome,
+  codexHookCommand,
+  codexHookCommandWindows,
+  codexHookGroup,
+  codexRunCommand,
+  hasCodex,
+  installCodex,
+  readCodexHooks,
+  removeCodex,
+} from '../src/install/codex'
 import { checkCodex, codexEventKey, codexHookHash, codexHookStates } from '../src/install/codex-check'
 import { parseToml, tomlString } from '../src/install/toml-table'
 
 const BINARY = '/home/ana/.tonton/bin/tonton'
 const COMMAND = "exec '/home/ana/.tonton/bin/tonton' hook codex"
 const WINDOWS_BINARY = 'C:\\Users\\Jean Dupont\\.tonton\\bin\\tonton.exe'
+const WINDOWS_COMMAND = "& 'C:\\Users\\Jean Dupont\\.tonton\\bin\\tonton.exe' hook codex"
+/** What the channel needs passed on from Codex's environment, as config.toml lists it. */
+const ENV_VARS = `env_vars = [${CODEX_ENV_VARS.map(name => `"${name}"`).join(', ')}]`
+const SERVER = `[mcp_servers.tonton]\ncommand = "/home/ana/.tonton/bin/tonton"\nargs = ["channel", "codex"]\n${ENV_VARS}\n`
 
 const root = mkdtempSync(join(tmpdir(), 'tonton-codex-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -82,6 +98,21 @@ describe('the hook command', () => {
     )
     expect(codexHookCommand(WINDOWS_BINARY, 'win32')).toBe(`"${WINDOWS_BINARY}" hook codex`)
   })
+
+  test('on Windows, Codex runs it with PowerShell: through the call operator, the path in single quotes', () => {
+    expect(codexHookCommandWindows(WINDOWS_BINARY)).toBe(WINDOWS_COMMAND)
+    expect(codexHookCommandWindows("C:\\Users\\O'Neil\\.tonton\\bin\\tonton.exe")).toBe(
+      "& 'C:\\Users\\O''Neil\\.tonton\\bin\\tonton.exe' hook codex",
+    )
+    const hook = codexHookGroup('Stop', WINDOWS_BINARY, 'win32').hooks[0]
+    expect(hook).toEqual({ type: 'command', command: `"${WINDOWS_BINARY}" hook codex`, command_windows: WINDOWS_COMMAND, timeout: 5 })
+    expect(hook && [codexRunCommand(hook, 'win32'), codexRunCommand(hook, 'darwin')]).toEqual([
+      WINDOWS_COMMAND,
+      `"${WINDOWS_BINARY}" hook codex`,
+    ])
+    // Elsewhere there is no Windows to run it on.
+    expect(codexHookGroup('Stop', BINARY, 'darwin').hooks[0]).toEqual({ type: 'command', command: COMMAND, timeout: 5 })
+  })
 })
 
 describe('installing', () => {
@@ -91,7 +122,7 @@ describe('installing', () => {
     expect(Object.keys(hooks.hooks).sort()).toEqual([...CODEX_HOOK_EVENTS].sort())
     expect(hooks.hooks.PreToolUse).toEqual([{ matcher: 'apply_patch', hooks: [{ type: 'command', command: COMMAND, timeout: 5 }] }])
     expect(hooks.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: COMMAND, timeout: 5 }] }])
-    expect(read(configFile())).toBe('[mcp_servers.tonton]\ncommand = "/home/ana/.tonton/bin/tonton"\nargs = ["channel", "codex"]\n')
+    expect(read(configFile())).toBe(SERVER)
     const [before, config] = [read(hooksFile()), read(configFile())]
     expect(install().changed).toBe(false)
     expect([read(hooksFile()), read(configFile())]).toEqual([before, config])
@@ -106,9 +137,7 @@ describe('installing', () => {
     expect(hooks.PreToolUse[1].hooks[0].command).toBe(COMMAND)
     expect(hooks.Stop[0]).toEqual(USER_HOOKS.hooks.Stop[0])
     expect(hooks.PreCompact).toEqual(USER_HOOKS.hooks.PreCompact)
-    expect(read(configFile())).toBe(
-      `${USER_CONFIG}\n[mcp_servers.tonton]\ncommand = "/home/ana/.tonton/bin/tonton"\nargs = ["channel", "codex"]\n`,
-    )
+    expect(read(configFile())).toBe(`${USER_CONFIG}\n${SERVER}`)
     // The user's file as it was, once.
     expect(JSON.parse(read(`${hooksFile()}.tonton-backup`))).toEqual(USER_HOOKS)
   })
@@ -128,13 +157,26 @@ describe('installing', () => {
       `${USER_CONFIG}\n[mcp_servers.tonton]\ncommand = "/old/tonton"\nargs = ["channel"]\n\n[projects."/p"]\ntrust_level = "trusted"\n`,
     )
     install()
-    expect(read(configFile())).toBe(
-      `${USER_CONFIG}\n[mcp_servers.tonton]\ncommand = "/home/ana/.tonton/bin/tonton"\nargs = ["channel", "codex"]\n\n[projects."/p"]\ntrust_level = "trusted"\n`,
-    )
+    expect(read(configFile())).toBe(`${USER_CONFIG}\n${SERVER}\n[projects."/p"]\ntrust_level = "trusted"\n`)
+  })
+
+  test("passes the channel Codex's environment it needs, after the variables the user passes on", () => {
+    writeFileSync(configFile(), '[mcp_servers.tonton]\ncommand = "/old/tonton"\nenv_vars = ["DEBUG", "TONTON_HOME"]\n')
+    install()
+    const listed = parseToml(read(configFile()))?.mcp_servers as { tonton: { env_vars: string[] } }
+    expect(listed.tonton.env_vars).toEqual(['DEBUG', 'TONTON_HOME', ...CODEX_ENV_VARS.filter(name => name !== 'TONTON_HOME')])
+    expect(install().changed).toBe(false)
+    // A list in a shape this agent does not write is the user's.
+    const own =
+      '[mcp_servers.tonton]\ncommand = "/home/ana/.tonton/bin/tonton"\nargs = ["channel", "codex"]\nenv_vars = [{ name = "TOKEN", source = "local" }]\n'
+    writeFileSync(configFile(), own)
+    expect(install().changed).toBe(false)
+    expect(read(configFile())).toBe(own)
+    expect(checkCodex(BINARY, dir, 'darwin').detail).not.toContain('out of date')
   })
 
   test('keeps what the user set on the server, like turning it off, also when the agent moved', () => {
-    const config = '[mcp_servers.tonton]\ncommand = "/home/ana/.tonton/bin/tonton"\nargs = ["channel", "codex"]\nenabled = false\n'
+    const config = `[mcp_servers.tonton]\ncommand = "/home/ana/.tonton/bin/tonton"\nargs = ["channel", "codex"]\nenabled = false\n${ENV_VARS}\n`
     writeFileSync(configFile(), config)
     expect(install().changed).toBe(true)
     expect(read(configFile())).toBe(config)
@@ -170,10 +212,23 @@ describe('installing', () => {
     expect(JSON.parse(read(hooksFile())).hooks.Stop[0].hooks[0].command).toBe(COMMAND)
   })
 
-  test('on Windows, the paths as cmd and TOML read them', () => {
+  test('on Windows, the paths as PowerShell, cmd and TOML read them', () => {
     install(WINDOWS_BINARY, 'win32')
-    expect(JSON.parse(read(hooksFile())).hooks.Stop[0].hooks[0].command).toBe(`"${WINDOWS_BINARY}" hook codex`)
-    expect(parseToml(read(configFile()))?.mcp_servers).toEqual({ tonton: { command: WINDOWS_BINARY, args: ['channel', 'codex'] } })
+    expect(JSON.parse(read(hooksFile())).hooks.Stop[0].hooks[0]).toMatchObject({
+      command: `"${WINDOWS_BINARY}" hook codex`,
+      command_windows: WINDOWS_COMMAND,
+    })
+    expect(parseToml(read(configFile()))?.mcp_servers).toEqual({
+      tonton: { command: WINDOWS_BINARY, args: ['channel', 'codex'], env_vars: CODEX_ENV_VARS },
+    })
+    expect(install(WINDOWS_BINARY, 'win32').changed).toBe(false)
+  })
+
+  test('on Windows, an install from before PowerShell is replaced where it is', () => {
+    const older = { hooks: [{ type: 'command', command: `"${WINDOWS_BINARY}" hook codex`, timeout: 5 }] }
+    writeFileSync(hooksFile(), JSON.stringify({ hooks: { Stop: [USER_HOOKS.hooks.Stop[0], older] } }))
+    install(WINDOWS_BINARY, 'win32')
+    expect(JSON.parse(read(hooksFile())).hooks.Stop).toEqual([USER_HOOKS.hooks.Stop[0], codexHookGroup('Stop', WINDOWS_BINARY, 'win32')])
   })
 
   test('a file Codex could not read either is left alone, and so is the other one', () => {
@@ -224,7 +279,11 @@ describe('uninstalling', () => {
   })
 })
 
-/** The currentHash codex app-server 0.142.2 lists for each of Tonton's hooks (hooks/list), on macOS and on Windows. */
+/**
+ * The currentHash codex app-server 0.142.2 lists for each of Tonton's hooks (hooks/list), on macOS and on Windows. Codex
+ * hashes the command it runs, `command_windows` on Windows: its hashes are those of hooks with that command, as a Codex
+ * on macOS lists them.
+ */
 const CODEX_HASHES: Record<string, Record<string, string>> = {
   [BINARY]: {
     PreToolUse: 'sha256:52078ddc9dce2c3888df2673a78d7fc905d3838956606e431870fffefcb66df4',
@@ -235,17 +294,18 @@ const CODEX_HASHES: Record<string, Record<string, string>> = {
     Stop: 'sha256:c1e6663a852bb2e888be1126c5f130761b77b8ce6ea0ef6edadb2f5fd98f2d14',
   },
   [WINDOWS_BINARY]: {
-    PreToolUse: 'sha256:b4010b5d026b447009c106b11717ab0c61f64ed7fc3eb4373dac206b29473f8d',
-    PermissionRequest: 'sha256:26801269f7a00bc93468a80dba5a190f3b80d665b2f65a2b5ccd5f04d13b1122',
-    PostToolUse: 'sha256:e8ad5802d7305085ffc59f1c4d52a530ff2b2afdb26dde8b1c74c3b7556fe3ce',
-    SessionStart: 'sha256:88066cade7b7a195f11c6ffa10d9f496bf3424890c3abddc11d17a9a269c03fc',
-    UserPromptSubmit: 'sha256:e6e637c66132bf79dd14eb2d020b3ee045117581ba3698ed2274c8fffb8c5683',
-    Stop: 'sha256:0288ba1ee407256ed82495c1df9cefd55e2c26f88887bd7f7ff7cb87e22f939f',
+    PreToolUse: 'sha256:e6120d37b93d55e2c59a12f3a23201769ac7f0d8cdd0e4a66c0f0fca9eb939d5',
+    PermissionRequest: 'sha256:c56b369a01284bd807973d323d13fadb4351b8f6c42860b9e3f0d5b11d9235fe',
+    PostToolUse: 'sha256:a4b0c68096ca4a2e8ff3cf3fef60be423a9cff8cfd45ddc33fd31c6959c4b647',
+    SessionStart: 'sha256:fb4d55826299554b857262836223eed2370e7f7d32703f1865c1c534da3c8fdb',
+    UserPromptSubmit: 'sha256:96faa41b878f3a96662ecb110a41e41e855de1ff7326a4a617c1ef9aa9b5b0c5',
+    Stop: 'sha256:45b3390e62e0346af71d608a6d7eb4fbc6b20366d8ffd355d0b3be774b43886d',
   },
 }
 
 /** Records trust for Tonton's hooks as Codex's /hooks does: by file, event and place, with Codex's own hash. */
-function trust(events: readonly string[] = CODEX_HOOK_EVENTS, hash = (event: string) => CODEX_HASHES[BINARY]?.[event] ?? '') {
+function trust(events: readonly string[] = CODEX_HOOK_EVENTS, hashOf?: (event: string) => string, binary = BINARY) {
+  const hash = hashOf ?? ((event: string) => CODEX_HASHES[binary]?.[event] ?? '')
   const file = join(realpathSync(dir), 'hooks.json')
   const states = events.map(
     event => `[hooks.state.${tomlString(`${file}:${codexEventKey(event)}:0:0`)}]\ntrusted_hash = "${hash(event)}"\n`,
@@ -261,7 +321,8 @@ describe("Codex's trust", () => {
     ] as const) {
       for (const event of CODEX_HOOK_EVENTS) {
         const matcher = event === 'PreToolUse' ? 'apply_patch' : undefined
-        expect(codexHookHash(event, matcher, codexHookCommand(binary, platform), 5)).toBe(CODEX_HASHES[binary]?.[event] ?? '')
+        const hook = codexHookGroup(event, binary, platform).hooks[0]
+        expect(codexHookHash(event, matcher, (hook && codexRunCommand(hook, platform)) ?? '', 5)).toBe(CODEX_HASHES[binary]?.[event] ?? '')
       }
     }
     // Codex reads no matcher for these two, and leaves it out of the hash.
@@ -319,6 +380,25 @@ describe("Codex's trust", () => {
     })
   })
 
+  test('trusted on Windows, by the hash of the command PowerShell runs', () => {
+    install(WINDOWS_BINARY, 'win32')
+    trust(CODEX_HOOK_EVENTS, undefined, WINDOWS_BINARY)
+    expect(checkCodex(WINDOWS_BINARY, dir, 'win32')).toMatchObject({ ok: true })
+  })
+
+  test('an install from before the environment was passed on is out of date, and a repair fixes it', () => {
+    install()
+    trust()
+    writeFileSync(configFile(), read(configFile()).replace(`${ENV_VARS}\n`, ''))
+    expect(checkCodex(BINARY, dir, 'darwin')).toEqual({
+      ok: false,
+      detail: `In ${dir}: the tonton MCP server is out of date.`,
+      repair: true,
+    })
+    install()
+    expect(checkCodex(BINARY, dir, 'darwin')).toMatchObject({ ok: true })
+  })
+
   test('trusted before they changed, or turned off in /hooks', () => {
     install()
     trust(CODEX_HOOK_EVENTS, event => (event === 'Stop' ? 'sha256:older' : (CODEX_HASHES[BINARY]?.[event] ?? '')))
@@ -338,12 +418,20 @@ describe("Codex's trust", () => {
       repair: true,
     })
     install()
-    writeFileSync(configFile(), `[features]\nhooks = false\n\n${read(configFile())}`)
+    const server = read(configFile())
+    writeFileSync(configFile(), `[features]\nhooks = false\n\n${server}`)
     expect(checkCodex(BINARY, dir, 'darwin')).toEqual({
       ok: false,
       detail: `Hooks are turned off in Codex: features.hooks is false in ${configFile()}.`,
       repair: false,
     })
+    // `codex_hooks` is the older name, which `hooks` overrides when both are set.
+    writeFileSync(configFile(), `[features]\ncodex_hooks = false\n\n${server}`)
+    expect(checkCodex(BINARY, dir, 'darwin').detail).toBe(
+      `Hooks are turned off in Codex: features.codex_hooks is false in ${configFile()}.`,
+    )
+    writeFileSync(configFile(), `[features]\ncodex_hooks = false\nhooks = true\n\n${server}`)
+    expect(checkCodex(BINARY, dir, 'darwin').detail).not.toContain('turned off')
   })
 
   test('files Codex could not read are reported, not repaired', () => {
