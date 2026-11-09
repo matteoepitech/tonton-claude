@@ -9,11 +9,13 @@ struct ExpandedView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // The top band sits under the camera housing: nothing readable goes there.
-            Color.clear.frame(height: max(state.notchSize.height, 30))
+            // The top band sits under the camera housing: nothing readable goes there, only Sessions | Music beside it.
+            NotchTopBand()
             Group {
-                // Sessions of this Mac show up without an account, so the list comes first.
-                if store.visibleSessions.isEmpty && state.showHero {
+                if state.content.shown == .music {
+                    MusicPanel()
+                } else if store.visibleSessions.isEmpty && state.showHero {
+                    // Sessions of this Mac show up without an account, so the list comes first.
                     HeroScreen().padding(.horizontal, 14).padding(.top, 6)
                 } else if store.visibleSessions.isEmpty && state.showClusters && settings.isConfigured {
                     ClustersPanel().padding(.trailing, 8)

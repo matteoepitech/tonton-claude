@@ -6813,6 +6813,26 @@
         }
       }
     },
+    "Music" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musique"
+          }
+        }
+      }
+    },
+    "Music playing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musique en cours"
+          }
+        }
+      }
+    },
     "Mute alerts at night" : {
       "localizations" : {
         "fr" : {
@@ -7389,12 +7409,32 @@
         }
       }
     },
+    "Notch content" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contenu de l’encoche"
+          }
+        }
+      }
+    },
     "Notch size" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Taille de l’encoche"
+          }
+        }
+      }
+    },
+    "Notch · ⌘M" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encoche · ⌘M"
           }
         }
       }
@@ -7449,6 +7489,16 @@
         }
       }
     },
+    "Nothing playing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune musique en cours"
+          }
+        }
+      }
+    },
     "Nothing posted yet." : {
       "localizations" : {
         "fr" : {
@@ -7495,6 +7545,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annonce"
+          }
+        }
+      }
+    },
+    "Now playing: %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Now playing: %1$@, %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En cours de lecture : %1$@, %2$@"
           }
         }
       }
@@ -9712,6 +9778,26 @@
         }
       }
     },
+    "Show the music" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher la musique"
+          }
+        }
+      }
+    },
+    "Show the music (⌘M)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher la musique (⌘M)"
+          }
+        }
+      }
+    },
     "Show the project name" : {
       "localizations" : {
         "fr" : {
@@ -9728,6 +9814,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afficher le résultat"
+          }
+        }
+      }
+    },
+    "Show the sessions" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les sessions"
+          }
+        }
+      }
+    },
+    "Show the sessions (⌘M)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les sessions (⌘M)"
           }
         }
       }
@@ -10891,6 +10997,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le modèle que %@ utilise dans cette session"
+          }
+        }
+      }
+    },
+    "The music playing on this Mac shows up here." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La musique jouée sur ce Mac s’affiche ici."
           }
         }
       }
