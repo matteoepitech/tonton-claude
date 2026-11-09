@@ -9,6 +9,8 @@ enum MusicAction: Equatable {
     case showPlayer
     case openPlayer
     case openAutomationSettings
+    /// Opens the player with this `app`, from the view shown while none runs.
+    case launch(String)
 }
 
 /// The music view of the open notch: the cover, the track, where it is, the buttons and the volume, or what keeps them
@@ -19,11 +21,13 @@ struct MusicPlayerView: View {
     let state: MusicPlayerState
     let cover: NSImage?
     let perform: (MusicAction) -> Void
+    /// Another player runs too: the card says which one it shows.
+    var showsName = false
 
     var body: some View {
         switch state.screen {
         case .playing(let now):
-            NowPlayingCard(name: name, now: now, cover: cover, perform: perform)
+            NowPlayingCard(name: name, now: now, cover: cover, showsName: showsName, perform: perform)
         case .notInstalled:
             CenteredMessage(
                 icon: "music.note", title: "\(name) is not installed", detail: "The music it plays shows up here once it is on this Mac.")
@@ -55,6 +59,7 @@ private struct NowPlayingCard: View {
     let name: String
     let now: NowPlaying
     let cover: NSImage?
+    let showsName: Bool
     let perform: (MusicAction) -> Void
     /// Where the pointer drags the position or the volume to, from 0 to 1: the bars follow it rather than the player.
     @State private var seeking: Double?
@@ -67,6 +72,9 @@ private struct NowPlayingCard: View {
             coverButton
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
+                    if showsName {
+                        Text(verbatim: name).font(.notch(11, weight: .medium)).foregroundStyle(Theme.tertiary).lineLimit(1)
+                    }
                     Text(now.title.isEmpty ? name : now.title)
                         .font(.notch(17, weight: .semibold))
                         .lineLimit(2)

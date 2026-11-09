@@ -144,7 +144,14 @@ final class MusicChoiceTests: XCTestCase {
         }
     }
 
-    // MARK: Nothing shown
+    // MARK: What the view says
+
+    func testTheViewNamesThePlayerWhenAnotherRuns() {
+        XCTAssertFalse(MusicChoice.namesPlayer([player(Self.spotify, .playing), player(Self.music, .closed)]))
+        XCTAssertFalse(MusicChoice.namesPlayer([player(Self.music, .playing)]))
+        XCTAssertTrue(MusicChoice.namesPlayer([player(Self.spotify, .playing), player(Self.music, .empty)]))
+        XCTAssertTrue(MusicChoice.namesPlayer([player(Self.spotify, .closed), player(Self.music, .paused), player(Self.deezer, .playing)]))
+    }
 
     func testTheViewOffersThePlayersOnThisMac() {
         let players = [player(Self.spotify, .notInstalled), player(Self.music, .closed), player(Self.deezer, .empty)]

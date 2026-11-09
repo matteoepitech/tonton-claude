@@ -66,7 +66,7 @@ struct NotchPane: View {
             Card {
                 Row(
                     title: "Player",
-                    detail: "The one Music mode shows. Automatic shows the one playing, or else the last one that played."
+                    detail: "Which player Music mode shows. Automatic shows the one playing, or else the last one that played."
                 ) {
                     ChoiceMenu(selection: settings.musicPlayer.rawValue, options: musicPlayers) {
                         settings.musicPlayer = MusicPin(rawValue: $0)

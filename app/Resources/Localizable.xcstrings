@@ -2965,6 +2965,17 @@
         }
       }
     },
+    "Automatic" : {
+      "comment" : "Settings › Notch › Music › Player: the one playing",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatique"
+          }
+        }
+      }
+    },
     "Automation" : {
       "localizations" : {
         "fr" : {
@@ -7179,6 +7190,16 @@
         }
       }
     },
+    "No music player is open" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun lecteur de musique n’est ouvert"
+          }
+        }
+      }
+    },
     "No notes yet. The sessions write conventions, interfaces and decisions here." : {
       "localizations" : {
         "fr" : {
@@ -7876,6 +7897,16 @@
         }
       }
     },
+    "Open one and the music it plays shows up here, with its controls." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrez-en un et la musique qu’il joue s’affiche ici, avec ses commandes."
+          }
+        }
+      }
+    },
     "Open pool leaderboard" : {
       "localizations" : {
         "fr" : {
@@ -8344,6 +8375,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Version jouable"
+          }
+        }
+      }
+    },
+    "Player" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecteur"
           }
         }
       }
@@ -12532,6 +12573,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quand ce projet se termine."
+          }
+        }
+      }
+    },
+    "Which player Music mode shows. Automatic shows the one playing, or else the last one that played." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le lecteur qu’affiche le mode Musique. Automatique affiche celui qui joue, sinon le dernier qui a joué."
           }
         }
       }

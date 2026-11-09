@@ -55,6 +55,11 @@ public struct MusicChoice: Equatable, Sendable {
         return (loaded ?? players.first { $0.state.running })?.app
     }
 
+    /// Another player runs beside the one shown: the view then says which one it shows.
+    public static func namesPlayer(_ players: [Player]) -> Bool {
+        players.filter(\.state.running).count > 1
+    }
+
     /// The players the view offers to open while none is shown: those on this Mac that don't run.
     public static func openable(_ players: [Player]) -> [Player] {
         players.filter { $0.state.installed && !$0.state.running }

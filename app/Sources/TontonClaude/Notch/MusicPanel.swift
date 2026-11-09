@@ -1,16 +1,21 @@
 import SwiftUI
 import TontonCore
 
-/// What the open notch shows in Music mode, in place of the session list and the conversation.
+/// What the open notch shows in Music mode, in place of the session list and the conversation: the player `MusicStore`
+/// chose, or a button for each player on this Mac while none runs.
 struct MusicPanel: View {
     @ObservedObject private var music = MusicStore.shared
 
     var body: some View {
-        // With none shown, the first player says it is not open, with a button that opens it.
-        let player = music.shown ?? music.allPlayers.first
-        MusicPlayerView(
-            name: player?.name ?? "", state: player?.state ?? MusicPlayerState(), cover: music.cover, perform: music.perform
-        )
+        Group {
+            if let shown = music.shown {
+                MusicPlayerView(
+                    name: shown.name, state: shown.state, cover: music.cover, perform: music.perform,
+                    showsName: MusicChoice.namesPlayer(music.allPlayers))
+            } else {
+                NoMusicPlayerView(players: MusicChoice.openable(music.allPlayers), perform: music.perform)
+            }
+        }
         .onAppear { music.viewAppeared() }
         .onDisappear { music.viewDisappeared() }
     }

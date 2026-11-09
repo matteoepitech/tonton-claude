@@ -78,8 +78,8 @@ final class MusicStore: ObservableObject {
         switch action {
         case .command(let command): chosen?.perform(command)
         case .showPlayer: chosen?.activate()
-        // With none shown, the view shows the first player, which doesn't run.
-        case .openPlayer: (chosen ?? players.first)?.launch()
+        case .openPlayer: chosen?.launch()
+        case .launch(let app): players.first { $0.app == app }?.launch()
         case .openAutomationSettings: if let url = Self.automationSettings { NSWorkspace.shared.open(url) }
         }
     }
