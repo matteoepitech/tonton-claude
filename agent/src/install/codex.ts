@@ -31,13 +31,14 @@ export const CODEX_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUs
 export type CodexHookEvent = (typeof CODEX_HOOK_EVENTS)[number]
 
 /**
- * The tools an event's hook runs for, when not all. Before a tool call, only edits, as with Claude Code: a hook before
- * every call would slow every one down. `apply_patch` is Codex's edit tool, which matchers also reach as `Edit` and
- * `Write`. After a call, every tool: Codex has no event for an answered permission request, and the next PostToolUse is
- * what tells the notch the turn goes on. A matcher is part of what the user trusts: changing one makes them trust the
- * hook again.
+ * The tools an event's hook runs for, when not all. Before a tool call, only what edits files: a hook before every call
+ * would slow every one down. `apply_patch` is Codex's edit tool, which matchers also reach as `Edit` and `Write`; `Bash`
+ * is its shell, through which Codex edits too (`sed -i`, `> file`), and which the cluster guard reads
+ * (agent/src/cluster/guard.ts). After a call, every tool: Codex has no event for an answered permission request, and the
+ * next PostToolUse is what tells the notch the turn goes on. A matcher is part of what the user trusts: changing one makes
+ * them trust the hook again.
  */
-const MATCHERS: Partial<Record<CodexHookEvent, string>> = { PreToolUse: 'apply_patch' }
+const MATCHERS: Partial<Record<CodexHookEvent, string>> = { PreToolUse: 'apply_patch|Bash' }
 /** Seconds. Codex waits for a hook before it goes on, ten minutes unless told otherwise. */
 const HOOK_TIMEOUT = 5
 

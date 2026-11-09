@@ -2,6 +2,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { open } from '../../../shared/crypto'
 import type { PromptPayload, RelayToAgent, SessionCommand } from '../../../shared/protocol'
+import { clearGuardState } from '../cluster/guard'
 import { CodexNotch } from '../codex/notch'
 import { readServerRecord } from '../codex/wrapper'
 import { loadConfig, paths } from '../config'
@@ -13,8 +14,8 @@ import { handleLogRequest } from '../logs'
 import { AgentRPG } from '../rpg'
 import { addSessionRules, openSessionRules, receiveRules } from '../rules'
 import { handleUpdateOrder } from '../update'
-import { isClusterTool } from './cluster-work'
-import { Conversation } from './conversation'
+import { CLUSTER_TOOLS, isClusterTool } from './cluster-work'
+import { type ClusterIntake, Conversation } from './conversation'
 import { saveToInbox } from './inbox'
 import { ChannelServer } from './mcp'
 import { deliverToCodex } from './pool-held'
@@ -35,12 +36,16 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
   const codex = tool === 'codex'
   let conversation: Conversation | null = null
   // The pool tools and the cluster tools, side by side: a session can be in a pool and a cluster at once. Codex lists an
-  // MCP server's tools once, when it starts it, and does not take the news that they changed: it gets every pool tool
-  // from the start, as OpenCode does, and outside a pool they say so.
+  // MCP server's tools once, when it starts it (`listed_tools` in codex-rs/codex-mcp, as of 0.142.2), and does not take
+  // the news that they changed: it gets every pool and cluster tool from the start, as OpenCode does, with the server's
+  // instructions, and outside a pool or a cluster they say so.
   const mcp = new ChannelServer(
     (requestId, detail) => conversation?.addPermission(requestId, detail),
     {
-      list: () => [...(codex ? ALL_POOL_TOOLS : (conversation?.work.tools() ?? [])), ...(conversation?.cluster.tools() ?? [])],
+      list: () => [
+        ...(codex ? ALL_POOL_TOOLS : (conversation?.work.tools() ?? [])),
+        ...(codex ? CLUSTER_TOOLS : (conversation?.cluster.tools() ?? [])),
+      ],
       call: (name, args) =>
         isClusterTool(name)
           ? (conversation?.cluster.call(name, args) ?? Promise.resolve('This session is not in a cluster.'))
@@ -60,6 +65,8 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
     if (config && sessionId) {
       await postHook(config, { hook_event_name: 'SessionEnd', session_id: sessionId }).catch(() => {})
       unlink(linkFile, sessionId)
+      // What its hooks read of its clusters' claims goes with it, as Claude Code's SessionEnd hook takes it.
+      clearGuardState(sessionId)
     }
     process.exit(0)
   }
@@ -136,7 +143,7 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
   }
 
   // What its pools send a Codex session goes in through its app-server when `tonton codex` runs it, or waits for its
-  // next prompt (pool-held.ts); a pool that stops it interrupts its turn there. What its clusters send waits for #371.
+  // next prompt (pool-held.ts); a pool that stops it interrupts its turn there.
   const pool = codex
     ? {
         deliver: (text: string) => void deliverToCodex(notch ? t => notch.inject(t) : null, conversation?.link.sessionId, text),
@@ -144,9 +151,13 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
         interrupt: async () => (notch ? notch.interrupt() : 'a codex started without tonton codex takes nothing from Tonton.'),
       }
     : { deliver: (text: string) => void mcp.inject(text, 'pool'), toolsChanged: () => void mcp.toolsChanged() }
-  const cluster = codex
-    ? { live: () => {}, toolsChanged: () => void mcp.toolsChanged() }
-    : { live: (text: string) => void mcp.inject(text, 'cluster'), toolsChanged: () => void mcp.toolsChanged() }
+  // A Codex run by `tonton codex` takes a cluster post into its turn, or a new one, through its server, which also says
+  // whether it works; a plain `codex` takes none: its posts wait for its next prompt (agent/src/codex/hook.ts).
+  const cluster: ClusterIntake = !codex
+    ? { live: (text: string) => void mcp.inject(text, 'cluster'), toolsChanged: () => void mcp.toolsChanged() }
+    : notch
+      ? { live: (text: string) => notch.inject(text), busy: () => notch.working, toolsChanged: () => {} }
+      : { live: () => false, toolsChanged: () => {} }
 
   const follow = (link: SessionLink) => {
     log('following session', link)

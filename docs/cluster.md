@@ -1,8 +1,8 @@
 # Clusters
 
-A cluster links the Claude Code and OpenCode sessions of several machines and several people, so they talk to each
-other: who is doing what, what is finished, what was pushed or submitted to Perforce, who holds which file. It is what
-processes on one machine do with each other, across every machine of the cluster.
+A cluster links the Claude Code, OpenCode and Codex sessions of several machines and several people, so they talk to
+each other: who is doing what, what is finished, what was pushed or submitted to Perforce, who holds which file. It is
+what processes on one machine do with each other, across every machine of the cluster.
 
 A cluster is not a pool. It has no orchestrator, no plan, no tasks and no dispatch, and nothing in it starts or drives
 a session on someone else's machine. Pools ([pools.md](pools.md)) stay as they are; clusters reuse their key code
@@ -93,9 +93,11 @@ enrolled machines, read only: `GET /api/agent/clusters` and `GET /api/agent/clus
 
 ## Claude's tools
 
-Served to Claude Code by the MCP channel and to OpenCode by the bridge, with the same names and results
-(`agent/src/channel/cluster-work.ts`). They show up while the session is in a cluster. A session can be in a pool and a
-cluster at once: the two have their own tools, keys, envelopes and instructions, and never mix.
+Served to Claude Code and Codex by the MCP channel and to OpenCode by the bridge, with the same names and results
+(`agent/src/channel/cluster-work.ts`). They show up while the session is in a cluster. Codex lists an MCP server's tools
+once, when it starts it, and gives the model the server's instructions with them: its channel lists the cluster tools
+from the start, and they say so while the session is in no cluster. A session can be in a pool and a cluster at once:
+the two have their own tools, keys, envelopes and instructions, and never mix.
 
 | Tool | Does |
 |---|---|
@@ -110,7 +112,18 @@ cluster at once: the two have their own tools, keys, envelopes and instructions,
 | `cluster_share`, `cluster_file` | Send and fetch a small file (#314) |
 
 A session sends 20 posts a minute at most, before the relay's own limit. OpenCode's plugin gives a tool 30 seconds to
-answer; a spec with `waitMs` (`cluster_ask`) gets that long instead.
+answer; a spec with `waitMs` (`cluster_ask`) gets that long instead. Codex ends an MCP call after five minutes: there,
+`cluster_ask` and `cluster_wait` wait four at most.
+
+### Held files
+
+Before a session edits a file another session of its clusters holds, its owner is asked
+(`agent/src/cluster/guard.ts`), from the claims its agent leaves on the machine. Claude Code's PreToolUse hook answers
+`ask`. OpenCode lets no plugin ask, and Codex lets a call run when its PreToolUse hook answers `ask`: for both, the edit
+stops once, with who holds the file, and the session asks its user; the same edit made again within ten minutes goes
+through. A cluster that blocks refuses it every time. Codex's hook runs before `apply_patch` and its shell (matcher
+`apply_patch|Bash`): the guard reads the files of a patch, and those a shell command writes (`>`, `sed -i`, `tee`, `rm`,
+`mv`, `cp`, PowerShell's `Set-Content`…). What a script does inside cannot be read.
 
 ### Delivery
 
@@ -126,7 +139,10 @@ A post for the session (`clusterPostIsFor`), and not its own, reaches Claude as
 the attributes, and every tag in the text (`<x`, `</x`, `<!`, `<?`) loses its `<` (`clusterEnvelope`): neither a name
 nor a text can close the envelope, open another one, or close Claude Code's own `<channel>`. Claude Code gets it as a
 channel notification with `meta.sender = 'cluster'`; OpenCode as a synthetic part (`session.synthetic` in OpenCode 2, a
-`synthetic` text part in OpenCode 1), never as the user's text, and the notch does not show it as one.
+`synthetic` text part in OpenCode 1), never as the user's text, and the notch does not show it as one. Codex, run by
+`tonton codex`, gets it through its app-server, in its running turn (`turn/steer`) or a new one (`turn/start`)
+(`CodexNotch.inject`): Codex takes no other text from outside, and the envelope says it is not its user's. A plain
+`codex` has no way in: what would go in live waits for its next prompt, as in a digest.
 
 How, as the owner chose in the order:
 
@@ -136,13 +152,16 @@ How, as the owner chose in the order:
 - **digest**: everything waits for the next prompt, and goes in with it as one text, 30 posts at most (the digest says
   how many were left out). Claude Code: the channel writes each post to `run/cluster-digest/<session>/`, and the
   `UserPromptSubmit` hook takes them and adds them to the prompt as context (`agent/src/channel/cluster-digest.ts`).
-  OpenCode: the bridge holds them, and steers them into the turn that starts, without starting another.
+  Codex: the same, through its own `UserPromptSubmit` hook (`agent/src/codex/hook.ts`); Codex shows the model 2,500
+  tokens of a hook's context at most, and keeps the rest in a file it names. OpenCode: the bridge holds them, and steers
+  them into the turn that starts, without starting another.
 - **muted**: nothing, not even what waited when the owner muted it. `cluster_inbox` still reads the posts, when the
   session's user asks.
 
 Whether Claude is in a turn, and whether it skips permission prompts (`bypassPermissions`), Claude Code's channel reads
-from what its hooks last wrote. OpenCode has no mode the bridge can see that skips every prompt: its sessions are live
-by default.
+from what its hooks last wrote. Codex's does the same, except that a Codex run by `tonton codex` says whether it is in a
+turn through its app-server; its hooks call `approval_policy = never` `bypassPermissions`. OpenCode has no mode the
+bridge can see that skips every prompt: its sessions are live by default.
 
 On joining, the session is told where it is, who else is there and how to behave, at its next prompt; when another
 session or a member changes the notes, it is told to read them again. The channel's instructions say the rest, for every
@@ -199,7 +218,7 @@ session's agent tells it, once each, at every milestone, at half time, one hour 
 next prompt; a muted session gets nothing. The agent looks at the clock every 30 seconds and whenever it changes. A mark
 already past when a session first sees it (on joining, or when the deadline moves) is not told late, and what a session
 was told is kept under the agent's home (`cluster/<cluster>/clock-<session>.json`), so a restart tells nothing twice.
-Claude Code and OpenCode alike.
+Claude Code, OpenCode and Codex alike.
 
 ## Files
 
@@ -211,7 +230,8 @@ The agent seals its bytes with the cluster key (`sealClusterFile`, `shared/clust
 `cluster_file` fetches it by that id, opens it and checks its hash against the post. A text file of 100 KB at most comes
 back in the tool's result; anything else, an image included, is saved under the agent's home
 (`cluster/<cluster>/files/`), never in the project, and its path given for Claude to open with its Read tool, in Claude
-Code and OpenCode alike. Members read files with `GET /api/clusters/:id/files/:file` too, for the website and the island.
+Code, OpenCode and Codex alike. Members read files with `GET /api/clusters/:id/files/:file` too, for the website and the
+island.
 
 The relay keeps 200 MB of files per cluster, the oldest going first, and drops them with the cluster.
 

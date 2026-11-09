@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ServerWebSocket } from 'bun'
+import { newAccountKey } from '../../shared/crypto'
 import { type CodexApproval, CodexDriver, decisionFor, readApproval } from '../src/codex/driver'
+import { CodexNotch } from '../src/codex/notch'
 
 // A Codex app-server with one thread, `t1`, whose answers each test sets.
 const dir = mkdtempSync(join(tmpdir(), 'tonton-codex-'))
@@ -161,5 +163,28 @@ describe('driving a Codex thread', () => {
     expect(readApproval('item/commandExecution/requestApproval', { command: '  ' })).toBeNull()
     expect(decisionFor('applyPatchApproval', 'decline')).toBe('denied')
     expect(decisionFor('item/fileChange/requestApproval', 'decline')).toBe('decline')
+  })
+})
+
+describe("a pool's or a cluster's text, through the notch", () => {
+  const post = '<cluster kind="ask" from="Ana · Mac · claude" id="p1" to="you">\nWhich socket?\n</cluster>'
+
+  test('starts a turn when Codex is idle, joins the one that runs, and says when Codex cannot be reached', async () => {
+    const notch = new CodexNotch(socket, newAccountKey(), () => null)
+    // No thread followed yet.
+    expect(await notch.inject(post)).toBe(false)
+    notch.follow('t1')
+    expect(await notch.inject(post)).toBe(true)
+    expect(sent('turn/start')[0]?.params).toEqual({ threadId: 't1', input: [{ type: 'text', text: post, text_elements: [] }] })
+    expect(notch.working).toBe(true)
+    expect(await notch.inject('<cluster kind="message">\nmore\n</cluster>')).toBe(true)
+    expect(sent('turn/steer')[0]?.params).toMatchObject({ threadId: 't1', expectedTurnId: 'turn-new' })
+    notch.close()
+    expect(notch.working).toBe(false)
+    expect(await notch.inject(post)).toBe(false)
+
+    const gone = new CodexNotch(join(dir, 'gone.sock'), newAccountKey(), () => null)
+    gone.follow('t1')
+    expect(await gone.inject(post)).toBe(false)
   })
 })

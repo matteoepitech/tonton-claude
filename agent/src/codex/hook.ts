@@ -1,5 +1,6 @@
 // `tonton hook codex`: what Codex runs for each hook event (codex-rs/hooks/src/schema.rs). Like Claude Code's hooks
-// (agent/src/hook.ts), it links the session to the channel of the same codex process and tells the relay its status.
+// (agent/src/hook.ts), it links the session to the channel of the same codex process and tells the relay its status,
+// hands Codex the cluster posts that waited for its next prompt, and stops an edit of a file another session holds.
 // Codex runs a hook's command through a shell: `$SHELL -c` on macOS and Linux, where the command starts with `exec` so
 // the shell hands its pid over and the hook's parent is codex, as the channel's is; PowerShell or `cmd /C` on Windows,
 // which cannot, so the hook asks Windows for its shell's parent once per session.
@@ -8,14 +9,16 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { HookPost } from '../../../shared/protocol'
+import { takeClusterDigest } from '../channel/cluster-digest'
 import { takePoolPosts } from '../channel/pool-held'
 import { terminalOf } from '../channel/terminal'
+import { editedPaths, guardCodexEdit, shellEdits } from '../cluster/guard'
 import { loadConfig, paths } from '../config'
 import { postHook, pruneLinks } from '../hook'
 import { log } from '../log'
 import { codexModeAllows, matchingRule, poolMode, poolRules, readRules, sessionRules } from '../rules'
 import { patchFiles } from './patch'
-import { codexToolName, shellCommand } from './tools'
+import { CODEX_SHELL_TOOLS, codexToolName, shellCommand } from './tools'
 
 /** Codex's hook input: the fields every event has, and those of some. */
 export interface CodexHookInput {
@@ -56,8 +59,8 @@ const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse'])
 
 /**
  * Called by Codex for each hook event it was told to run Tonton for. It must never get in the way of the session:
- * failures are logged, it prints nothing but an approval by an auto-approve rule or the pool posts that waited for a
- * prompt, and it always exits 0.
+ * failures are logged, it prints nothing but an approval by an auto-approve rule, the pool and cluster posts that waited
+ * for a prompt, or why an edit of a held file stops, and it always exits 0.
  */
 export async function runCodexHook() {
   const event = await readInput()
@@ -68,8 +71,10 @@ export async function runCodexHook() {
     const previous = readLink(file)
     writeLink(file, link(event, previous))
     if (event.hook_event_name === 'SessionStart') pruneLinks(paths.run)
+    if (event.hook_event_name === 'PreToolUse') guardEdit(event)
     if (event.hook_event_name === 'PermissionRequest' && approveByRule(event)) return
-    if (event.hook_event_name === 'UserPromptSubmit') handHeldPosts(event.session_id)
+    // A subagent's prompt is not its session's.
+    if (event.hook_event_name === 'UserPromptSubmit' && !event.agent_id) handHeldPosts(event.session_id)
     const config = loadConfig()
     const status = codexStatus(event, previous?.event)
     if (config && status) await postHook(config, status.event, status.text)
@@ -79,13 +84,14 @@ export async function runCodexHook() {
 }
 
 /**
- * What waited for this prompt, added to it as context Codex reads with it: the pool posts its channel could not hand
- * Codex as they came (agent/src/channel/pool-held.ts).
+ * What waited for this prompt, added to it as context Codex reads with it, as Claude Code's hook does, never as the
+ * user's own text: the pool posts its channel could not hand Codex as they came (agent/src/channel/pool-held.ts), and the
+ * cluster posts it kept (agent/src/channel/cluster-digest.ts). Codex reads one JSON object from a hook: all in this one.
  */
 function handHeldPosts(sessionId: string) {
-  const context = [takePoolPosts(sessionId)].filter(Boolean).join('\n\n')
+  const context = [takePoolPosts(sessionId), takeClusterDigest(sessionId)].filter(Boolean).join('\n\n')
   if (!context) return
-  log('pool posts handed to the prompt')
+  log('pool and cluster posts handed to the prompt', { tool: 'codex' })
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: context } }))
 }
 
@@ -188,7 +194,37 @@ function alive(pid: number): boolean {
   }
 }
 
-/** apply_patch edits files; any other tool under the name the notch knows it by (./tools.ts). */
+/**
+ * The files a call of Codex changes, as the guard reads them: those of an `apply_patch` (`{ command: <patch> }`, Codex's
+ * hook input for it), and those a shell command writes (`Bash`, with `{ command }`). Any other tool changes none.
+ */
+export function codexEdits(tool: string | undefined, input: unknown): string[] {
+  const fields = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  if (tool === 'apply_patch') {
+    const patch = [fields.command, fields.input, fields.patch].find(value => typeof value === 'string')
+    return patch ? editedPaths('apply_patch', { patch }) : []
+  }
+  if (tool !== 'Bash' && !CODEX_SHELL_TOOLS.has(tool ?? '')) return []
+  const command = shellCommand(fields)
+  return command ? shellEdits(command) : []
+}
+
+/**
+ * Codex is about to edit a file: when another session of one of this session's clusters holds it, the call is stopped
+ * with who holds it. Codex lets a call run when a hook answers "ask" (codex-rs/hooks/src/events/pre_tool_use.rs), so the
+ * session is told to ask its user, and the same edit made again soon after goes through (`guardCodexEdit`). A subagent's
+ * call is its session's. The path stays out of the log.
+ */
+function guardEdit(event: CodexHookInput) {
+  const edited = codexEdits(event.tool_name, event.tool_input)
+  if (!edited.length) return
+  const reason = guardCodexEdit(event.session_id, edited, event.cwd)
+  if (!reason) return
+  log('cluster guard: the file is held', { tool: event.tool_name, codex: true })
+  const output = { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason }
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: output }))
+}
+
 /**
  * Codex asks before this call: approve it when an auto-approve rule from the app, one allowed for this session, or a
  * pool rule its owner accepted matches, or when a pool machine's mode lets it pass, as Claude Code's hook does. True
@@ -215,6 +251,7 @@ export function approveByRule(
   return true
 }
 
+/** apply_patch edits files; any other tool under the name the notch knows it by (./tools.ts). */
 const toolName = (tool: string | undefined) => (tool === 'apply_patch' ? 'Edit' : codexToolName(tool || 'a tool'))
 
 function readLink(file: string): CodexLink | null {

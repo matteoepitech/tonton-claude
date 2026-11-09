@@ -218,6 +218,34 @@ describe('the hook', () => {
     expect(await run(input('UserPromptSubmit', { prompt: 'and again' }))).toBe('')
   }, 20_000)
 
+  test("hands the cluster posts that waited to the session's next prompt, as context, and never to a subagent's", async () => {
+    const folder = join(home, 'run', 'cluster-digest', SESSION)
+    mkdirSync(folder, { recursive: true })
+    const post = '<cluster kind="message" from="Ana · Mac · claude" id="p1" to="you">\nThe rig is pushed\n</cluster>'
+    writeFileSync(join(folder, `${Date.now()}-000001-cluster1.txt`), post)
+    expect(await run(input('UserPromptSubmit', { prompt: 'go on', agent_id: 'sub-1' }))).toBe('')
+    const printed = JSON.parse(await run(input('UserPromptSubmit', { prompt: 'go on' })))
+    // The shape Codex reads (UserPromptSubmitCommandOutputWire in codex-rs/hooks/src/schema.rs), nothing more.
+    expect(Object.keys(printed)).toEqual(['hookSpecificOutput'])
+    expect(Object.keys(printed.hookSpecificOutput).sort()).toEqual(['additionalContext', 'hookEventName'])
+    expect(printed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit')
+    expect(printed.hookSpecificOutput.additionalContext).toStartWith('Cluster posts since your last prompt (1).')
+    expect(printed.hookSpecificOutput.additionalContext).toContain(post)
+    // Taken: the next prompt gets nothing.
+    expect(await run(input('UserPromptSubmit', { prompt: 'and then' }))).toBe('')
+  }, 20_000)
+
+  test('pool and cluster posts that waited go in one object: Codex reads one from a hook', async () => {
+    holdPoolPost(SESSION, '<pool kind="message" from="Ana">Ship it.</pool>', join(home, 'run'))
+    const folder = join(home, 'run', 'cluster-digest', SESSION)
+    mkdirSync(folder, { recursive: true })
+    writeFileSync(join(folder, `${Date.now()}-000002-cluster1.txt`), '<cluster kind="message" from="Bob">\nLights baked\n</cluster>')
+    const printed = await run(input('UserPromptSubmit', { prompt: 'go on' }))
+    const context = JSON.parse(printed).hookSpecificOutput.additionalContext as string
+    expect(context).toContain('Ship it.')
+    expect(context).toContain('Lights baked')
+  }, 20_000)
+
   test('unreadable or foreign input changes nothing and still exits 0', async () => {
     const before = posts.length
     expect(await run('not json')).toBe('')

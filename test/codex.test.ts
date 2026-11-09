@@ -124,13 +124,18 @@ describe('Codex through the relay', () => {
       tool: 'codex',
     })
     // Codex is told about the tools only: no channel to receive messages or permission prompts. It lists them once, so
-    // every pool tool is there from the start, and says outside a pool that the session is not in one.
+    // every pool and cluster tool is there from the start, and says outside a pool or a cluster that the session is not
+    // in one.
     expect(codex.getServerCapabilities()?.experimental).toBeUndefined()
     const names = (await codex.listTools()).tools.map(tool => tool.name)
-    expect(names).toContain('task_claim')
-    expect(names).toContain('plan_create')
+    expect(names).toEqual(
+      expect.arrayContaining(['task_claim', 'plan_create', 'cluster_who', 'cluster_ask', 'cluster_send', 'cluster_claim']),
+    )
     expect(await codex.callTool({ name: 'pool_status', arguments: {} })).toMatchObject({
       content: [{ type: 'text', text: 'This session is not in a pool.' }],
+    })
+    expect(await codex.callTool({ name: 'cluster_who', arguments: {} })).toMatchObject({
+      content: [{ type: 'text', text: 'This session is not in a cluster.' }],
     })
   })
 

@@ -174,12 +174,14 @@ function didNotRun(output: string, isError: boolean): boolean {
 
 // Commands
 
-interface Command {
+export interface Command {
   /** The program's name, lower case, without folder or extension: `git`, `p4`, `runuat`, `unrealbuildtool`. */
   program: string
   /** As written, folder and extension included. */
   word: string
   args: string[]
+  /** The files its output goes to: `> build.log`, `>> notes.md`. */
+  writes: string[]
 }
 
 /** Programs that run the command after them, and their options that take a value. */
@@ -210,9 +212,13 @@ const SHELL_FLAGS: Record<string, RegExp> = {
 /** A command line cut into simple commands the way a shell reads it: quotes, `&&`, `||`, `;`, `|`, redirections. */
 export function commandsOf(line: string, depth = 0): Command[] {
   const commands: Command[] = []
-  for (const words of wordsOf(line)) {
+  for (const { words, writes } of wordsOf(line)) {
     const at = commandStart(words)
-    if (at >= words.length) continue
+    // `> file` alone empties the file: a command with no program, for what it writes.
+    if (at >= words.length) {
+      if (writes.length) commands.push({ program: '', word: '', args: [], writes })
+      continue
+    }
     const word = words[at]
     const program = programName(word)
     const args = words.slice(at + 1)
@@ -220,7 +226,7 @@ export function commandsOf(line: string, depth = 0): Command[] {
     // A POSIX shell runs the one argument after its flag; cmd and PowerShell join the rest.
     const inner = /sh$/.test(program) ? (args[flag + 1] ?? '') : args.slice(flag + 1).join(' ')
     if (flag >= 0 && depth < 2) commands.push(...commandsOf(inner, depth + 1))
-    else commands.push({ program, word, args })
+    else commands.push({ program, word, args, writes })
   }
   return commands
 }
@@ -253,23 +259,27 @@ function commandStart(words: string[]): number {
 /** Backslashes stay unless they escape something a shell would read: Windows paths keep theirs. */
 const ESCAPABLE = ` '"&|;()<>$\\`
 
-function wordsOf(line: string): string[][] {
-  const lists: string[][] = []
+function wordsOf(line: string): { words: string[]; writes: string[] }[] {
+  const lists: { words: string[]; writes: string[] }[] = []
   let words: string[] = []
+  let writes: string[] = []
   let word: string | null = null
-  // The word after `>` or `<` is a file, not an argument.
-  let redirected = false
+  // The word after `>` or `<` is a file, not an argument: after `>`, one the command writes.
+  let redirected: 'in' | 'out' | null = null
   // The lines of a here-document are text, not commands: they end at their delimiter's line.
   const heredocs: string[] = []
   const end = () => {
-    if (word !== null && redirected) redirected = false
-    else if (word !== null) words.push(word)
+    if (word !== null && redirected) {
+      if (redirected === 'out') writes.push(word)
+      redirected = null
+    } else if (word !== null) words.push(word)
     word = null
   }
   const split = () => {
     end()
-    if (words.length) lists.push(words)
+    if (words.length || writes.length) lists.push({ words, writes })
     words = []
+    writes = []
   }
   for (let i = 0; i < line.length; i++) {
     const c = line[i]
@@ -322,8 +332,10 @@ function wordsOf(line: string): string[][] {
       // The 2 of `2>&1` is no argument either.
       if (word !== null && /^\d+$/.test(word)) word = null
       end()
+      // `>&2` and `2>&1` name a stream, not a file.
+      const stream = line[i + 1] === '&' || (line[i + 1] === '>' && line[i + 2] === '&')
       while ('<>&'.includes(line[i + 1] ?? '.')) i++
-      redirected = true
+      redirected = c === '>' && !stream ? 'out' : 'in'
     } else if (c === '$' && line[i + 1] === '(') {
       split()
       i++
@@ -624,7 +636,8 @@ function runOf(command: Command): Run | null {
 function packageRun(program: string, args: string[]): Run | null {
   const [first, second] = positional(args)
   if (!first) return null
-  if (['exec', 'x', 'dlx'].includes(first)) return second ? runOf({ program: programName(second), word: second, args: [] }) : null
+  if (['exec', 'x', 'dlx'].includes(first))
+    return second ? runOf({ program: programName(second), word: second, args: [], writes: [] }) : null
   if (program === 'bun' && (first === 'test' || first === 'build')) return { type: first, ref: `bun ${first}` }
   if (first === 't' || first === 'tst') return { type: 'test', ref: `${program} test` }
   const viaRun = first === 'run' || first === 'run-script'

@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join as joinPath } from 'node:path'
-import { ClusterVault, decodeClusterClaims, newClusterKey, sealClusterSessionOrder } from '../../shared/cluster'
+import {
+  ClusterVault,
+  decodeClusterClaims,
+  decodeClusterSessionProfile,
+  newClusterKey,
+  sealClusterSessionOrder,
+} from '../../shared/cluster'
 import type {
   ClusterDelivery,
   ClusterDocWire,
@@ -227,6 +233,23 @@ describe('putting a session in', () => {
     expect(clusters.ids()).toEqual([])
   })
 
+  test('put in again by its owner, with a profile of their own, it says again what it runs on, once', async () => {
+    await join()
+    const profiles = () => relay.sent.filter(message => message.t === 'cluster_session_profile')
+    expect(profiles()).toHaveLength(1)
+    // A new delivery from the app: the relay keeps the profile the app sent, which knows no machine.
+    const session = { ...(relay.sessions.find(s => s.session === ME) as ClusterSessionWire), profile: await vault.seal({ name: 'api' }) }
+    relay.sessions = [...relay.sessions.filter(s => s.session !== ME), session]
+    clusters.apply({ t: 'cluster_session', clusterId: CLUSTER, session })
+    await settle()
+    expect(profiles()).toHaveLength(2)
+    const sent = profiles()[1]
+    if (sent?.t !== 'cluster_session_profile') throw new Error('no profile')
+    expect(await vault.read(sent.profile, decodeClusterSessionProfile)).toMatchObject({ name: 'api', machine: 'mac', tool: 'claude' })
+    await relay.fromAna({ kind: 'message', text: 'later' })
+    expect(profiles()).toHaveLength(2)
+  })
+
   test('an order older than the last leave is not taken again', async () => {
     await join()
     const old = await sealClusterSessionOrder(
@@ -344,6 +367,51 @@ describe('delivery', () => {
     expect(await call('cluster_send', { text: 'mine' })).toStartWith('Sent')
     expect(live).toEqual([])
     expect(deferred).toEqual([])
+  })
+
+  test('a post that cannot go in live (a Codex Tonton does not drive, or its server gone) waits for the next prompt', async () => {
+    const reached: string[] = []
+    const kept: string[] = []
+    let goesIn: (text: string) => unknown = () => false
+    // Takes the place of the session's ClusterWork: the clusters tell the last one made.
+    new ClusterWork(
+      clusters,
+      () => ME,
+      () => {},
+      { live: text => goesIn(text), defer: (_, text) => kept.push(text), forget: () => {}, busy: () => true, skipsPrompts: () => false },
+      () => ({ tool: 'codex' }),
+    )
+    await join()
+    expect(kept).toHaveLength(1)
+    expect(kept[0]).toContain('<cluster kind="notice" from="Tonton">')
+    await relay.fromAna({ kind: 'message', text: 'one' })
+    goesIn = async () => false
+    await relay.fromAna({ kind: 'message', text: 'two' })
+    goesIn = async () => {
+      throw new Error('the server went away')
+    }
+    await relay.fromAna({ kind: 'message', text: 'three' })
+    await settle()
+    expect(kept.slice(1).map(text => /\n(\w+)\n/.exec(text)?.[1])).toEqual(['one', 'two', 'three'])
+    goesIn = async text => reached.push(text) > 0
+    await relay.fromAna({ kind: 'message', text: 'four' })
+    await settle()
+    expect(reached).toHaveLength(1)
+    expect(reached[0]).toStartWith('<cluster kind="message" from="Ana · ana-pc · opencode"')
+    expect(kept).toHaveLength(4)
+  })
+
+  test('a tool that ends calls sooner, as Codex does, gets an ask that waits no longer', async () => {
+    const work = new ClusterWork(
+      clusters,
+      () => ME,
+      build => void build().then(message => message && relay.handle(message)),
+      { live: () => {}, defer: () => {}, forget: () => {}, busy: () => true, skipsPrompts: () => false, maxWaitMinutes: 0.0005 },
+      () => ({ tool: 'codex' }),
+    )
+    await join()
+    const result = work.call('cluster_ask', { to_session: ANA, text: 'Ready?', minutes: 10 })
+    expect(await result).toStartWith('No answer from Ana · ana-pc · opencode within 0.0005 minutes.')
   })
 })
 
@@ -611,7 +679,9 @@ describe("what the session's shell calls tell", () => {
           id: CLUSTER,
           name: 'Jam',
           block: false,
-          claims: [{ paths: ['Content/Hero.uasset'], holder: "Ana's Claude", session: ANA, reason: 'rigging', at: '2026-11-04T10:00:00Z' }],
+          claims: [
+            { paths: ['Content/Hero.uasset'], holder: "Ana's OpenCode", session: ANA, reason: 'rigging', at: '2026-11-04T10:00:00Z' },
+          ],
         },
       ],
     })

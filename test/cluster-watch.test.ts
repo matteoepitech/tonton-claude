@@ -1,23 +1,28 @@
 // The clusters as the website and the island follow them (shared/cluster-watch.ts): two accounts on a real relay make a
 // cluster, invite, join, put a session in, see each other's sessions, posts and clock, and the owner kicks; then three
-// share or keep their Tonton on the leaderboard. Each side reads through its own ClusterWatch, as a browser would.
+// share or keep their Tonton on the leaderboard; then a Codex session, put in from the website, talks with a Claude Code
+// and an OpenCode session behind real channels. Each side reads through its own ClusterWatch, as a browser would.
 
 import { Database } from 'bun:sqlite'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { readGuardState } from '../agent/src/cluster/guard'
 import { loadConfig } from '../relay/src/config'
 import { startRelay } from '../relay/src/main'
 import { RelayClient } from '../shared/client'
-import { ClusterVault, newClusterItemId, openClusterSessionOrder } from '../shared/cluster'
+import { type ClusterPostItem, ClusterVault, decodeClusterPostBody, newClusterItemId, openClusterSessionOrder } from '../shared/cluster'
 import { ClusterApi } from '../shared/cluster-api'
 import { CLUSTER_LEADERBOARD, rankClusterHeroes } from '../shared/cluster-heroes'
 import { CLUSTERS_UNSUPPORTED, ClusterWatch } from '../shared/cluster-watch'
-import { parseClusterToAgent } from '../shared/cluster-wire'
-import { newAccountKey } from '../shared/crypto'
+import { parseClusterToAgent, parseClusterUpdate } from '../shared/cluster-wire'
+import { newAccountKey, seal } from '../shared/crypto'
 import { newRPGState, type RPGState } from '../shared/rpg'
 import { Vault } from '../shared/vault'
+import { authorLabel, profileOf, TOOL_LABELS } from '../web/site/clusters/model'
 
 const dir = mkdtempSync(join(tmpdir(), 'tonton-cluster-watch-'))
 const relay = startRelay(loadConfig({ PORT: '0', TONTON_DATA_DIR: join(dir, 'data') }))
@@ -33,6 +38,10 @@ interface Member {
 
 const members: Member[] = []
 const sockets: WebSocket[] = []
+const clients: Client[] = []
+const AGENT = join(import.meta.dir, '../agent/src/main.ts')
+const CODEX = '01a2b3c4-5d6e-7f80-91a2-b3c4d5e6f709'
+const CLAUDE = `session-${Date.now()}`
 
 async function eventually<T>(read: () => T | undefined | null | false | Promise<T | undefined | null | false>, label: string): Promise<T> {
   for (let i = 0; i < 100; i++) {
@@ -78,10 +87,17 @@ async function member(): Promise<Member> {
   return made
 }
 
+/** The account's token for joining machines: the relay makes it once. */
+const secrets = new Map<string, Promise<string>>()
+const secretOf = (owner: Member): Promise<string> => {
+  const made = secrets.get(owner.account) ?? post('/api/account/token', {}, owner.token).then(({ secret }) => secret as string)
+  secrets.set(owner.account, made)
+  return made
+}
+
 /** The agent of one session of the account: a machine joins, then its channel says hello. */
 async function agentOf(owner: Member, sessionId: string) {
-  const { secret } = await post('/api/account/token', {}, owner.token)
-  const machine = await post('/api/machines/join', { account: owner.account, secret, name: 'sealed-name' })
+  const machine = await post('/api/machines/join', { account: owner.account, secret: await secretOf(owner), name: 'sealed-name' })
   const socket = new WebSocket(`${base.replace('http', 'ws')}/ws/agent`, { headers: { authorization: `Bearer ${machine.token}` } } as never)
   sockets.push(socket)
   const messages: unknown[] = []
@@ -91,6 +107,34 @@ async function agentOf(owner: Member, sessionId: string) {
   return { messages, send: (message: object) => socket.send(JSON.stringify(message)) }
 }
 
+/** A machine of the account with an agent's home, for the real channel of one of its sessions. */
+async function agentHome(owner: Member, name: string): Promise<string> {
+  const machine = await post('/api/machines/join', {
+    account: owner.account,
+    secret: await secretOf(owner),
+    name: await seal(owner.key, { name }),
+  })
+  const home = join(dir, `${name}-${owner.account}`)
+  mkdirSync(join(home, 'run'), { recursive: true })
+  writeFileSync(
+    join(home, 'config.json'),
+    JSON.stringify({ server: base, ...machine, account: owner.account, key: owner.key, machine: name, version: '0.12.0' }),
+  )
+  return home
+}
+
+/** A session's channel, spawned as Claude Code or Codex spawn it, and the client that plays them. */
+async function mcp(args: string[], env: Record<string, string>, cwd: string, notified: (notification: unknown) => void = () => {}) {
+  const client = new Client({ name: 'mcp-client', version: 'test' })
+  client.fallbackNotificationHandler = async notification => notified(notification)
+  await client.connect(new StdioClientTransport({ command: process.execPath, args, env, cwd }))
+  clients.push(client)
+  return client
+}
+
+const callTool = async (client: Client, name: string, args: Record<string, unknown>) =>
+  ((await client.callTool({ name, arguments: args })) as { content: { text: string }[] }).content[0]?.text ?? ''
+
 let alice: Member
 let bob: Member
 
@@ -99,9 +143,10 @@ beforeAll(async () => {
   bob = await member()
 })
 
-afterAll(() => {
+afterAll(async () => {
   for (const m of members) m.client.stop()
   for (const socket of sockets) socket.close()
+  for (const client of clients) await client.close().catch(() => {})
   relay.stop()
   rmSync(dir, { recursive: true, force: true })
 })
@@ -265,6 +310,133 @@ describe('following clusters from a browser', () => {
     for (const clear of ['since', 'level', 'hat-rare', 'heroes', bob.account]) expect(row.blob).not.toContain(clear)
     // A third account, a cluster and five rounds of sealed writes: more than the default 5 seconds in a busy full run.
   }, 30_000)
+
+  test('a Codex session from the website: it says Codex everywhere, talks with Claude Code and OpenCode, and holds files', async () => {
+    const id = await alice.watch.create({ name: 'Codex jam' }, { name: 'Alice' })
+    if (!id) throw new Error(alice.watch.problem ?? 'no cluster')
+    alice.watch.open(id)
+    await eventually(() => alice.watch.cluster(id)?.state, 'alice opened the cluster')
+    const invite = await alice.watch.invite(id, { uses: 1, hours: 1 })
+    if (!invite) throw new Error(alice.watch.problem ?? 'no invite')
+    expect(await bob.watch.join(invite.link, { name: 'Bob' })).toBe(id)
+    bob.watch.open(id)
+    await eventually(() => bob.watch.cluster(id)?.state, 'bob opened the cluster')
+
+    // Alice's plain `codex` on her Mac: its MCP server and its hooks, and no server Tonton drives it through.
+    const codexHome = await agentHome(alice, 'Mac')
+    const project = join(dir, 'Hero')
+    mkdirSync(project, { recursive: true })
+    const codexEnv = { ...process.env, TONTON_HOME: codexHome, TONTON_SERVICE: 'off', TMUX: '', TMUX_PANE: '' } as Record<string, string>
+    codexEnv.CODEX_HOME = join(dir, 'codex-home')
+    const codex = await mcp([AGENT, 'channel', 'codex'], codexEnv, project)
+    const codexHook = async (input: Record<string, unknown>) => {
+      const child = Bun.spawn(['/bin/sh', '-c', `exec '${process.execPath}' '${AGENT}' hook codex`], {
+        env: codexEnv,
+        stdin: new Blob([JSON.stringify({ session_id: CODEX, turn_id: 't1', cwd: project, permission_mode: 'default', ...input })]),
+        stdout: 'pipe',
+      })
+      return new Response(child.stdout).text()
+    }
+    await codexHook({ hook_event_name: 'SessionStart', transcript_path: null, source: 'startup' })
+    const codexSession = await eventually(() => alice.client.state.sessions.find(s => s.id === CODEX && s.agentOnline), 'the Codex session')
+    expect(codexSession.tool).toBe('codex')
+    expect(await alice.watch.putSession(id, CODEX, profileOf(codexSession), { delivery: 'live' })).toBe(true)
+
+    // Bob's Claude Code on his Linux machine, between two turns.
+    const claudeHome = await agentHome(bob, 'Linux')
+    writeFileSync(
+      join(claudeHome, 'run', `${process.pid}.json`),
+      JSON.stringify({ sessionId: CLAUDE, transcriptPath: null, cwd: join(dir, 'game'), event: 'Stop', permissionMode: 'default' }),
+    )
+    const claudeEnv = { ...process.env, TONTON_HOME: claudeHome, TONTON_CHANNEL: '1', TONTON_SERVICE: 'off' } as Record<string, string>
+    const fromCluster: string[] = []
+    const claude = await mcp([AGENT, 'channel'], claudeEnv, dir, notification => {
+      const params = (notification as { params?: { content?: string; meta?: { sender?: string } } }).params
+      if (params?.meta?.sender === 'cluster' && params.content) fromCluster.push(params.content)
+    })
+    const claudeSession = await eventually(
+      () => bob.client.state.sessions.find(s => s.id === CLAUDE && s.agentOnline),
+      'the Claude session',
+    )
+    expect(await bob.watch.putSession(id, CLAUDE, profileOf(claudeSession), { delivery: 'live' })).toBe(true)
+
+    // And Bob's OpenCode, as its agent's socket.
+    const opencode = await agentOf(bob, 'ses_bob_oc')
+    expect(await bob.watch.putSession(id, 'ses_bob_oc', { name: 'lods', tool: 'opencode', machine: 'Linux' }, { delivery: 'live' })).toBe(
+      true,
+    )
+    const order = await eventually(
+      () => opencode.messages.map(parseClusterToAgent).find(m => m?.t === 'cluster_join'),
+      'the join order at the OpenCode agent',
+    )
+    if (order?.t !== 'cluster_join') throw new Error('no order')
+    const opened = await openClusterSessionOrder(bob.key, order.order, 'ses_bob_oc', id)
+    opencode.send({ t: 'cluster_ack', sessionId: 'ses_bob_oc', clusterId: id })
+    const vault = new ClusterVault(opened?.key ?? '')
+
+    // The roster says Codex, after what its agent says it runs on.
+    const seen = await eventually(
+      () => bob.watch.cluster(id)?.state?.sessions.find(s => s.session === CODEX && s.ready && s.profile?.machine === 'Mac'),
+      'the Codex session described at bob',
+    )
+    expect(seen.profile).toMatchObject({ tool: 'codex', project: 'Hero' })
+    expect(TOOL_LABELS[seen.profile?.tool ?? 'claude']).toBe('Codex')
+    await eventually(() => alice.watch.cluster(id)?.state?.sessions.filter(s => s.ready).length === 3, 'the three sessions ready')
+    const label = async (text: string) => {
+      const state = await eventually(() => {
+        const now = alice.watch.cluster(id)?.state
+        return now?.posts.some(p => p.body?.text === text) && now
+      }, `the post "${text}" in the feed`)
+      return authorLabel(state, state.posts.find(p => p.body?.text === text) as ClusterPostItem)
+    }
+
+    // Claude Code tells Codex, which nothing can reach between prompts: its hook hands it over with the next one.
+    expect(await callTool(claude, 'cluster_send', { to_session: CODEX, text: 'The rig is pushed' })).toStartWith('Sent')
+    expect(await label('The rig is pushed')).toBe('Bob · Linux · Claude Code')
+    // OpenCode asks it.
+    const askId = newClusterItemId()
+    const ask = { kind: 'ask', text: 'Which LOD for the hero?', to: [{ account: alice.account, session: CODEX }] }
+    opencode.send({ t: 'cluster_post', sessionId: 'ses_bob_oc', clusterId: id, id: askId, blob: await vault.seal(ask) })
+    expect(await label('Which LOD for the hero?')).toBe('Bob · Linux · OpenCode')
+    const digest = join(codexHome, 'run', 'cluster-digest', CODEX)
+    await eventually(
+      () =>
+        existsSync(digest) &&
+        readdirSync(digest).filter(file => readFileSync(join(digest, file), 'utf8').includes('<cluster kind=')).length >= 3,
+      'the posts kept for its next prompt',
+    )
+    const context = JSON.parse(await codexHook({ hook_event_name: 'UserPromptSubmit', prompt: 'go on' })).hookSpecificOutput
+      .additionalContext
+    expect(context).toContain('<cluster kind="message" from="Bob · Linux · claude"')
+    expect(context).toContain('<cluster kind="ask" from="Bob · Linux · opencode"')
+
+    // Codex answers OpenCode, and tells Claude Code, which takes it at once.
+    expect(await callTool(codex, 'cluster_send', { text: 'LOD2', reply_to: askId })).toStartWith('Sent')
+    expect(await label('LOD2')).toBe('Alice · Mac · Codex')
+    const answer = await eventually(async () => {
+      for (const message of opencode.messages.map(parseClusterUpdate)) {
+        if (message?.t !== 'cluster_post') continue
+        const body = await vault.read(message.post.blob, decodeClusterPostBody)
+        if (body?.text === 'LOD2') return body
+      }
+    }, 'the answer at the OpenCode agent')
+    expect(answer).toMatchObject({ kind: 'answer', replyTo: askId, to: [{ account: bob.account, session: 'ses_bob_oc' }] })
+    expect(await callTool(codex, 'cluster_send', { to_session: CLAUDE, text: 'The spawn moved' })).toStartWith('Sent')
+    const told = await eventually(() => fromCluster.find(text => text.includes('The spawn moved')), 'the message in Claude Code')
+    expect(told).toStartWith('<cluster kind="message" from="Alice · Mac · codex"')
+
+    // What Codex holds is in the claims for everyone, and in Claude Code's guard as Alice's Codex.
+    expect(await callTool(codex, 'cluster_claim', { paths: ['Content/Hero/**'], reason: 'rigging' })).toContain('For 2 hours')
+    const claim = await eventually(
+      () => bob.watch.cluster(id)?.claims?.claims.find(c => c.paths.includes('Content/Hero/**')),
+      'the claim at bob',
+    )
+    expect(claim).toMatchObject({ account: alice.account, session: CODEX, reason: 'rigging' })
+    await eventually(
+      () => readGuardState(CLAUDE, join(claudeHome, 'cluster-guard'))?.clusters[0]?.claims.some(c => c.holder === "Alice's Codex"),
+      "the claim in Claude Code's guard",
+    )
+  }, 40_000)
 
   test('a relay from before clusters says it needs updating', async () => {
     const old = new ClusterWatch({

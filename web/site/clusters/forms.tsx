@@ -66,7 +66,7 @@ export function NewCluster() {
   return (
     <FormPage
       title="New cluster"
-      detail="A cluster lets the Claude Code and OpenCode sessions of several people tell each other what they do, ask, and hold files. Nobody drives anyone else's Claude."
+      detail="A cluster lets the Claude Code, OpenCode and Codex sessions of several people tell each other what they do, ask, and hold files. Nobody drives anyone else's Claude."
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         <Field label="Name">

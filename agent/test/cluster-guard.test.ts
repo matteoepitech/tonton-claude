@@ -1,5 +1,6 @@
 // The guard of held files (#310): which claims hold which paths, Windows and POSIX alike, what Claude Code's PreToolUse
-// hook answers, and what OpenCode's plugin is told, from the file the agent leaves for each cluster session.
+// hook answers, what OpenCode's plugin is told, and what Codex's PreToolUse hook answers for a patch or a shell command,
+// from the file the agent leaves for each cluster session.
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,11 +10,14 @@ import {
   editedPaths,
   type GuardState,
   guard,
+  guardCodexEdit,
   holds,
   OpenCodeGuard,
   readGuardState,
+  shellEdits,
   writeGuardState,
 } from '../src/cluster/guard'
+import { codexEdits } from '../src/codex/hook'
 import { withTontonHooks } from '../src/install/claude-settings'
 import { guardCall } from '../src/opencode/bridge'
 
@@ -270,5 +274,114 @@ describe('Claude Code', () => {
       },
     ])
     expect(settings.hooks?.Stop?.[0]).not.toHaveProperty('matcher')
+  })
+})
+
+describe('the files a shell command writes', () => {
+  test('what its output goes to, and what common programs change', () => {
+    expect(shellEdits('echo hi > Content/Notes.md && cat a.txt >> log/build.log 2>/dev/null')).toEqual([
+      'Content/Notes.md',
+      'log/build.log',
+    ])
+    expect(shellEdits('make 2>&1 | tee -a build.log')).toEqual(['build.log'])
+    expect(shellEdits("sed -i '' 's/Hero/Heroine/' Config/Game.ini")).toEqual(['Config/Game.ini'])
+    expect(shellEdits("sed -i.bak -e 's/a/b/' -e 's/c/d/' one.txt two.txt")).toEqual(['one.txt', 'two.txt'])
+    expect(shellEdits("perl -pi -e 's/a/b/' src/a.ts")).toEqual(['src/a.ts'])
+    expect(shellEdits('rm -rf build && mv a.txt b.txt && cp -r Assets/Hero Content/Hero && touch x && truncate -s 0 y')).toEqual([
+      'build',
+      'a.txt',
+      'b.txt',
+      'Content/Hero',
+      'x',
+      'y',
+    ])
+    expect(shellEdits('dd if=/dev/zero of=disk.img bs=1m count=1')).toEqual(['disk.img'])
+    expect(shellEdits("bash -lc 'cd Source && echo x > Hero.cpp'")).toEqual(['Source/Hero.cpp'])
+    expect(shellEdits('cd /tmp/other && rm a; rm b')).toEqual(['/tmp/other/a', '/tmp/other/b'])
+    expect(shellEdits("Set-Content -Path Config\\Game.ini -Value 'x'; Remove-Item old.txt")).toEqual(['Config\\Game.ini', 'old.txt'])
+    expect(shellEdits('del /q Content\\Old.uasset')).toEqual(['Content\\Old.uasset'])
+  })
+
+  test('a patch it applies, here-document and all', () => {
+    const command = "apply_patch <<'EOF'\n*** Begin Patch\n*** Update File: Content/Maps/Main.umap\n@@\n-a\n+b\n*** End Patch\nEOF"
+    expect(shellEdits(command)).toEqual(['Content/Maps/Main.umap'])
+  })
+
+  test('what only reads, or writes nowhere, is no edit', () => {
+    for (const command of [
+      'git status',
+      'cat Content/Maps/Main.umap | grep x',
+      'sed -n 1,20p Config/Game.ini',
+      'perl -ne print a.txt',
+      'make > /dev/null 2>&1',
+      'echo $HOME > $OUT',
+      'ls >&2',
+      '',
+    ])
+      expect([command, shellEdits(command)]).toEqual([command, []])
+  })
+})
+
+describe('Codex', () => {
+  const AGENT = join(import.meta.dir, '../src/main.ts')
+  const home = join(dir, 'codex-home')
+  const env = { ...process.env, TONTON_HOME: home, TONTON_SERVICE: 'off' } as Record<string, string>
+  const hook = async (input: object) => {
+    const child = Bun.spawn(['/bin/sh', '-c', `exec '${process.execPath}' '${AGENT}' hook codex`], {
+      env,
+      stdin: new Blob([JSON.stringify(input)]),
+      stdout: 'pipe',
+    })
+    return new Response(child.stdout).text()
+  }
+  const call = (tool_name: string, tool_input: object) => ({
+    hook_event_name: 'PreToolUse',
+    session_id: 'mine',
+    turn_id: 't1',
+    cwd: '/Users/ana/jam/Hero',
+    permission_mode: 'default',
+    tool_name,
+    tool_input,
+  })
+  const patch = (path: string) => `*** Begin Patch\n*** Update File: ${path}\n@@\n-a\n+b\n*** End Patch`
+
+  test("the files of Codex's calls: a patch's, and what a shell command writes", () => {
+    expect(codexEdits('apply_patch', { command: patch('Content/Maps/Main.umap') })).toEqual(['Content/Maps/Main.umap'])
+    expect(codexEdits('Bash', { command: "sed -i 's/a/b/' Content/Maps/Main.umap" })).toEqual(['Content/Maps/Main.umap'])
+    expect(codexEdits('shell', { command: ['bash', '-lc', 'echo x > a.txt'] })).toEqual(['a.txt'])
+    expect(codexEdits('Bash', { command: 'git status' })).toEqual([])
+    expect(codexEdits('mcp__tonton__cluster_who', {})).toEqual([])
+    expect(codexEdits('apply_patch', 'nonsense')).toEqual([])
+  })
+
+  test('a held file stops the edit once, as Codex takes no ask; the same edit again goes through', () => {
+    const folder = join(dir, 'codex-guard')
+    writeGuardState(state(), folder)
+    const edited = ['Content/Maps/Main.umap']
+    expect(guardCodexEdit('mine', edited, '/Users/ana/jam/Hero', NOW, folder)).toBe(
+      "Content/Maps/Main.umap is held by Bob's Claude since 14:02 (lighting pass). Ask your user before you edit it. If they agree, make the same edit again.",
+    )
+    expect(guardCodexEdit('mine', edited, '/Users/ana/jam/Hero', NOW, folder)).toBe('')
+    expect(guardCodexEdit('mine', edited, '/Users/ana/jam/Hero', NOW, folder)).toContain('Ask your user')
+    expect(guardCodexEdit('mine', ['Content/Free.umap', 'Content/Mine.uasset'], '/Users/ana/jam/Hero', NOW, folder)).toBe('')
+    // Gone with the session's guard, when it leaves its last cluster or ends.
+    clearGuardState('mine', folder)
+    expect(guardCodexEdit('mine', edited, '/Users/ana/jam/Hero', NOW, folder)).toBe('')
+  })
+
+  test("the PreToolUse hook denies a held file's patch or shell edit with the reason, and says nothing otherwise", async () => {
+    writeGuardState(state(), join(home, 'cluster-guard'))
+    const denied = JSON.parse(await hook(call('apply_patch', { command: patch('Content/Characters/Hero/Rig.uasset') })))
+    expect(denied.hookSpecificOutput).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny' })
+    expect(denied.hookSpecificOutput.permissionDecisionReason).toMatch(
+      /^Content\/Characters\/Hero\/Rig\.uasset is held by Chloé's OpenCode/,
+    )
+    // Only the fields Codex reads: it refuses an output with any other (deny_unknown_fields in codex-rs/hooks/src/schema.rs).
+    expect(Object.keys(denied.hookSpecificOutput).sort()).toEqual(['hookEventName', 'permissionDecision', 'permissionDecisionReason'])
+    const shell = JSON.parse(await hook(call('Bash', { command: 'echo lit > Content/Maps/Main.umap' })))
+    expect(shell.hookSpecificOutput.permissionDecision).toBe('deny')
+    expect(await hook(call('Bash', { command: 'echo lit > Content/Maps/Main.umap' }))).toBe('')
+    expect(await hook(call('Bash', { command: 'cat Content/Maps/Main.umap' }))).toBe('')
+    expect(await hook(call('apply_patch', { command: patch('Content/Free.umap') }))).toBe('')
   })
 })

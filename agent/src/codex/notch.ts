@@ -129,6 +129,11 @@ export class CodexNotch {
     await driver.prompt(text, images).catch(error => session.notice(`The message did not reach Codex: ${messageOf(error)}`))
   }
 
+  /** Codex is in a turn, as its server says: a post joins it rather than waking the session. */
+  get working(): boolean {
+    return this.driver?.working ?? false
+  }
+
   close() {
     this.driver?.close()
     this.driver = null
