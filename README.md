@@ -67,7 +67,7 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 
 A pool puts the machines of several people on one project. On the relay's website (`https://<relay>/` › **Pools**),
 make one with the project's repository and send the invite link. Each teammate's machines join with what their account
-brings, Claude Max, Pro or OpenCode, and how many sessions they can run at once: nothing to fill in.
+brings, Claude Max, Pro, Codex or OpenCode, and how many sessions they can run at once: nothing to fill in.
 
 Then tell the orchestrator what to build. It proposes a plan, who does what, and you accept it: every machine gets to
 work, each task in a session of its own on its own branch, merged into main once the checks pass. For a hackathon,
@@ -153,7 +153,8 @@ See [how pools work](docs/pools.md) and [the autopilot](docs/pool-autopilot.md).
   running the install line: the background service keeps the ones it was installed with. See
   [the details](docs/self-hosting.md#behind-a-proxy).
 - **Diagnose a machine.** In **Settings › Machines**, **Diagnose** in a machine's menu has its agent check its setup: the
-  background service, the relay, the hooks, the channel, the `claude` launcher, the status line and the OpenCode plugin.
+  background service, the relay, the hooks, the channel, the `claude` launcher, the status line, the OpenCode plugin and
+  Codex's hooks and MCP server.
   **Repair** next to a problem redoes that step of the install on the machine.
 - **Agent log.** In **Settings › Machines**, **Show agent log** in a machine's menu reads the end of its log, sealed on the
   way. It says what the agent did, never what Claude wrote, and keys and tokens are taken out before it leaves.
