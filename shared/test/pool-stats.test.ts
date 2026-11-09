@@ -246,6 +246,45 @@ test('the leaderboard counts tasks done, time and spending per session and per m
   expect(periodStart(pool(), 'run', now)).toBe('2026-10-26T09:00:00.000Z')
 })
 
+test('a Codex session shows as Codex in the control center, the activity and the leaderboard, its plan readings left out', () => {
+  const state = busy()
+  state.sessions.push({
+    account: BOB,
+    session: 'ses_codex',
+    joinedAt: '2026-10-27T09:14:00.000Z',
+    profile: { area: 'back', tool: 'codex', machine: 'Box' },
+    online: true,
+    ready: true,
+    status: 'working',
+    accepted: 0,
+  })
+  state.tasks.push(
+    task('t4', { title: 'Cart', state: 'done', assignee: { account: BOB, session: 'ses_codex' } }, { account: BOB, session: 'ses_codex' }),
+  )
+  state.events.push(
+    event('2026-10-27T09:15:00.000Z', BOB, 'ses_codex', { kind: 'session', tool: 'codex', model: 'gpt-5.4' }),
+    event('2026-10-27T09:16:00.000Z', BOB, 'ses_codex', { kind: 'task_moved', taskId: 't4', text: 'in_progress' }),
+    event('2026-10-27T09:17:00.000Z', BOB, 'ses_codex', {
+      kind: 'codex_limits',
+      limits: { fiveHour: { usedPercent: 30, resetsAt: '2026-10-27T13:00:00.000Z' } },
+    }),
+    event('2026-10-27T09:18:00.000Z', ANA, 'ses_claude', {
+      kind: 'limits',
+      limits: { fiveHour: { usedPercent: 50, resetsAt: '2026-10-27T13:00:00.000Z' } },
+    }),
+    event('2026-10-27T09:46:00.000Z', BOB, 'ses_codex', { kind: 'task_moved', taskId: 't4', text: 'done' }),
+  )
+  const codex = controlCenter(state)
+    .flatMap(member => member.sessions)
+    .find(card => card.session === 'ses_codex')
+  expect(codex).toMatchObject({ tool: 'codex', model: 'gpt-5.4', machine: 'Box' })
+  const items = timeline(state)
+  expect(items.find(item => item.kind === 'session' && item.session === 'ses_codex')?.text).toBe('Codex · gpt-5.4')
+  expect(items.some(item => item.kind === 'codex_limits' || item.kind === 'limits')).toBe(false)
+  const row = leaderboard(state, 'today', new Date('2026-10-27T12:00:00.000Z')).sessions.find(row => row.session === 'ses_codex')
+  expect(row).toMatchObject({ tool: 'codex', tasksDone: 1, secondsWorked: 1800 })
+})
+
 test('an explicit competition run survives resumed events and pruning', () => {
   const state = pool()
   state.info = { name: 'Hack', startedAt: '2026-10-27T09:00:00Z' }

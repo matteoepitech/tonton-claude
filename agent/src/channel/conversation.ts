@@ -106,8 +106,14 @@ export class Conversation {
     private readonly key: string,
     private readonly canChat: boolean,
     private readonly post: Post,
-    /** Hands Claude what its pools send it, and tells Claude Code the pool tools changed. */
-    pool: { deliver(text: string): void; toolsChanged(): void } = { deliver: () => {}, toolsChanged: () => {} },
+    /**
+     * Hands Claude what its pools send it, and tells Claude Code the pool tools changed. A Codex session's turn is
+     * stopped through `interrupt`, on its app-server: none for a plain codex.
+     */
+    pool: { deliver(text: string): void; toolsChanged(): void; interrupt?(): Promise<string | null> } = {
+      deliver: () => {},
+      toolsChanged: () => {},
+    },
     /** This machine: a pool machine's mode applies to the sessions it started here only. */
     private readonly machineId = '',
     private readonly rpg?: AgentRPG,
@@ -130,13 +136,20 @@ export class Conversation {
       () => link.sessionId,
       post,
       text => pool.deliver(text),
-      () => ({
-        tool: this.codex ? 'codex' : 'claude',
-        model: this.model,
-        usage: poolUsage({ tokens: this.tokens, ...this.usage }),
-        // The plan's windows from the status line: the pool plans around them (agent/src/channel/pool-limits.ts).
-        plan: { fiveHour: this.usage.fiveHourLimit, sevenDay: this.usage.sevenDayLimit },
-      }),
+      () => {
+        // The plan's windows: Claude Code's from the status line, Codex's (its ChatGPT plan) from the rollout. The pool
+        // plans around them, each tool's apart (agent/src/channel/pool-limits.ts).
+        const windows = this.codex ? codexPlanWindows(this.codexLimits) : {}
+        const plan = this.codex
+          ? { fiveHour: windows.codexFiveHourLimit, sevenDay: windows.codexSevenDayLimit }
+          : { fiveHour: this.usage.fiveHourLimit, sevenDay: this.usage.sevenDayLimit }
+        return {
+          tool: this.codex ? 'codex' : 'claude',
+          model: this.model,
+          usage: poolUsage({ tokens: this.tokens, fiveHourLimit: plan.fiveHour, sevenDayLimit: plan.sevenDay }),
+          plan,
+        }
+      },
       () => pool.toolsChanged(),
     )
     this.safety = new PoolSafety(
@@ -146,7 +159,7 @@ export class Conversation {
       () => ({ costUSD: this.costUSD, turns: this.turns }),
       {
         interrupt: () => {
-          if (this.codex) return 'Tonton cannot stop a Codex session yet.'
+          if (this.codex) return pool.interrupt?.() ?? 'this Codex session takes nothing from Tonton.'
           const command = {
             name: 'interrupt' as const,
             sessionId: link.sessionId,

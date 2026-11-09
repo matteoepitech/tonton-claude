@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { open, seal } from '../../shared/crypto'
 import type { AgentMessage, StartDetail } from '../../shared/protocol'
+import { codexModelFile } from '../src/codex/wrapper'
 import type { AgentConfig } from '../src/config'
 import { paths } from '../src/config'
 import {
@@ -203,6 +204,30 @@ describe.skipIf(process.platform === 'win32' || !hasTmux)('starting a session fr
     Bun.spawnSync(['tmux', 'kill-session', '-t', '=tonton-launch0015'], { env: tmuxEnv() })
   }, 30_000)
 
+  test("a pool task starts codex through tonton codex on the task's model, trusting its worktree, its thread the session", async () => {
+    const codexShell = join(dir, 'codex-pool-shell')
+    writeFileSync(codexShell, '#!/bin/sh\nexec /bin/sh -c "$2"\n')
+    chmodSync(codexShell, 0o755)
+    const fake = join(import.meta.dir, 'fake-tonton-codex.ts')
+    const out = join(dir, 'codex-pool-args')
+    const command = `FAKE_CODEX_TRUST=1 FAKE_CODEX_STAY_MS=20000 FAKE_CODEX_OUT='${out}' '${process.execPath}' '${fake}' '${run}'`
+    const options = { run, shell: codexShell, codex: { installed: () => true, command }, model: 'gpt-5.4' }
+    expect(await launchForPool('task0002abcd', project, 'codex', options)).toEqual({
+      sessionId: 'thread-1',
+      tmux: 'tonton-pool-task0002abcd',
+    })
+    // Codex's TUI got the model; nobody was asked about the folder: its owner put the machine in the pool with it.
+    const said = await until(() => {
+      try {
+        return readFileSync(out, 'utf8').trim() || undefined
+      } catch {
+        return undefined
+      }
+    }, 'the TUI arguments')
+    expect(said).toBe(JSON.stringify(['-m', 'gpt-5.4']))
+    Bun.spawnSync(['tmux', 'kill-session', '-t', '=tonton-pool-task0002abcd'], { env: tmuxEnv() })
+  }, 30_000)
+
   test('without codex on the machine, its start fails and says so', async () => {
     const link = relay()
     const order = await seal(key, { launchId: 'launch0016', machineId: 'm', cwd: project, issuedAt: now(), tool: 'codex' })
@@ -358,7 +383,7 @@ describe("a pool task's model", () => {
     }
   })
 
-  test('the session says which model it runs on: Claude Code in its status line, OpenCode through the bridge', () => {
+  test('the session says which model it runs on: Claude Code in its status line, OpenCode through the bridge, Codex its server', () => {
     expect(effectiveModel('claude', 'ses-quiet')).toBeNull()
     writeUsage('ses-said', { model: 'claude-sonnet-4-5-20250929' })
     expect(effectiveModel('claude', 'ses-said')).toEqual({ model: 'claude-sonnet-4-5-20250929' })
@@ -368,6 +393,13 @@ describe("a pool task's model", () => {
     expect(effectiveModel('opencode', 'ses_a', run)).toEqual({ model: 'anthropic/claude-sonnet-5-5' })
     expect(effectiveModel('opencode', 'ses_b', run)).toEqual({ problem: 'OpenCode has no opus model: the session runs on its own' })
     expect(effectiveModel('opencode', 'ses_c', run)).toBeNull()
+    // Codex's channel says what its server answered, or why it could not join the thread.
+    mkdirSync(join(run, 'codex'), { recursive: true })
+    writeFileSync(codexModelFile('thread-a', run), JSON.stringify({ model: 'gpt-5.4' }))
+    writeFileSync(codexModelFile('thread-b', run), JSON.stringify({ problem: 'Tonton could not join the Codex thread on its app-server' }))
+    expect(effectiveModel('codex', 'thread-a', run)).toEqual({ model: 'gpt-5.4' })
+    expect(effectiveModel('codex', 'thread-b', run)?.problem).toContain('could not join')
+    expect(effectiveModel('codex', 'thread-c', run)).toBeNull()
     expect(paths.run).not.toBe(run)
   })
 })

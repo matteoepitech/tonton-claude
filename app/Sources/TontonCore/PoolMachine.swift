@@ -88,13 +88,15 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
     private static let planSessions = ["max_20x": 3, "max_5x": 2, "team": 2, "enterprise": 2, "api": 2, "pro": 1]
     /// OpenCode has no plan windows.
     private static let openCodeSessions = 2
+    /// Codex's ChatGPT plan is not known before a session reports its windows: one session, as for an unknown Claude plan.
+    private static let codexSessions = 1
     /// Memory each session needs, with its worktree's build and tests.
     private static let sessionMemory = 8.0 * 1_073_741_824
 
     /// How one of the account's machines works for a pool when its owner says nothing (docs/pool-autopilot.md, Joining):
-    /// Claude Code when it is there and signed in, else OpenCode; as many sessions as its plan sustains and its memory
-    /// holds; a folder of its own per pool. Nil when it has no coding tool. Mirrors `autoPoolMachineProfile` in
-    /// shared/pool-machines.ts; both check shared/test/pool-auto-profile.json.
+    /// Claude Code when it is there and signed in, else Codex, else OpenCode, else a Claude Code not signed in; as many
+    /// sessions as its plan sustains and its memory holds; a folder of its own per pool. Nil when it has no coding tool.
+    /// Mirrors `autoPoolMachineProfile` in shared/pool-machines.ts; both check shared/test/pool-auto-profile.json.
     public static func automatic(
         name: String?, health: MachineHealth?, poolId: String, poolName: String?, mode: PoolMachineMode = .edits
     ) -> PoolMachineProfile? {
@@ -102,14 +104,19 @@ public struct PoolMachineProfile: Codable, Equatable, Sendable {
         let tools = health?.tools ?? ["claude"]
         let plan = Self.plan(health?.plan)
         let tool: String
-        if tools.contains("claude") && (plan != nil || !tools.contains("opencode")) {
+        if tools.contains("claude") && plan != nil {
             tool = "claude"
-        } else if tools.contains("opencode") {
-            tool = "opencode"
+        } else if let other = ["codex", "opencode", "claude"].first(where: tools.contains) {
+            tool = other
         } else {
             return nil
         }
-        let wanted = tool == "opencode" ? openCodeSessions : plan.flatMap { planSessions[$0] } ?? 1
+        let wanted =
+            switch tool {
+            case "opencode": openCodeSessions
+            case "codex": codexSessions
+            default: plan.flatMap { planSessions[$0] } ?? 1
+            }
         let memory = health.map {
             $0.memoryTotal > 0 ? max(1, Int(($0.memoryTotal / sessionMemory).rounded(.down))) : capacities.upperBound
         }
@@ -178,7 +185,7 @@ public struct PoolModelPolicy: Codable, Equatable, Sendable {
     public var lock: String?
     /// The tiers its sessions may use. Nil: all three.
     public var allowed: [String]?
-    /// The model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`.
+    /// The model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`, a Codex model.
     public var tiers: [String: String]?
     /// How many tiers a task may climb after sessions failed it.
     public var escalations: Int?
@@ -195,11 +202,18 @@ public enum PoolModelTier: String, CaseIterable, Sendable, Identifiable {
     public var id: String { rawValue }
 
     /// What the tier stands for when the owner says nothing: Claude Code's aliases, and the families OpenCode resolves.
-    public var defaultModel: String {
-        switch self {
-        case .light: "haiku"
-        case .balanced: "sonnet"
-        case .strong: "opus"
+    public var defaultModel: String { defaultModel(for: .claudeCode) }
+
+    /// What the tier stands for on a machine of this tool when its owner says nothing: Codex's models are OpenAI's, as
+    /// Codex 0.142.2 lists them (`DEFAULT_TIER_MODELS` and `CODEX_TIER_MODELS` in shared/pool-model.ts).
+    public func defaultModel(for tool: CodingTool) -> String {
+        switch (tool, self) {
+        case (.codex, .light): "gpt-5.4-mini"
+        case (.codex, .balanced): "gpt-5.4"
+        case (.codex, .strong): "gpt-5.5"
+        case (_, .light): "haiku"
+        case (_, .balanced): "sonnet"
+        case (_, .strong): "opus"
         }
     }
 
@@ -211,7 +225,8 @@ public enum PoolModelTier: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// A Claude Code alias or model id, or an OpenCode `provider/model`: anything else could carry a flag into a command line.
+    /// A Claude Code alias or model id, an OpenCode `provider/model` or a Codex model: anything else could carry a flag into
+    /// a command line.
     public static func isModel(_ name: String) -> Bool {
         name.count <= 100 && name.wholeMatch(of: #/[A-Za-z0-9_.:@\[\]-]+(\/[A-Za-z0-9_.:@\[\]-]+)?/#) != nil
     }
@@ -281,14 +296,14 @@ public struct PoolMachineForm: Equatable, Sendable {
         return nil
     }
 
-    /// The policy the form stands for, without what is already the default, as the website seals it: nil when the owner
-    /// changed nothing.
+    /// The policy the form stands for, without what is already the default for its tool, as the website seals it: nil when
+    /// the owner changed nothing.
     public var modelPolicy: PoolModelPolicy? {
         let allowed = PoolModelTier.allCases.filter(allowed.contains)
         var tiers: [String: String] = [:]
         for tier in PoolModelTier.allCases {
             let model = (models[tier] ?? "").trimmed
-            if !model.isEmpty && model != tier.defaultModel { tiers[tier.rawValue] = model }
+            if !model.isEmpty && model != tier.defaultModel(for: tool) { tiers[tier.rawValue] = model }
         }
         let escalations = Self.escalationRange.contains(escalations) ? escalations : Self.defaultEscalations
         let policy = PoolModelPolicy(

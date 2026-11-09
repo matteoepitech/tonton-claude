@@ -3,7 +3,9 @@
 // (test/stand-in-claude.ts), and temporary git repositories. The owner puts the machine in the pool and dispatches tasks
 // to it from the website's client core: the machine clones the repository, makes a worktree per task, starts a session
 // there that gets the task as its first message, ends it on task_done, and puts back a task whose session crashed. A
-// second machine runs OpenCode: a stand-in for its service makes the session, and the real bridge hands it the task.
+// second machine runs OpenCode: a stand-in for its service makes the session, and the real bridge hands it the task. A
+// third runs Codex: a stand-in for `tonton codex` (test/stand-in-codex.ts) runs the real channel, which hands it the task
+// on its app-server.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,6 +22,7 @@ import { Vault } from '../shared/vault'
 
 const AGENT = join(import.meta.dir, '../agent/src/main.ts')
 const STAND_IN = join(import.meta.dir, 'stand-in-claude.ts')
+const STAND_IN_CODEX = join(import.meta.dir, 'stand-in-codex.ts')
 const dir = mkdtempSync(join(tmpdir(), 'tonton-pool-workers-'))
 const relay = startRelay(loadConfig({ PORT: '0', TONTON_DATA_DIR: join(dir, 'data') }))
 const base = `http://127.0.0.1:${relay.server.port}`
@@ -59,8 +62,28 @@ writeFileSync(
 chmodSync(openShell, 0o755)
 const openEnv: Record<string, string> = { ...env, TONTON_HOME: openHome, SHELL: openShell, XDG_STATE_HOME: openState }
 
+// The Codex machine: its home, a tmux server of its own (a session gets the environment of the server that runs it), and
+// a login shell that has codex and runs the stand-in for `tonton codex -m <model>`.
+const codexHome = join(dir, 'codex-agent')
+const codexTmux = mkdtempSync(join(tmpdir(), 'ttc-'))
+const codexShell = join(dir, 'codex-shell')
+writeFileSync(
+  codexShell,
+  `#!/bin/sh\ncase "$2" in\n  "codex --version") echo "codex-cli 0.142.2" ;;\n  *) exec "${process.execPath}" "${STAND_IN_CODEX}" "$@" ;;\nesac\n`,
+)
+chmodSync(codexShell, 0o755)
+const codexEnv: Record<string, string> = {
+  ...env,
+  TONTON_HOME: codexHome,
+  SHELL: codexShell,
+  TMUX_TMPDIR: codexTmux,
+  STAND_IN_SOCKETS: codexTmux,
+}
+
 let service: ReturnType<typeof Bun.spawn>
 let openService: ReturnType<typeof Bun.spawn>
+let codexService: ReturnType<typeof Bun.spawn>
+let codexMachineId: string
 let bridge: ReturnType<typeof Bun.spawn>
 let openCode: ReturnType<typeof Bun.serve>
 const commands: PluginCommand[] = []
@@ -81,9 +104,9 @@ async function eventually<T>(read: () => T | undefined | null | false, label: st
   throw new Error(`timed out waiting for ${label}\n${logs()}`)
 }
 
-const logs = () => {
-  const log = existsSync(join(home, 'tonton.log')) ? readFileSync(join(home, 'tonton.log'), 'utf8').split('\n').slice(-25).join('\n') : ''
-  const folder = join(home, 'stand-in')
+const logs = (of = home) => {
+  const log = existsSync(join(of, 'tonton.log')) ? readFileSync(join(of, 'tonton.log'), 'utf8').split('\n').slice(-25).join('\n') : ''
+  const folder = join(of, 'stand-in')
   const stand = existsSync(folder)
     ? readdirSync(folder)
         .filter(file => file.endsWith('.log'))
@@ -193,18 +216,32 @@ beforeAll(async () => {
   const openWorkdir = join(dir, 'opencode-work')
   expect(await watch.addMachine(poolId, openMachineId, { tool: 'opencode', capacity: 1, workdir: openWorkdir, mode: 'ask' })).toBe(true)
   await eventually(() => state()?.machines?.find(m => m.machine === openMachineId)?.ready, 'the OpenCode machine ready')
+
+  const third = await post('/api/machines/join', { account: accountId, secret, name: await seal(key, { name: 'Codex box' }) })
+  codexMachineId = third.machineId
+  mkdirSync(codexHome, { recursive: true })
+  writeFileSync(join(codexHome, 'config.json'), JSON.stringify({ server: base, ...third, key, machine: 'Codex box', version: '0.9.0' }))
+  codexService = Bun.spawn(['bun', AGENT, 'service'], { env: codexEnv, stdout: 'ignore', stderr: 'ignore' })
+  const codexWork = join(dir, 'codex-work')
+  expect(await watch.addMachine(poolId, codexMachineId, { tool: 'codex', capacity: 1, workdir: codexWork, mode: 'edits' })).toBe(true)
+  await eventually(() => state()?.machines?.find(m => m.machine === codexMachineId)?.ready, 'the Codex machine ready')
 }, 60_000)
 
 afterAll(() => {
   service?.kill()
   openService?.kill()
+  codexService?.kill()
   bridge?.kill()
   openCode?.stop(true)
   client?.stop()
-  if (hasTmux) tmux('kill-server')
+  if (hasTmux) {
+    tmux('kill-server')
+    Bun.spawnSync(['tmux', 'kill-server'], { env: codexEnv, stdout: 'pipe', stderr: 'pipe' })
+  }
   relay.stop()
   rmSync(dir, { recursive: true, force: true })
   rmSync(tmuxDir, { recursive: true, force: true })
+  rmSync(codexTmux, { recursive: true, force: true })
 })
 
 describe.skipIf(!hasTmux)('pool workers on a machine', () => {
@@ -275,8 +312,30 @@ describe.skipIf(!hasTmux)('pool workers on a machine', () => {
     await eventually(() => !existsSync(join(openHome, 'pool-slots', `${poolId}-${id}.json`)), 'the slot free')
   }, 90_000)
 
+  test('on a Codex machine, Codex starts through tonton codex on its model, and its channel hands it the task', async () => {
+    const id = await dispatch('SECRET cart page', codexMachineId)
+    const done = await eventually(() => taskOf(id)?.state === 'done' && taskOf(id), 'the task done by Codex')
+    expect(done.branch).toBe(`pool/${id}-secret-cart-page`)
+    expect(done.summary).toContain('Codex wrote the file.')
+    // A feature: Codex's balanced model, which its app-server confirmed to the channel before the task went in.
+    expect(done.route).toMatchObject({ tier: 'balanced', model: 'gpt-5.4', confirmed: 'gpt-5.4' })
+    const said = logs(codexHome)
+    expect(said).toContain('on gpt-5.4')
+    // Codex lists the tools once: the pool's were there before the session joined the pool.
+    expect(said).toMatch(/tools: .*task_claim.*task_done/)
+    // The task reached the thread as a turn, marked as the pool's, with the worker's steps.
+    expect(said).toContain(`<pool kind="task" from="Ana" task="${id}">`)
+    expect(git(join(dir, 'shop.git'), 'log', '--format=%s', '-1', done.branch as string)).toBe(`codex work on ${id}`)
+    // Then it ended: it left the pool, its tmux is gone and its slot free.
+    const codexTmuxHas = () => Bun.spawnSync(['tmux', 'has-session', '-t', `=tonton-pool-${id}`], { env: codexEnv, stderr: 'pipe' })
+    await eventually(() => codexTmuxHas().exitCode !== 0, 'the Codex session ended')
+    await eventually(() => !existsSync(join(codexHome, 'pool-slots', `${poolId}-${id}.json`)), 'the slot free')
+    await eventually(() => state()?.sessions.length === 0, 'no session left in the pool')
+  }, 90_000)
+
   test('the relay saw none of it: not the repository, the tasks, the folders nor what the sessions wrote', () => {
     const traffic = raw.join('')
-    for (const secret of ['SECRET', 'shop.git', workdir, 'Wrote the file', 'pool/']) expect(traffic).not.toContain(secret)
+    for (const secret of ['SECRET', 'shop.git', workdir, 'Wrote the file', 'Codex wrote the file', 'pool/', 'gpt-5.4'])
+      expect(traffic).not.toContain(secret)
   })
 })

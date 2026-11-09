@@ -6,7 +6,7 @@
 import { BotIcon, CpuIcon, EllipsisIcon, MessageSquareIcon, PowerIcon, PowerOffIcon, SparklesIcon, XIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
-  DEFAULT_TIER_MODELS,
+  defaultTierModels,
   MODEL_TIERS,
   type ModelPolicyForm,
   type ModelTier,
@@ -242,8 +242,10 @@ function ModelsDialog({
   const reopen = (next: boolean) => setOpen(next)
   const allow = (tier: ModelTier, on: boolean) =>
     setForm(form => ({ ...form, allowed: on ? [...form.allowed, tier] : form.allowed.filter(other => other !== tier) }))
+  // Its tiers stand for its tool's models: Claude Code's aliases, or Codex's.
+  const defaults = defaultTierModels(profile.tool)
   const save = async () => {
-    const models = modelPolicyFromForm(form)
+    const models = modelPolicyFromForm(form, profile.tool)
     if (typeof models === 'string') return setProblem(models)
     const { models: _, ...rest } = profile
     setBusy(true)
@@ -291,13 +293,13 @@ function ModelsDialog({
                   aria-label={`The model for ${tier}`}
                   className="font-mono"
                   value={form.tiers[tier]}
-                  placeholder={DEFAULT_TIER_MODELS[tier]}
+                  placeholder={defaults[tier]}
                   onChange={event => setForm({ ...form, tiers: { ...form.tiers, [tier]: event.target.value } })}
                 />
               </div>
             ))}
             <p className="text-xs text-muted-foreground">
-              A Claude Code alias or model id, or an OpenCode provider/model. Empty: {Object.values(DEFAULT_TIER_MODELS).join(', ')}.
+              A Claude Code alias or model id, an OpenCode provider/model, or a Codex model. Empty: {Object.values(defaults).join(', ')}.
             </p>
           </div>
           <Field label="After a session fails a task">

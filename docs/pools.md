@@ -1,6 +1,6 @@
 # Pools
 
-A pool connects Claude Code (and OpenCode) sessions of several people, on several machines and Claude accounts, so
+A pool connects Claude Code (and OpenCode and Codex) sessions of several people, on several machines and accounts, so
 they build one project together. One session is the **orchestrator**: it plans the project and hands each member a
 large task. The others are **workers**: full sessions with their own account and context, not subagents. They report
 back, talk to each other and share notes. The relay's website shows the pool live.
@@ -29,11 +29,12 @@ minutes costs more than one session doing everything. The orchestrator:
 - assigns by area and by what each session's account has left (5-hour and weekly windows);
 - re-plans when a task is blocked, slow, or its session leaves.
 
-A pool mixes Claude Code and OpenCode sessions, with nothing to change on either side. They are not equally capable:
+A pool mixes Claude Code, OpenCode and Codex sessions, with nothing to change on any side. They are not equally capable:
 OpenCode sessions take the simpler, well-bounded tasks (tests, docs, small fixes, boilerplate, a page following an
-existing pattern), and Claude Code sessions take the features that need broad context. `pool_status` shows each
-session's coding tool and model for that, and the kind of task it takes (`takes`: `simple` or `large`). The machine owner
-picks it when the session joins; without a choice it follows the tool. The orchestrator's tools apply these rules: [pool-orchestrator.md](pool-orchestrator.md).
+existing pattern), and Claude Code and Codex sessions take the features that need broad context. `pool_status` shows
+each session's coding tool and model for that, and the kind of task it takes (`takes`: `simple` or `large`). The machine
+owner picks it when the session joins; without a choice it follows the tool. The orchestrator's tools apply these rules:
+[pool-orchestrator.md](pool-orchestrator.md).
 
 ## What the relay keeps
 
@@ -134,7 +135,8 @@ can be compared.
 
 ## Claude's side
 
-The agent turns a pool session into tools, served by the MCP channel for Claude Code and by the plugin for OpenCode:
+The agent turns a pool session into tools, served by the MCP channel for Claude Code and Codex, and by the plugin for
+OpenCode:
 
 | Tool | Who | Does |
 |---|---|---|
@@ -163,14 +165,20 @@ Details:
 - Claude Code sees the tools only while its session is in a pool: the channel tells it when the list changes. OpenCode's
   plugin registers them once (OpenCode 2 through `input.tool.transform`, OpenCode 1 through its `tool` hook); outside a
   pool they answer that the session is not in one. A call from OpenCode goes to the bridge as a `tonton.tool` event and
-  comes back as a `tool_result` command.
+  comes back as a `tool_result` command. Codex lists an MCP server's tools once, when it starts it, and does not take
+  the news that they changed: its channel serves every pool tool from the start, as OpenCode's plugin does.
+- A Codex session gets its tasks and messages through `tonton codex`'s app-server (agent/src/codex/notch.ts): a new
+  turn, or into the turn that runs, one after the other. A plain `codex`, or one whose server went away, has no way in:
+  they wait for its user's next prompt, which Codex's UserPromptSubmit hook hands them with
+  (agent/src/channel/pool-held.ts). Without that server, a Codex session follows its pool from its tools only.
+  `tonton codex` is how pool machines start Codex.
 - When it joins, and when its model changes, a session's agent posts a `session` event with its coding tool and model.
 - A task change is sent with the revision it replaces; a change that raced another member's is refused, and the tool
   says to read the task again. Claiming, blocking and finishing a task also post an event, for the timeline.
 - An agent sends 20 messages a minute at most, under the relay's own limit per member.
 - A paused pool still reads; nothing is posted to it and nothing is delivered from it.
 - Creating and assigning tasks is the orchestrator's: Claude Code lists its tools to the orchestrator only, OpenCode's
-  plugin registers them for every session and they answer the others that only the orchestrator plans.
+  plugin and Codex's channel list them for every session and they answer the others that only the orchestrator plans.
 - **Who hands out work.** A session takes a task assigned to it only from the orchestrator, from a person (a member's
   app or the website), or from itself. The relay attests who wrote each task last, so another member's Claude cannot
   hand work to the others' sessions.
@@ -207,8 +215,13 @@ Members use different Claude accounts and plans, and a session that hits its lim
 - Within twenty minutes of running out, or past 95 % of its 5-hour window, a session holding a task is told once to
   hand it over: commit and push its branch, then `task_update` blocked with a summary that starts with "Handover:". The
   orchestrator is told too, and reassigns it.
-- OpenCode sessions have no Claude plan: they share nothing, show as "no plan limit", are never skipped for time, and
-  still get the simpler tasks first.
+- A Codex session runs on its ChatGPT plan, which has a 5-hour and a weekly window too (agent/src/codex/limits.ts). It
+  shares them the same way, as a `codex_limits` event: another plan, never read as the account's Claude plan, and
+  ignored by agents and apps from before Codex. The rules read each tool's plan apart: a Codex machine is skipped for
+  its own windows, a Claude Code machine of the same account for Claude's, and a session near the end of its window
+  is told to hand over by its own plan.
+- OpenCode sessions have no plan: they share nothing, show as "no plan limit", are never skipped for time, and still
+  get the simpler tasks first.
 
 ### Review
 
@@ -225,7 +238,8 @@ finished task is done at once, and the orchestrator checks it before merging. Ea
 
 ## Control
 
-Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safety.ts`, for Claude Code and OpenCode alike.
+Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safety.ts`, for Claude Code, OpenCode and
+Codex alike.
 
 - **Permissions stay with each machine owner.** A pool task or message reaches Claude like a message from the notch and
   goes through the session's permission prompts and auto-approve rules like anything else. Nothing a member writes can
@@ -235,15 +249,17 @@ Pool safety lives in `relay/src/pool-safety.ts` and `agent/src/channel/pool-safe
   (`pool_accept_rules`): its app seals a `PoolRulesAcceptance` with the account key, the rules copied in, for that session
   and that pool. Only the machine owner may send it for its session, and only its session's agent gets it, again with
   each join order. The agent applies exactly the accepted rules, never a later proposal, and drops them when the session
-  leaves the pool. Claude Code's PermissionRequest hook reads them from `~/.tonton/session-rules/<session>.pool.json`;
-  the OpenCode bridge keeps them in memory. Members see in clear which revision each session accepted.
+  leaves the pool. Claude Code's PermissionRequest hook reads them from `~/.tonton/session-rules/<session>.pool.json`,
+  and so do Codex's hook and its channel, which answers the approvals of a Codex run by `tonton codex`; the OpenCode
+  bridge keeps them in memory. Members see in clear which revision each session accepted.
 - **Pause.** The owner and admins pause and resume the pool (`pool_pause`). While it is paused, the relay sends tasks
   and messages to the apps only, and takes no tasks, notes or messages from the sessions; they still post their
   spending. On resume, every session's agent gets the pool again, with what was held back.
 - **Stop.** The owner and admins stop a session's pool work, or every session's (`pool_stop`); a member stops its own.
   The relay tells the agent (`pool_stop`), which interrupts the turn (Escape in tmux for Claude Code, OpenCode's own
-  interrupt), and takes the session out of the pool. Without tmux, Claude Code's turn cannot be interrupted: the user is
-  told. Every machine owner can also take a session out (`pool_leave_session`) or leave the pool at any time.
+  interrupt, `turn/interrupt` on Codex's app-server), and takes the session out of the pool. Without tmux, Claude Code's
+  turn cannot be interrupted, nor a plain `codex`'s: the user is told. Every machine owner can also take a session out
+  (`pool_leave_session`) or leave the pool at any time.
 - **Stop a machine.** A machine put in the pool for the autopilot is stopped by its owner, or by the owner and admins
   (`pool_stop_machine`); the owner and admins stop every machine at once, and the website and the notch turn the
   dispatch off with them. The relay keeps the machine `stopped`, in clear, interrupts the sessions it started for the pool's tasks and
@@ -334,14 +350,14 @@ The relay serves a website at `/`, built on the client core like the web app: si
   members get a new `pool_session` when it changes, never with every entry. Older relays send none: the page then says
   online or offline only.
 - The **usage** comes from each session's agent: a `usage` event, sealed with the pool key, with its tokens (cache
-  included) and its account's 5-hour and weekly windows (Claude Code only). What it spent comes from its `spend` events,
-  the same numbers the budgets count, so the control center and the leaderboard never disagree with them. The agent posts it when it
-  would show differently (thousands of tokens, whole percents), at most once a minute (`agent/src/channel/
-  pool-usage.ts`), for Claude Code and OpenCode alike.
+  included) and its own plan's 5-hour and weekly windows (Claude Code's, or a Codex session's ChatGPT plan). What it
+  spent comes from its `spend` events, the same numbers the budgets count, so the control center and the leaderboard
+  never disagree with them. The agent posts it when it would show differently (thousands of tokens, whole percents), at
+  most once a minute (`agent/src/channel/ pool-usage.ts`), for Claude Code, OpenCode and Codex alike.
 - **Activity** (`web/site/pools/activity.tsx`) lists everything in order: joins of members and sessions, messages, task changes,
   blockers, merges, key changes and the other audit events, newest first. It searches what was said and done, filters
   by member, session and kind, and downloads what it shows as JSON or Markdown, from the page itself (a blob link), or
-  copies it as Markdown. `usage` and `spend` events stay out of it.
+  copies it as Markdown. `usage`, `spend`, `limits` and `codex_limits` events stay out of it.
 - **Leaderboard** (`web/site/pools/leaderboard.tsx`) ranks sessions and members by tasks done, then time, for today, this run (since
   the last `resumed` or `started` event, else since the pool was made) or all time. A task counts once, for the session it
   was assigned to when it was done last; its time runs from its first move to in progress to that moment. Spending is

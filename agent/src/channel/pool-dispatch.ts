@@ -45,8 +45,8 @@ export const LOOP_EVENTS: ReadonlySet<string> = new Set(['dispatched', 'retried'
 /** Told to the orchestrator once, with its guide, when the pool runs on autopilot: its machine runs the control loop. */
 export const AUTOPILOT_GUIDE = [
   'This pool runs on autopilot: members put whole machines in it, and the control loop of your machine hands the tasks out.',
-  "1. pool_overview lists the machines: their tool and their account's plan (Claude Max 20x, Max 5x, Pro, OpenCode), how many sessions each runs, its mode, its areas and what it runs now. Their owners said nothing more: size the work by what each one brings.",
-  "2. When the user says what to build, plan it at once, without asking them questions you can answer yourself: plan_create, then task_create for each task, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines and the largest plans. Keep every machine busy from the start: depends_on only when a task cannot start before another is merged, builds_on when it just uses another one's work.",
+  "1. pool_overview lists the machines: their tool and their account's plan (Claude Max 20x, Max 5x, Pro, OpenCode, Codex), how many sessions each runs, its mode, its areas and what it runs now. Their owners said nothing more: size the work by what each one brings.",
+  "2. When the user says what to build, plan it at once, without asking them questions you can answer yourself: plan_create, then task_create for each task, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code and Codex machines and the largest plans. Keep every machine busy from the start: depends_on only when a task cannot start before another is merged, builds_on when it just uses another one's work.",
   '3. Then call plan_propose with the plan in a few sentences. The user accepts it with a button and the dispatch starts on its own: you are told. Do not ask in the chat whether to go. If they ask for changes instead, change the tasks and call plan_propose again. When they say go here, call dispatch_start; when they say pause, dispatch_stop.',
   '4. The loop hands each task whose dependencies are merged to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most. Your own machine takes tasks too, in sessions of their own: you plan, merge and answer.',
   '5. Notices tell you what the loop did, and when machines are free while every task waits: merge what is done, or split off work that can start now. Answer the blocked tasks and the questions nobody answers, merge the finished branches with task_merge, and re-plan when tasks fail.',
@@ -68,10 +68,10 @@ const held = (state: PoolState, machine: string) =>
 
 /**
  * The machines that may take the task, best first: online, their service ready, a free slot, within their member's and
- * the pool's budgets, with time left on their account's plan for it (Claude Code), and of the kind the task needs. A
- * simple task goes to the machines that take simple tasks first, OpenCode ones before the others; a large one never
- * goes to a machine that takes simple tasks only. Within that, a machine of the task's area, then by its account's plan
- * (a large task to the largest, a simple one to the smallest), then the freest.
+ * the pool's budgets, with time left on their account's plan for it (Claude Code's or Codex's, each its own), and of
+ * the kind the task needs. A simple task goes to the machines that take simple tasks first, OpenCode ones before the
+ * others; a large one never goes to a machine that takes simple tasks only. Within that, a machine of the task's area,
+ * then by its account's plan (a large task to the largest, a simple one to the smallest), then the freest.
  */
 export function machineCandidates(state: PoolState, task: Pick<PoolTask, 'area' | 'size' | 'hours'>, now = Date.now()): PoolMachine[] {
   const size = task.size ?? 'large'
@@ -81,7 +81,7 @@ export function machineCandidates(state: PoolState, task: Pick<PoolTask, 'area' 
     .filter(machine => !overBudget(state, machine.account))
     .map(machine => ({ machine, kind: kindOf(machine), free: (machine.profile?.capacity ?? 0) - held(state, machine.machine) }))
     .filter(c => c.free > 0 && rank(c.kind) < 9)
-    .filter(c => c.machine.profile?.tool === 'opencode' || !shortOfTime(accountLimits(state, c.machine.account), expectedHours(task), now))
+    .filter(c => !shortOfTime(accountLimits(state, c.machine.account, c.machine.profile?.tool), expectedHours(task), now))
     .sort((a, b) => {
       const byKind = rank(a.kind) - rank(b.kind)
       if (byKind) return byKind

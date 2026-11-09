@@ -87,7 +87,7 @@ export function poolMachineProfile(input: {
   plan?: ClaudePlan
 }): PoolMachineProfile | string {
   const workdir = input.workdir.trim()
-  if (!isTool(input.tool)) return 'Choose Claude Code or OpenCode.'
+  if (!isTool(input.tool)) return 'Choose Claude Code, OpenCode or Codex.'
   if (!isCapacity(input.capacity)) return `Run 1 to ${MAX_POOL_MACHINE_CAPACITY} sessions at once.`
   if (!isPoolWorkdir(workdir)) return 'The work folder is a full path on that machine, such as ~/pool or /srv/pool.'
   if (!isPoolMachineMode(input.mode)) return 'Choose what its sessions may do: ask, edits or full.'
@@ -109,6 +109,11 @@ export function poolMachineProfile(input: {
 const PLAN_SESSIONS: Record<ClaudePlan, number> = { max_20x: 3, max_5x: 2, team: 2, enterprise: 2, api: 2, pro: 1 }
 /** OpenCode has no plan windows: its provider's limits are its owner's business. */
 const OPENCODE_SESSIONS = 2
+/**
+ * Codex runs on a ChatGPT plan whose windows its agent cannot tell before a session reports them: one session, as for
+ * a Claude plan it does not know. Its owner gives it more when the plan sustains them.
+ */
+const CODEX_SESSIONS = 1
 /** Memory each session needs, with its worktree's build and tests. */
 const SESSION_MEMORY = 8 * 1024 ** 3
 
@@ -125,8 +130,9 @@ const slug = (text: string) =>
 
 /**
  * How one of the account's machines works for a pool when its owner says nothing (docs/pool-autopilot.md, Joining):
- * everything comes from what its agent reports. Claude Code when it is there and signed in, else OpenCode; as many
- * sessions at once as its plan sustains and its memory holds; a folder of its own per pool; the tier each task needs.
+ * everything comes from what its agent reports. Claude Code when it is there and signed in, else Codex, which takes
+ * features too, else OpenCode, else a Claude Code that is not signed in; as many sessions at once as its plan sustains
+ * and its memory holds; a folder of its own per pool; the tier each task needs.
  * Null when the machine has no coding tool to run. The mode stays its owner's choice. Mirrors
  * `PoolMachineProfile.automatic` in app/Sources/TontonCore/PoolMachine.swift; both check shared/test/pool-auto-profile.json.
  */
@@ -139,9 +145,11 @@ export function autoPoolMachineProfile(
   // Older agents report no tools: they run Claude Code.
   const tools = health?.tools ?? ['claude']
   const plan = health?.plan && PLAN.test(health.plan) ? health.plan : undefined
-  const tool = tools.includes('claude') && (plan || !tools.includes('opencode')) ? 'claude' : tools.includes('opencode') ? 'opencode' : null
+  const claude = tools.includes('claude')
+  const tool =
+    claude && plan ? 'claude' : tools.includes('codex') ? 'codex' : tools.includes('opencode') ? 'opencode' : claude ? 'claude' : null
   if (!tool) return null
-  const wanted = tool === 'opencode' ? OPENCODE_SESSIONS : ((plan && PLAN_SESSIONS[plan]) ?? 1)
+  const wanted = tool === 'opencode' ? OPENCODE_SESSIONS : tool === 'codex' ? CODEX_SESSIONS : ((plan && PLAN_SESSIONS[plan]) ?? 1)
   const memory = health?.memoryTotal ? Math.max(1, Math.floor(health.memoryTotal / SESSION_MEMORY)) : MAX_POOL_MACHINE_CAPACITY
   const folder = [slug(pool.name ?? ''), pool.id.slice(0, 6).toLowerCase()].filter(Boolean).join('-')
   const profile = poolMachineProfile({
@@ -192,15 +200,20 @@ export function machinesToAdd(
 const PLAN_RANK: Partial<Record<string, number>> = { max_20x: 0, max_5x: 1, team: 1, enterprise: 1, api: 1, pro: 2 }
 export const planRank = (profile: Pick<PoolMachineProfile, 'plan'> | null | undefined): number => PLAN_RANK[profile?.plan ?? ''] ?? 1
 
+/** The tools an orchestrator session runs on, best first: it plans, merges and answers the admin. */
+const LEADS: Partial<Record<string, number>> = { claude: 0, codex: 1 }
+
 /**
- * Which of an admin's machines runs the orchestrator when nobody chose: Claude Code, which the orchestrator session
- * runs on, online first, then the largest plan, since planning and merging run on its account all along.
+ * Which of an admin's machines runs the orchestrator when nobody chose: one whose orchestrator session can plan and
+ * merge, Claude Code or Codex (agent/src/service/pool-lead.ts), online first, then Claude Code, then the largest plan,
+ * since planning and merging run on its account all along.
  */
 export function bestOrchestrator<T extends { online: boolean; profile: PoolMachineProfile | null }>(machines: readonly T[]): T | null {
+  const lead = (machine: T) => LEADS[machine.profile?.tool ?? ''] ?? 9
   return (
     machines
-      .filter(machine => machine.profile?.tool === 'claude')
-      .sort((a, b) => Number(b.online) - Number(a.online) || planRank(a.profile) - planRank(b.profile))[0] ?? null
+      .filter(machine => lead(machine) < 9)
+      .sort((a, b) => Number(b.online) - Number(a.online) || lead(a) - lead(b) || planRank(a.profile) - planRank(b.profile))[0] ?? null
   )
 }
 
@@ -213,7 +226,7 @@ const PLAN_LABELS: Record<ClaudePlan, string> = {
   api: 'Claude API key',
 }
 
-/** `Claude Max 20x`, `OpenCode`, `Claude Code` when its plan is not known: what a machine brings to the pool. */
+/** `Claude Max 20x`, `OpenCode`, `Codex`, `Claude Code` when its plan is not known: what a machine brings to the pool. */
 export function machinePlanLabel(profile: Pick<PoolMachineProfile, 'tool' | 'plan'> | null | undefined): string {
   if (profile?.tool && profile.tool !== 'claude') return codingToolLabel(profile.tool)
   return (profile?.plan && PLAN_LABELS[profile.plan]) ?? 'Claude Code'

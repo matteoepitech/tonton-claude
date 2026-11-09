@@ -107,6 +107,34 @@
       }
     },
     {
+      "name": "Claude Code signed in and Codex: Claude Code",
+      "machine": { "name": "Studio", "health": { "tools": ["claude", "opencode", "codex"], "plan": "max_5x", "memoryTotal": 68719476736 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Shop" },
+      "mode": "edits",
+      "profile": {
+        "name": "Studio",
+        "tool": "claude",
+        "capacity": 2,
+        "workdir": "~/tonton-pools/shop-abcdef",
+        "mode": "edits",
+        "plan": "max_5x"
+      }
+    },
+    {
+      "name": "Claude Code not signed in, Codex and OpenCode installed: Codex, one session",
+      "machine": { "name": "Linux box", "health": { "tools": ["claude", "opencode", "codex"], "memoryTotal": 68719476736 } },
+      "pool": { "id": "AbCdEfGhIjKl", "name": "Shop" },
+      "mode": "edits",
+      "profile": { "name": "Linux box", "tool": "codex", "capacity": 1, "workdir": "~/tonton-pools/shop-abcdef", "mode": "edits" }
+    },
+    {
+      "name": "Codex alone: Codex, one session",
+      "machine": { "name": "Codex box", "health": { "tools": ["codex"], "memoryTotal": 17179869184 } },
+      "pool": { "id": "Zz9_-xYwVuTs", "name": "Shop" },
+      "mode": "full",
+      "profile": { "name": "Codex box", "tool": "codex", "capacity": 1, "workdir": "~/tonton-pools/shop-zz9_-x", "mode": "full" }
+    },
+    {
       "name": "No coding tool installed",
       "machine": { "name": "Server", "health": { "tools": [], "memoryTotal": 68719476736 } },
       "pool": { "id": "AbCdEfGhIjKl", "name": "Shop" },

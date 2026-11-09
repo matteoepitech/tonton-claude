@@ -57,6 +57,22 @@ final class PoolMachineTests: XCTestCase {
         for bad in ["", "a/b/c", "$(id)", String(repeating: "x", count: 101)] { XCTAssertFalse(PoolModelTier.isModel(bad), bad) }
     }
 
+    /// On a Codex machine, the tiers stand for Codex's models (shared/pool-model.ts, CODEX_TIER_MODELS): typed out, they
+    /// are the defaults and seal nothing; Claude Code's aliases there are the owner's own.
+    func testACodexMachineTiersAreCodexModels() {
+        XCTAssertEqual(PoolModelTier.allCases.map { $0.defaultModel(for: .codex) }, ["gpt-5.4-mini", "gpt-5.4", "gpt-5.5"])
+        XCTAssertEqual(PoolModelTier.allCases.map { $0.defaultModel(for: .openCode) }, ["haiku", "sonnet", "opus"])
+        var form = PoolMachineForm(tool: .codex)
+        form.models = [.light: "gpt-5.4-mini", .balanced: " gpt-5.4 ", .strong: "gpt-5.5"]
+        XCTAssertNil(form.modelPolicy)
+        form.models[.light] = "haiku"
+        XCTAssertEqual(form.modelPolicy, PoolModelPolicy(tiers: ["light": "haiku"]))
+        XCTAssertTrue(PoolModelTier.isModel("gpt-5.4-mini"))
+        XCTAssertEqual(form.takes, .large)
+        XCTAssertEqual(form.profile(name: nil)?.tool, "codex")
+        XCTAssertNil(form.profile(name: nil)?.plan)
+    }
+
     func testAProfileAnotherMemberSealedReadsAsTheClientCoreReadsIt() throws {
         let pool = try PoolVault(key: E2E.newKey())
         let profile = PoolMachineProfile(name: "Studio", tool: "claude", capacity: 2, workdir: "~/pool", mode: .full, areas: ["back"])

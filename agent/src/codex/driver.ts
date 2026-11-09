@@ -67,6 +67,8 @@ export const decisionFor = (method: string, decision: CodexDecision): string =>
 
 export class CodexDriver {
   private turnId: string | null = null
+  /** The model the thread runs on, as the server said when it was joined (`-m`, or Codex's own choice). */
+  model: string | undefined
   /** The approvals asked, by their id as the notch has it, with Codex's own id and method. */
   private readonly asked = new Map<string, { id: RequestId; method: string }>()
   /** The files of each patch Codex is about to apply, which its newer approvals don't repeat. */
@@ -88,9 +90,15 @@ export class CodexDriver {
     })
     driver = new CodexDriver(server, threadId, events)
     try {
-      const resumed = await server.request<{ thread?: { turns?: { id?: unknown; status?: unknown }[] } }>('thread/resume', { threadId })
+      const resumed = await server.request<{ thread?: { turns?: { id?: unknown; status?: unknown }[] }; model?: unknown }>(
+        'thread/resume',
+        {
+          threadId,
+        },
+      )
       const running = resumed?.thread?.turns?.findLast(turn => turn.status === 'inProgress')
       if (typeof running?.id === 'string') driver.turnId = running.id
+      if (typeof resumed?.model === 'string' && resumed.model) driver.model = resumed.model
     } catch (error) {
       server.close()
       throw error

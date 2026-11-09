@@ -91,10 +91,10 @@ final class CodingToolTests: XCTestCase {
         XCTAssertEqual(CodingTool.allCases.map(\.otherLabel), [nil, "OpenCode", "Codex"])
     }
 
-    func testTheNotchStartsCodexWhereTheAgentListsItButPoolsDoNotRunItYet() throws {
+    func testTheNotchStartsCodexWhereTheAgentListsItAndPoolMachinesRunIt() throws {
         XCTAssertEqual(try machine(tools: ["claude", "opencode", "codex"]).startableTools, [.claudeCode, .openCode, .codex])
         XCTAssertEqual(try machine(tools: ["codex"]).startableTools, [.codex])
-        XCTAssertFalse(CodingTool.poolTools.contains(.codex))
+        XCTAssertEqual(CodingTool.poolTools, [.claudeCode, .openCode, .codex])
     }
 
     func testStartOrdersNameOpenCodeAndLeaveClaudeAsOlderAgentsKnowIt() throws {

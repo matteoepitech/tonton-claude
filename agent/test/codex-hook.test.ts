@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { newAccountKey, open } from '../../shared/crypto'
 import type { HookPost } from '../../shared/protocol'
+import { holdPoolPost } from '../src/channel/pool-held'
 import { approveByRule, type CodexHookInput, codexPid, codexStatus, link } from '../src/codex/hook'
 
 const AGENT = join(import.meta.dir, '../src/main.ts')
@@ -104,6 +105,25 @@ describe('auto-approve rules', () => {
       hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } },
     })
   })
+
+  test('on a pool machine, its mode lets a patch in the worktree through, and `full` everything; the rest asks', () => {
+    const write = process.stdout.write
+    process.stdout.write = (() => true) as typeof process.stdout.write
+    const patch = (...files: string[]) =>
+      ['*** Begin Patch', ...files.flatMap(file => [`*** Add File: ${file}`, '+done']), '*** End Patch'].join('\n')
+    const inTree = (tool_input: unknown) => ({ ...ask('apply_patch', tool_input), cwd: '/work/tree' })
+    const edits = { mode: 'edits' as const, root: '/work/tree' }
+    try {
+      expect(approveByRule(inTree({ command: patch('src/a.ts', 'src/b.ts') }), [], edits)).toBe(true)
+      expect(approveByRule(inTree({ command: patch('src/a.ts', '/etc/hosts') }), [], edits)).toBe(false)
+      expect(approveByRule(inTree({ command: 'not a patch' }), [], edits)).toBe(false)
+      expect(approveByRule(ask('exec_command', { cmd: 'npm test' }), [], edits)).toBe(false)
+      expect(approveByRule(ask('exec_command', { cmd: 'npm test' }), [], { mode: 'full', root: '/work/tree' })).toBe(true)
+      expect(approveByRule(inTree({ command: patch('src/a.ts') }), [], null)).toBe(false)
+    } finally {
+      process.stdout.write = write
+    }
+  })
 })
 
 describe("codex's pid", () => {
@@ -185,6 +205,17 @@ describe('the hook', () => {
     const detail = posts[2].detail
     expect(detail && (await open(key, detail))).toEqual({ text: 'Codex needs your permission to use Bash' })
     expect(JSON.parse(readFileSync(file, 'utf8')).event).toBe('Stop')
+  }, 20_000)
+
+  test('the pool posts its channel could not hand Codex come with the next prompt, once', async () => {
+    holdPoolPost(SESSION, '<pool kind="task" from="Ana" task="t1">Build the cart.</pool>', join(home, 'run'))
+    holdPoolPost(SESSION, '<pool kind="message" from="Ana">Use the API in the notes.</pool>', join(home, 'run'))
+    const printed = JSON.parse(await run(input('UserPromptSubmit', { prompt: 'go on' })))
+    expect(printed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit')
+    const context = printed.hookSpecificOutput.additionalContext as string
+    expect(context).toContain('Pool posts since your last prompt (2)')
+    expect(context.indexOf('Build the cart.')).toBeLessThan(context.indexOf('Use the API'))
+    expect(await run(input('UserPromptSubmit', { prompt: 'and again' }))).toBe('')
   }, 20_000)
 
   test('unreadable or foreign input changes nothing and still exits 0', async () => {

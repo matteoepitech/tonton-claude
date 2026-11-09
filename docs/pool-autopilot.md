@@ -23,7 +23,7 @@ profile sealed with the pool key:
 
 | Field | Meaning |
 |---|---|
-| `tool` | `claude` or `opencode`: what its sessions run |
+| `tool` | `claude`, `opencode` or `codex`: what its sessions run |
 | `capacity` | How many sessions it runs at once for the pool, 1 to 8 (default 1) |
 | `workdir` | Folder on the machine where the pool's work goes: the repository is cloned there once, and each task gets a git worktree under it |
 | `mode` | What its sessions may do without asking: `ask` (permission prompts go to the machine owner, as today), `edits` (file edits and read-only tools pass, the rest asks), `full` (everything passes: only for a machine or VM given to the hackathon) |
@@ -44,9 +44,11 @@ and its rate limit tier; only the plan leaves the machine, never the account). `
 `shared/pool-machines.ts` and `PoolMachineProfile.automatic` in `TontonCore` give the same answer, both checked with
 `shared/test/pool-auto-profile.json`:
 
-- `tool`: Claude Code when it is installed and signed in, else OpenCode; a machine with neither stays out.
+- `tool`: Claude Code when it is installed and signed in, else Codex, which takes the features too, else OpenCode,
+  else a Claude Code that is not signed in; a machine with none of them stays out.
 - `capacity`: by the plan, what its windows sustain: Max 20x three sessions, Max 5x, Team, Enterprise and API keys two,
-  Pro one, OpenCode two; never more than one per 8 GB of memory.
+  Pro one, OpenCode two, Codex one (its ChatGPT plan is not known before a session reports its windows); never more
+  than one per 8 GB of memory.
 - `workdir`: `~/tonton-pools/<pool name>-<id>`, one folder per pool.
 - `plan`: the plan, in the profile the members see, so the orchestrator and the control loop size the work by it.
 - `takes`, `areas`, `models`: left out, so they follow the tool and each task.
@@ -54,12 +56,14 @@ and its rate limit tier; only the plan leaves the machine, never the account). `
   one thing asked, since it is the owner's to decide.
 
 The online machines are ticked, the others can be. When the member leads the pool and it has no orchestrator machine
-yet, the best of them becomes it: Claude Code, online, the largest plan. In the Mac app, Settings › Machines › **Add to
-pool…** does the same for one machine in one click, with **Customize…** for an owner who wants another folder, more
-sessions or other models.
+yet, the best of them becomes it: online, Claude Code before Codex, the largest plan. In the Mac app, Settings ›
+Machines › **Add to pool…** does the same for one machine in one click, with **Customize…** for an owner who wants
+another folder, more sessions or other models.
 
-`mode` is the machine owner's choice, never the pool's: the agent's PermissionRequest hook (Claude Code) and the OpenCode
-bridge answer the requests of a pool worker session by it. `full` shows a warning when it is chosen.
+`mode` is the machine owner's choice, never the pool's: the agent's PermissionRequest hooks (Claude Code, Codex), the
+channel of a Codex run by `tonton codex` and the OpenCode bridge answer the requests of a pool worker session by it.
+`edits` passes a Codex patch only when every file it changes is in the task's worktree. `full` shows a warning when it
+is chosen.
 
 ## Workers
 
@@ -70,7 +74,8 @@ When a task is dispatched to a machine (`task.assignee = { account, machine }`),
    `git worktree add workdir/tasks/<task-id> -B pool/<task-id>-<slug> origin/<base>` after a fetch. The agent runs these git
    commands itself: adding the machine to a pool with a `workdir` is the owner's consent. It never runs any other command.
 3. Starts a session there with the existing launch code (`agent/src/launch.ts`): Claude Code in a detached tmux with the
-   channel, or OpenCode through its service. The session joins the pool as a worker of that machine, with `autoStart`.
+   channel, OpenCode through its service, or Codex through `tonton codex` in a detached tmux, whose thread is the
+   session. The session joins the pool as a worker of that machine, with `autoStart`.
 4. Hands it the task as its first message (the `<pool kind="task">` envelope, with the branch, the criteria, the notes'
    contracts), so it starts at once.
 5. Follows it: `task_done` moves the task on (review or done); the session is then ended (tmux session killed, OpenCode
@@ -83,9 +88,10 @@ rules, or by `full`).
 ## The orchestrator
 
 - The admin picks one of **their own** machines as the orchestrator machine (`pool_orchestrator` now names a machine as
-  well as a session). Its agent starts the orchestrator session in `workdir/repo`, Claude Code, with the orchestrator role
-  and guide. Since it is the admin's session, sealed with the admin's account key, only the admin's account reads it and
-  writes to it: the website's chat is that session's conversation. Nobody else can drive the orchestrator.
+  well as a session). Its agent starts the orchestrator session in `workdir/repo`, with the orchestrator role and guide:
+  Codex on a Codex machine, through `tonton codex` so the admin's messages reach it, Claude Code otherwise. Since it is
+  the admin's session, sealed with the admin's account key, only the admin's account reads it and writes to it: the
+  website's chat is that session's conversation. Nobody else can drive the orchestrator.
 - The admin talks to it in plain words: "build this app" → it writes the plan (notes: contracts, areas) and creates the
   tasks with `plan_create` and `task_create`, without assigning them, then proposes the plan (`plan_propose`, below).
   The admin accepts it with a button and the work starts. "Pause" → `dispatch_stop`. It answers questions about the pool
@@ -140,7 +146,8 @@ stopped or not. Each of these is a line of the audit log (docs/pools.md, Control
 
 Each task runs on the least costly model that can reliably do it (#283, `shared/pool-model.ts`). Models come in three
 tiers: **light** for routine work, **balanced** for ordinary features, **strong** for demanding work. By default they are
-Claude Code's `haiku`, `sonnet` and `opus`; for OpenCode, the latest model of those families its catalog has.
+Claude Code's `haiku`, `sonnet` and `opus`; for OpenCode, the latest model of those families its catalog has; for Codex,
+`gpt-5.4-mini`, `gpt-5.4` and `gpt-5.5`, as Codex 0.142.2 lists them (`CODEX_TIER_MODELS` in `shared/pool-model.ts`).
 
 When a machine starts a task's session, its agent chooses the tier:
 
@@ -167,13 +174,13 @@ sets them in the Mac app when adding the machine (Settings › Machines › Add 
 the website: **Models** on the machine's card in the Machines tab seals a new order for its agent. What is left as the
 default is not sealed, so a machine its owner never changed follows the defaults as they change.
 
-The model is applied before the task starts: Claude Code is started with `--model`, as `/model` would switch it; OpenCode
-is switched by its bridge, the same switch as the notch's model menu (OpenCode 1 takes it with the next message, which is
-the task). The agent then waits up to 20 seconds for the session to say what it runs on (Claude Code's status line, the
-bridge), and only then hands it the task. The task's `route` keeps the tier, the model, the reason, any escalation, and
-the model the session confirmed or why it could not be applied; the timeline gets a `model` event (`model_problem` when
-the switch failed or was not confirmed). The session runs either way, on what its tool chose. `pool_overview` and
-`pool_tasks` show the route.
+The model is applied before the task starts: Claude Code is started with `--model`, as `/model` would switch it, and
+Codex with `-m`; OpenCode is switched by its bridge, the same switch as the notch's model menu (OpenCode 1 takes it with
+the next message, which is the task). The agent then waits up to 20 seconds for the session to say what it runs on
+(Claude Code's status line, the bridge, what Codex's app-server told its channel), and only then hands it the task. The
+task's `route` keeps the tier, the model, the reason, any escalation, and the model the session confirmed or why it
+could not be applied; the timeline gets a `model` event (`model_problem` when the switch failed or was not confirmed).
+The session runs either way, on what its tool chose. `pool_overview` and `pool_tasks` show the route.
 
 The budgets, the plan limits and the control loop's rules for who takes a task are unchanged: the model is chosen on the
 machine the loop picked.

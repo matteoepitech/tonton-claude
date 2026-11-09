@@ -11,6 +11,7 @@ import {
   decodeTaskRoute,
   isModelId,
   type ModelChoice,
+  modelMatches,
   modelPolicyForm,
   modelPolicyFromForm,
   modelPolicyView,
@@ -85,6 +86,17 @@ describe('choosing the model', () => {
     expect(chosen({ task: docs, tool: 'claude' })).toMatchObject({ tier: 'light', model: 'haiku', escalated: 0 })
     expect(chosen({ task: feature, tool: 'claude' })).toMatchObject({ tier: 'balanced', model: 'sonnet' })
     expect(chosen({ task: architecture, tool: 'claude' })).toMatchObject({ tier: 'strong', model: 'opus' })
+  })
+
+  test("on a Codex machine, each tier is one of Codex's models, and the owner's own still win", () => {
+    expect(chosen({ task: docs, tool: 'codex' })).toMatchObject({ tier: 'light', model: 'gpt-5.4-mini' })
+    expect(chosen({ task: feature, tool: 'codex' })).toMatchObject({ tier: 'balanced', model: 'gpt-5.4' })
+    expect(chosen({ task: architecture, tool: 'codex' })).toMatchObject({ tier: 'strong', model: 'gpt-5.5' })
+    expect(chosen({ task: architecture, tool: 'codex', policy: { tiers: { strong: 'gpt-5.3-codex' } } }).model).toBe('gpt-5.3-codex')
+    expect(chosen({ task: docs, tool: 'codex', policy: { lock: 'balanced' } }).model).toBe('gpt-5.4')
+    // Claude Code's aliases stay Claude Code's.
+    expect(chosen({ task: feature, tool: 'claude' }).model).toBe('sonnet')
+    expect(isModelId('gpt-5.4-mini')).toBe(true)
   })
 
   test("the owner's models stand for the tiers, for OpenCode as for Claude Code", () => {
@@ -241,6 +253,25 @@ describe("the owner's form", () => {
     expect(modelPolicyFromForm({ ...form, escalations: 3 })).toBe('A task climbs 0 to 2 tiers.')
     // A malformed policy someone else sealed opens on what the agent would do with it.
     expect(modelPolicyForm({ lock: 'giant' as never, tiers: { light: '$(id)' }, escalations: 9 })).toEqual(modelPolicyForm(undefined))
+  })
+
+  test("on a Codex machine, Codex's models are the defaults: typed out, they seal nothing", () => {
+    const form = modelPolicyForm(undefined)
+    const typed = { ...form, tiers: { light: 'gpt-5.4-mini', balanced: ' gpt-5.4 ', strong: 'gpt-5.5' } }
+    expect(modelPolicyFromForm(typed, 'codex')).toBeUndefined()
+    // On Claude Code, they are the owner's own.
+    expect(modelPolicyFromForm(typed, 'claude')).toEqual({ tiers: { light: 'gpt-5.4-mini', balanced: 'gpt-5.4', strong: 'gpt-5.5' } })
+    expect(modelPolicyFromForm({ ...form, tiers: { ...form.tiers, light: 'haiku' } }, 'codex')).toEqual({ tiers: { light: 'haiku' } })
+    expect(modelPolicyView({ allowed: ['light', 'balanced'] }, 'codex')).toBe('gpt-5.4-mini, gpt-5.4')
+  })
+
+  test('a session runs on the model it was asked for: by family, with its date, never a longer model of the family', () => {
+    expect(modelMatches('sonnet', 'claude-sonnet-4-5')).toBe(true)
+    expect(modelMatches('claude-opus-4-5', 'claude-opus-4-5-20251101')).toBe(true)
+    expect(modelMatches('sonnet', 'anthropic/claude-sonnet-5-5')).toBe(true)
+    expect(modelMatches('gpt-5.4', 'gpt-5.4')).toBe(true)
+    expect(modelMatches('gpt-5.4', 'gpt-5.4-mini')).toBe(false)
+    expect(modelMatches('gpt-5.5', 'gpt-5.4')).toBe(false)
   })
 
   test("a machine's card says the policy in a few words", () => {

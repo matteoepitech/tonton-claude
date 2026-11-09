@@ -1,13 +1,24 @@
 // A pool plans around each account's Claude plan (docs/pools.md): a Claude Code session's agent shares, sealed with the
 // pool key, how much of its 5-hour and weekly windows is used and when the 5-hour one runs out at the current pace. The
 // orchestrator's rules skip a session whose window runs out before a task would be done, and a session near its limit
-// is told to hand its task over cleanly. OpenCode sessions have no Claude plan: nothing to share, nothing to skip, and
-// they still get the simpler tasks first.
+// is told to hand its task over cleanly. A Codex session does the same with its ChatGPT plan's windows, as `codex_limits`
+// events: they are another plan, never read as the account's Claude plan, and agents and apps from before Codex ignore
+// them. OpenCode sessions have no plan: nothing to share, nothing to skip, and they still get the simpler tasks first.
 
 import { LimitForecast } from '../../../shared/limit-forecast'
 import type { PoolState } from '../../../shared/pool'
-import type { PoolLimits, PoolLimitWindow, PoolTask } from '../../../shared/pool-protocol'
+import type { PoolEventBody, PoolLimits, PoolLimitWindow, PoolTask } from '../../../shared/pool-protocol'
 import type { CodingTool, UsageLimit } from '../../../shared/protocol'
+
+/** The event a tool's sessions share their plan in: Claude Code's `limits`, Codex's `codex_limits`; OpenCode has none. */
+export const LIMITS_KINDS: Partial<Record<CodingTool, string>> = { claude: 'limits', codex: 'codex_limits' }
+
+/** Whose plan a `limits` or `codex_limits` event shares, or null for another event. */
+export function limitsTool(body: Pick<PoolEventBody, 'kind'> | null | undefined): CodingTool | null {
+  if (body?.kind === LIMITS_KINDS.claude) return 'claude'
+  if (body?.kind === LIMITS_KINDS.codex) return 'codex'
+  return null
+}
 
 /** How long a task takes when it does not say: a small one an hour, a large one three. */
 export const DEFAULT_HOURS = { simple: 1, large: 3 } as const
@@ -85,16 +96,21 @@ export function shortOfTime(limits: PoolLimits | undefined, hours: number, now =
   return null
 }
 
-/** When a session should hand its task over: its window runs out soon, or is nearly used up. Null otherwise. */
-/** The latest plan an account's Claude Code sessions shared: what its machines have left. */
-export function accountLimits(state: PoolState, account: string): PoolLimits | undefined {
+/**
+ * The latest plan an account's sessions of a tool shared: what its machines of that tool have left. Claude Code's and
+ * Codex's are different plans, never mixed; OpenCode has none.
+ */
+export function accountLimits(state: PoolState, account: string, tool: CodingTool = 'claude'): PoolLimits | undefined {
+  const kind = LIMITS_KINDS[tool]
+  if (!kind) return undefined
   for (let i = state.events.length - 1; i >= 0; i--) {
     const event = state.events[i]
-    if (event.account === account && event.session && event.body?.kind === 'limits' && event.body.limits) return event.body.limits
+    if (event.account === account && event.session && event.body?.kind === kind && event.body.limits) return event.body.limits
   }
   return undefined
 }
 
+/** When a session should hand its task over: its window runs out soon, or is nearly used up. Null otherwise. */
 export function nearLimit(limits: PoolLimits | undefined, now = Date.now()): string | null {
   const five = limits?.fiveHour
   if (!limits || !five || !(Date.parse(five.resetsAt) > now)) return null

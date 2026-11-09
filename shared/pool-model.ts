@@ -7,6 +7,7 @@
 // cheap enough to run for every task: no model is asked to classify. Runs in browsers, like the rest of the client core.
 
 import type { ModelTier, PoolModelPolicy, PoolTask, PoolTaskRoute } from './pool-protocol'
+import type { CodingTool } from './protocol'
 
 export const MODEL_TIERS: readonly ModelTier[] = ['light', 'balanced', 'strong']
 
@@ -16,11 +17,21 @@ export const MODEL_TIERS: readonly ModelTier[] = ['light', 'balanced', 'strong']
  */
 export const DEFAULT_TIER_MODELS: Readonly<Record<ModelTier, string>> = { light: 'haiku', balanced: 'sonnet', strong: 'opus' }
 
+/**
+ * Codex's models are OpenAI's, by id: what Codex 0.142.2 lists (`model/list` on its app-server), its small and fast
+ * model, its everyday one, and its default frontier model.
+ */
+export const CODEX_TIER_MODELS: Readonly<Record<ModelTier, string>> = { light: 'gpt-5.4-mini', balanced: 'gpt-5.4', strong: 'gpt-5.5' }
+
+/** The models a machine's tiers stand for when its owner names none, by the tool its sessions run. */
+export const defaultTierModels = (tool: CodingTool = 'claude'): Readonly<Record<ModelTier, string>> =>
+  tool === 'codex' ? CODEX_TIER_MODELS : DEFAULT_TIER_MODELS
+
 /** Tiers a task may climb after its sessions failed it, unless the owner says otherwise. */
 export const DEFAULT_ESCALATIONS = 1
 const MAX_ESCALATIONS = 2
 
-/** A Claude Code alias or model id (`sonnet`, `claude-sonnet-4-5`), or an OpenCode `provider/model`. */
+/** A Claude Code alias or model id (`sonnet`, `claude-sonnet-4-5`), an OpenCode `provider/model`, or a Codex model (`gpt-5.5`). */
 const MODEL_ID = /^[\w.:@[\]-]+(\/[\w.:@[\]-]+)?$/
 
 export function isModelTier(value: unknown): value is ModelTier {
@@ -130,7 +141,8 @@ export function assessTask(
 
 export interface ModelChoiceInput {
   task: PoolTask
-  tool: 'claude' | 'opencode'
+  /** What the machine runs: a tier stands for its tool's models. */
+  tool: CodingTool
   /** The machine owner's: from its order, which only the owner can seal. */
   policy?: PoolModelPolicy
   /** Why the account should spare its plan now (close to its limit), or null. */
@@ -153,10 +165,10 @@ export function allowedTiers(policy: PoolModelPolicy | undefined): ModelTier[] {
   return MODEL_TIERS.filter(tier => !named?.length || named.includes(tier))
 }
 
-/** The model a tier stands for on the machine: the owner's, else the default one. */
-export function tierModel(policy: PoolModelPolicy | undefined, tier: ModelTier): string {
+/** The model a tier stands for on the machine: the owner's, else its tool's default one. */
+export function tierModel(policy: PoolModelPolicy | undefined, tier: ModelTier, tool: CodingTool = 'claude'): string {
   const own = policy?.tiers?.[tier]
-  return isModelId(own) ? own : DEFAULT_TIER_MODELS[tier]
+  return isModelId(own) ? own : defaultTierModels(tool)[tier]
 }
 
 /**
@@ -166,12 +178,12 @@ export function tierModel(policy: PoolModelPolicy | undefined, tier: ModelTier):
  * owner's limit). Then the nearest tier the owner allows: up first, since a weaker model would fail the task, down when
  * there is none above.
  */
-export function chooseModel({ task, policy, spare }: ModelChoiceInput): ModelChoice {
+export function chooseModel({ task, tool, policy, spare }: ModelChoiceInput): ModelChoice {
   const allowed = allowedTiers(policy)
   const lock = policy?.lock
   if (isModelTier(lock)) {
     // The more precise of the owner's two choices: a lock outside the tiers it allows is still what it asked for.
-    return { tier: lock, model: tierModel(policy, lock), reason: `locked to ${lock} by its owner`, escalated: 0 }
+    return { tier: lock, model: tierModel(policy, lock, tool), reason: `locked to ${lock} by its owner`, escalated: 0 }
   }
   const reasons: string[] = []
   const rank = (tier: ModelTier) => MODEL_TIERS.indexOf(tier)
@@ -208,16 +220,18 @@ export function chooseModel({ task, policy, spare }: ModelChoiceInput): ModelCho
   const above = allowed.filter(tier => rank(tier) >= rank(wanted))
   const tier = above[0] ?? (allowed[allowed.length - 1] as ModelTier)
   if (tier !== wanted) reasons.push(`${tier} as its owner does not allow ${wanted}`)
-  return { tier, model: tierModel(policy, tier), reason: reasons.join('; '), escalated }
+  return { tier, model: tierModel(policy, tier, tool), reason: reasons.join('; '), escalated }
 }
 
 /**
  * Whether a session runs on the model it was asked for: an alias names its family (`sonnet` in `claude-sonnet-4-5`), an
- * id may come back with its date (`claude-opus-4-5-20251101`), an OpenCode family with its provider.
+ * id may come back with its date (`claude-opus-4-5-20251101`), an OpenCode family with its provider. A longer name of
+ * the same family is another model: `gpt-5.4-mini` is not `gpt-5.4`.
  */
 export function modelMatches(asked: string, runs: string): boolean {
   const a = asked.toLowerCase()
   const r = runs.toLowerCase()
+  if (r.startsWith(a) && /^-[a-z]/.test(r.slice(a.length))) return false
   return r.includes(a)
 }
 
@@ -259,16 +273,16 @@ export function modelPolicyForm(policy: PoolModelPolicy | undefined): ModelPolic
 }
 
 /**
- * The policy the form stands for, without what is already the default, so a machine the owner left as it was seals
- * none: undefined. Or why it can't be sealed.
+ * The policy the form stands for, without what is already the default for the machine's tool, so a machine the owner
+ * left as it was seals none: undefined. Or why it can't be sealed.
  */
-export function modelPolicyFromForm(form: ModelPolicyForm): PoolModelPolicy | undefined | string {
+export function modelPolicyFromForm(form: ModelPolicyForm, tool: CodingTool = 'claude'): PoolModelPolicy | undefined | string {
   const allowed = MODEL_TIERS.filter(tier => form.allowed.includes(tier))
   if (!allowed.length) return 'Allow at least one tier.'
   const tiers: Partial<Record<ModelTier, string>> = {}
   for (const tier of MODEL_TIERS) {
     const model = form.tiers[tier].trim()
-    if (!model || model === DEFAULT_TIER_MODELS[tier]) continue
+    if (!model || model === defaultTierModels(tool)[tier]) continue
     if (!isModelId(model)) return `${model} is not a model name: use an alias, a model id or provider/model.`
     tiers[tier] = model
   }
@@ -283,11 +297,11 @@ export function modelPolicyFromForm(form: ModelPolicyForm): PoolModelPolicy | un
 }
 
 /** The policy in a few words, for a machine's card: undefined for the default one. */
-export function modelPolicyView(policy: PoolModelPolicy | undefined): string | undefined {
+export function modelPolicyView(policy: PoolModelPolicy | undefined, tool: CodingTool = 'claude'): string | undefined {
   if (!policy) return undefined
-  if (isModelTier(policy.lock)) return `always ${tierModel(policy, policy.lock)}`
+  if (isModelTier(policy.lock)) return `always ${tierModel(policy, policy.lock, tool)}`
   const allowed = allowedTiers(policy)
-  const parts = [allowed.length < MODEL_TIERS.length ? allowed.map(tier => tierModel(policy, tier)).join(', ') : 'models by task']
+  const parts = [allowed.length < MODEL_TIERS.length ? allowed.map(tier => tierModel(policy, tier, tool)).join(', ') : 'models by task']
   const escalations = policy.escalations ?? DEFAULT_ESCALATIONS
   if (escalations !== DEFAULT_ESCALATIONS) parts.push(escalations ? `up to ${escalations} tiers up` : 'no escalation')
   return parts.join(' · ')

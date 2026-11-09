@@ -8,11 +8,13 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { HookPost } from '../../../shared/protocol'
+import { takePoolPosts } from '../channel/pool-held'
 import { terminalOf } from '../channel/terminal'
 import { loadConfig, paths } from '../config'
 import { postHook, pruneLinks } from '../hook'
 import { log } from '../log'
-import { matchingRule, readRules, sessionRules } from '../rules'
+import { codexModeAllows, matchingRule, poolMode, poolRules, readRules, sessionRules } from '../rules'
+import { patchFiles } from './patch'
 import { codexToolName, shellCommand } from './tools'
 
 /** Codex's hook input: the fields every event has, and those of some. */
@@ -54,7 +56,8 @@ const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse'])
 
 /**
  * Called by Codex for each hook event it was told to run Tonton for. It must never get in the way of the session:
- * failures are logged, it prints nothing but an approval by an auto-approve rule, and it always exits 0.
+ * failures are logged, it prints nothing but an approval by an auto-approve rule or the pool posts that waited for a
+ * prompt, and it always exits 0.
  */
 export async function runCodexHook() {
   const event = await readInput()
@@ -66,12 +69,24 @@ export async function runCodexHook() {
     writeLink(file, link(event, previous))
     if (event.hook_event_name === 'SessionStart') pruneLinks(paths.run)
     if (event.hook_event_name === 'PermissionRequest' && approveByRule(event)) return
+    if (event.hook_event_name === 'UserPromptSubmit') handHeldPosts(event.session_id)
     const config = loadConfig()
     const status = codexStatus(event, previous?.event)
     if (config && status) await postHook(config, status.event, status.text)
   } catch (error) {
     log('codex hook failed', String(error))
   }
+}
+
+/**
+ * What waited for this prompt, added to it as context Codex reads with it: the pool posts its channel could not hand
+ * Codex as they came (agent/src/channel/pool-held.ts).
+ */
+function handHeldPosts(sessionId: string) {
+  const context = [takePoolPosts(sessionId)].filter(Boolean).join('\n\n')
+  if (!context) return
+  log('pool posts handed to the prompt')
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: context } }))
 }
 
 /**
@@ -175,18 +190,27 @@ function alive(pid: number): boolean {
 
 /** apply_patch edits files; any other tool under the name the notch knows it by (./tools.ts). */
 /**
- * Codex asks before this call: approve it when an auto-approve rule from the app, or one allowed for this session,
- * matches, as Claude Code's hook does. True when it printed the approval; otherwise the user is asked, in the terminal
- * or the notch. A session run by `tonton codex` gets the same from its channel (agent/src/codex/notch.ts).
+ * Codex asks before this call: approve it when an auto-approve rule from the app, one allowed for this session, or a
+ * pool rule its owner accepted matches, or when a pool machine's mode lets it pass, as Claude Code's hook does. True
+ * when it printed the approval; otherwise the user is asked, in the terminal or the notch. A session run by
+ * `tonton codex` gets the same from its channel (agent/src/codex/notch.ts).
  */
-export function approveByRule(event: CodexHookInput, rules = [...(readRules()?.rules ?? []), ...sessionRules(event.session_id)]): boolean {
+export function approveByRule(
+  event: CodexHookInput,
+  rules = [...(readRules()?.rules ?? []), ...sessionRules(event.session_id), ...poolRules(event.session_id)],
+  mode = poolMode(event.session_id),
+): boolean {
   if (!event.tool_name) return false
   const tool = toolName(event.tool_name)
   const input = (event.tool_input && typeof event.tool_input === 'object' ? event.tool_input : {}) as Record<string, unknown>
   const command = tool === 'Bash' ? shellCommand(input) : undefined
   const rule = matchingRule(rules, tool, tool === 'Bash' ? { command } : input)
-  if (!rule || (tool === 'Bash' && !command)) return false
-  log('approved by an auto-approve rule', { tool })
+  const byRule = Boolean(rule) && !(tool === 'Bash' && !command)
+  // A patch comes as its text, in Codex's format: its files, from the session's folder.
+  const patch = typeof input.command === 'string' ? input.command : typeof input.input === 'string' ? input.input : ''
+  const files = tool === 'Edit' ? patchFiles(patch, event.cwd).map(file => file.path) : []
+  if (!byRule && !codexModeAllows(mode, tool, files)) return false
+  log(byRule ? 'approved by an auto-approve rule' : 'approved by the pool machine’s mode', { tool })
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } }))
   return true
 }

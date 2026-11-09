@@ -1,11 +1,12 @@
 // The orchestrator machine's session (docs/pool-autopilot.md). When the admin makes one of their own pool machines the
-// orchestrator machine, its background service starts a Claude Code session in `<workdir>/repo` and puts it in the pool
-// as the orchestrator: the relay makes it the pool's orchestrator, its agent gives it the guide, and the admin talks to
-// it from the website, as to any of their own sessions. A session that ends is started again, later each time; once the
-// machine is not the orchestrator's any more, its session ends.
+// orchestrator machine, its background service starts a Claude Code session in `<workdir>/repo`, or a Codex one on a
+// Codex machine, and puts it in the pool as the orchestrator: the relay makes it the pool's orchestrator, its agent gives
+// it the guide, and the admin talks to it from the website, as to any of their own sessions. A session that ends is
+// started again, later each time; once the machine is not the orchestrator's any more, its session ends.
 
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { CodingTool } from '../../../shared/protocol'
 import { paths } from '../config'
 import { endPoolSession, launchForPool, poolSessionRuns } from '../launch'
 import { log } from '../log'
@@ -139,13 +140,15 @@ export class PoolLead {
     if (!repo) return 'the pool has no repository to clone.'
     const prepared = await (this.options.prepare ?? prepareRepository)(order.profile.workdir, repo)
     if (typeof prepared === 'string') return prepared
-    // Always Claude Code: it plans, merges and answers the admin.
-    const launched = await (this.options.launch ?? launchForPool)(`lead-${poolId}`, prepared.clone, 'claude')
+    // It plans, merges and answers the admin: Claude Code, or Codex on a machine that runs Codex, through `tonton codex`
+    // so that the admin's messages reach it. OpenCode's sessions take simple tasks: Claude Code leads there.
+    const tool: CodingTool = order.profile.tool === 'codex' ? 'codex' : 'claude'
+    const launched = await (this.options.launch ?? launchForPool)(`lead-${poolId}`, prepared.clone, tool)
     if (typeof launched === 'string') return launched
     const lead: Lead = { poolId, sessionId: launched.sessionId, tmux: launched.tmux, joined: false }
     this.leads.set(poolId, lead)
     this.save(lead)
-    const profile = { tool: 'claude' as const, machine: this.options.machineName, project: repositoryName(repo) }
+    const profile = { tool, machine: this.options.machineName, project: repositoryName(repo) }
     if (!(await this.pools.joinSession(poolId, launched.sessionId, profile, true))) {
       this.end(lead)
       return 'its session did not reach the relay.'

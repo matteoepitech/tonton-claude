@@ -34,6 +34,13 @@ export interface CodexServerRecord {
 
 export const serverRecordPath = (serverPid: number, run = paths.run) => join(codexRun(run), `${serverPid}.json`)
 
+/**
+ * Where the channel says which model a thread runs on, as its server answered when the channel joined it, or why it
+ * could not join (agent/src/codex/notch.ts): a pool machine waits for it before handing the session its task
+ * (agent/src/launch.ts, effectiveModel). It goes with its server.
+ */
+export const codexModelFile = (threadId: string, run = paths.run) => join(codexRun(run), `${threadId.replace(/[^\w-]/g, '_')}.model`)
+
 /** The server whose process is `serverPid`, while its wrapper runs. */
 export function readServerRecord(serverPid: number, run = paths.run): CodexServerRecord | null {
   try {
@@ -168,6 +175,7 @@ export async function runCodex(args: string[], options: CodexWrapperOptions = {}
     server.kill()
     rmSync(recordPath, { force: true })
     rmSync(socket, { force: true })
+    for (const thread of record.threads) rmSync(codexModelFile(thread.id, run), { force: true })
   }
   for (const signal of ['SIGHUP', 'SIGTERM'] as const)
     process.on(signal, () => {
