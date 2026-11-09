@@ -135,8 +135,10 @@ repository's secrets.
   the English, or without French punctuation, and CI fails when the catalog is behind the code.
 - No new dependency without a reason in the PR. The agent has two runtime dependencies. The website bundles React,
   shadcn/ui's Radix primitives, Tailwind and React Flow (#254), and jsQR, its QR scanner, all pinned; none of them goes
-  into the agent. The app has one, Sparkle, for its own updates, and `TontonCore` has none. The island in `desktop/` has
-  Electron, and electron-builder to package it, in its own `package.json`.
+  into the agent. The app has one, Sparkle, for its own updates, and `TontonCore` has none.
+  `app/Vendor/mediaremote-adapter` is pinned source, built by `app/scripts/build-app.sh` and loaded by `/usr/bin/perl`,
+  never by the app, to read Now Playing (#390). The island in `desktop/` has Electron, and electron-builder to package
+  it, in its own `package.json`.
 
 ## Tests
 
