@@ -88,4 +88,6 @@ test('cluster_ask may wait for its answer longer than the other tools', () => {
   const ask = CLUSTER_TOOLS.find(tool => tool.name === 'cluster_ask')
   expect(ask?.waitMs).toBeGreaterThan(10 * 60_000)
   expect(pluginSource(['tonton'])).toContain('"waitMs":630000')
+  // OpenCode's model sees the arguments the plugin declares: waiting anyway for a digest session is one of them.
+  expect(pluginSource(['tonton'])).toContain('"wait_anyway":{"type":"boolean"')
 })

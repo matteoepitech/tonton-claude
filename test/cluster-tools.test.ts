@@ -3,7 +3,8 @@
 // machines, in one cluster each owner put its own session in. The test plays Claude Code and Codex (MCP clients), Codex's
 // app-server and hooks, and Tonton's OpenCode plugin (the bridge's pipes), and the Claude in each: they ask and answer
 // each other, share files, hold files the others cannot edit, a digest waits for the next prompt, a muted session gets
-// nothing, and the relay sees none of it.
+// nothing, an ask to a session that reads posts only at its next prompt (a digest, or live but skipping permission
+// prompts) is told so at once rather than sent, and the relay sees none of it.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -172,6 +173,59 @@ const callCodex = async (name: string, args: Record<string, unknown> = {}) => {
   return result.content[0]?.text ?? ''
 }
 
+const callOpenCode = (name: string, args: Record<string, unknown> = {}) => openCodeTool(name, args)
+
+type Call = typeof callClaude
+interface Seen {
+  session: string
+  state?: string
+  machine?: string
+  delivery?: string
+  takesPosts?: string
+  skipsPrompts?: boolean
+}
+
+/** A session as cluster_who shows it to the session that calls. */
+async function seenBy(call: Call, session: string): Promise<Seen | undefined> {
+  const who = readJSON(await call('cluster_who'))
+  return who?.members?.flatMap((m: { sessions: Seen[] }) => m.sessions).find((s: Seen) => s.session === session)
+}
+
+/**
+ * Until cluster_who, as one session calls it, shows another with this delivery: its agent took its owner's order, or saw
+ * its permission mode change, and said so in its profile (#396).
+ */
+const shown = (call: Call, session: string, delivery: string, skipsPrompts = false) =>
+  eventually(
+    async () => {
+      const seen = await seenBy(call, session)
+      return seen?.delivery === delivery && Boolean(seen.skipsPrompts) === skipsPrompts && seen
+    },
+    `${session} shown ${delivery}${skipsPrompts ? ', skipping permission prompts' : ''}`,
+  )
+
+/** What Claude Code's hooks write, as in a turn's end: its permission mode is what a cluster reads skipsPrompts from. */
+const claudeHooksWrite = (permissionMode: string) =>
+  writeFileSync(
+    join(ana.home, 'run', `${process.pid}.json`),
+    JSON.stringify({
+      sessionId: CLAUDE,
+      transcriptPath: join(dir, 'transcript.jsonl'),
+      cwd: claudeProject,
+      event: 'Stop',
+      permissionMode,
+    }),
+  )
+
+/** Until the app of the member sees a post with this text: every post sent before it is there too. */
+const onRelay = (app: App, text: string) =>
+  eventually(async () => {
+    const posts = (await stateOf(app))?.posts ?? []
+    return posts.some(p => p.body?.text.includes(text)) && posts
+  }, `"${text}" on the relay`)
+
+const SENT = /^Sent \(post [\w-]+\)\.$/
+
 /** As Codex runs a hook on macOS: `$SHELL -c "exec <agent> hook codex"`, a child of the process the channel's parent is. */
 async function codexHook(input: Record<string, unknown>): Promise<string> {
   const child = Bun.spawn(['/bin/sh', '-c', `exec '${process.execPath}' '${AGENT}' hook codex`], {
@@ -209,10 +263,7 @@ beforeAll(async () => {
   )
   // What the hooks write: Claude is between turns.
   mkdirSync(claudeProject, { recursive: true })
-  writeFileSync(
-    join(ana.home, 'run', `${process.pid}.json`),
-    JSON.stringify({ sessionId: CLAUDE, transcriptPath: transcript, cwd: claudeProject, event: 'Stop', permissionMode: 'default' }),
-  )
+  claudeHooksWrite('default')
   claude = new Client({ name: 'claude-code', version: 'test' })
   claude.fallbackNotificationHandler = async notification => {
     notifications.push(notification as (typeof notifications)[number])
@@ -363,8 +414,8 @@ describe('cluster tools end to end', () => {
       // Until the session is in, the tool answers in words.
       const read = readJSON(await callClaude('cluster_who'))
       const sessions = read?.members?.flatMap((m: { sessions: { model?: string }[] }) => m.sessions) ?? []
-      // Each agent says what its session runs on, after the profile its owner gave it.
-      return sessions.length === 3 && sessions.every((s: { machine?: string }) => s.machine) && read
+      // Each agent says what its session runs on, and how it takes posts, after the profile its owner gave it.
+      return sessions.length === 3 && sessions.every((s: Seen) => s.machine && s.delivery === 'live') && read
     }, 'the three sessions described')
     const sessions = Object.fromEntries(
       who.members.flatMap((m: { name: string; sessions: { session: string }[] }) =>
@@ -381,6 +432,11 @@ describe('cluster tools end to end', () => {
     })
     expect(sessions[OPENCODE]).toMatchObject({ member: 'Bob', tool: 'opencode', machine: 'Linux' })
     expect(sessions[CODEX]).toMatchObject({ member: 'Cleo', tool: 'codex', machine: 'PC', project: 'HeroProject' })
+    // A post sent to any of them wakes it now: none skips permission prompts.
+    for (const session of [CLAUDE, OPENCODE, CODEX]) {
+      expect(sessions[session]).toMatchObject({ delivery: 'live', takesPosts: 'now: an ask or a message sent to it wakes it' })
+      expect(sessions[session].skipsPrompts).toBeUndefined()
+    }
     // The same tools answer OpenCode. The pool tools stay apart: the session is in no pool.
     expect(JSON.parse(await openCodeTool('cluster_who', {})).id).toBe(clusterId)
     expect(await callClaude('pool_status')).toBe('This session is not in a pool.')
@@ -443,9 +499,11 @@ describe('cluster tools end to end', () => {
     codexConnection?.send(JSON.stringify({ method: 'turn/completed', params: { threadId: CODEX, turn: { id: 'turn-9' } } }))
 
     await putIn(cleo, CODEX, 'codex', 'digest')
-    await Bun.sleep(500)
+    // Codex's agent took the order: it says so in its profile, which OpenCode's agent reads.
+    await shown(callOpenCode, CODEX, 'digest')
     const turns = toCodex.length
-    expect(await openCodeTool('cluster_send', { text: `Audio is in ${MARKER}`, to_session: CODEX })).toStartWith('Sent')
+    const sent = await openCodeTool('cluster_send', { text: `Audio is in ${MARKER}`, to_session: CODEX })
+    expect(sent).toMatch(/^Sent \(post [\w-]+\)\. It reads this at its next prompt\.$/)
     const folder = join(cleo.home, 'run', 'cluster-digest', CODEX)
     await eventually(
       () => existsSync(folder) && readdirSync(folder).some(file => readFileSync(join(folder, file), 'utf8').includes('Audio is in')),
@@ -457,8 +515,61 @@ describe('cluster tools end to end', () => {
     expect(output.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit')
     expect(output.hookSpecificOutput.additionalContext).toContain('<cluster kind="message" from="Bob · Linux · opencode"')
     expect(output.hookSpecificOutput.additionalContext).toContain(`Audio is in ${MARKER}`)
+  })
+
+  test('an ask to a digest session is not sent, from Claude Code or OpenCode; waiting anyway, Codex answers at its next prompt', async () => {
+    const turns = toCodex.length
+    await shown(callClaude, CODEX, 'digest')
+    const fromClaude = await callClaude('cluster_ask', { to_session: CODEX, text: `Is the lighting final? ${MARKER}` })
+    expect(fromClaude).toStartWith(
+      'Not asked: Cleo · PC · codex reads posts only at its next prompt, so its answer would not come while you wait.',
+    )
+    expect(fromClaude).toContain(`cluster_send and to_session "${CODEX}"`)
+    expect(fromClaude).toContain('wait_anyway: true')
+    expect(await openCodeTool('cluster_ask', { to_session: CODEX, text: `Is the lighting final? ${MARKER}` })).toBe(fromClaude)
+
+    const waiting = callClaude('cluster_ask', { to_session: CODEX, text: `Where is the save point? ${MARKER}`, wait_anyway: true })
+    const folder = join(cleo.home, 'run', 'cluster-digest', CODEX)
+    await eventually(
+      () =>
+        existsSync(folder) &&
+        readdirSync(folder).some(file => readFileSync(join(folder, file), 'utf8').includes('Where is the save point?')),
+      'the ask kept for its next prompt',
+    )
+    // The relay keeps posts in order: the asks told at once never went out.
+    const posts = await onRelay(cleo, 'Where is the save point?')
+    expect(posts.some(p => p.body?.text.includes('Is the lighting final?'))).toBe(false)
+    expect(toCodex.slice(turns).filter(m => m.method === 'turn/start' || m.method === 'turn/steer')).toEqual([])
+    // Its user writes to it: the ask comes with the prompt, and its answer is the result Claude Code waits for.
+    const output = JSON.parse(await codexHook({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-11', prompt: 'next' }))
+    const context: string = output.hookSpecificOutput.additionalContext
+    expect(context).toContain('<cluster kind="ask" from="Ana · Mac · claude"')
+    expect(await callCodex('cluster_send', { text: `By the gate ${MARKER}`, reply_to: askId(context) })).toMatch(SENT)
+    expect(JSON.parse(await waiting)).toMatchObject({ answer: `By the gate ${MARKER}`, from: 'Cleo · PC · codex' })
+  })
+
+  test('live, but Codex skips permission prompts: it gets digests, cluster_who says why, and asks from Claude Code and OpenCode are not sent', async () => {
+    // The turn its prompt started ends, then its owner sets it to live again.
+    await codexHook({ hook_event_name: 'Stop', permission_mode: 'default' })
+    await eventually(async () => (await seenBy(callClaude, CODEX))?.state === 'idle', 'Codex idle')
     await putIn(cleo, CODEX, 'codex', 'live')
-    await Bun.sleep(300)
+    await shown(callClaude, CODEX, 'live')
+    // Its user turns approvals off, which Codex's hooks report as bypassPermissions at their next event. The session stays
+    // idle, so its channel learns it from the link the hooks wrote (#396), not from a change of status.
+    await codexHook({ hook_event_name: 'Stop', permission_mode: 'bypassPermissions' })
+    expect(await shown(callClaude, CODEX, 'digest', true)).toMatchObject({ takesPosts: 'at its next prompt' })
+    const notAsked =
+      'Not asked: Cleo · PC · codex reads posts only at its next prompt (it skips permission prompts), so its answer would not come while you wait.'
+    expect(await callClaude('cluster_ask', { to_session: CODEX, text: 'Is the rig final?' })).toStartWith(notAsked)
+    await shown(callOpenCode, CODEX, 'digest', true)
+    expect(await openCodeTool('cluster_ask', { to_session: CODEX, text: 'Is the rig final?' })).toStartWith(notAsked)
+    expect(await callClaude('cluster_send', { text: `The build is green ${MARKER}`, to_member: 'Cleo' })).toEndWith(
+      `\nNot at once for Cleo's one session:\n- Cleo · PC · codex (session ${CODEX}) reads this at its next prompt (it skips permission prompts).`,
+    )
+    // Approvals back on: live again.
+    await codexHook({ hook_event_name: 'Stop', permission_mode: 'default' })
+    await shown(callClaude, CODEX, 'live')
+    await shown(callOpenCode, CODEX, 'live')
   })
 
   test('Codex asks OpenCode, which answers: the answer is the result of the ask', async () => {
@@ -551,12 +662,10 @@ describe('cluster tools end to end', () => {
   test('digest: what comes waits for the next prompt, and the hook hands it to Claude', async () => {
     const before = fromCluster().length
     await putIn(ana, CLAUDE, 'claude', 'digest')
-    await eventually(async () => {
-      const state = await stateOf(ana)
-      return state?.sessions.find(s => s.session === CLAUDE)?.ready
-    }, 'the new order taken')
-    await Bun.sleep(300)
-    expect(await openCodeTool('cluster_send', { text: `The rig is pushed ${MARKER}`, to_session: CLAUDE })).toStartWith('Sent')
+    // Claude Code's agent took the new order: it says so in its profile, which OpenCode's agent reads.
+    await shown(callOpenCode, CLAUDE, 'digest')
+    const sent = await openCodeTool('cluster_send', { text: `The rig is pushed ${MARKER}`, to_session: CLAUDE })
+    expect(sent).toMatch(/^Sent \(post [\w-]+\)\. It reads this at its next prompt\.$/)
     const folder = join(ana.home, 'run', 'cluster-digest', CLAUDE)
     await eventually(
       () =>
@@ -572,21 +681,58 @@ describe('cluster tools end to end', () => {
     const output = JSON.parse(await new Response(hook.stdout).text())
     expect(output.hookSpecificOutput.additionalContext).toContain('The rig is pushed')
     expect(output.hookSpecificOutput.additionalContext).toContain('<cluster kind="message" from="Bob · Linux · opencode"')
+    // Codex's ask is not sent: it is told at once.
+    await shown(callCodex, CLAUDE, 'digest')
+    expect(await callCodex('cluster_ask', { to_session: CLAUDE, text: 'Is the API frozen?' })).toStartWith(
+      'Not asked: Ana · Mac · claude reads posts only at its next prompt, so its answer would not come while you wait.',
+    )
+  })
+
+  test('live, but Claude Code skips permission prompts: Codex and OpenCode are told, and their asks are not sent', async () => {
+    await putIn(ana, CLAUDE, 'claude', 'live')
+    await shown(callCodex, CLAUDE, 'live')
+    // Shift+Tab to bypass permissions: the hooks write the mode at their next event, and the channel reads it there.
+    claudeHooksWrite('bypassPermissions')
+    expect(await shown(callCodex, CLAUDE, 'digest', true)).toMatchObject({ takesPosts: 'at its next prompt' })
+    const notAsked =
+      'Not asked: Ana · Mac · claude reads posts only at its next prompt (it skips permission prompts), so its answer would not come while you wait.'
+    expect(await callCodex('cluster_ask', { to_session: CLAUDE, text: 'Is the API frozen?' })).toStartWith(notAsked)
+    await shown(callOpenCode, CLAUDE, 'digest', true)
+    expect(await openCodeTool('cluster_ask', { to_session: CLAUDE, text: 'Is the API frozen?' })).toStartWith(notAsked)
+    expect(await callCodex('cluster_send', { text: `Spawn moved ${MARKER}`, to_session: CLAUDE })).toMatch(
+      /^Sent \(post [\w-]+\)\. It reads this at its next prompt \(it skips permission prompts\)\.$/,
+    )
+    // Claude Code tells itself as it is now.
+    expect(await seenBy(callClaude, CLAUDE)).toMatchObject({ delivery: 'digest', skipsPrompts: true })
+    claudeHooksWrite('default')
+    await shown(callCodex, CLAUDE, 'live')
+    await shown(callOpenCode, CLAUDE, 'live')
   })
 
   test('muted: the session receives nothing, not even at its next prompt', async () => {
     await putIn(bob, OPENCODE, 'opencode', 'muted')
-    await Bun.sleep(500)
+    // OpenCode's agent took the order: it says so in its profile, which Claude Code's agent reads.
+    await shown(callClaude, OPENCODE, 'muted')
     const before = injected().length
-    expect(await callClaude('cluster_send', { text: `Anyone there? ${MARKER}`, to_session: OPENCODE })).toStartWith('Sent')
-    await eventually(async () => (await stateOf(bob))?.posts.some(p => p.body?.text.startsWith('Anyone there?')), 'the post on the relay')
+    // An ask is never sent to it, even waiting anyway: no answer could come.
+    await shown(callCodex, OPENCODE, 'muted')
+    for (const call of [callClaude, callCodex]) {
+      const asked = await call('cluster_ask', { to_session: OPENCODE, text: `Still there? ${MARKER}`, wait_anyway: true })
+      expect(asked).toStartWith('Not asked: Bob · Linux · opencode is muted, so no post reaches it, not even at its next prompt')
+    }
+    expect(await callClaude('cluster_send', { text: `Anyone there? ${MARKER}`, to_session: OPENCODE })).toMatch(
+      /^Sent \(post [\w-]+\)\. It is muted: it reads this only if its user asks for its inbox\.$/,
+    )
+    // The relay keeps posts in order: the asks never went out.
+    const posts = await onRelay(bob, 'Anyone there?')
+    expect(posts.some(p => p.body?.text.startsWith('Still there?'))).toBe(false)
     // A new turn of OpenCode would get a digest: there is none.
     bridge.stdin.write(`${JSON.stringify({ type: 'session.status', properties: { sessionID: OPENCODE, status: { type: 'busy' } } })}\n`)
     bridge.stdin.flush()
-    await Bun.sleep(500)
-    expect(injected()).toHaveLength(before)
-    // Its Claude can still read it, when its user asks.
+    // Its Claude can still read it, when its user asks. The bridge reads its input in order and hands a digest as the turn
+    // starts: by this answer, one would have come.
     expect(await openCodeTool('cluster_inbox', {})).toContain('Anyone there?')
+    expect(injected()).toHaveLength(before)
   })
 
   test('the relay holds none of it', () => {
