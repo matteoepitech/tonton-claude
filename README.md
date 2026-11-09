@@ -67,7 +67,7 @@ Open a new terminal on that machine and run `claude` as usual. It shows up in yo
 
 A pool puts the machines of several people on one project. On the relay's website (`https://<relay>/` › **Pools**),
 make one with the project's repository and send the invite link. Each teammate's machines join with what their account
-brings, Claude Max, Pro or OpenCode, and how many sessions they can run at once: nothing to fill in.
+brings, Claude Max, Pro, Codex or OpenCode, and how many sessions they can run at once: nothing to fill in.
 
 Then tell the orchestrator what to build. It proposes a plan, who does what, and you accept it: every machine gets to
 work, each task in a session of its own on its own branch, merged into main once the checks pass. For a hackathon,
@@ -125,6 +125,11 @@ See [how pools work](docs/pools.md) and [the autopilot](docs/pool-autopilot.md).
 - **OpenCode?** Yes: the installer adds a plugin to OpenCode when it finds it, and its sessions work in the notch like
   Claude Code's: messages, permissions, auto-approve rules, compact and interrupt. On this Mac, OpenCode 2's sessions
   show up and take messages even without the agent.
+- **Codex?** Yes: the installer adds Tonton's hooks and MCP server to Codex when it finds it (`~/.codex`, or
+  `$CODEX_HOME`). Trust the hooks once in Codex's `/hooks`. Then every Codex session shows in the notch, with its plan's
+  windows apart from Claude's. Start it from the notch, or with `tonton codex` in a terminal, and it takes messages,
+  images, permissions, compact and interrupt, like Claude Code's, and works in clusters and pools with Claude Code and
+  OpenCode. A plain `codex` stays read-only.
 - **First launch.** Claude Code asks you to confirm "I am using this for local development" once per launch, because the
   feature Tonton Claude uses is still in preview.
 - **Status line.** Claude Code only shares your plan's usage with status lines, so sessions started from a terminal get one
@@ -149,7 +154,8 @@ See [how pools work](docs/pools.md) and [the autopilot](docs/pool-autopilot.md).
   running the install line: the background service keeps the ones it was installed with. See
   [the details](docs/self-hosting.md#behind-a-proxy).
 - **Diagnose a machine.** In **Settings › Machines**, **Diagnose** in a machine's menu has its agent check its setup: the
-  background service, the relay, the hooks, the channel, the `claude` launcher, the status line and the OpenCode plugin.
+  background service, the relay, the hooks, the channel, the `claude` launcher, the status line, the OpenCode plugin and
+  Codex's hooks and MCP server.
   **Repair** next to a problem redoes that step of the install on the machine.
 - **Agent log.** In **Settings › Machines**, **Show agent log** in a machine's menu reads the end of its log, sealed on the
   way. It says what the agent did, never what Claude wrote, and keys and tokens are taken out before it leaves.

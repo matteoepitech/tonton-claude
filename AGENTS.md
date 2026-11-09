@@ -12,6 +12,7 @@ WebSocket relay, and everything that describes what Claude is doing is end-to-en
 ```
 claude ─ hooks + MCP channel ─▶ agent ──sealed blobs──▶ relay ──WebSocket──▶ macOS app (notch)
 opencode ─ Tonton plugin ──────▶ agent
+codex ──── hooks + MCP server ─▶ agent (driven through `codex app-server` when `tonton codex` runs it)
 ```
 
 | Path | What | Language |
@@ -19,7 +20,7 @@ opencode ─ Tonton plugin ──────▶ agent
 | `agent/` | One binary per machine: a background service, Claude Code hooks, an MCP channel that streams the transcript and relays prompts and permissions. Tray icons in `agent/tray/` (Swift on macOS, PowerShell on Windows). | TypeScript (Bun) |
 | `relay/` | Accounts, machines and sealed session history in SQLite, live sessions in memory, WebSocket routing, the web app at its address. Never sees plaintext. | TypeScript (Bun) |
 | `shared/` | The client core: wire protocol, end-to-end crypto, account token, session models and a relay client. Used by the agent, the relay and the client apps, and runs in browsers. Versions, for the agent and the relay. | TypeScript |
-| `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown) and also builds for iOS, `TontonMac` what reads this Mac's own files (local Claude Code and OpenCode sessions, the local agent), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
+| `app/` | The macOS app. `TontonCore` holds the testable logic (crypto, wire format, models, markdown) and also builds for iOS, `TontonMac` what reads this Mac's own files (local Claude Code, OpenCode and Codex sessions, the local agent), `TontonClaude` the SwiftUI views. | Swift 5.10, macOS 14+ |
 | `ios/` | The iPhone app (`TontonClaude.xcodeproj`, Xcode 16 or later), its Live Activity (`TontonWidgets`) and the extension that opens permission alerts (`TontonNotifications`), on `TontonCore`. | Swift 5, iOS 17+ |
 | `raycast/` | A Raycast extension that lists the sessions and messages them through the app's AppleScript dictionary (`app/Resources/TontonClaude.sdef`). | TypeScript (React) |
 | `web/` | The website (`web/site/`, React with shadcn/ui, Tailwind and React Flow): served by the relay at its address, and released as one HTML file (`bun run web`, `tonton-web.html`). Built on the client core in `shared/`, which decrypts in the browser. `views.ts` and `markdown.ts` are the island's; `hero.ts`, the hero screen's view model, serves both. | TypeScript (React) |
@@ -98,11 +99,14 @@ in `relay/src/limits.ts`.
 don't recognize, never throw. Channels are a research preview started with `--dangerously-load-development-channels`
 (see `agent/src/install/shell-profile.ts`).
 
-**Claude Code and OpenCode.** Tonton shows the sessions of both, and every feature works with both. Claude Code goes
-through hooks, the MCP channel and its transcripts (`agent/src/channel`, `agent/src/transcript`); OpenCode through
-Tonton's plugin and the `tonton opencode` bridge (`agent/src/opencode`), whose events are no more public than the
-transcripts: skip what you don't recognize, never throw. A change for one tool comes with the same change for the other,
-tested on both sides. When it really cannot work for one (Claude plan limits do not exist in OpenCode), say why in the PR.
+**Claude Code, OpenCode and Codex.** Tonton shows the sessions of the three, and every feature works with the three.
+- Claude Code goes through hooks, the MCP channel and its transcripts (`agent/src/channel`, `agent/src/transcript`).
+- OpenCode goes through Tonton's plugin and the `tonton opencode` bridge (`agent/src/opencode`).
+- Codex goes through its hooks, Tonton's MCP server (`tonton channel codex`) and its rollouts. When `tonton codex` runs
+  it, it also goes through its app-server (`agent/src/codex`).
+None of these formats is public: skip what you don't recognize, never throw. A change for one tool comes with the same
+change for the others, tested on each side. When it really cannot work for one (Claude plan limits do not exist in
+OpenCode), say why in the PR. Codex's plan windows are another account's: keep them apart from Claude's.
 
 **Three platforms.** The agent runs on Windows, macOS and Linux: use `node:path`, no POSIX-only shell calls, and keep
 `scripts/install.sh` and `scripts/install.ps1` in step.

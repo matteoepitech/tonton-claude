@@ -16,7 +16,7 @@ let
 in
 {
   options.programs.tonton = {
-    enable = lib.mkEnableOption "the Tonton Claude agent: this machine's Claude Code and OpenCode sessions in your notch";
+    enable = lib.mkEnableOption "the Tonton Claude agent: this machine's Claude Code, OpenCode and Codex sessions in your notch";
 
     package = lib.mkOption {
       type = lib.types.package;

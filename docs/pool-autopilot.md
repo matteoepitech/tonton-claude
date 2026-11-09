@@ -110,7 +110,7 @@ or a slot frees. It posts a `plan_proposed` event, sealed like the rest, with th
 (`PoolPlanProposal`, `shared/pool-plan.ts` and `TontonCore/PoolPlan.swift`).
 
 - The pool's page and the notch, above the orchestrator's conversation, show it as a card: the orchestrator's words,
-  each machine with its plan (Claude Max 20x, Pro, OpenCode) and the tasks it starts, and what comes later.
+  each machine with its plan (Claude Max 20x, Pro, Codex, OpenCode) and the tasks it starts, and what comes later.
 - The owner and admins **Accept and start**: the dispatch goes on, then a `plan_accepted` event says who accepted it.
   The orchestrator is told, and the card goes away for everyone. Others read "Waiting for the owner or an admin".
 - To change it, the admin tells the orchestrator in the chat; it changes the tasks and proposes again. Only the latest
@@ -169,7 +169,7 @@ When a machine starts a task's session, its agent chooses the tier:
 4. The nearest tier the owner **allows**: up first, since a weaker model would fail the task, else down.
 
 The owner's choices are the machine profile's `models`, sealed in its order: `lock`, `allowed` (tiers), `tiers` (the
-model each tier stands for: a Claude Code alias or id, an OpenCode `provider/model`), `escalations` (0 to 2). The owner
+model each tier stands for: a Claude Code alias or id, a Codex model, an OpenCode `provider/model`), `escalations` (0 to 2). The owner
 sets them in the Mac app when adding the machine (Settings › Machines › Add to pool…, Models), and changes them later on
 the website: **Models** on the machine's card in the Machines tab seals a new order for its agent. What is left as the
 default is not sealed, so a machine its owner never changed follows the defaults as they change.

@@ -1,7 +1,7 @@
 # Tonton Claude for Nix and NixOS: the agent and the relay of the latest release (nix/release.json), and NixOS modules
 # that run them. See docs/nix.md.
 {
-  description = "Tonton Claude: the Claude Code and OpenCode sessions of all your machines, in your Mac's notch";
+  description = "Tonton Claude: the Claude Code, OpenCode and Codex sessions of all your machines, in your Mac's notch";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -31,7 +31,7 @@
             };
         in
         {
-          tonton = executable "tonton" "Tonton Claude's agent: streams this machine's Claude Code and OpenCode sessions to your relay";
+          tonton = executable "tonton" "Tonton Claude's agent: streams this machine's Claude Code, OpenCode and Codex sessions to your relay";
           default = self.packages.${system}.tonton;
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
