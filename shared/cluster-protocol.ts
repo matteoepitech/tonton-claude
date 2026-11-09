@@ -48,6 +48,13 @@ export interface ClusterSessionProfile {
   /** What the session says it is doing (`cluster_status`), and since when, ISO. */
   status?: string
   statusAt?: string
+  /**
+   * The delivery this session really gets now, as its own agent works it out (`clusterDelivery`): a session set to live
+   * that skips permission prompts gets digests. Missing: an older agent, so unknown.
+   */
+  delivery?: ClusterDelivery
+  /** Present only while the session skips permission prompts (`bypassPermissions`). Missing: it doesn't, or unknown. */
+  skipsPrompts?: true
 }
 
 /**

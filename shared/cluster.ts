@@ -185,6 +185,8 @@ export function decodeClusterSessionProfile(value: unknown): ClusterSessionProfi
     branch: text(f.branch, 200),
     status: text(f.status, 500),
     statusAt: date(f.statusAt),
+    delivery: DELIVERIES.includes(f.delivery as ClusterDelivery) ? (f.delivery as ClusterDelivery) : undefined,
+    skipsPrompts: f.skipsPrompts === true ? (true as const) : undefined,
   })
 }
 

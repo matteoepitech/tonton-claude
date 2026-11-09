@@ -120,6 +120,19 @@ describe('what other members sealed', () => {
 
   test('profiles, claims and the clock drop wrong fields', () => {
     expect(decodeClusterSessionProfile({ name: 'Hero', tool: 'vim', status: 5, statusAt: 'not a date' })).toEqual({ name: 'Hero' })
+    // The delivery a session really gets, and that it skips permission prompts; anything else is dropped.
+    expect(decodeClusterSessionProfile({ name: 'Hero', delivery: 'digest', skipsPrompts: true })).toEqual({
+      name: 'Hero',
+      delivery: 'digest',
+      skipsPrompts: true,
+    })
+    expect(decodeClusterSessionProfile({ name: 'Hero', delivery: 'muted', skipsPrompts: 'yes' })).toEqual({
+      name: 'Hero',
+      delivery: 'muted',
+    })
+    expect(decodeClusterSessionProfile({ name: 'Hero', delivery: 'loud', skipsPrompts: false })).toEqual({ name: 'Hero' })
+    // An older agent says neither: unknown.
+    expect(decodeClusterSessionProfile({ name: 'Hero' })).toEqual({ name: 'Hero' })
     expect(
       decodeClusterClaims({
         claims: [
