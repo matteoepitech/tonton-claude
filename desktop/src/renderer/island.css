@@ -580,6 +580,9 @@ body {
 .cluster-page .session span {
   flex: 1;
 }
+.cluster-page .session .turned-digest {
+  color: var(--warning);
+}
 .cluster-post {
   padding: 6px 0;
   border-bottom: 1px solid var(--border);

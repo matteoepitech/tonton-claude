@@ -1,7 +1,7 @@
 // What the cluster pages show, worked out from the cluster's state alone: the roster by member and machine, who wrote a
 // post, what a post says in a line, and the clock. Shared by the website and the island (web/views.ts), tested in
 // web/test/clusters.test.ts.
-import type { ClusterPostItem, ClusterSession, ClusterState } from '../../../shared/cluster'
+import { type ClusterPostItem, type ClusterSession, type ClusterState, clusterLiveTurnedDigest } from '../../../shared/cluster'
 import type {
   ClusterClaim,
   ClusterClock,
@@ -11,6 +11,7 @@ import type {
   ClusterSessionProfile,
   ClusterTool,
 } from '../../../shared/cluster-protocol'
+import type { ClusterSessionChoice } from '../../../shared/cluster-watch'
 import { CODING_TOOL_LABELS, codingToolOf, type Session } from '../../../shared/session'
 
 export interface RosterMachine {
@@ -172,11 +173,29 @@ export function timeLeft(ms: number): string {
   return `${days} day${days === 1 ? '' : 's'}${restHours ? ` ${restHours} h` : ''} left`
 }
 
-export const DELIVERIES: { value: ClusterDelivery; label: string; detail: string }[] = [
+/** How a session takes the posts, as the website and the island offer it: the three deliveries, and Live anyway. */
+export type DeliveryOption = ClusterDelivery | 'anyway'
+
+export const DELIVERIES: { value: DeliveryOption; label: string; detail: string }[] = [
   { value: 'live', label: 'Live', detail: 'Posts reach it as they come' },
   { value: 'digest', label: 'Digest', detail: 'Gathered for its next prompt' },
   { value: 'muted', label: 'Muted', detail: 'Nothing reaches it' },
+  { value: 'anyway', label: 'Live anyway', detail: 'Live, even if it skips permission prompts' },
 ]
+
+/** What an option orders: Live anyway is live for a session that skips permission prompts too. */
+export const choiceOf = (option: DeliveryOption): ClusterSessionChoice =>
+  option === 'anyway' ? { delivery: 'live', liveWithoutPrompts: true } : { delivery: option }
+
+/** What a session set to live that gets digests says, as its agent tells it skips permission prompts. */
+export const TURNED_DIGEST = 'Live → digest: skips permission prompts'
+
+/**
+ * The option chosen for one of this account's sessions, as this browser last chose it, turned into digests because the
+ * session skips permission prompts (docs/cluster.md, The rule). False for an older agent, which says neither.
+ */
+export const turnsDigest = (option: DeliveryOption, session: ClusterSession): boolean =>
+  clusterLiveTurnedDigest(choiceOf(option), session.profile)
 
 const DELIVERY_KEY = 'tonton.clusterDelivery'
 
@@ -195,7 +214,7 @@ export function profileOf(session: Session): ClusterSessionProfile {
   ) as ClusterSessionProfile
 }
 
-export function rememberedDelivery(clusterId: string, sessionId: string): ClusterDelivery {
+export function rememberedDelivery(clusterId: string, sessionId: string): DeliveryOption {
   try {
     const saved = JSON.parse(localStorage.getItem(DELIVERY_KEY) ?? '{}')[`${clusterId}/${sessionId}`]
     return DELIVERIES.some(choice => choice.value === saved) ? saved : 'live'
@@ -204,7 +223,7 @@ export function rememberedDelivery(clusterId: string, sessionId: string): Cluste
   }
 }
 
-export function rememberDelivery(clusterId: string, sessionId: string, delivery: ClusterDelivery) {
+export function rememberDelivery(clusterId: string, sessionId: string, delivery: DeliveryOption) {
   try {
     const saved = JSON.parse(localStorage.getItem(DELIVERY_KEY) ?? '{}')
     localStorage.setItem(DELIVERY_KEY, JSON.stringify({ ...saved, [`${clusterId}/${sessionId}`]: delivery }))

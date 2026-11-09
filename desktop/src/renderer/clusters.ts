@@ -4,10 +4,10 @@
 
 import type { RelayClient } from '../../../shared/client'
 import { ClusterApi } from '../../../shared/cluster-api'
-import type { ClusterDelivery, ClusterUpdate } from '../../../shared/cluster-protocol'
+import type { ClusterUpdate } from '../../../shared/cluster-protocol'
 import { ClusterWatch } from '../../../shared/cluster-watch'
 import type { Session } from '../../../shared/session'
-import { profileOf, rememberDelivery } from '../../../web/site/clusters/model'
+import { choiceOf, type DeliveryOption, profileOf, rememberDelivery } from '../../../web/site/clusters/model'
 import type { ClusterCall, IslandBridge } from '../bridge'
 
 /** At most this many clusters are followed live for the strip: the relay allows ten per account. */
@@ -65,9 +65,9 @@ export class IslandClusters {
     return id
   }
 
-  putIn(clusterId: string, session: Session, delivery: ClusterDelivery) {
+  putIn(clusterId: string, session: Session, delivery: DeliveryOption) {
     rememberDelivery(clusterId, session.id, delivery)
-    void this.watch.putSession(clusterId, session.id, profileOf(session), { delivery })
+    void this.watch.putSession(clusterId, session.id, profileOf(session), choiceOf(delivery))
   }
 
   takeOut(clusterId: string, sessionId: string) {
