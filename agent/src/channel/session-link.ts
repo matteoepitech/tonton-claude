@@ -35,11 +35,14 @@ const IN_TURN = ['UserPromptSubmit', 'PermissionRequest', 'Notification:permissi
 export function hookState(file = join(paths.run, `${process.ppid}.json`)): { busy: boolean; skipsPrompts: boolean } {
   try {
     const link = JSON.parse(readFileSync(file, 'utf8')) as SessionLink
-    return { busy: IN_TURN.includes(link.event ?? ''), skipsPrompts: link.permissionMode === 'bypassPermissions' }
+    return { busy: IN_TURN.includes(link.event ?? ''), skipsPrompts: skipsPrompts(link) }
   } catch {
     return { busy: false, skipsPrompts: false }
   }
 }
+
+/** Claude Code and Codex both report the mode that skips every permission prompt as `bypassPermissions`. */
+const skipsPrompts = (link: SessionLink | null): boolean => link?.permissionMode === 'bypassPermissions'
 
 /**
  * Finds which Claude Code or Codex session this channel belongs to. Hooks and the channel are both children of the same
@@ -47,9 +50,13 @@ export function hookState(file = join(paths.run, `${process.ppid}.json`)): { bus
  * a Codex run by `tonton codex` is the first thread its server started, as `tonton codex` records it: Codex runs no
  * hook its user has not trusted, and writes no rollout before the first prompt, which for a pool machine's session is
  * the task the channel hands it. Otherwise the newest transcript or rollout of the working directory is used.
+ *
+ * The hooks write the link at every event, the permission mode with it: a session that starts or stops skipping
+ * permission prompts (Shift+Tab in Claude Code) is told with `onPrompts` at the next event, from the same reads.
  */
 export class SessionLinkWatcher {
   private current: SessionLink | null = null
+  private skipsPrompts = false
   private timer: Timer | null = null
   private readonly startedAt = Date.now()
   private readonly linkFile = join(paths.run, `${process.ppid}.json`)
@@ -57,6 +64,7 @@ export class SessionLinkWatcher {
   constructor(
     private readonly onChange: (link: SessionLink) => void,
     private readonly tool: 'claude' | 'codex' = 'claude',
+    private readonly onPrompts: (skipsPrompts: boolean) => void = () => {},
   ) {}
 
   start() {
@@ -69,10 +77,16 @@ export class SessionLinkWatcher {
   }
 
   private poll() {
-    let next =
-      this.readLinkFile() ??
-      this.fromServer() ??
-      (this.current || Date.now() - this.startedAt < GUESS_AFTER_MS ? null : this.guessFromCwd())
+    const linked = this.readLinkFile()
+    this.follow(linked)
+    const skips = skipsPrompts(linked)
+    if (skips === this.skipsPrompts) return
+    this.skipsPrompts = skips
+    this.onPrompts(skips)
+  }
+
+  private follow(linked: SessionLink | null) {
+    let next = linked ?? this.fromServer() ?? (this.current || Date.now() - this.startedAt < GUESS_AFTER_MS ? null : this.guessFromCwd())
     if (!next) return
     // Some hook events carry no transcript path: keep the one already known for this session.
     if (next.sessionId === this.current?.sessionId && !next.transcriptPath) next = { ...next, transcriptPath: this.current.transcriptPath }

@@ -216,7 +216,7 @@ export class Conversation {
           () => this.cwd(),
           this.clusters,
           post,
-          () => this.clusterSelf(),
+          order => this.cluster.joinProfile(order),
         )
       : null
     this.tailer = link.transcriptPath
@@ -256,6 +256,11 @@ export class Conversation {
     if (this.usageTimer) clearInterval(this.usageTimer)
     this.work.stop()
     this.autoJoin?.stop()
+  }
+
+  /** The session started or stopped skipping permission prompts: its clusters see how it takes posts now. */
+  promptsChanged() {
+    this.cluster.descriptionChanged()
   }
 
   /** How this session shows in its clusters: the folder's name, never its path. */

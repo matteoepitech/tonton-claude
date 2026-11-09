@@ -184,7 +184,7 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
   }
 
   relay.connect()
-  new SessionLinkWatcher(follow, tool).start()
+  new SessionLinkWatcher(follow, tool, () => conversation?.promptsChanged()).start()
 }
 
 /** The link goes with its session, as Claude Code's SessionEnd hook takes it (agent/src/hook.ts). */

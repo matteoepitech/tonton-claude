@@ -4,7 +4,9 @@ import { describe, expect, test } from 'bun:test'
 import {
   ClusterVault,
   clusterDelivery,
+  clusterDeliveryProfile,
   clusterKeyScope,
+  clusterLiveTurnedDigest,
   clusterPostIsFor,
   decodeClusterClaims,
   decodeClusterClock,
@@ -82,6 +84,24 @@ describe('cluster keys and orders', () => {
     expect(clusterDelivery({ delivery: 'live', liveWithoutPrompts: true }, true)).toBe('live')
     expect(clusterDelivery({ delivery: 'muted' }, false)).toBe('muted')
     expect(clusterDelivery({ delivery: 'muted', liveWithoutPrompts: true }, true)).toBe('muted')
+  })
+
+  test("a session's agent says the delivery it really gets, and the clients say when live turned into digests", () => {
+    expect(clusterDeliveryProfile({}, false)).toEqual({ delivery: 'live' })
+    expect(clusterDeliveryProfile({}, true)).toEqual({ delivery: 'digest', skipsPrompts: true })
+    expect(clusterDeliveryProfile({ delivery: 'live', liveWithoutPrompts: true }, true)).toEqual({ delivery: 'live', skipsPrompts: true })
+    expect(clusterDeliveryProfile({ delivery: 'muted' }, true)).toEqual({ delivery: 'muted', skipsPrompts: true })
+
+    const turned = { delivery: 'digest', skipsPrompts: true } as const
+    expect(clusterLiveTurnedDigest({}, turned)).toBe(true)
+    expect(clusterLiveTurnedDigest({ delivery: 'live' }, turned)).toBe(true)
+    // Its owner chose a digest, or Live anyway, which its agent has not taken yet: nothing turned.
+    expect(clusterLiveTurnedDigest({ delivery: 'digest' }, turned)).toBe(false)
+    expect(clusterLiveTurnedDigest({ delivery: 'live', liveWithoutPrompts: true }, turned)).toBe(false)
+    // It asks for permission, or an older agent says neither.
+    expect(clusterLiveTurnedDigest({}, { delivery: 'live' })).toBe(false)
+    expect(clusterLiveTurnedDigest({}, {})).toBe(false)
+    expect(clusterLiveTurnedDigest({}, null)).toBe(false)
   })
 })
 

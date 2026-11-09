@@ -141,6 +141,29 @@ export function clusterDelivery(
   return chosen === 'live' && skipsPrompts && !order.liveWithoutPrompts ? 'digest' : chosen
 }
 
+/**
+ * What a session's agent puts in its profile about how it takes posts, for every member to see: the delivery it really
+ * gets, and that it skips permission prompts while it does.
+ */
+export function clusterDeliveryProfile(
+  order: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>,
+  skipsPrompts: boolean,
+): Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts'> {
+  return { delivery: clusterDelivery(order, skipsPrompts), ...(skipsPrompts ? { skipsPrompts: true as const } : {}) }
+}
+
+/**
+ * Its owner chose live, but the session skips permission prompts, so its agent says it gets digests: the website and
+ * the island say so, with Live anyway one click away. False for an older agent, which says neither.
+ */
+export function clusterLiveTurnedDigest(
+  choice: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>,
+  profile: Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts'> | null | undefined,
+): boolean {
+  const live = (choice.delivery ?? 'live') === 'live' && !choice.liveWithoutPrompts
+  return live && profile?.skipsPrompts === true && profile.delivery === 'digest'
+}
+
 const isVersion = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1
 
 // MARK: Payloads another member sealed

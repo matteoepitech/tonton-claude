@@ -193,7 +193,7 @@ class Link {
       () => this.cwd() ?? process.cwd(),
       this.clusters,
       build => this.relay.post(build),
-      () => this.clusterSelf(),
+      order => this.cluster.joinProfile(order),
     )
     this.autoJoin.start()
     this.relay.connect()

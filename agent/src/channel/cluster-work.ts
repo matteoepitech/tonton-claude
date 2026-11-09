@@ -11,6 +11,7 @@ import {
   type ClusterSession,
   type ClusterState,
   clusterDelivery,
+  clusterDeliveryProfile,
   clusterPostIsFor,
   decodeClusterClaims,
   decodeClusterClock,
@@ -29,6 +30,7 @@ import type {
   ClusterDelivery,
   ClusterDocWire,
   ClusterPostBody,
+  ClusterSessionOrder,
   ClusterSessionProfile,
   ClusterTarget,
   ClusterTool,
@@ -389,7 +391,10 @@ export class ClusterWork {
     return this.clusters.ids().length ? CLUSTER_TOOLS : []
   }
 
-  /** The model, the project or the branch may have changed: the cluster sees them with the session's next profile. */
+  /**
+   * The model, the project, the branch, or whether the session skips permission prompts may have changed: the cluster
+   * sees them with the session's next profile.
+   */
   descriptionChanged() {
     for (const clusterId of this.clusters.ids()) {
       const state = this.clusters.state(clusterId)
@@ -519,7 +524,7 @@ export class ClusterWork {
   private async status(clusterId: string, me: ClusterSession, args: Args): Promise<string> {
     if (typeof args.text !== 'string') return 'text is missing.'
     const status = args.text.replace(/\s+/g, ' ').trim().slice(0, MAX_STATUS)
-    const profile: ClusterSessionProfile = { ...me.profile, ...this.describe() }
+    const profile: ClusterSessionProfile = { ...withoutDelivery(me.profile), ...this.describe(), ...this.deliveryOf(clusterId) }
     if (status) Object.assign(profile, { status, statusAt: new Date().toISOString() })
     else {
       delete profile.status
@@ -1128,12 +1133,22 @@ export class ClusterWork {
   }
 
   /**
-   * Posts its profile when it joins, and again when its tool, model, project or branch change, or when its owner put it
-   * in again with a profile of their own (a new delivery), which leaves out what only the agent knows.
+   * The profile the session's agent seals with an order it makes itself (`tonton cluster join`): what it runs on, and
+   * how it will take posts.
+   */
+  joinProfile(order: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>): ClusterSessionProfile {
+    return { ...defined(this.describe()), ...clusterDeliveryProfile(order, this.hooks.skipsPrompts()) }
+  }
+
+  /**
+   * Posts its profile when it joins, and again when its tool, model, project or branch change, when its delivery changes
+   * (it started or stopped skipping permission prompts, or its owner chose another), or when its owner put it in again
+   * with a profile of their own, which leaves out what only the agent knows.
    */
   private announce(clusterId: string, me: ClusterSession) {
     const self = this.describe()
-    const mark = JSON.stringify([self.tool, self.model, self.project, self.branch, self.machine, me.profile ?? null])
+    const delivery = this.deliveryOf(clusterId)
+    const mark = JSON.stringify([self.tool, self.model, self.project, self.branch, self.machine, delivery, me.profile ?? null])
     if (this.described.get(clusterId) === mark) return
     this.described.set(clusterId, mark)
     const profile = me.profile ?? {}
@@ -1142,9 +1157,17 @@ export class ClusterWork {
       profile.model === self.model &&
       profile.project === self.project &&
       profile.branch === self.branch &&
-      profile.machine === self.machine
+      profile.machine === self.machine &&
+      profile.delivery === delivery.delivery &&
+      profile.skipsPrompts === delivery.skipsPrompts
     if (same) return
-    void this.sendProfile(clusterId, { ...profile, ...defined(self) })
+    void this.sendProfile(clusterId, { ...withoutDelivery(profile), ...defined(self), ...delivery })
+  }
+
+  /** How the session really takes posts in the cluster, as its owner chose and as its hooks say; nothing without an order. */
+  private deliveryOf(clusterId: string): Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts'> {
+    const order = this.clusters.order(clusterId)
+    return order ? clusterDeliveryProfile(order, this.hooks.skipsPrompts()) : {}
   }
 
   private forget(clusterId: string) {
@@ -1289,3 +1312,9 @@ function holderTool(state: ClusterState, claim: ClusterClaim): string {
 
 /** Leaves out the fields that are missing. */
 const defined = <T extends object>(value: T): T => Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T
+
+/** A profile without what its agent says of its delivery, to say it again as it is now. */
+function withoutDelivery(profile: ClusterSessionProfile | null | undefined): ClusterSessionProfile {
+  const { delivery: _delivery, skipsPrompts: _skipsPrompts, ...rest } = profile ?? {}
+  return rest
+}

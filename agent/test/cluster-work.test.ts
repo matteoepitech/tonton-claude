@@ -250,6 +250,59 @@ describe('putting a session in', () => {
     expect(profiles()).toHaveLength(2)
   })
 
+  test('its profile says it skips permission prompts and gets digests, and says it no more once it stops', async () => {
+    const profiles = () =>
+      Promise.all(
+        relay.sent.flatMap(message =>
+          message.t === 'cluster_session_profile' ? [vault.read(message.profile, decodeClusterSessionProfile)] : [],
+        ),
+      )
+    // The hook state says bypassPermissions.
+    skipsPrompts = true
+    await join()
+    expect(await profiles()).toHaveLength(1)
+    expect((await profiles()).at(-1)).toMatchObject({ name: 'api', tool: 'claude', delivery: 'digest', skipsPrompts: true })
+    // Nothing changed: nothing is sent again.
+    work.descriptionChanged()
+    await settle()
+    expect(await profiles()).toHaveLength(1)
+    // Shift+Tab: it asks again, so it takes posts live.
+    skipsPrompts = false
+    work.descriptionChanged()
+    await settle()
+    expect(await profiles()).toHaveLength(2)
+    const back = (await profiles()).at(-1)
+    expect(back).toMatchObject({ name: 'api', machine: 'mac', delivery: 'live' })
+    expect(back?.skipsPrompts).toBeUndefined()
+    // It skips them again, then its owner chooses Live anyway: live, still skipping prompts.
+    skipsPrompts = true
+    work.descriptionChanged()
+    await settle()
+    expect((await profiles()).at(-1)).toMatchObject({ delivery: 'digest', skipsPrompts: true })
+    await join({ delivery: 'live', liveWithoutPrompts: true })
+    expect((await profiles()).at(-1)).toMatchObject({ delivery: 'live', skipsPrompts: true })
+    // The status line keeps what it says of its delivery.
+    expect(await call('cluster_status', { text: 'rigging' })).toBe('Status set.')
+    expect((await profiles()).at(-1)).toMatchObject({ status: 'rigging', delivery: 'live', skipsPrompts: true })
+    // Muted, whatever the prompts.
+    await join({ delivery: 'muted' })
+    expect((await profiles()).at(-1)).toMatchObject({ delivery: 'muted', skipsPrompts: true })
+  })
+
+  test('the profile it seals with an order of its own says how it will take posts', () => {
+    expect(work.joinProfile({})).toEqual({
+      tool: 'claude',
+      model: 'claude-opus-5-5',
+      project: 'api',
+      branch: 'main',
+      machine: 'mac',
+      delivery: 'live',
+    })
+    skipsPrompts = true
+    expect(work.joinProfile({})).toMatchObject({ delivery: 'digest', skipsPrompts: true })
+    expect(work.joinProfile({ delivery: 'live', liveWithoutPrompts: true })).toMatchObject({ delivery: 'live', skipsPrompts: true })
+  })
+
   test('an order older than the last leave is not taken again', async () => {
     await join()
     const old = await sealClusterSessionOrder(

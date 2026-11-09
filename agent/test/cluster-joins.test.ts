@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   ClusterVault,
+  clusterDeliveryProfile,
   decodeClusterSessionProfile,
   grantClusterKey,
   newClusterKey,
@@ -129,7 +130,7 @@ describe('a channel and the rules of its machine', () => {
       () => cwd,
       clusters,
       post,
-      () => ({ tool: 'claude', project: 'jam' }),
+      order => ({ tool: 'claude', project: 'jam', ...clusterDeliveryProfile(order, false) }),
       offline,
     )
 
@@ -151,9 +152,11 @@ describe('a channel and the rules of its machine', () => {
       version: 1,
       delivery: 'digest',
     })
+    // The profile is made for the order: it says how the session takes posts.
     expect(await new ClusterVault(clusterKey).read(message.profile, decodeClusterSessionProfile)).toEqual({
       tool: 'claude',
       project: 'jam',
+      delivery: 'digest',
     })
     // Read again, the same rule does nothing: a session its owner took out from the app stays out.
     await joining.poll(true)
