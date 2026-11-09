@@ -4,5 +4,7 @@
 <dict>
   <!-- Dictation in the composer: with the hardened runtime, the microphone needs this. -->
   <key>com.apple.security.device.audio-input</key><true/>
+  <!-- Music mode reads and drives Spotify through AppleScript: with the hardened runtime, Apple Events need this. -->
+  <key>com.apple.security.automation.apple-events</key><true/>
 </dict>
 </plist>

@@ -159,6 +159,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>OSAScriptingDefinition</key><string>TontonClaude.sdef</string>
   <key>NSMicrophoneUsageDescription</key><string>Dictate messages to your Claude Code sessions from the notch.</string>
   <key>NSSpeechRecognitionUsageDescription</key><string>Turn what you dictate in the notch into text for Claude.</string>
+  <key>NSAppleEventsUsageDescription</key><string>Show the music playing on this Mac in the notch, and control it from there.</string>
   $UPDATES
   $WIDGET_INFO
 </dict>
