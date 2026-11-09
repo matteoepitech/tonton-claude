@@ -2,7 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "NSAppleEventsUsageDescription" : {
-      "comment" : "Asked the first time Music mode opens, before Tonton reads or controls Spotify. The same English as in scripts/build-app.sh.",
+      "comment" : "Asked the first time Music mode opens, before Tonton reads or controls Spotify or Apple Music, once for each. The same English as in scripts/build-app.sh.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {

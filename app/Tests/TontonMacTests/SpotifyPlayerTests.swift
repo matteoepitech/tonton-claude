@@ -28,6 +28,8 @@ final class SpotifyPlayerTests: XCTestCase {
             if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
             return try answer(source)
         }
+
+        func data(_ source: String) async throws -> Data { Data(try await run(source).utf8) }
     }
 
     private final class Access: AutomationAccess, @unchecked Sendable {

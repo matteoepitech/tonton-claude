@@ -38,7 +38,8 @@ final class MusicStore: ObservableObject {
         let apps = WorkspaceApps()
         let notifications = DistributedNotifications()
         players = [
-            SpotifyPlayer(apps: apps, notifications: notifications)
+            SpotifyPlayer(apps: apps, notifications: notifications),
+            AppleMusicPlayer(apps: apps, notifications: notifications),
         ]
         pin = AppSettings.shared.musicPlayer
         covers.countLimit = 50
