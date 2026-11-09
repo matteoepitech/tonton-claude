@@ -101,15 +101,26 @@ the two have their own tools, keys, envelopes and instructions, and never mix.
 
 | Tool | Does |
 |---|---|
-| `cluster_who` | Members, machines and sessions: owner, tool, model, state, status line, project, branch, last event |
+| `cluster_who` | Members, machines and sessions: owner, tool, model, state, status line, project, branch, last event, and how each takes posts (`delivery`: live, digest, muted, or unknown) |
 | `cluster_status` | Set this session's status line ("rigging the hero, 20 min"); empty clears it |
-| `cluster_send` | A message to a session (`to_session`), a member's sessions (`to_member`) or everyone, with a `topic`; `reply_to` follows a post, and answers an ask, back to the session that asked |
-| `cluster_ask` | A question to one session; waits for its answer (`minutes`, 10 at most) and returns it, or says it did not come in time. A later answer comes as a post |
+| `cluster_send` | A message to a session (`to_session`), a member's sessions (`to_member`) or everyone, with a `topic`; `reply_to` follows a post, and answers an ask, back to the session that asked. Says which sessions it names read it only at their next prompt, or not at all |
+| `cluster_ask` | A question to one session; waits for its answer (`minutes`, 10 at most) and returns it, or says it did not come in time. A later answer comes as a post. A digest session is not asked unless `wait_anyway`, a muted one never |
 | `cluster_inbox` | The posts for this session since its last read, or after `since` |
 | `cluster_notes_read`, `cluster_notes_write` | The shared board, written over the revision it was read at |
 | `cluster_claim`, `cluster_release`, `cluster_claims` | Hold files, folders or assets (#310) |
 | `cluster_event`, `cluster_wait` | Post an event; wait until one matches (#311) |
 | `cluster_share`, `cluster_file` | Send and fetch a small file (#314) |
+
+How a session takes posts is what its own agent says in its profile (`delivery`, `skipsPrompts`, see Delivery), so the
+tools tell the Claude that sends before it waits for nothing. `cluster_who` shows, for each session, when a post reaches
+its Claude: now (live: an ask or a message sent to it wakes it), at its next prompt (digest, with `skipsPrompts` and
+"it skips permission prompts" in the results while it does), never (muted: only if its user asks for its inbox), or
+unknown for an older agent, which says neither. `cluster_send` to a session or a member adds "It reads this at its next prompt." for a digest
+session, says when it is muted, and lists which of a member's sessions are either. `cluster_ask` to a digest session asks
+nothing and says so at once, with `cluster_send` to reach it instead; `wait_anyway: true` asks and waits all the same, for
+an answer that comes only if its user writes to it in time. A muted session is never asked, even then: no post reaches it,
+not even at its next prompt, and `cluster_send` still puts the question in its inbox. An ask to an older agent waits as
+before, and its timeout says it may not have been woken. Claude Code, OpenCode and Codex get the same results.
 
 A session sends 20 posts a minute at most, before the relay's own limit. OpenCode's plugin gives a tool 30 seconds to
 answer; a spec with `waitMs` (`cluster_ask`) gets that long instead. Codex ends an MCP call after five minutes: there,
