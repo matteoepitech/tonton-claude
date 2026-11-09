@@ -9,6 +9,8 @@ enum MusicAction: Equatable {
     case showPlayer
     case openPlayer
     case openAutomationSettings
+    /// The media keys, which drive a player Now Playing can't read, need Accessibility.
+    case openAccessibilitySettings
     /// Opens the player with this `app`, from the view shown while none runs.
     case launch(String)
 }
@@ -27,7 +29,7 @@ struct MusicPlayerView: View {
     var body: some View {
         switch state.screen {
         case .playing(let now):
-            NowPlayingCard(name: name, now: now, cover: cover, showsName: showsName, perform: perform)
+            NowPlayingCard(name: name, now: now, cover: cover, showsName: showsName, keys: state.mediaKeys, perform: perform)
         case .notInstalled:
             CenteredMessage(
                 icon: "music.note", title: "\(name) is not installed", detail: "The music it plays shows up here once it is on this Mac.")
@@ -60,6 +62,8 @@ private struct NowPlayingCard: View {
     let now: NowPlaying
     let cover: NSImage?
     let showsName: Bool
+    /// Set when the buttons press the media keys, for a player Now Playing can't read: whether Accessibility allows them.
+    let keys: MusicAccess?
     let perform: (MusicAction) -> Void
     /// Where the pointer drags the position or the volume to, from 0 to 1: the bars follow it rather than the player.
     @State private var seeking: Double?
@@ -72,7 +76,8 @@ private struct NowPlayingCard: View {
             coverButton
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    if showsName {
+                    // Without a title the name is the title already.
+                    if showsName && !now.title.isEmpty {
                         Text(verbatim: name).font(.notch(11, weight: .medium)).foregroundStyle(Theme.tertiary).lineLimit(1)
                     }
                     Text(now.title.isEmpty ? name : now.title)
@@ -86,9 +91,11 @@ private struct NowPlayingCard: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                position
+                // A player that says neither where it is nor how long, as when only its app is known, gets no bar.
+                if now.duration != nil || now.position != nil { position }
                 controls
                 if let level = now.volume { volumeRow(level) }
+                if let keys, keys != .granted { keysHint }
             }
             .frame(maxWidth: 360)
         }
@@ -162,6 +169,27 @@ private struct NowPlayingCard: View {
             .help(now.isPlaying ? "Pause" : "Play")
             .accessibilityLabel(now.isPlaying ? "Pause" : "Play")
             control("forward.fill", size: 15, label: "Next track") { perform(.command(.nextTrack)) }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The keys do nothing without Accessibility, and macOS says nothing of it: the first press asks, and this stays until
+    /// it is allowed.
+    private var keysHint: some View {
+        VStack(spacing: 8) {
+            Text("The buttons press the media keys: turn on Tonton Claude in System Settings › Privacy & Security › Accessibility.")
+                .font(.notch(11))
+                .foregroundStyle(Theme.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                perform(.openAccessibilitySettings)
+            } label: {
+                Text("Open System Settings").font(.notch(11, weight: .medium)).padding(.horizontal, 12).padding(.vertical, 5)
+            }
+            .buttonStyle(.plain)
+            .background(Capsule().fill(Theme.ink.opacity(0.14)))
+            .overlay(Capsule().stroke(Theme.line(0.18)))
         }
         .frame(maxWidth: .infinity)
     }

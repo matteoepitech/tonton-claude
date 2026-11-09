@@ -67,12 +67,19 @@ public struct MusicPlayerState: Equatable, Sendable {
     public var access: MusicAccess
     /// What it plays. Nil when it is stopped, not read yet, or not running.
     public var nowPlaying: NowPlaying?
+    /// Nil unless its controls go through the keyboard's media keys, as Now Playing's do when it can't be read: then
+    /// whether macOS lets Tonton post them, under Accessibility.
+    public var mediaKeys: MusicAccess?
 
-    public init(installed: Bool = true, running: Bool = false, access: MusicAccess = .unknown, nowPlaying: NowPlaying? = nil) {
+    public init(
+        installed: Bool = true, running: Bool = false, access: MusicAccess = .unknown, nowPlaying: NowPlaying? = nil,
+        mediaKeys: MusicAccess? = nil
+    ) {
         self.installed = installed
         self.running = running
         self.access = access
         self.nowPlaying = nowPlaying
+        self.mediaKeys = mediaKeys
     }
 
     /// What the music view shows.

@@ -10982,6 +10982,16 @@
         }
       }
     },
+    "The buttons press the media keys: turn on Tonton Claude in System Settings › Privacy & Security › Accessibility." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les boutons appuient sur les touches multimédias : activez Tonton Claude dans Réglages Système › Confidentialité et sécurité › Accessibilité."
+          }
+        }
+      }
+    },
     "The cluster is still opening: try again in a moment." : {
       "localizations" : {
         "fr" : {

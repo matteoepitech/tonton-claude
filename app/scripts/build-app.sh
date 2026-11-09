@@ -111,6 +111,49 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 cp "$BIN" "$APP/Contents/MacOS/TontonClaude"
 # ditto keeps the framework's symlinks and signatures.
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
+
+# Now Playing, for the players with no script of their own (Sources/TontonMac/NowPlayingPlayer.swift). Since macOS 15.4
+# MediaRemote only answers Apple's own processes, so the app never loads this framework: /usr/bin/perl does, through the
+# adapter's script. Vendor/mediaremote-adapter is ungive/mediaremote-adapter v0.7.7 (commit e3ff502), BSD-3-Clause: its
+# LICENSE, bin/, include/ and src/, unchanged. Its src/test is a test client, which isn't built. Both architectures
+# whatever the app's: perl runs natively.
+ADAPTER_SOURCE=Vendor/mediaremote-adapter
+ADAPTER=$APP/Contents/Frameworks/MediaRemoteAdapter.framework
+ADAPTER_VERSION=0.7.7
+rm -rf build/adapter
+mkdir -p build/adapter "$ADAPTER/Versions/A/Resources"
+for arch in arm64 x86_64; do
+  xcrun clang -arch $arch -mmacosx-version-min=14.0 -dynamiclib -O2 -fobjc-arc -fvisibility=default \
+    -I "$ADAPTER_SOURCE/include" -I "$ADAPTER_SOURCE/src" \
+    -framework Foundation -framework AppKit -framework UniformTypeIdentifiers \
+    -install_name @rpath/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter \
+    -o "build/adapter/MediaRemoteAdapter-$arch" \
+    "$ADAPTER_SOURCE"/src/adapter/*.m "$ADAPTER_SOURCE"/src/private/*.m "$ADAPTER_SOURCE"/src/utility/*.m
+done
+lipo -create -output "$ADAPTER/Versions/A/MediaRemoteAdapter" build/adapter/MediaRemoteAdapter-arm64 build/adapter/MediaRemoteAdapter-x86_64
+# The license goes with the binary, as its second clause asks.
+cp "$ADAPTER_SOURCE/LICENSE" "$ADAPTER/Versions/A/Resources/LICENSE"
+cat > "$ADAPTER/Versions/A/Resources/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>com.vandenbe.MediaRemoteAdapter</string>
+  <key>CFBundleName</key><string>MediaRemoteAdapter</string>
+  <key>CFBundleExecutable</key><string>MediaRemoteAdapter</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundlePackageType</key><string>FMWK</string>
+  <key>CFBundleShortVersionString</key><string>$ADAPTER_VERSION</string>
+  <key>CFBundleVersion</key><string>$ADAPTER_VERSION</string>
+</dict>
+</plist>
+PLIST
+plutil -lint -s "$ADAPTER/Versions/A/Resources/Info.plist"
+ln -s A "$ADAPTER/Versions/Current"
+ln -s Versions/Current/MediaRemoteAdapter "$ADAPTER/MediaRemoteAdapter"
+ln -s Versions/Current/Resources "$ADAPTER/Resources"
+# The adapter's script, and the one that runs its stream and ends it once the app is gone.
+cp "$ADAPTER_SOURCE/bin/mediaremote-adapter.pl" Resources/now-playing.pl "$APP/Contents/Resources/"
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp Resources/TontonClaude.sdef "$APP/Contents/Resources/"
 # The text of the app and of the widget: one .lproj folder per language in their Resources, where Bundle.main and the
@@ -223,6 +266,8 @@ sign --options runtime --preserve-metadata=entitlements "$SPARKLE_CODE/XPCServic
 sign --options runtime "$SPARKLE_CODE/Autoupdate"
 sign --options runtime "$SPARKLE_CODE/Updater.app"
 sign --options runtime "$APP/Contents/Frameworks/Sparkle.framework"
+# perl loads it, not the app: perl has no hardened runtime of its own, so it loads an ad-hoc signature as well.
+sign --options runtime "$ADAPTER"
 # The widget only links system frameworks, so it keeps the hardened runtime with an ad-hoc signature too.
 if [ -n "$APP_GROUP" ]; then sign --options runtime --entitlements "$ENTITLEMENTS/TontonWidget.entitlements" "$WIDGET"; fi
 if [ -n "$CODESIGN_IDENTITY" ]; then
