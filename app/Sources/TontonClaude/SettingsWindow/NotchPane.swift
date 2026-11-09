@@ -4,6 +4,8 @@ import TontonCore
 
 struct NotchPane: View {
     @EnvironmentObject var settings: AppSettings
+    /// Its players, for the pin. Listing them sends them nothing.
+    @ObservedObject private var music = MusicStore.shared
 
     private static let focusSettings = URL(string: "x-apple.systempreferences:com.apple.Focus-Settings.extension")
 
@@ -57,6 +59,17 @@ struct NotchPane: View {
                         // Not the "Clear" of a button: another word in other languages.
                         Text(String(localized: "Clear (transparency)", defaultValue: "Clear"))
                             .font(.system(size: 11)).foregroundStyle(Theme.textDim).fixedSize()
+                    }
+                }
+            }
+            GroupLabel(text: "Music")
+            Card {
+                Row(
+                    title: "Player",
+                    detail: "Which player Music mode shows. Automatic shows the one playing, or else the last one that played."
+                ) {
+                    ChoiceMenu(selection: settings.musicPlayer.rawValue, options: musicPlayers) {
+                        settings.musicPlayer = MusicPin(rawValue: $0)
                     }
                 }
             }
@@ -182,6 +195,23 @@ struct NotchPane: View {
                     isOn: $settings.webhookIncludeLastMessage)
             }
         }
+    }
+
+    /// Automatic, then each player Music mode follows. A pin to an app that isn't one of them now (the Now Playing player
+    /// only is a given app while it plays) stays listed, under that app's name.
+    private var musicPlayers: [(id: String, label: String)] {
+        let players = music.allPlayers.filter { !$0.app.isEmpty }.map { (id: $0.app, label: $0.name) }
+        let pinned: [(id: String, label: String)] =
+            switch settings.musicPlayer {
+            case .player(let app) where !players.contains(where: { $0.id == app }): [(app, Self.appName(app))]
+            default: []
+            }
+        return [("", String(localized: "Automatic", comment: "Settings › Notch › Music › Player: the one playing"))] + players + pinned
+    }
+
+    private static func appName(_ bundleId: String) -> String {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId).map { FileManager.default.displayName(atPath: $0.path) }
+            ?? bundleId
     }
 
     /// The pack every event's sound comes from, or none when they were picked one by one.

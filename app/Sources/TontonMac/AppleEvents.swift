@@ -6,9 +6,11 @@ import TontonCore
 /// What the music players of this Mac are driven through: AppleScript, the Automation permission, the apps that run and
 /// the notifications players post. Each is a protocol so that tests send no Apple Event, ask nothing and launch nothing.
 
-/// Runs AppleScript source and gives its result as text.
+/// Runs AppleScript source and gives its result as text, or as bytes.
 public protocol ScriptRunning: Sendable {
     func run(_ source: String) async throws -> String
+    /// The bytes of what the script returns, such as the picture of Music's `data of artwork`: empty for none.
+    func data(_ source: String) async throws -> Data
 }
 
 /// A script that failed, with AppleScript's error number: `MusicAccess.notPermittedError` when Automation is off.
@@ -24,6 +26,20 @@ public final class AppleScriptRunner: ScriptRunning, @unchecked Sendable {
     private let queue = DispatchQueue(label: "tech.d3l.tontonclaude.applescript", qos: .userInitiated)
 
     public func run(_ source: String) async throws -> String {
+        try await execute(source) { $0.stringValue ?? "" }
+    }
+
+    /// A picture comes back as a descriptor of its format (`JPEG`, `PNGf`, `tdta`), whose data is the image itself.
+    public func data(_ source: String) async throws -> Data {
+        try await execute(source) { $0.data }
+    }
+
+    /// Runs `source` on the queue and reads its result there: the descriptor stays on that thread.
+    private func execute<Value: Sendable>(
+        _ source: String, _ read: @escaping @Sendable (NSAppleEventDescriptor) -> Value
+    ) async throws
+        -> Value
+    {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 var error: NSDictionary?
@@ -35,7 +51,7 @@ public final class AppleScriptRunner: ScriptRunning, @unchecked Sendable {
                 if let error {
                     continuation.resume(throwing: ScriptFailure(code: error[NSAppleScript.errorNumber] as? Int ?? 0))
                 } else {
-                    continuation.resume(returning: result.stringValue ?? "")
+                    continuation.resume(returning: read(result))
                 }
             }
         }
