@@ -6,7 +6,7 @@ struct MusicPanel: View {
     @ObservedObject private var music = MusicStore.shared
 
     var body: some View {
-        CenteredMessage(icon: "music.note", title: "Nothing playing", detail: "The music playing on this Mac shows up here.")
+        MusicPlayerView(name: music.playerName, state: music.player, cover: music.cover, perform: music.perform)
             .onAppear { music.viewAppeared() }
             .onDisappear { music.viewDisappeared() }
     }
