@@ -1,7 +1,7 @@
 # A game jam with Tonton Claude
 
-Two people, one Unreal Engine game, a weekend, Perforce, a Mac and a Windows PC. Each of you sees your own Claude Code
-and OpenCode sessions in the notch (macOS) or the island (Windows), and your Claudes talk to each other through a
+Two people, one Unreal Engine game, a weekend, Perforce, a Mac and a Windows PC. Each of you sees your own Claude Code,
+OpenCode and Codex sessions in the notch (macOS) or the island (Windows), and your Claudes talk to each other through a
 [cluster](cluster.md): who is doing what, what is finished, what was submitted, who holds which asset.
 
 The cluster's one rule: **only a machine's owner drives its sessions.** Your Claude can ask the other Claude a question
@@ -58,7 +58,8 @@ within a few seconds.
 Sessions started any other way (an IDE, cmd.exe, Git Bash, a shortcut) show up too, but read only: no prompts and no
 permission answers from the notch or the island. On Windows, start `claude` from PowerShell, even when Claude Code
 runs its own commands in Git Bash. OpenCode needs nothing more: its plugin is installed with the agent when OpenCode is
-set up.
+set up. Codex gets Tonton's hooks and MCP server with the agent too: trust the hooks once in Codex's `/hooks`, and start
+Codex from the notch or with `tonton codex` for it to take prompts from the notch (macOS and Linux).
 
 ### 5. The cluster (3 minutes)
 
@@ -173,7 +174,7 @@ The session stays **working** in the notch for the whole build, and the turn cou
 Press Ctrl+Alt+F11 in the editor to compile there, or close the editor before Claude builds.
 
 **An Unreal MCP server.** A server that drives the editor (spawn actors, edit Blueprints, read the level) works like
-any MCP server, in Claude Code and in OpenCode. Its calls show in the notch with the server's name and the tool's.
+any MCP server, in Claude Code, OpenCode and Codex. Its calls show in the notch with the server's name and the tool's.
 Claude can't read `.uasset` and `.umap` files: they are binary, and only the editor or such a server understands them.
 
 **Long paths on Windows.** Unreal and Perforce paths get long. Turn on long paths once, as an administrator:
@@ -183,7 +184,7 @@ and keep the workspace close to the drive's root (`C:\Jam\MyGame`, not deep in D
 ## A CLAUDE.md for the jam
 
 Put this in the project's `CLAUDE.md`, in Perforce with the rest. OpenCode reads `AGENTS.md`, and `CLAUDE.md` when
-there is none.
+there is none. Codex reads `AGENTS.md`: point it at the same text.
 
 ```markdown
 ## Working in the jam cluster
