@@ -6467,6 +6467,26 @@
         }
       }
     },
+    "Live → digest" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En direct → résumé"
+          }
+        }
+      }
+    },
+    "Live → digest: skips permission prompts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En direct → résumé : saute les demandes de permission"
+          }
+        }
+      }
+    },
     "Loading the release notes…" : {
       "localizations" : {
         "fr" : {
@@ -8476,6 +8496,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les messages lui parviennent dès qu’ils arrivent"
+          }
+        }
+      }
+    },
+    "Posts reach it as they come, though it skips permission prompts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les messages lui parviennent dès qu’ils arrivent, bien qu’elle saute les demandes de permission"
           }
         }
       }

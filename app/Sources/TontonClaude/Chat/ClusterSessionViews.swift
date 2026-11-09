@@ -137,7 +137,7 @@ struct ClusterSessionContent: View {
                 .accessibilityElement(children: .combine)
                 Button("Open") { open(board.id) }.buttonStyle(NotchButtonStyle()).help("The cluster's roster, feed, claims and clock")
             }
-            deliveryPicker(current) { next in send(next, to: board.id) }
+            deliveryPicker(current, profile: member.profile) { next in send(next, to: board.id) }
             HStack {
                 Spacer()
                 Button("Take out", role: .destructive) { clusters.takeOut(session.id, of: board.id) }
@@ -177,8 +177,11 @@ struct ClusterSessionContent: View {
         .onAppear { choice = clusters.choice(for: session.id, in: selected.id) }
     }
 
-    /// Live, digest or muted, what each does, and Live anyway for a session that skips permission prompts.
-    private func deliveryPicker(_ current: ClusterSessionChoice, pick: @escaping (ClusterSessionChoice) -> Void) -> some View {
+    /// Live, digest or muted, what each does, and Live anyway for a session that skips permission prompts. Live that its
+    /// agent says turned into digests, as the session skips permission prompts, says so, the toggle right under it.
+    private func deliveryPicker(
+        _ current: ClusterSessionChoice, profile: ClusterSessionProfile? = nil, pick: @escaping (ClusterSessionChoice) -> Void
+    ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
                 ForEach(ClusterDelivery.allCases, id: \.self) { delivery in
@@ -188,7 +191,18 @@ struct ClusterSessionContent: View {
                     .help(delivery.detail)
                 }
             }
-            Text(verbatim: current.delivery.detail).font(.notch(10)).foregroundStyle(Theme.tertiary)
+            if current.turnsDigest(profile) {
+                Label {
+                    Text(verbatim: ClusterSessionChoice.turnedDigest).font(.notch(10, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.notch(9))
+                }
+                .labelStyle(TightLabelStyle())
+                .foregroundStyle(Theme.warning)
+            } else {
+                Text(verbatim: current.delivery.detail).font(.notch(10)).foregroundStyle(Theme.tertiary)
+            }
             if current.delivery == .live {
                 Toggle(
                     isOn: Binding(

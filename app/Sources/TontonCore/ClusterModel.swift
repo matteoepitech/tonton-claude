@@ -291,7 +291,25 @@ public struct ClusterSessionChoice: Codable, Equatable, Sendable {
 
     public var label: String { liveWithoutPrompts ? String(core: "Live anyway") : delivery.label }
 
-    /// The app does not know which sessions skip permission prompts: the agent applies the rule, and the notch says it.
+    /// Live, as chosen, but the session's agent says it skips permission prompts and so gets digests (docs/cluster.md,
+    /// The rule): the notch says so, with Live anyway one click away. False for an older agent, which says neither.
+    public func turnsDigest(_ profile: ClusterSessionProfile?) -> Bool {
+        delivery == .live && !liveWithoutPrompts && profile?.skipsPrompts == true && profile?.delivery == .digest
+    }
+
+    /// The choice, as the session really takes the posts.
+    public func label(for profile: ClusterSessionProfile?) -> String {
+        turnsDigest(profile) ? Self.turnedDigest : label
+    }
+
+    public static var turnedDigest: String { String(core: "Live → digest: skips permission prompts") }
+
+    /// What Live anyway does, for a session that skips permission prompts.
+    public static var anywayDetail: String {
+        String(core: "Posts reach it as they come, though it skips permission prompts")
+    }
+
+    /// The agent applies the rule, and an older one does not say when it did: the notch says it for every session.
     public static var promptsNote: String {
         String(core: "A session that skips permission prompts gets a digest unless you choose Live anyway.")
     }

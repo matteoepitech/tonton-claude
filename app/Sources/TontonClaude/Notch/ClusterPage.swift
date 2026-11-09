@@ -197,10 +197,22 @@ struct ClusterSessionRow: View {
     let own: SessionSummary?
     let mine: Bool
 
+    @ObservedObject private var clusters = ClusterStore.shared
+
     var body: some View {
-        let status = ClusterModel.status(of: session)
         let profile = session.profile
-        HStack(alignment: .top, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
+            summary(profile)
+            if let own, clusters.choice(for: session.session, in: board.id).turnsDigest(profile) {
+                ClusterTurnedDigest(board: board, session: own).padding(.leading, 14)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func summary(_ profile: ClusterSessionProfile?) -> some View {
+        let status = ClusterModel.status(of: session)
+        return HStack(alignment: .top, spacing: 6) {
             HStack(alignment: .top, spacing: 7) {
                 Circle().fill(Color(nsColor: status.color)).frame(width: 7, height: 7).padding(.top, 4)
                 VStack(alignment: .leading, spacing: 2) {
@@ -221,9 +233,8 @@ struct ClusterSessionRow: View {
             }
             .accessibilityElement(children: .combine)
             Spacer(minLength: 4)
-            if mine { ClusterOwnMenu(board: board, sessionId: session.session, own: own) }
+            if mine { ClusterOwnMenu(board: board, sessionId: session.session, own: own, profile: profile) }
         }
-        .padding(.vertical, 2)
     }
 
     static func ago(_ date: Date) -> String { date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)) }
@@ -234,13 +245,15 @@ struct ClusterOwnMenu: View {
     let board: ClusterBoard
     let sessionId: String
     let own: SessionSummary?
+    /// What its agent says of it, with how it really takes the posts. Nil before its agent said anything.
+    var profile: ClusterSessionProfile?
     @ObservedObject private var clusters = ClusterStore.shared
 
     var body: some View {
         let choice = clusters.choice(for: sessionId, in: board.id)
         HStack(spacing: 5) {
             if let own {
-                ClusterDeliveryMenu(choice: choice) { next in if next != choice { send(next, own) } }
+                ClusterDeliveryMenu(choice: choice, profile: profile) { next in if next != choice { send(next, own) } }
                     .help("How it takes the posts")
             }
             Button {
@@ -263,12 +276,16 @@ struct ClusterOwnMenu: View {
     }
 }
 
-/// Live, digest or muted, each with what it does, and Live anyway for a session that skips permission prompts.
+/// Live, digest or muted, each with what it does, and Live anyway for a session that skips permission prompts. Live
+/// that its agent says turned into digests, as the session skips permission prompts, reads so.
 struct ClusterDeliveryMenu: View {
     let choice: ClusterSessionChoice
+    /// What the session's agent says of it. Nil for a session not in the cluster yet, or an older agent.
+    var profile: ClusterSessionProfile?
     let pick: (ClusterSessionChoice) -> Void
 
     var body: some View {
+        let turned = choice.turnsDigest(profile)
         NotchMenu(width: 250) {
             let anyway = ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true)
             return [
@@ -278,17 +295,51 @@ struct ClusterDeliveryMenu: View {
                         let option = ClusterSessionChoice(delivery: delivery)
                         return NotchMenuItem(title: delivery.label, detail: delivery.detail, checked: option == choice) { pick(option) }
                     } + [
-                        NotchMenuItem(title: String(localized: "Live anyway, if it skips permission prompts"), checked: anyway == choice) {
+                        NotchMenuItem(
+                            title: String(localized: "Live anyway, if it skips permission prompts"),
+                            detail: turned ? ClusterSessionChoice.anywayDetail : nil, checked: anyway == choice
+                        ) {
                             pick(anyway)
                         }
                     ],
-                    note: ClusterSessionChoice.promptsNote)
+                    note: turned ? ClusterSessionChoice.turnedDigest : ClusterSessionChoice.promptsNote)
             ]
         } label: {
-            NotchMenuLabel(text: choice.label)
+            NotchMenuLabel(text: turned ? String(localized: "Live → digest") : choice.label)
         }
         .foregroundStyle(Theme.text)
-        .accessibilityLabel("Delivery: \(choice.label)")
+        .accessibilityLabel("Delivery: \(choice.label(for: profile))")
+    }
+}
+
+/// Under one of the account's sessions set to live that gets digests, as it skips permission prompts: why, and Live
+/// anyway one click away.
+struct ClusterTurnedDigest: View {
+    let board: ClusterBoard
+    let session: SessionSummary
+    @ObservedObject private var clusters = ClusterStore.shared
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Label {
+                Text(verbatim: ClusterSessionChoice.turnedDigest).font(.notch(10, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill").font(.notch(9))
+            }
+            .labelStyle(TightLabelStyle())
+            .foregroundStyle(Theme.warning)
+            Spacer(minLength: 4)
+            Button("Live anyway") {
+                do {
+                    try clusters.put(session, in: board.id, choice: ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true))
+                } catch {
+                    clusters.report(error, in: board.id)
+                }
+            }
+            .buttonStyle(NotchButtonStyle())
+            .help(ClusterSessionChoice.anywayDetail)
+        }
     }
 }
 

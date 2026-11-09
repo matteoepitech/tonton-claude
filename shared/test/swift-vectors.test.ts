@@ -3,7 +3,14 @@
 import { describe, expect, test } from 'bun:test'
 import { parseAccountToken } from '../account-token'
 import { chatItems } from '../chat'
-import { ClusterVault, decodeClusterClaims, decodeClusterPostBody, openClusterGrant, openClusterSessionOrder } from '../cluster'
+import {
+  ClusterVault,
+  decodeClusterClaims,
+  decodeClusterPostBody,
+  decodeClusterSessionProfile,
+  openClusterGrant,
+  openClusterSessionOrder,
+} from '../cluster'
 import { parseClusterInvite } from '../cluster-link'
 import { open } from '../crypto'
 import { modelFamily, modelName } from '../model'
@@ -94,7 +101,7 @@ describe('vectors from the Swift implementation', () => {
     expect(await openPoolSessionOrder(vectors.key, blob('pool session order'), 's2', 'pool00000001')).toBeNull()
   })
 
-  test('the cluster invite, key grant, session order, post and claims the app makes are read as the app wrote them', async () => {
+  test('the cluster invite, key grant, session order, post, session profile and claims the app makes are read as the app wrote them', async () => {
     const { text, pool, ...fields } = vectors.clusterInvite
     expect(parseClusterInvite(text)).toEqual({ ...fields, cluster: pool })
     const blob = (name: string) => vectors.blobs.find(b => b.name === name)?.blob ?? ''
@@ -119,6 +126,19 @@ describe('vectors from the Swift implementation', () => {
       to: [{ account: 'bob000000001', session: 's1' }],
       topic: 'art',
       event: { type: 'submit', ok: true, ref: '1234', paths: ['Content/Characters/Hero/SK_Hero.uasset'], count: 3 },
+    })
+    // A session set to live that skips permission prompts, as its agent says it: it gets digests.
+    expect(await cluster.read(blob('cluster session profile'), decodeClusterSessionProfile)).toEqual({
+      name: 'rig ✨',
+      project: 'jam',
+      machine: 'Studio',
+      tool: 'claude',
+      model: 'claude-opus-5-5',
+      branch: 'main',
+      status: 'rigging the hero',
+      statusAt: '2026-11-04T10:00:00Z',
+      delivery: 'digest',
+      skipsPrompts: true,
     })
     expect(await cluster.read(blob('cluster claims'), decodeClusterClaims)).toEqual({
       claims: [

@@ -49,6 +49,7 @@ final class VectorTests: XCTestCase {
         let cluster = try ClusterVault(key: vectors.key)
         XCTAssertEqual(cluster.post(blob("cluster post")), clusterPost)
         XCTAssertEqual(cluster.read(blob("cluster claims"), as: ClusterClaims.self), clusterClaims)
+        XCTAssertEqual(cluster.read(blob("cluster session profile"), as: ClusterSessionProfile.self), clusterProfile)
         let vault = SessionVault(key: try E2E.key(fromBase64URL: vectors.key))
         let order = try XCTUnwrap(
             vault.openClusterSessionOrder(try XCTUnwrap(blob("cluster session order")), sessionId: "s1", clusterId: "clus00000001"))
@@ -59,6 +60,10 @@ final class VectorTests: XCTestCase {
     static let clusterPost = ClusterPostBody(
         kind: .event, text: "Submitted the hero rig ✅", to: [ClusterTarget(account: "bob000000001", session: "s1")], topic: "art",
         event: ClusterEvent(type: "submit", ok: true, ref: "1234", paths: ["Content/Characters/Hero/SK_Hero.uasset"], count: 3))
+    /// A session set to live that skips permission prompts, as its agent says it: it gets digests.
+    static let clusterProfile = ClusterSessionProfile(
+        name: "rig ✨", project: "jam", machine: "Studio", tool: "claude", model: "claude-opus-5-5", branch: "main",
+        status: "rigging the hero", statusAt: "2026-11-04T10:00:00Z", delivery: .digest, skipsPrompts: true)
     static let clusterClaims = ClusterClaims(claims: [
         ClusterClaim(
             id: "claim0000001", paths: ["Content/Maps/Main.umap"], reason: "lighting pass", account: "bob000000001", session: "s1",
@@ -204,6 +209,7 @@ final class VectorTests: XCTestCase {
             ),
             ("cluster post", try ClusterVault(key: keyText).seal(clusterPost)),
             ("cluster claims", try ClusterVault(key: keyText).seal(clusterClaims)),
+            ("cluster session profile", try ClusterVault(key: keyText).seal(clusterProfile)),
             (
                 "cluster session order",
                 try vault.sealClusterSessionOrder(
