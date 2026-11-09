@@ -341,20 +341,46 @@ final class AppleMusicPlayerTests: XCTestCase {
 
     func testNoCover() async throws {
         let player = await playing()
-        let now = try XCTUnwrap(player.state.nowPlaying)
+        func track(_ id: String) -> NowPlaying {
+            NowPlaying(app: AppleMusic.bundleId, title: "Song", artist: "", album: "", isPlaying: true, trackId: id)
+        }
         // Gone on to another track: the script returns nothing.
         scripts.bytes { _ in Data() }
-        let gone = await player.artwork(for: now)
+        let gone = await player.artwork(for: track("A01"))
         XCTAssertNil(gone)
         // No artwork (-1728): no cover, and nothing else changes.
         scripts.bytes { _ in throw ScriptFailure(code: -1728) }
-        let none = await player.artwork(for: now)
+        let none = await player.artwork(for: track("A02"))
         XCTAssertNil(none)
         XCTAssertEqual(player.state.access, .granted)
         // Too big to keep.
         scripts.bytes { _ in Data(count: AppleMusic.maxArtworkBytes + 1) }
-        let huge = await player.artwork(for: now)
+        let huge = await player.artwork(for: track("A03"))
         XCTAssertNil(huge)
+        XCTAssertEqual(scripts.covers.count, 3)
+    }
+
+    func testTheCoverIsReadOncePerTrack() async throws {
+        let player = await playing()
+        let now = try XCTUnwrap(player.state.nowPlaying)
+        scripts.bytes { _ in Data([7]) }
+        scripts.delay = 100_000_000
+        // Asked twice at once, and again once read, as the read after a notification tells the store more of the track.
+        async let first = player.artwork(for: now)
+        async let second = player.artwork(for: now)
+        let (one, two) = await (first, second)
+        let again = await player.artwork(
+            for: NowPlaying(app: AppleMusic.bundleId, title: "Song", artist: "Artist", album: "More", isPlaying: false, trackId: "abc"))
+        XCTAssertEqual([one, two, again], [Data([7]), Data([7]), Data([7])])
+        XCTAssertEqual(scripts.covers.count, 1)
+        // Another track is read; Music quit and opened again, the same track is read anew.
+        _ = await player.artwork(
+            for: NowPlaying(app: AppleMusic.bundleId, title: "Next", artist: "", album: "", isPlaying: true, trackId: "DEF"))
+        XCTAssertEqual(scripts.covers.count, 2)
+        apps.set(running: false)
+        apps.set(running: true)
+        await eventually("allowed again") { player.state.nowPlaying != nil }
+        _ = await player.artwork(for: now)
         XCTAssertEqual(scripts.covers.count, 3)
     }
 

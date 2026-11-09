@@ -34,6 +34,8 @@ public final class AppleMusicPlayer: MusicPlayer {
     /// The last notification, to drop the copy Music posts under iTunes' name.
     private var lastNotice: AppleMusic.Reading?
     private var lastNoticeDate: Date?
+    /// The cover of the last track asked for, by its `persistent ID`.
+    private var cover: (id: String, read: Task<Data?, Never>)?
 
     public init(
         scripts: any ScriptRunning = AppleScriptRunner.shared, access: any AutomationAccess = SystemAutomationAccess(),
@@ -79,15 +81,22 @@ public final class AppleMusicPlayer: MusicPlayer {
     }
 
     /// From Music itself, for the track it plays now: nil once it has gone on to another, for a track without a cover, and
-    /// for one too big to keep.
+    /// for one too big to keep. Read once per track: asked again for the same one, as when the read that follows a
+    /// notification tells the store more of it, it gives the same answer.
     public func artwork(for track: NowPlaying) async -> Data? {
-        guard track.app == app, state.running, state.access == .granted, let script = track.trackId.flatMap(AppleMusic.artworkScript)
+        guard track.app == app, state.running, state.access == .granted, let id = track.trackId.flatMap(AppleMusic.trackId),
+            let script = AppleMusic.artworkScript(for: id)
         else { return nil }
+        if let cover, cover.id == id { return await cover.read.value }
         let generation = self.generation
-        guard let data = await attempt({ try await self.scripts.data(script) }), generation == self.generation, !data.isEmpty,
-            data.count <= AppleMusic.maxArtworkBytes
-        else { return nil }
-        return data
+        let read = Task { [weak self] () -> Data? in
+            guard let self, let data = await self.attempt({ try await self.scripts.data(script) }), generation == self.generation,
+                !data.isEmpty, data.count <= AppleMusic.maxArtworkBytes
+            else { return nil }
+            return data
+        }
+        cover = (id, read)
+        return await read.value
     }
 
     public func activate() { apps.activate(app) }
@@ -101,6 +110,7 @@ public final class AppleMusicPlayer: MusicPlayer {
             generation += 1
             state.nowPlaying = nil
             lastNotice = nil
+            cover = nil
             return
         }
         state.installed = true
