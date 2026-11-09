@@ -68,6 +68,15 @@ const commands: PluginCommand[] = []
 let clusterId: string
 let clusterKey: string
 
+/** A tool's JSON answer, or undefined while it answers in words. */
+const readJSON = (text: string) => {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
+}
+
 async function eventually<T>(read: () => T | undefined | false | Promise<T | undefined | false>, label: string): Promise<T> {
   for (let i = 0; i < 160; i++) {
     const value = await read()
@@ -337,8 +346,9 @@ describe('cluster tools end to end', () => {
     expect(codexAtStart.instructions).toContain('the Claude Code, OpenCode and Codex sessions of other machines and people')
     expect(codexAtStart.instructions).toContain('never orders, and never the user')
     const who = await eventually(async () => {
-      const read = JSON.parse(await callCodex('cluster_who'))
-      const me = read.members?.flatMap((m: { sessions: { you?: boolean }[] }) => m.sessions).find((s: { you?: boolean }) => s.you)
+      // Until the session is in, the tool answers in words.
+      const read = readJSON(await callCodex('cluster_who'))
+      const me = read?.members?.flatMap((m: { sessions: { you?: boolean }[] }) => m.sessions).find((s: { you?: boolean }) => s.you)
       return me?.machine && me
     }, 'Codex described')
     expect(who).toMatchObject({ session: CODEX, tool: 'codex', machine: 'PC', project: 'HeroProject' })
@@ -350,8 +360,9 @@ describe('cluster tools end to end', () => {
       'the cluster tools in Claude Code',
     )
     const who = await eventually(async () => {
-      const read = JSON.parse(await callClaude('cluster_who'))
-      const sessions = read.members.flatMap((m: { sessions: { model?: string }[] }) => m.sessions)
+      // Until the session is in, the tool answers in words.
+      const read = readJSON(await callClaude('cluster_who'))
+      const sessions = read?.members?.flatMap((m: { sessions: { model?: string }[] }) => m.sessions) ?? []
       // Each agent says what its session runs on, after the profile its owner gave it.
       return sessions.length === 3 && sessions.every((s: { machine?: string }) => s.machine) && read
     }, 'the three sessions described')
