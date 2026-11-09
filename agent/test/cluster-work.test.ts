@@ -91,6 +91,7 @@ let deferred: string[]
 let forgotten: string[]
 let busy: boolean
 let skipsPrompts: boolean
+let takesLive: boolean
 let toolsChanged: number
 /** The session's project folder, and what the relay keeps of shared files. */
 let project: string
@@ -166,6 +167,7 @@ beforeEach(() => {
   forgotten = []
   busy = false
   skipsPrompts = false
+  takesLive = true
   toolsChanged = 0
   clockNow = Date.now()
   project = mkdtempSync(joinPath(tmpdir(), 'tonton-cluster-project-'))
@@ -180,6 +182,7 @@ beforeEach(() => {
       forget: clusterId => forgotten.push(clusterId),
       busy: () => busy,
       skipsPrompts: () => skipsPrompts,
+      takesLive: () => takesLive,
       cwd: () => project,
       now: () => clockNow,
       files: {
@@ -263,12 +266,12 @@ describe('putting a session in', () => {
     expect(await profiles()).toHaveLength(1)
     expect((await profiles()).at(-1)).toMatchObject({ name: 'api', tool: 'claude', delivery: 'digest', skipsPrompts: true })
     // Nothing changed: nothing is sent again.
-    work.descriptionChanged()
+    work.followHooks()
     await settle()
     expect(await profiles()).toHaveLength(1)
     // Shift+Tab: it asks again, so it takes posts live.
     skipsPrompts = false
-    work.descriptionChanged()
+    work.followHooks()
     await settle()
     expect(await profiles()).toHaveLength(2)
     const back = (await profiles()).at(-1)
@@ -276,7 +279,7 @@ describe('putting a session in', () => {
     expect(back?.skipsPrompts).toBeUndefined()
     // It skips them again, then its owner chooses Live anyway: live, still skipping prompts.
     skipsPrompts = true
-    work.descriptionChanged()
+    work.followHooks()
     await settle()
     expect((await profiles()).at(-1)).toMatchObject({ delivery: 'digest', skipsPrompts: true })
     await join({ delivery: 'live', liveWithoutPrompts: true })
@@ -287,6 +290,42 @@ describe('putting a session in', () => {
     // Muted, whatever the prompts.
     await join({ delivery: 'muted' })
     expect((await profiles()).at(-1)).toMatchObject({ delivery: 'muted', skipsPrompts: true })
+  })
+
+  test('a mode that came and went between two reads of the hooks still ends with the right profile', async () => {
+    const last = async () => {
+      const sent = relay.sent.findLast(message => message.t === 'cluster_session_profile')
+      return sent?.t === 'cluster_session_profile' ? vault.read(sent.profile, decodeClusterSessionProfile) : null
+    }
+    await join()
+    expect(await last()).toMatchObject({ delivery: 'live' })
+    // bypassPermissions, and a post comes before the channel reads the hooks again: the profile says digest.
+    skipsPrompts = true
+    await relay.fromAna({ kind: 'message', text: 'pushed' })
+    expect(await last()).toMatchObject({ delivery: 'digest', skipsPrompts: true })
+    // The mode turns back before that read: the read finds what was published wrong.
+    skipsPrompts = false
+    work.followHooks()
+    await settle()
+    const back = await last()
+    expect(back).toMatchObject({ delivery: 'live' })
+    expect(back?.skipsPrompts).toBeUndefined()
+    const count = relay.sent.filter(message => message.t === 'cluster_session_profile').length
+    work.followHooks()
+    await settle()
+    expect(relay.sent.filter(message => message.t === 'cluster_session_profile')).toHaveLength(count)
+  })
+
+  test('a codex nothing drives says it gets digests, and not that it skips permission prompts', async () => {
+    takesLive = false
+    await join()
+    const sent = relay.sent.findLast(message => message.t === 'cluster_session_profile')
+    if (sent?.t !== 'cluster_session_profile') throw new Error('no profile')
+    const profile = await vault.read(sent.profile, decodeClusterSessionProfile)
+    expect(profile).toMatchObject({ delivery: 'digest' })
+    expect(profile?.skipsPrompts).toBeUndefined()
+    expect(work.joinProfile({ delivery: 'muted' })).toMatchObject({ delivery: 'muted' })
+    expect(work.joinProfile({ delivery: 'live', liveWithoutPrompts: true }).delivery).toBe('digest')
   })
 
   test('the profile it seals with an order of its own says how it will take posts', () => {

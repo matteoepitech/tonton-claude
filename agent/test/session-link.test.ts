@@ -122,40 +122,23 @@ test('a Codex run by tonton codex is followed from the first thread its server s
   }
 })
 
-test('a session that starts or stops skipping permission prompts is told from the link its hooks write, once each time', async () => {
+test('every read of the link is told, for cluster delivery to compare what it published with what the hooks say now', async () => {
   mkdirSync(paths.run, { recursive: true })
   const file = join(paths.run, `${process.ppid}.json`)
-  const write = (permissionMode: string) =>
-    writeFileSync(
-      file,
-      JSON.stringify({ sessionId: 'mode', transcriptPath: null, cwd: '/work', event: 'UserPromptSubmit', permissionMode }),
-    )
-  const until = async (check: () => boolean) => {
-    for (let i = 0; i < 50 && !check(); i++) await Bun.sleep(50)
-  }
-  write('default')
+  writeFileSync(file, JSON.stringify({ sessionId: 'mode', transcriptPath: null, cwd: '/work', event: 'Stop', permissionMode: 'default' }))
   const followed: string[] = []
-  const told: boolean[] = []
+  let reads = 0
   const watcher = new SessionLinkWatcher(
     link => followed.push(link.sessionId),
     'claude',
-    skips => told.push(skips),
+    () => reads++,
   )
   watcher.start()
   try {
-    expect(followed).toEqual(['mode'])
-    expect(told).toEqual([])
-    // Shift+Tab to bypassPermissions: the next hook event writes it.
-    write('bypassPermissions')
-    await until(() => told.length > 0)
-    expect(told).toEqual([true])
-    // Another event in the same mode says nothing new, and the session is not followed again.
-    write('bypassPermissions')
-    await Bun.sleep(800)
-    expect(told).toEqual([true])
-    write('acceptEdits')
-    await until(() => told.length > 1)
-    expect(told).toEqual([true, false])
+    expect(reads).toBe(1)
+    // A mode that came and went between two reads leaves the link as it was: it is told all the same.
+    for (let i = 0; i < 40 && reads < 2; i++) await Bun.sleep(50)
+    expect(reads).toBeGreaterThanOrEqual(2)
     expect(followed).toEqual(['mode'])
   } finally {
     watcher.stop()
