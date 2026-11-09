@@ -105,6 +105,8 @@ final class AppSettings: ObservableObject {
     @Published var notchContent: NotchContent
     /// Music mode was opened once: from then on the players may be asked what they play, from launch. Never reset.
     @Published var musicOpened: Bool
+    /// The player the music view keeps to, or automatic: the one playing, else the last one that played (`MusicChoice`).
+    @Published var musicPlayer: MusicPin
     @Published var theme: ThemeChoice {
         didSet { Theme.palette = theme.palette(contrast: contrast) }
     }
@@ -231,6 +233,7 @@ final class AppSettings: ObservableObject {
         notchTransparency = value("notchTransparency", 0.5)
         notchContent = choice("notchContent", NotchContent.sessions)
         musicOpened = value("musicOpened", false)
+        musicPlayer = choice("musicPlayer", MusicPin.automatic)
         let theme = choice("theme", ThemeChoice.midnight)
         self.theme = theme
         let contrast = Self.systemContrast
@@ -299,6 +302,7 @@ final class AppSettings: ObservableObject {
         persist($notchTransparency, "notchTransparency")
         persist($notchContent.map(\.rawValue), "notchContent")
         persist($musicOpened, "musicOpened")
+        persist($musicPlayer.map(\.rawValue), "musicPlayer")
         persist($theme.map(\.rawValue), "theme")
         persist($openOnPermission, "openOnPermission")
         persist($showAlerts, "showAlerts")
