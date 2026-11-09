@@ -165,9 +165,12 @@ bridge can see that skips every prompt: its sessions are live by default.
 
 The session's agent says in its profile the delivery it really gets (`delivery`), and `skipsPrompts` while it skips
 permission prompts (`clusterDeliveryProfile`): when it joins, and again when its owner's order or its permission mode
-changes (Shift+Tab in Claude Code), which its channel sees in the link the hooks write at their next event. The notch,
-the website and the island show **Live → digest: skips permission prompts** for a session its owner set to live that
-gets digests, with **Live anyway** one click away. An older agent says neither, and they show the choice alone.
+changes (Shift+Tab in Claude Code). Its channel reads the link the hooks write at every event, and compares what the
+profile says with what the hooks say now, so a mode that came and went between two reads leaves no stale profile. A
+plain `codex` says digest, without `skipsPrompts`. For a session its owner set to live that gets digests, the notch,
+the website and the island say why (`clusterDigestReason`): **Live → digest: skips permission prompts**, with **Live
+anyway** one click away, or that a codex started without `tonton codex` reads posts at its next prompt. An older agent
+says neither, and they show the choice alone.
 
 On joining, the session is told where it is, who else is there and how to behave, at its next prompt; when another
 session or a member changes the notes, it is told to read them again. The channel's instructions say the rest, for every

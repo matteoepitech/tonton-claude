@@ -196,19 +196,25 @@ final class ClusterModelTests: XCTestCase {
         XCTAssertFalse(ClusterSessionChoice(delivery: .muted, liveWithoutPrompts: true).liveWithoutPrompts)
     }
 
-    func testLiveTurnedIntoDigestsIsSaidWhenTheAgentSaysItSkipsPrompts() {
+    func testLiveTurnedIntoDigestsSaysWhyAsTheAgentSaysIt() {
         let turned = ClusterSessionProfile(name: "rig", delivery: .digest, skipsPrompts: true)
         let live = ClusterSessionChoice.standard
-        XCTAssertTrue(live.turnsDigest(turned))
+        let anyway = ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true)
+        XCTAssertEqual(live.digestReason(turned), .prompts)
         XCTAssertEqual(live.label(for: turned), "Live → digest: skips permission prompts")
         // Its owner chose a digest, or Live anyway, which its agent has not taken yet: nothing turned.
-        XCTAssertFalse(ClusterSessionChoice(delivery: .digest).turnsDigest(turned))
-        XCTAssertFalse(ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true).turnsDigest(turned))
-        XCTAssertEqual(ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true).label(for: turned), "Live anyway")
+        XCTAssertNil(ClusterSessionChoice(delivery: .digest).digestReason(turned))
+        XCTAssertNil(anyway.digestReason(turned))
+        XCTAssertEqual(anyway.label(for: turned), "Live anyway")
+        // A codex nothing drives reads posts at its next prompt, Live anyway or not.
+        let plainCodex = ClusterSessionProfile(name: "rig", tool: "codex", delivery: .digest)
+        XCTAssertEqual(live.digestReason(plainCodex), .codex)
+        XCTAssertEqual(anyway.digestReason(plainCodex), .codex)
+        XCTAssertEqual(live.label(for: plainCodex), "Live → digest: a codex started without tonton codex reads posts at its next prompt")
         // It asks for permission, or an older agent says neither: the choice alone.
-        XCTAssertFalse(live.turnsDigest(ClusterSessionProfile(name: "rig", delivery: .live)))
-        XCTAssertFalse(live.turnsDigest(ClusterSessionProfile(name: "rig")))
-        XCTAssertFalse(live.turnsDigest(nil))
+        XCTAssertNil(live.digestReason(ClusterSessionProfile(name: "rig", delivery: .live)))
+        XCTAssertNil(live.digestReason(ClusterSessionProfile(name: "rig", tool: "codex")))
+        XCTAssertNil(live.digestReason(nil))
         XCTAssertEqual(live.label(for: nil), "Live")
     }
 

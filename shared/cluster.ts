@@ -152,16 +152,21 @@ export function clusterDeliveryProfile(
   return { delivery: clusterDelivery(order, skipsPrompts), ...(skipsPrompts ? { skipsPrompts: true as const } : {}) }
 }
 
+/** Why a session its owner set to live gets digests, as its agent says. */
+export type ClusterDigestReason = 'prompts' | 'codex'
+
 /**
- * Its owner chose live, but the session skips permission prompts, so its agent says it gets digests: the website and
- * the island say so, with Live anyway one click away. False for an older agent, which says neither.
+ * Why a session its owner chose live for gets digests, as its agent says: it skips permission prompts (`prompts`: Live
+ * anyway turns live delivery on), or it is a codex nothing drives (`codex`: a plain `codex` reads posts only at its next
+ * prompt, `tonton codex` takes them live). Null when it gets what was chosen, or for an older agent, which says neither.
  */
-export function clusterLiveTurnedDigest(
+export function clusterDigestReason(
   choice: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>,
-  profile: Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts'> | null | undefined,
-): boolean {
-  const live = (choice.delivery ?? 'live') === 'live' && !choice.liveWithoutPrompts
-  return live && profile?.skipsPrompts === true && profile.delivery === 'digest'
+  profile: Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts' | 'tool'> | null | undefined,
+): ClusterDigestReason | null {
+  if ((choice.delivery ?? 'live') !== 'live' || profile?.delivery !== 'digest') return null
+  if (profile.skipsPrompts && !choice.liveWithoutPrompts) return 'prompts'
+  return profile.tool === 'codex' ? 'codex' : null
 }
 
 const isVersion = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1

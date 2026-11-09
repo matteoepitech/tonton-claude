@@ -5,8 +5,8 @@ import {
   ClusterVault,
   clusterDelivery,
   clusterDeliveryProfile,
+  clusterDigestReason,
   clusterKeyScope,
-  clusterLiveTurnedDigest,
   clusterPostIsFor,
   decodeClusterClaims,
   decodeClusterClock,
@@ -93,15 +93,18 @@ describe('cluster keys and orders', () => {
     expect(clusterDeliveryProfile({ delivery: 'muted' }, true)).toEqual({ delivery: 'muted', skipsPrompts: true })
 
     const turned = { delivery: 'digest', skipsPrompts: true } as const
-    expect(clusterLiveTurnedDigest({}, turned)).toBe(true)
-    expect(clusterLiveTurnedDigest({ delivery: 'live' }, turned)).toBe(true)
+    expect(clusterDigestReason({}, turned)).toBe('prompts')
+    expect(clusterDigestReason({ delivery: 'live' }, turned)).toBe('prompts')
     // Its owner chose a digest, or Live anyway, which its agent has not taken yet: nothing turned.
-    expect(clusterLiveTurnedDigest({ delivery: 'digest' }, turned)).toBe(false)
-    expect(clusterLiveTurnedDigest({ delivery: 'live', liveWithoutPrompts: true }, turned)).toBe(false)
+    expect(clusterDigestReason({ delivery: 'digest' }, turned)).toBeNull()
+    expect(clusterDigestReason({ delivery: 'live', liveWithoutPrompts: true }, turned)).toBeNull()
+    // A codex nothing drives reads posts at its next prompt, Live anyway or not.
+    expect(clusterDigestReason({}, { delivery: 'digest', tool: 'codex' })).toBe('codex')
+    expect(clusterDigestReason({ delivery: 'live', liveWithoutPrompts: true }, { ...turned, tool: 'codex' })).toBe('codex')
     // It asks for permission, or an older agent says neither.
-    expect(clusterLiveTurnedDigest({}, { delivery: 'live' })).toBe(false)
-    expect(clusterLiveTurnedDigest({}, {})).toBe(false)
-    expect(clusterLiveTurnedDigest({}, null)).toBe(false)
+    expect(clusterDigestReason({}, { delivery: 'live' })).toBeNull()
+    expect(clusterDigestReason({}, { tool: 'codex' })).toBeNull()
+    expect(clusterDigestReason({}, null)).toBeNull()
   })
 })
 

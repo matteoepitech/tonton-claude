@@ -1,7 +1,13 @@
 // What the cluster pages show, worked out from the cluster's state alone: the roster by member and machine, who wrote a
 // post, what a post says in a line, and the clock. Shared by the website and the island (web/views.ts), tested in
 // web/test/clusters.test.ts.
-import { type ClusterPostItem, type ClusterSession, type ClusterState, clusterLiveTurnedDigest } from '../../../shared/cluster'
+import {
+  type ClusterDigestReason,
+  type ClusterPostItem,
+  type ClusterSession,
+  type ClusterState,
+  clusterDigestReason,
+} from '../../../shared/cluster'
 import type {
   ClusterClaim,
   ClusterClock,
@@ -187,15 +193,18 @@ export const DELIVERIES: { value: DeliveryOption; label: string; detail: string 
 export const choiceOf = (option: DeliveryOption): ClusterSessionChoice =>
   option === 'anyway' ? { delivery: 'live', liveWithoutPrompts: true } : { delivery: option }
 
-/** What a session set to live that gets digests says, as its agent tells it skips permission prompts. */
-export const TURNED_DIGEST = 'Live → digest: skips permission prompts'
+/** What a session set to live that gets digests says, and why, as its agent tells it. */
+export const DIGEST_REASONS: Record<ClusterDigestReason, string> = {
+  prompts: 'Live → digest: skips permission prompts',
+  codex: 'Live → digest: a codex started without tonton codex reads posts at its next prompt',
+}
 
 /**
- * The option chosen for one of this account's sessions, as this browser last chose it, turned into digests because the
- * session skips permission prompts (docs/cluster.md, The rule). False for an older agent, which says neither.
+ * Why one of this account's sessions, set to live as this browser last chose it, gets digests (docs/cluster.md,
+ * Delivery). Null when it gets what was chosen, or for an older agent, which says nothing.
  */
-export const turnsDigest = (option: DeliveryOption, session: ClusterSession): boolean =>
-  clusterLiveTurnedDigest(choiceOf(option), session.profile)
+export const digestReason = (option: DeliveryOption, session: ClusterSession): ClusterDigestReason | null =>
+  clusterDigestReason(choiceOf(option), session.profile)
 
 const DELIVERY_KEY = 'tonton.clusterDelivery'
 

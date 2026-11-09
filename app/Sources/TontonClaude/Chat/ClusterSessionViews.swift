@@ -178,7 +178,7 @@ struct ClusterSessionContent: View {
     }
 
     /// Live, digest or muted, what each does, and Live anyway for a session that skips permission prompts. Live that its
-    /// agent says turned into digests, as the session skips permission prompts, says so, the toggle right under it.
+    /// agent says turned into digests says why, the Live anyway toggle right under it.
     private func deliveryPicker(
         _ current: ClusterSessionChoice, profile: ClusterSessionProfile? = nil, pick: @escaping (ClusterSessionChoice) -> Void
     ) -> some View {
@@ -191,9 +191,9 @@ struct ClusterSessionContent: View {
                     .help(delivery.detail)
                 }
             }
-            if current.turnsDigest(profile) {
+            if let reason = current.digestReason(profile) {
                 Label {
-                    Text(verbatim: ClusterSessionChoice.turnedDigest).font(.notch(10, weight: .medium))
+                    Text(verbatim: reason.text).font(.notch(10, weight: .medium))
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "exclamationmark.triangle.fill").font(.notch(9))

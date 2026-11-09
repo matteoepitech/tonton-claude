@@ -1,6 +1,6 @@
 // The island's cluster page (web/cluster-views.ts, renderClusterPage), on a small stand-in for the DOM: one of your
-// sessions set to live that its agent says gets digests, as it skips permission prompts, says so, with Live anyway one
-// click away; an older agent, or someone else's session, shows what it showed before.
+// sessions set to live that its agent says gets digests says why, with Live anyway one click away when it skips
+// permission prompts; an older agent, or someone else's session, shows what it showed before.
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import type { ClusterSession, ClusterSessionProfile, ClusterState, OpenCluster, Session } from '../../shared'
 import type { DeliveryOption } from '../site/clusters/model'
@@ -102,6 +102,12 @@ test('your session set to live that skips permission prompts says it gets digest
   // Another member's session: nothing to choose for it.
   expect(row('rig')?.text).not.toContain('Live → digest')
   expect(buttons('rig')).toEqual([])
+})
+
+test('a codex nothing drives says it reads posts at its next prompt, with no Live anyway', () => {
+  const { row, buttons } = render([member('me', 'api', { tool: 'codex', delivery: 'digest' })])
+  expect(row('api')?.text).toContain('Live → digest: a codex started without tonton codex reads posts at its next prompt')
+  expect(buttons('api').map(button => button.text)).toEqual(['Take out'])
 })
 
 test('an older agent, a session that asks, or a choice other than live shows what it showed before', () => {

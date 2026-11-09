@@ -203,8 +203,8 @@ struct ClusterSessionRow: View {
         let profile = session.profile
         VStack(alignment: .leading, spacing: 4) {
             summary(profile)
-            if let own, clusters.choice(for: session.session, in: board.id).turnsDigest(profile) {
-                ClusterTurnedDigest(board: board, session: own).padding(.leading, 14)
+            if let own, let reason = clusters.choice(for: session.session, in: board.id).digestReason(profile) {
+                ClusterTurnedDigest(board: board, session: own, reason: reason).padding(.leading, 14)
             }
         }
         .padding(.vertical, 2)
@@ -277,7 +277,7 @@ struct ClusterOwnMenu: View {
 }
 
 /// Live, digest or muted, each with what it does, and Live anyway for a session that skips permission prompts. Live
-/// that its agent says turned into digests, as the session skips permission prompts, reads so.
+/// that its agent says turned into digests reads so, and the menu says why.
 struct ClusterDeliveryMenu: View {
     let choice: ClusterSessionChoice
     /// What the session's agent says of it. Nil for a session not in the cluster yet, or an older agent.
@@ -285,7 +285,7 @@ struct ClusterDeliveryMenu: View {
     let pick: (ClusterSessionChoice) -> Void
 
     var body: some View {
-        let turned = choice.turnsDigest(profile)
+        let reason = choice.digestReason(profile)
         NotchMenu(width: 250) {
             let anyway = ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true)
             return [
@@ -297,32 +297,33 @@ struct ClusterDeliveryMenu: View {
                     } + [
                         NotchMenuItem(
                             title: String(localized: "Live anyway, if it skips permission prompts"),
-                            detail: turned ? ClusterSessionChoice.anywayDetail : nil, checked: anyway == choice
+                            detail: reason == .prompts ? ClusterSessionChoice.anywayDetail : nil, checked: anyway == choice
                         ) {
                             pick(anyway)
                         }
                     ],
-                    note: turned ? ClusterSessionChoice.turnedDigest : ClusterSessionChoice.promptsNote)
+                    note: reason?.text ?? ClusterSessionChoice.promptsNote)
             ]
         } label: {
-            NotchMenuLabel(text: turned ? String(localized: "Live → digest") : choice.label)
+            NotchMenuLabel(text: reason != nil ? String(localized: "Live → digest") : choice.label)
         }
         .foregroundStyle(Theme.text)
         .accessibilityLabel("Delivery: \(choice.label(for: profile))")
     }
 }
 
-/// Under one of the account's sessions set to live that gets digests, as it skips permission prompts: why, and Live
-/// anyway one click away.
+/// Under one of the account's sessions set to live that gets digests: why, and Live anyway one click away when it skips
+/// permission prompts. A plain codex needs `tonton codex` instead, which no button here can do.
 struct ClusterTurnedDigest: View {
     let board: ClusterBoard
     let session: SessionSummary
+    let reason: ClusterDigestReason
     @ObservedObject private var clusters = ClusterStore.shared
 
     var body: some View {
         HStack(spacing: 6) {
             Label {
-                Text(verbatim: ClusterSessionChoice.turnedDigest).font(.notch(10, weight: .medium))
+                Text(verbatim: reason.text).font(.notch(10, weight: .medium))
                     .fixedSize(horizontal: false, vertical: true)
             } icon: {
                 Image(systemName: "exclamationmark.triangle.fill").font(.notch(9))
@@ -330,15 +331,17 @@ struct ClusterTurnedDigest: View {
             .labelStyle(TightLabelStyle())
             .foregroundStyle(Theme.warning)
             Spacer(minLength: 4)
-            Button("Live anyway") {
-                do {
-                    try clusters.put(session, in: board.id, choice: ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true))
-                } catch {
-                    clusters.report(error, in: board.id)
+            if reason == .prompts {
+                Button("Live anyway") {
+                    do {
+                        try clusters.put(session, in: board.id, choice: ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true))
+                    } catch {
+                        clusters.report(error, in: board.id)
+                    }
                 }
+                .buttonStyle(NotchButtonStyle())
+                .help(ClusterSessionChoice.anywayDetail)
             }
-            .buttonStyle(NotchButtonStyle())
-            .help(ClusterSessionChoice.anywayDetail)
         }
     }
 }

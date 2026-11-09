@@ -1,7 +1,7 @@
 // The cluster pages' model (web/site/clusters/model.ts): the roster, who wrote a post, events, claims and the clock.
 import { describe, expect, test } from 'bun:test'
 import type { ClusterSession, ClusterState } from '../../shared'
-import { authorLabel, choiceOf, clockView, eventLine, heldClaims, recipients, roster, timeLeft, turnsDigest } from '../site/clusters/model'
+import { authorLabel, choiceOf, clockView, digestReason, eventLine, heldClaims, recipients, roster, timeLeft } from '../site/clusters/model'
 
 const session = (account: string, id: string, extra: Partial<ClusterSession> = {}): ClusterSession => ({
   account,
@@ -42,11 +42,13 @@ describe('the cluster pages', () => {
     expect(choiceOf('anyway')).toEqual({ delivery: 'live', liveWithoutPrompts: true })
     expect(choiceOf('digest')).toEqual({ delivery: 'digest' })
     const turned = session('alice', 'hero', { profile: { name: 'hero', delivery: 'digest', skipsPrompts: true } })
-    expect(turnsDigest('live', turned)).toBe(true)
-    expect(turnsDigest('anyway', turned)).toBe(false)
-    expect(turnsDigest('digest', turned)).toBe(false)
+    expect(digestReason('live', turned)).toBe('prompts')
+    expect(digestReason('anyway', turned)).toBeNull()
+    expect(digestReason('digest', turned)).toBeNull()
+    const plainCodex = session('alice', 'hero', { profile: { name: 'hero', tool: 'codex', delivery: 'digest' } })
+    expect(digestReason('live', plainCodex)).toBe('codex')
     // An older agent says neither.
-    expect(turnsDigest('live', session('alice', 'hero'))).toBe(false)
+    expect(digestReason('live', session('alice', 'hero'))).toBeNull()
   })
 
   test('the roster puts this account first, then the owner, with busy sessions first on each machine', () => {

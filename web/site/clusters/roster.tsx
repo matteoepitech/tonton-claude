@@ -1,7 +1,7 @@
 // Who is in the cluster and what each session does, live: every member, its machines and their sessions, with the
 // state the relay sees and the status line, project, branch, tool and model the session's agent shares, sealed. Your own
 // sessions can be put in or taken out, and each chooses how it takes the posts (docs/cluster.md, The rule); one set to
-// live that gets digests, as it skips permission prompts, says so, with Live anyway one click away.
+// live that gets digests says why, with Live anyway one click away when it skips permission prompts.
 import { LogInIcon, LogOutIcon, TriangleAlertIcon } from 'lucide-react'
 import { useState } from 'react'
 import { type ClusterSession, type Session, STATUS_LABELS } from '../../../shared'
@@ -15,14 +15,14 @@ import {
   choiceOf,
   DELIVERIES,
   type DeliveryOption,
+  DIGEST_REASONS,
+  digestReason,
   profileOf,
   rememberDelivery,
   rememberedDelivery,
   roster,
   sessionName,
   TOOL_LABELS,
-  TURNED_DIGEST,
-  turnsDigest,
 } from './model'
 import type { ClusterTabProps } from './page'
 
@@ -70,6 +70,7 @@ function SessionRow({ clusterId, session, mine }: { clusterId: string; session: 
     rememberDelivery(clusterId, yours.id, next)
     void store.clusters?.putSession(clusterId, yours.id, profileOf(yours), choiceOf(next))
   }
+  const reason = own ? digestReason(delivery, session) : null
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
       <StatusDot status={session.online ? session.status : 'offline'} />
@@ -98,20 +99,22 @@ function SessionRow({ clusterId, session, mine }: { clusterId: string; session: 
           </Button>
         </span>
       )}
-      {/* What its agent says it really gets: live turned into digests, as the session skips permission prompts. */}
-      {own && turnsDigest(delivery, session) && (
+      {/* What its agent says it really gets: live turned into digests, and why. */}
+      {own && reason && (
         <span className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 ps-5 text-xs text-warning">
           <TriangleAlertIcon className="size-3.5" aria-hidden="true" />
-          {TURNED_DIGEST}
-          <Button
-            variant="outline"
-            size="sm"
-            className="ms-auto"
-            title="Posts reach it as they come, though it skips permission prompts"
-            onClick={() => choose(own, 'anyway')}
-          >
-            Live anyway
-          </Button>
+          {DIGEST_REASONS[reason]}
+          {reason === 'prompts' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ms-auto"
+              title="Posts reach it as they come, though it skips permission prompts"
+              onClick={() => choose(own, 'anyway')}
+            >
+              Live anyway
+            </Button>
+          )}
         </span>
       )}
     </li>
