@@ -23,7 +23,7 @@ import { TranscriptWork, type WorkFacts } from '../transcript/work'
 import { modelName, newerLimit, readUsageFile, type SessionUsage } from '../usage'
 import { deferClusterPost, forgetClusterPosts } from './cluster-digest'
 import { ClusterAutoJoin } from './cluster-joins'
-import { ClusterWork, relayFiles } from './cluster-work'
+import { type ClusterHooks, ClusterWork, CODEX_MAX_WAIT_MINUTES, relayFiles } from './cluster-work'
 import { SessionClusters } from './clusters'
 import { PoolSafety } from './pool-safety'
 import { poolUsage } from './pool-usage'
@@ -46,6 +46,14 @@ type Post = (build: () => Promise<Outgoing>) => void
 
 interface PendingPermission extends PermissionDetail {
   ts: string
+}
+
+/** How the session's tool takes cluster posts, from the channel. */
+export interface ClusterIntake {
+  live: ClusterHooks['live']
+  toolsChanged(): void
+  /** Claude is in a turn, as the tool says it: missing, as its hooks last wrote it. */
+  busy?(): boolean
 }
 
 /** State of the session this channel serves, and the messages that keep the relay in sync with it. */
@@ -118,7 +126,7 @@ export class Conversation {
     private readonly machineId = '',
     private readonly rpg?: AgentRPG,
     /** Hands Claude what its clusters send it, and tells Claude Code the cluster tools changed. */
-    cluster: { live(text: string): void; toolsChanged(): void } = { live: () => {}, toolsChanged: () => {} },
+    cluster: ClusterIntake = { live: () => {}, toolsChanged: () => {} },
     /** The machine's setup, for the clusters its owner put this session's folder in; none in the tests. */
     private readonly config?: AgentConfig,
   ) {
@@ -188,13 +196,15 @@ export class Conversation {
       post,
       {
         live: text => cluster.live(text),
-        // The UserPromptSubmit hook hands them to Claude with the next prompt (agent/src/channel/cluster-digest.ts).
+        // The UserPromptSubmit hook hands them to Claude with the next prompt (agent/src/channel/cluster-digest.ts), Codex's
+        // too (agent/src/codex/hook.ts).
         defer: (clusterId, text) => deferClusterPost(link.sessionId, clusterId, text),
         forget: clusterId => forgetClusterPosts(link.sessionId, clusterId),
-        busy: () => hookState().busy,
+        busy: () => cluster.busy?.() ?? hookState().busy,
         skipsPrompts: () => hookState().skipsPrompts,
         cwd: () => this.cwd(),
         ...(config ? { files: relayFiles(config) } : {}),
+        ...(this.codex ? { maxWaitMinutes: CODEX_MAX_WAIT_MINUTES } : {}),
       },
       () => this.clusterSelf(),
       () => cluster.toolsChanged(),

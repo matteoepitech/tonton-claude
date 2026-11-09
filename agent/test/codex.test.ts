@@ -120,7 +120,7 @@ describe('installing', () => {
     expect(install().changed).toBe(true)
     const hooks = JSON.parse(read(hooksFile()))
     expect(Object.keys(hooks.hooks).sort()).toEqual([...CODEX_HOOK_EVENTS].sort())
-    expect(hooks.hooks.PreToolUse).toEqual([{ matcher: 'apply_patch', hooks: [{ type: 'command', command: COMMAND, timeout: 5 }] }])
+    expect(hooks.hooks.PreToolUse).toEqual([{ matcher: 'apply_patch|Bash', hooks: [{ type: 'command', command: COMMAND, timeout: 5 }] }])
     expect(hooks.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: COMMAND, timeout: 5 }] }])
     expect(read(configFile())).toBe(SERVER)
     const [before, config] = [read(hooksFile()), read(configFile())]
@@ -231,6 +231,14 @@ describe('installing', () => {
     expect(JSON.parse(read(hooksFile())).hooks.Stop).toEqual([USER_HOOKS.hooks.Stop[0], codexHookGroup('Stop', WINDOWS_BINARY, 'win32')])
   })
 
+  test('an install from before the shell was guarded gets its PreToolUse hook widened where it is', () => {
+    const older = { matcher: 'apply_patch', hooks: [{ type: 'command', command: COMMAND, timeout: 5 }] }
+    const user = { matcher: 'Bash', hooks: [{ type: 'command', command: 'audit-shell' }] }
+    writeFileSync(hooksFile(), JSON.stringify({ hooks: { PreToolUse: [older, user] } }))
+    install()
+    expect(JSON.parse(read(hooksFile())).hooks.PreToolUse).toEqual([{ ...older, matcher: 'apply_patch|Bash' }, user])
+  })
+
   test('a file Codex could not read either is left alone, and so is the other one', () => {
     writeFileSync(hooksFile(), '{ "hooks": ')
     writeFileSync(configFile(), USER_CONFIG)
@@ -286,7 +294,7 @@ describe('uninstalling', () => {
  */
 const CODEX_HASHES: Record<string, Record<string, string>> = {
   [BINARY]: {
-    PreToolUse: 'sha256:52078ddc9dce2c3888df2673a78d7fc905d3838956606e431870fffefcb66df4',
+    PreToolUse: 'sha256:91ef518b2ee237af36878e418ac39ee080f965652d891139a534a2d9f96d3d91',
     PermissionRequest: 'sha256:9e1f6c60938d6155ffb1b09ad6c620c7786c3badd74622ca5bb2dcc17baf766a',
     PostToolUse: 'sha256:861fc3f4e2c9f02312bff712428bb474ce0e7f9738b584eb828166938e57c658',
     SessionStart: 'sha256:7002fadc6b464e3247a591e7ce806f576e3258f470efc04cd0328b52ece1f615',
@@ -294,7 +302,7 @@ const CODEX_HASHES: Record<string, Record<string, string>> = {
     Stop: 'sha256:c1e6663a852bb2e888be1126c5f130761b77b8ce6ea0ef6edadb2f5fd98f2d14',
   },
   [WINDOWS_BINARY]: {
-    PreToolUse: 'sha256:e6120d37b93d55e2c59a12f3a23201769ac7f0d8cdd0e4a66c0f0fca9eb939d5',
+    PreToolUse: 'sha256:fa6db5e20abe3d2612f2f8ea588e10d483f44a95017a3e1190a644578ad180f2',
     PermissionRequest: 'sha256:c56b369a01284bd807973d323d13fadb4351b8f6c42860b9e3f0d5b11d9235fe',
     PostToolUse: 'sha256:a4b0c68096ca4a2e8ff3cf3fef60be423a9cff8cfd45ddc33fd31c6959c4b647',
     SessionStart: 'sha256:fb4d55826299554b857262836223eed2370e7f7d32703f1865c1c534da3c8fdb',
@@ -320,7 +328,7 @@ describe("Codex's trust", () => {
       [WINDOWS_BINARY, 'win32'],
     ] as const) {
       for (const event of CODEX_HOOK_EVENTS) {
-        const matcher = event === 'PreToolUse' ? 'apply_patch' : undefined
+        const matcher = event === 'PreToolUse' ? 'apply_patch|Bash' : undefined
         const hook = codexHookGroup(event, binary, platform).hooks[0]
         expect(codexHookHash(event, matcher, (hook && codexRunCommand(hook, platform)) ?? '', 5)).toBe(CODEX_HASHES[binary]?.[event] ?? '')
       }

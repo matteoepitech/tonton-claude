@@ -10625,12 +10625,12 @@
         }
       }
     },
-    "The Claude Code and OpenCode sessions of several people tell each other what they do, ask, and hold files. Nobody drives anyone else's Claude." : {
+    "The Claude Code, OpenCode and Codex sessions of several people tell each other what they do, ask, and hold files. Nobody drives anyone else's Claude." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les sessions Claude Code et OpenCode de plusieurs personnes se disent ce qu’elles font, posent des questions et réservent des fichiers. Personne ne pilote le Claude d’un autre."
+            "value" : "Les sessions Claude Code, OpenCode et Codex de plusieurs personnes se disent ce qu’elles font, posent des questions et réservent des fichiers. Personne ne pilote le Claude d’un autre."
           }
         }
       }

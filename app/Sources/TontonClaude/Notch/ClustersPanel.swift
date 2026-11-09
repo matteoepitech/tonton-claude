@@ -225,7 +225,7 @@ struct ClusterCreateForm: View {
         VStack(alignment: .leading, spacing: 7) {
             Text("New cluster").font(.notch(12, weight: .bold)).accessibilityAddTraits(.isHeader)
             Text(
-                "The Claude Code and OpenCode sessions of several people tell each other what they do, ask, and hold files. Nobody drives anyone else's Claude."
+                "The Claude Code, OpenCode and Codex sessions of several people tell each other what they do, ask, and hold files. Nobody drives anyone else's Claude."
             )
             .font(.notch(10.5)).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
             ClusterField(placeholder: "Name, such as Game jam", text: $name).onSubmit(create)
