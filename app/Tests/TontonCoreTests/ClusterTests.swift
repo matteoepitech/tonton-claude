@@ -97,6 +97,16 @@ final class ClusterTests: XCTestCase {
         XCTAssertEqual(event, ClusterEvent(type: "submit", paths: ["a", "b"]))
         let profile = try XCTUnwrap(try read(["tool": "vim", "status": "rigging", "statusAt": "never"], as: ClusterSessionProfile.self))
         XCTAssertEqual(profile, ClusterSessionProfile(status: "rigging"))
+        // What its agent says of its delivery: kept when it reads, dropped otherwise; an older agent says neither.
+        XCTAssertEqual(
+            try read(["name": "rig", "delivery": "digest", "skipsPrompts": true], as: ClusterSessionProfile.self),
+            ClusterSessionProfile(name: "rig", delivery: .digest, skipsPrompts: true))
+        XCTAssertEqual(
+            try read(["name": "rig", "delivery": "loud", "skipsPrompts": "yes"], as: ClusterSessionProfile.self),
+            ClusterSessionProfile(name: "rig"))
+        XCTAssertNil(try read(["name": "rig", "delivery": "muted", "skipsPrompts": false], as: ClusterSessionProfile.self)?.skipsPrompts)
+        XCTAssertNil(ClusterSessionProfile(skipsPrompts: false).skipsPrompts, "only true is said")
+        XCTAssertNil(try read(["name": "rig"], as: ClusterSessionProfile.self)?.delivery)
         let claims = try XCTUnwrap(
             try read(
                 [

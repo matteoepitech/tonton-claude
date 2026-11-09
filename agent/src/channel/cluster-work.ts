@@ -11,6 +11,7 @@ import {
   type ClusterSession,
   type ClusterState,
   clusterDelivery,
+  clusterDeliveryProfile,
   clusterPostIsFor,
   decodeClusterClaims,
   decodeClusterClock,
@@ -29,6 +30,7 @@ import type {
   ClusterDelivery,
   ClusterDocWire,
   ClusterPostBody,
+  ClusterSessionOrder,
   ClusterSessionProfile,
   ClusterTarget,
   ClusterTool,
@@ -313,6 +315,11 @@ export interface ClusterHooks {
   busy(): boolean
   /** The session skips permission prompts: it gets a digest unless its owner turned live delivery on. */
   skipsPrompts(): boolean
+  /**
+   * False for a session nothing can hand a post to before its next prompt (a plain `codex`, not run by `tonton codex`):
+   * what would go in live waits, as in a digest, and its profile says digest. Missing: it takes them.
+   */
+  takesLive?(): boolean
   /** The session's project folder: the only place cluster_share reads from. */
   cwd?(): string
   /** The relay's store of shared files. Missing: the tools say files need the agent. */
@@ -357,6 +364,8 @@ export class ClusterWork {
   private readonly read = new Map<string, number>()
   /** What the session last posted about itself, per cluster. */
   private readonly described = new Map<string, string>()
+  /** The delivery its profile says in each cluster, as it last found or sent it. */
+  private readonly published = new Map<string, string>()
   /** How the session took posts in each cluster, to drop what waited when its owner mutes it. */
   private readonly deliveries = new Map<string, ClusterDelivery>()
   /** Asks waiting for their answer, by the ask's id. */
@@ -389,7 +398,10 @@ export class ClusterWork {
     return this.clusters.ids().length ? CLUSTER_TOOLS : []
   }
 
-  /** The model, the project or the branch may have changed: the cluster sees them with the session's next profile. */
+  /**
+   * The model, the project, the branch, or whether the session skips permission prompts may have changed: the cluster
+   * sees them with the session's next profile.
+   */
   descriptionChanged() {
     for (const clusterId of this.clusters.ids()) {
       const state = this.clusters.state(clusterId)
@@ -519,7 +531,7 @@ export class ClusterWork {
   private async status(clusterId: string, me: ClusterSession, args: Args): Promise<string> {
     if (typeof args.text !== 'string') return 'text is missing.'
     const status = args.text.replace(/\s+/g, ' ').trim().slice(0, MAX_STATUS)
-    const profile: ClusterSessionProfile = { ...me.profile, ...this.describe() }
+    const profile: ClusterSessionProfile = { ...withoutDelivery(me.profile), ...this.describe(), ...this.deliveryOf(clusterId) }
     if (status) Object.assign(profile, { status, statusAt: new Date().toISOString() })
     else {
       delete profile.status
@@ -1128,29 +1140,70 @@ export class ClusterWork {
   }
 
   /**
-   * Posts its profile when it joins, and again when its tool, model, project or branch change, or when its owner put it
-   * in again with a profile of their own (a new delivery), which leaves out what only the agent knows.
+   * The profile the session's agent seals with an order it makes itself (`tonton cluster join`): what it runs on, and
+   * how it will take posts.
+   */
+  joinProfile(order: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>): ClusterSessionProfile {
+    return { ...defined(this.describe()), ...this.deliveryFor(order) }
+  }
+
+  /**
+   * The hooks wrote the session's link again, or may have: the profile follows when the delivery it says is no longer
+   * the one the session gets. Compared with what was published, not with the last read of the hooks, so a mode that came
+   * and went between two reads still ends with the right profile.
+   */
+  followHooks() {
+    for (const clusterId of this.clusters.ids()) {
+      if (this.published.get(clusterId) === JSON.stringify(this.deliveryOf(clusterId))) continue
+      const me = this.clusters.state(clusterId)?.sessions.find(session => session.session === this.sessionId())
+      if (me) this.announce(clusterId, me)
+    }
+  }
+
+  /**
+   * Posts its profile when it joins, and again when its tool, model, project or branch change, when its delivery changes
+   * (it started or stopped skipping permission prompts, or its owner chose another), or when its owner put it in again
+   * with a profile of their own, which leaves out what only the agent knows.
    */
   private announce(clusterId: string, me: ClusterSession) {
     const self = this.describe()
-    const mark = JSON.stringify([self.tool, self.model, self.project, self.branch, self.machine, me.profile ?? null])
+    const delivery = this.deliveryOf(clusterId)
+    const mark = JSON.stringify([self.tool, self.model, self.project, self.branch, self.machine, delivery, me.profile ?? null])
     if (this.described.get(clusterId) === mark) return
     this.described.set(clusterId, mark)
+    this.published.set(clusterId, JSON.stringify(delivery))
     const profile = me.profile ?? {}
     const same =
       profile.tool === self.tool &&
       profile.model === self.model &&
       profile.project === self.project &&
       profile.branch === self.branch &&
-      profile.machine === self.machine
+      profile.machine === self.machine &&
+      profile.delivery === delivery.delivery &&
+      profile.skipsPrompts === delivery.skipsPrompts
     if (same) return
-    void this.sendProfile(clusterId, { ...profile, ...defined(self) })
+    void this.sendProfile(clusterId, { ...withoutDelivery(profile), ...defined(self), ...delivery })
+  }
+
+  /** How the session really takes posts in the cluster, as its owner chose and as its hooks say; nothing without an order. */
+  private deliveryOf(clusterId: string): Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts'> {
+    const order = this.clusters.order(clusterId)
+    return order ? this.deliveryFor(order) : {}
+  }
+
+  private deliveryFor(
+    order: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>,
+  ): Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts'> {
+    const said = clusterDeliveryProfile(order, this.hooks.skipsPrompts())
+    // A plain codex takes nothing before its next prompt: live waits for it, as in a digest, for another reason than prompts.
+    return said.delivery === 'live' && this.hooks.takesLive?.() === false ? { ...said, delivery: 'digest' } : said
   }
 
   private forget(clusterId: string) {
     this.seen.delete(clusterId)
     this.read.delete(clusterId)
     this.described.delete(clusterId)
+    this.published.delete(clusterId)
     this.deliveries.delete(clusterId)
     this.clockRevs.delete(clusterId)
     this.clocks.delete(clusterId)
@@ -1289,3 +1342,9 @@ function holderTool(state: ClusterState, claim: ClusterClaim): string {
 
 /** Leaves out the fields that are missing. */
 const defined = <T extends object>(value: T): T => Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T
+
+/** A profile without what its agent says of its delivery, to say it again as it is now. */
+function withoutDelivery(profile: ClusterSessionProfile | null | undefined): ClusterSessionProfile {
+  const { delivery: _delivery, skipsPrompts: _skipsPrompts, ...rest } = profile ?? {}
+  return rest
+}

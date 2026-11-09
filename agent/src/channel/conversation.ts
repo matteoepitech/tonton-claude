@@ -54,6 +54,8 @@ export interface ClusterIntake {
   toolsChanged(): void
   /** Claude is in a turn, as the tool says it: missing, as its hooks last wrote it. */
   busy?(): boolean
+  /** False when nothing can hand Claude a post before its next prompt (a plain `codex`). Missing: it takes them. */
+  takesLive?: boolean
 }
 
 /** State of the session this channel serves, and the messages that keep the relay in sync with it. */
@@ -202,6 +204,7 @@ export class Conversation {
         forget: clusterId => forgetClusterPosts(link.sessionId, clusterId),
         busy: () => cluster.busy?.() ?? hookState().busy,
         skipsPrompts: () => hookState().skipsPrompts,
+        takesLive: () => cluster.takesLive !== false,
         cwd: () => this.cwd(),
         ...(config ? { files: relayFiles(config) } : {}),
         ...(this.codex ? { maxWaitMinutes: CODEX_MAX_WAIT_MINUTES } : {}),
@@ -216,7 +219,7 @@ export class Conversation {
           () => this.cwd(),
           this.clusters,
           post,
-          () => this.clusterSelf(),
+          order => this.cluster.joinProfile(order),
         )
       : null
     this.tailer = link.transcriptPath
@@ -256,6 +259,11 @@ export class Conversation {
     if (this.usageTimer) clearInterval(this.usageTimer)
     this.work.stop()
     this.autoJoin?.stop()
+  }
+
+  /** The hooks wrote the session's link again, or may have: its clusters see how it takes posts now. */
+  hooksRead() {
+    this.cluster.followHooks()
   }
 
   /** How this session shows in its clusters: the folder's name, never its path. */

@@ -1,14 +1,18 @@
 // The clusters in the Windows and Linux island (desktop/): a compact strip above the sessions with each cluster's clock,
 // who is working and the last posts, and a cluster's page in the island's window: the roster, your sessions with Put in
 // and Take out, the feed and the claims. Built from the same model as the website's Clusters page (site/clusters/model.ts).
+// One of your sessions set to live that gets digests says why, with Live anyway when it skips permission prompts.
 
-import type { ClusterDelivery, ClusterState, ListedCluster, OpenCluster, Session } from '../shared'
+import type { ClusterState, ListedCluster, OpenCluster, Session } from '../shared'
 import { STATUS_LABELS } from '../shared'
 import { element } from './markdown'
 import {
   authorLabel,
   clockView,
   DELIVERIES,
+  type DeliveryOption,
+  DIGEST_REASONS,
+  digestReason,
   eventLine,
   heldClaims,
   POST_KINDS,
@@ -99,7 +103,7 @@ function joinForm(actions: ClusterActions, done: () => void): HTMLElement {
 /** What a cluster's page can do for this account's own sessions: only their owner puts them in or takes them out. */
 export interface ClusterPageActions {
   back(): void
-  putIn(session: Session, delivery: ClusterDelivery): void
+  putIn(session: Session, delivery: DeliveryOption): void
   takeOut(sessionId: string): void
 }
 
@@ -130,20 +134,31 @@ export function renderClusterPage(
       for (const session of machine.sessions) {
         const profile = session.profile
         const facts = [machine.name, profile?.project, profile?.branch, profile?.tool ? TOOL_LABELS[profile.tool] : undefined]
-        const row = element(
-          'div',
-          dot(session.online ? (session.status ?? 'idle') : 'offline'),
+        const text = element(
+          'span',
+          element('strong', sessionName(session)),
           element(
-            'span',
-            element('strong', sessionName(session)),
-            element(
-              'small',
-              profile?.status ?? (!session.ready ? 'Waiting for its agent' : session.status ? STATUS_LABELS[session.status] : ''),
-            ),
-            element('small', facts.filter(Boolean).join(' · ')),
+            'small',
+            profile?.status ?? (!session.ready ? 'Waiting for its agent' : session.status ? STATUS_LABELS[session.status] : ''),
           ),
+          element('small', facts.filter(Boolean).join(' · ')),
         )
+        const row = element('div', dot(session.online ? (session.status ?? 'idle') : 'offline'), text)
         row.className = 'session'
+        // As this window last chose it: the relay sends a session's order only to its agent.
+        const yours = member.mine ? own.find(s => s.id === session.session) : undefined
+        const reason = yours ? digestReason(rememberedDelivery(state.id, session.session), session) : null
+        if (yours && reason) {
+          const turned = element('small', `⚠ ${DIGEST_REASONS[reason]}`)
+          turned.className = 'turned-digest'
+          text.append(turned)
+        }
+        if (yours && reason === 'prompts') {
+          const anyway = element('button', 'Live anyway')
+          anyway.title = 'Posts reach it as they come, though it skips permission prompts'
+          anyway.onclick = () => actions.putIn(yours, 'anyway')
+          row.append(anyway)
+        }
         if (member.mine) {
           const out = element('button', 'Take out')
           out.onclick = () => actions.takeOut(session.session)
@@ -168,7 +183,7 @@ export function renderClusterPage(
       }
       delivery.value = rememberedDelivery(state.id, session.id)
       const put = element('button', 'Put in')
-      put.onclick = () => actions.putIn(session, delivery.value as ClusterDelivery)
+      put.onclick = () => actions.putIn(session, delivery.value as DeliveryOption)
       const row = element(
         'div',
         dot(session.status),

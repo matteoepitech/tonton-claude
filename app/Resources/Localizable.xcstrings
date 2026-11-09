@@ -6467,6 +6467,36 @@
         }
       }
     },
+    "Live → digest" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En direct → résumé"
+          }
+        }
+      }
+    },
+    "Live → digest: a codex started without tonton codex reads posts at its next prompt" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En direct → résumé : un codex lancé sans tonton codex lit les messages à son prochain prompt"
+          }
+        }
+      }
+    },
+    "Live → digest: skips permission prompts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En direct → résumé : saute les demandes de permission"
+          }
+        }
+      }
+    },
     "Loading the release notes…" : {
       "localizations" : {
         "fr" : {
@@ -8476,6 +8506,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les messages lui parviennent dès qu’ils arrivent"
+          }
+        }
+      }
+    },
+    "Posts reach it as they come, though it skips permission prompts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les messages lui parviennent dès qu’ils arrivent, bien qu’elle saute les demandes de permission"
           }
         }
       }

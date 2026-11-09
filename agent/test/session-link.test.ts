@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { newestTranscript, type SessionLink, SessionLinkWatcher } from '../src/channel/session-link'
 import { codexRun } from '../src/codex/wrapper'
+import { paths } from '../src/config'
 
 const AGENT = join(import.meta.dir, '../src/main.ts')
 const temps: string[] = []
@@ -118,5 +119,29 @@ test('a Codex run by tonton codex is followed from the first thread its server s
     expect(follow('claude')).toEqual([])
   } finally {
     rmSync(record, { force: true })
+  }
+})
+
+test('every read of the link is told, for cluster delivery to compare what it published with what the hooks say now', async () => {
+  mkdirSync(paths.run, { recursive: true })
+  const file = join(paths.run, `${process.ppid}.json`)
+  writeFileSync(file, JSON.stringify({ sessionId: 'mode', transcriptPath: null, cwd: '/work', event: 'Stop', permissionMode: 'default' }))
+  const followed: string[] = []
+  let reads = 0
+  const watcher = new SessionLinkWatcher(
+    link => followed.push(link.sessionId),
+    'claude',
+    () => reads++,
+  )
+  watcher.start()
+  try {
+    expect(reads).toBe(1)
+    // A mode that came and went between two reads leaves the link as it was: it is told all the same.
+    for (let i = 0; i < 40 && reads < 2; i++) await Bun.sleep(50)
+    expect(reads).toBeGreaterThanOrEqual(2)
+    expect(followed).toEqual(['mode'])
+  } finally {
+    watcher.stop()
+    rmSync(file, { force: true })
   }
 })

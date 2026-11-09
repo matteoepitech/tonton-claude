@@ -91,6 +91,7 @@ let deferred: string[]
 let forgotten: string[]
 let busy: boolean
 let skipsPrompts: boolean
+let takesLive: boolean
 let toolsChanged: number
 /** The session's project folder, and what the relay keeps of shared files. */
 let project: string
@@ -166,6 +167,7 @@ beforeEach(() => {
   forgotten = []
   busy = false
   skipsPrompts = false
+  takesLive = true
   toolsChanged = 0
   clockNow = Date.now()
   project = mkdtempSync(joinPath(tmpdir(), 'tonton-cluster-project-'))
@@ -180,6 +182,7 @@ beforeEach(() => {
       forget: clusterId => forgotten.push(clusterId),
       busy: () => busy,
       skipsPrompts: () => skipsPrompts,
+      takesLive: () => takesLive,
       cwd: () => project,
       now: () => clockNow,
       files: {
@@ -248,6 +251,95 @@ describe('putting a session in', () => {
     expect(await vault.read(sent.profile, decodeClusterSessionProfile)).toMatchObject({ name: 'api', machine: 'mac', tool: 'claude' })
     await relay.fromAna({ kind: 'message', text: 'later' })
     expect(profiles()).toHaveLength(2)
+  })
+
+  test('its profile says it skips permission prompts and gets digests, and says it no more once it stops', async () => {
+    const profiles = () =>
+      Promise.all(
+        relay.sent.flatMap(message =>
+          message.t === 'cluster_session_profile' ? [vault.read(message.profile, decodeClusterSessionProfile)] : [],
+        ),
+      )
+    // The hook state says bypassPermissions.
+    skipsPrompts = true
+    await join()
+    expect(await profiles()).toHaveLength(1)
+    expect((await profiles()).at(-1)).toMatchObject({ name: 'api', tool: 'claude', delivery: 'digest', skipsPrompts: true })
+    // Nothing changed: nothing is sent again.
+    work.followHooks()
+    await settle()
+    expect(await profiles()).toHaveLength(1)
+    // Shift+Tab: it asks again, so it takes posts live.
+    skipsPrompts = false
+    work.followHooks()
+    await settle()
+    expect(await profiles()).toHaveLength(2)
+    const back = (await profiles()).at(-1)
+    expect(back).toMatchObject({ name: 'api', machine: 'mac', delivery: 'live' })
+    expect(back?.skipsPrompts).toBeUndefined()
+    // It skips them again, then its owner chooses Live anyway: live, still skipping prompts.
+    skipsPrompts = true
+    work.followHooks()
+    await settle()
+    expect((await profiles()).at(-1)).toMatchObject({ delivery: 'digest', skipsPrompts: true })
+    await join({ delivery: 'live', liveWithoutPrompts: true })
+    expect((await profiles()).at(-1)).toMatchObject({ delivery: 'live', skipsPrompts: true })
+    // The status line keeps what it says of its delivery.
+    expect(await call('cluster_status', { text: 'rigging' })).toBe('Status set.')
+    expect((await profiles()).at(-1)).toMatchObject({ status: 'rigging', delivery: 'live', skipsPrompts: true })
+    // Muted, whatever the prompts.
+    await join({ delivery: 'muted' })
+    expect((await profiles()).at(-1)).toMatchObject({ delivery: 'muted', skipsPrompts: true })
+  })
+
+  test('a mode that came and went between two reads of the hooks still ends with the right profile', async () => {
+    const last = async () => {
+      const sent = relay.sent.findLast(message => message.t === 'cluster_session_profile')
+      return sent?.t === 'cluster_session_profile' ? vault.read(sent.profile, decodeClusterSessionProfile) : null
+    }
+    await join()
+    expect(await last()).toMatchObject({ delivery: 'live' })
+    // bypassPermissions, and a post comes before the channel reads the hooks again: the profile says digest.
+    skipsPrompts = true
+    await relay.fromAna({ kind: 'message', text: 'pushed' })
+    expect(await last()).toMatchObject({ delivery: 'digest', skipsPrompts: true })
+    // The mode turns back before that read: the read finds what was published wrong.
+    skipsPrompts = false
+    work.followHooks()
+    await settle()
+    const back = await last()
+    expect(back).toMatchObject({ delivery: 'live' })
+    expect(back?.skipsPrompts).toBeUndefined()
+    const count = relay.sent.filter(message => message.t === 'cluster_session_profile').length
+    work.followHooks()
+    await settle()
+    expect(relay.sent.filter(message => message.t === 'cluster_session_profile')).toHaveLength(count)
+  })
+
+  test('a codex nothing drives says it gets digests, and not that it skips permission prompts', async () => {
+    takesLive = false
+    await join()
+    const sent = relay.sent.findLast(message => message.t === 'cluster_session_profile')
+    if (sent?.t !== 'cluster_session_profile') throw new Error('no profile')
+    const profile = await vault.read(sent.profile, decodeClusterSessionProfile)
+    expect(profile).toMatchObject({ delivery: 'digest' })
+    expect(profile?.skipsPrompts).toBeUndefined()
+    expect(work.joinProfile({ delivery: 'muted' })).toMatchObject({ delivery: 'muted' })
+    expect(work.joinProfile({ delivery: 'live', liveWithoutPrompts: true }).delivery).toBe('digest')
+  })
+
+  test('the profile it seals with an order of its own says how it will take posts', () => {
+    expect(work.joinProfile({})).toEqual({
+      tool: 'claude',
+      model: 'claude-opus-5-5',
+      project: 'api',
+      branch: 'main',
+      machine: 'mac',
+      delivery: 'live',
+    })
+    skipsPrompts = true
+    expect(work.joinProfile({})).toMatchObject({ delivery: 'digest', skipsPrompts: true })
+    expect(work.joinProfile({ delivery: 'live', liveWithoutPrompts: true })).toMatchObject({ delivery: 'live', skipsPrompts: true })
   })
 
   test('an order older than the last leave is not taken again', async () => {

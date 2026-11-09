@@ -4,6 +4,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   ClusterVault,
   clusterDelivery,
+  clusterDeliveryProfile,
+  clusterDigestReason,
   clusterKeyScope,
   clusterPostIsFor,
   decodeClusterClaims,
@@ -83,6 +85,27 @@ describe('cluster keys and orders', () => {
     expect(clusterDelivery({ delivery: 'muted' }, false)).toBe('muted')
     expect(clusterDelivery({ delivery: 'muted', liveWithoutPrompts: true }, true)).toBe('muted')
   })
+
+  test("a session's agent says the delivery it really gets, and the clients say when live turned into digests", () => {
+    expect(clusterDeliveryProfile({}, false)).toEqual({ delivery: 'live' })
+    expect(clusterDeliveryProfile({}, true)).toEqual({ delivery: 'digest', skipsPrompts: true })
+    expect(clusterDeliveryProfile({ delivery: 'live', liveWithoutPrompts: true }, true)).toEqual({ delivery: 'live', skipsPrompts: true })
+    expect(clusterDeliveryProfile({ delivery: 'muted' }, true)).toEqual({ delivery: 'muted', skipsPrompts: true })
+
+    const turned = { delivery: 'digest', skipsPrompts: true } as const
+    expect(clusterDigestReason({}, turned)).toBe('prompts')
+    expect(clusterDigestReason({ delivery: 'live' }, turned)).toBe('prompts')
+    // Its owner chose a digest, or Live anyway, which its agent has not taken yet: nothing turned.
+    expect(clusterDigestReason({ delivery: 'digest' }, turned)).toBeNull()
+    expect(clusterDigestReason({ delivery: 'live', liveWithoutPrompts: true }, turned)).toBeNull()
+    // A codex nothing drives reads posts at its next prompt, Live anyway or not.
+    expect(clusterDigestReason({}, { delivery: 'digest', tool: 'codex' })).toBe('codex')
+    expect(clusterDigestReason({ delivery: 'live', liveWithoutPrompts: true }, { ...turned, tool: 'codex' })).toBe('codex')
+    // It asks for permission, or an older agent says neither.
+    expect(clusterDigestReason({}, { delivery: 'live' })).toBeNull()
+    expect(clusterDigestReason({}, { tool: 'codex' })).toBeNull()
+    expect(clusterDigestReason({}, null)).toBeNull()
+  })
 })
 
 describe('what other members sealed', () => {
@@ -120,6 +143,19 @@ describe('what other members sealed', () => {
 
   test('profiles, claims and the clock drop wrong fields', () => {
     expect(decodeClusterSessionProfile({ name: 'Hero', tool: 'vim', status: 5, statusAt: 'not a date' })).toEqual({ name: 'Hero' })
+    // The delivery a session really gets, and that it skips permission prompts; anything else is dropped.
+    expect(decodeClusterSessionProfile({ name: 'Hero', delivery: 'digest', skipsPrompts: true })).toEqual({
+      name: 'Hero',
+      delivery: 'digest',
+      skipsPrompts: true,
+    })
+    expect(decodeClusterSessionProfile({ name: 'Hero', delivery: 'muted', skipsPrompts: 'yes' })).toEqual({
+      name: 'Hero',
+      delivery: 'muted',
+    })
+    expect(decodeClusterSessionProfile({ name: 'Hero', delivery: 'loud', skipsPrompts: false })).toEqual({ name: 'Hero' })
+    // An older agent says neither: unknown.
+    expect(decodeClusterSessionProfile({ name: 'Hero' })).toEqual({ name: 'Hero' })
     expect(
       decodeClusterClaims({
         claims: [

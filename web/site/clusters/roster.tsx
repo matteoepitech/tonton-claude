@@ -1,16 +1,29 @@
 // Who is in the cluster and what each session does, live: every member, its machines and their sessions, with the
 // state the relay sees and the status line, project, branch, tool and model the session's agent shares, sealed. Your own
-// sessions can be put in or taken out, and each chooses how it takes the posts (docs/cluster.md, The rule).
-import { LogInIcon, LogOutIcon } from 'lucide-react'
+// sessions can be put in or taken out, and each chooses how it takes the posts (docs/cluster.md, The rule); one set to
+// live that gets digests says why, with Live anyway one click away when it skips permission prompts.
+import { LogInIcon, LogOutIcon, TriangleAlertIcon } from 'lucide-react'
 import { useState } from 'react'
-import { type ClusterDelivery, type ClusterSession, type Session, STATUS_LABELS } from '../../../shared'
+import { type ClusterSession, type Session, STATUS_LABELS } from '../../../shared'
 import { Empty, StatusDot } from '../common'
 import { ago, plural } from '../format'
 import { useStore } from '../store'
 import { Button } from '../ui/button'
 import { Badge, Card } from '../ui/card'
 import { NativeSelect } from '../ui/select'
-import { DELIVERIES, profileOf, rememberDelivery, rememberedDelivery, roster, sessionName, TOOL_LABELS } from './model'
+import {
+  choiceOf,
+  DELIVERIES,
+  type DeliveryOption,
+  DIGEST_REASONS,
+  digestReason,
+  profileOf,
+  rememberDelivery,
+  rememberedDelivery,
+  roster,
+  sessionName,
+  TOOL_LABELS,
+} from './model'
 import type { ClusterTabProps } from './page'
 
 export function Roster({ cluster, state }: ClusterTabProps) {
@@ -49,6 +62,15 @@ function SessionRow({ clusterId, session, mine }: { clusterId: string; session: 
   const profile = session.profile
   const facts = [profile?.project, profile?.branch, profile?.tool ? TOOL_LABELS[profile.tool] : undefined, profile?.model].filter(Boolean)
   const own = mine ? store.state?.sessions.find(s => s.id === session.session) : undefined
+  // The relay keeps each session's order sealed with the account key and sends it only to its agent, so a browser shows
+  // the delivery it last chose itself. Changing it sends a new order.
+  const [delivery, setDelivery] = useState<DeliveryOption>(() => rememberedDelivery(clusterId, session.session))
+  const choose = (yours: Session, next: DeliveryOption) => {
+    setDelivery(next)
+    rememberDelivery(clusterId, yours.id, next)
+    void store.clusters?.putSession(clusterId, yours.id, profileOf(yours), choiceOf(next))
+  }
+  const reason = own ? digestReason(delivery, session) : null
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
       <StatusDot status={session.online ? session.status : 'offline'} />
@@ -70,11 +92,29 @@ function SessionRow({ clusterId, session, mine }: { clusterId: string; session: 
       </span>
       {mine && (
         <span className="flex items-center gap-2">
-          {own && <DeliveryPicker clusterId={clusterId} session={own} />}
+          {own && <DeliverySelect value={delivery} onChange={next => choose(own, next)} />}
           <Button variant="ghost" size="sm" onClick={() => store.clusters?.takeSessionOut(clusterId, session.session)}>
             <LogOutIcon />
             Take out
           </Button>
+        </span>
+      )}
+      {/* What its agent says it really gets: live turned into digests, and why. */}
+      {own && reason && (
+        <span className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 ps-5 text-xs text-warning">
+          <TriangleAlertIcon className="size-3.5" aria-hidden="true" />
+          {DIGEST_REASONS[reason]}
+          {reason === 'prompts' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ms-auto"
+              title="Posts reach it as they come, though it skips permission prompts"
+              onClick={() => choose(own, 'anyway')}
+            >
+              Live anyway
+            </Button>
+          )}
         </span>
       )}
     </li>
@@ -115,7 +155,7 @@ function YourSessions({ clusterId, inCluster }: { clusterId: string; inCluster: 
 
 function PutIn({ clusterId, session }: { clusterId: string; session: Session }) {
   const store = useStore()
-  const [delivery, setDelivery] = useState<ClusterDelivery>(() => rememberedDelivery(clusterId, session.id))
+  const [delivery, setDelivery] = useState<DeliveryOption>(() => rememberedDelivery(clusterId, session.id))
   return (
     <span className="flex items-center gap-2">
       <DeliverySelect value={delivery} onChange={setDelivery} />
@@ -123,7 +163,7 @@ function PutIn({ clusterId, session }: { clusterId: string; session: Session }) 
         size="sm"
         onClick={() => {
           rememberDelivery(clusterId, session.id, delivery)
-          void store.clusters?.putSession(clusterId, session.id, profileOf(session), { delivery })
+          void store.clusters?.putSession(clusterId, session.id, profileOf(session), choiceOf(delivery))
         }}
       >
         <LogInIcon />
@@ -133,32 +173,13 @@ function PutIn({ clusterId, session }: { clusterId: string; session: Session }) 
   )
 }
 
-/**
- * The relay keeps each session's order sealed with the account key and sends it only to its agent, so a browser shows
- * the delivery it last chose itself. Changing it sends a new order.
- */
-function DeliveryPicker({ clusterId, session }: { clusterId: string; session: Session }) {
-  const store = useStore()
-  const [delivery, setDelivery] = useState<ClusterDelivery>(() => rememberedDelivery(clusterId, session.id))
-  return (
-    <DeliverySelect
-      value={delivery}
-      onChange={next => {
-        setDelivery(next)
-        rememberDelivery(clusterId, session.id, next)
-        void store.clusters?.putSession(clusterId, session.id, profileOf(session), { delivery: next })
-      }}
-    />
-  )
-}
-
-function DeliverySelect({ value, onChange }: { value: ClusterDelivery; onChange(value: ClusterDelivery): void }) {
+function DeliverySelect({ value, onChange }: { value: DeliveryOption; onChange(value: DeliveryOption): void }) {
   return (
     <NativeSelect
       aria-label="How it takes the posts"
       title="A session that skips permission prompts gets a digest even when Live is chosen."
       value={value}
-      onChange={event => onChange(event.target.value as ClusterDelivery)}
+      onChange={event => onChange(event.target.value as DeliveryOption)}
       className="h-8 w-auto"
     >
       {DELIVERIES.map(choice => (

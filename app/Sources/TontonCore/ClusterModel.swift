@@ -276,6 +276,19 @@ extension ClusterDelivery {
     }
 }
 
+/// Why a session its owner set to live gets digests: it skips permission prompts, or it is a codex nothing drives (a plain
+/// `codex` reads posts only at its next prompt; `tonton codex` takes them live).
+public enum ClusterDigestReason: Equatable, Sendable {
+    case prompts, codex
+
+    public var text: String {
+        switch self {
+        case .prompts: String(core: "Live → digest: skips permission prompts")
+        case .codex: String(core: "Live → digest: a codex started without tonton codex reads posts at its next prompt")
+        }
+    }
+}
+
 /// What the owner of a session chose for it in a cluster (docs/cluster.md, The rule).
 public struct ClusterSessionChoice: Codable, Equatable, Sendable {
     public var delivery: ClusterDelivery
@@ -291,7 +304,26 @@ public struct ClusterSessionChoice: Codable, Equatable, Sendable {
 
     public var label: String { liveWithoutPrompts ? String(core: "Live anyway") : delivery.label }
 
-    /// The app does not know which sessions skip permission prompts: the agent applies the rule, and the notch says it.
+    /// Why the session, set to live, gets digests, as its agent says (docs/cluster.md, Delivery): the notch says so, with
+    /// Live anyway one click away when it skips permission prompts. Nil when it gets what was chosen, or for an older
+    /// agent, which says nothing. Mirrors `clusterDigestReason` in shared/cluster.ts.
+    public func digestReason(_ profile: ClusterSessionProfile?) -> ClusterDigestReason? {
+        guard delivery == .live, let profile, profile.delivery == .digest else { return nil }
+        if profile.skipsPrompts == true && !liveWithoutPrompts { return .prompts }
+        return profile.tool == CodingTool.codex.command ? .codex : nil
+    }
+
+    /// The choice, as the session really takes the posts.
+    public func label(for profile: ClusterSessionProfile?) -> String {
+        digestReason(profile)?.text ?? label
+    }
+
+    /// What Live anyway does, for a session that skips permission prompts.
+    public static var anywayDetail: String {
+        String(core: "Posts reach it as they come, though it skips permission prompts")
+    }
+
+    /// The agent applies the rule, and an older one does not say when it did: the notch says it for every session.
     public static var promptsNote: String {
         String(core: "A session that skips permission prompts gets a digest unless you choose Live anyway.")
     }

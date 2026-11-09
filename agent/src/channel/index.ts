@@ -157,7 +157,7 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
     ? { live: (text: string) => void mcp.inject(text, 'cluster'), toolsChanged: () => void mcp.toolsChanged() }
     : notch
       ? { live: (text: string) => notch.inject(text), busy: () => notch.working, toolsChanged: () => {} }
-      : { live: () => false, toolsChanged: () => {} }
+      : { live: () => false, takesLive: false, toolsChanged: () => {} }
 
   const follow = (link: SessionLink) => {
     log('following session', link)
@@ -184,7 +184,7 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
   }
 
   relay.connect()
-  new SessionLinkWatcher(follow, tool).start()
+  new SessionLinkWatcher(follow, tool, () => conversation?.hooksRead()).start()
 }
 
 /** The link goes with its session, as Claude Code's SessionEnd hook takes it (agent/src/hook.ts). */

@@ -324,13 +324,20 @@ public struct ClusterSessionProfile: Codable, Equatable, Sendable, ClusterPayloa
     /// What the session says it is doing, and since when.
     public var status: String?
     public var statusAt: String?
+    /// The delivery the session really gets now, as its own agent works it out (`ClusterDelivery.of`): one set to live
+    /// that skips permission prompts gets digests. Nil: an older agent, so unknown.
+    public var delivery: ClusterDelivery?
+    /// True only while the session skips permission prompts (`bypassPermissions`); nil otherwise, or unknown.
+    public var skipsPrompts: Bool?
 
     public init(
         name: String? = nil, project: String? = nil, machine: String? = nil, tool: String? = nil, model: String? = nil,
-        branch: String? = nil, status: String? = nil, statusAt: String? = nil
+        branch: String? = nil, status: String? = nil, statusAt: String? = nil, delivery: ClusterDelivery? = nil,
+        skipsPrompts: Bool? = nil
     ) {
         (self.name, self.project, self.machine, self.tool) = (name, project, machine, tool)
         (self.model, self.branch, self.status, self.statusAt) = (model, branch, status, statusAt)
+        (self.delivery, self.skipsPrompts) = (delivery, skipsPrompts == true ? true : nil)
     }
 
     init?(json: ClusterJSON) {
@@ -339,7 +346,8 @@ public struct ClusterSessionProfile: Codable, Equatable, Sendable, ClusterPayloa
         self.init(
             name: json["name"]?.text(200), project: json["project"]?.text(200), machine: json["machine"]?.text(200),
             tool: CodingTool(command: tool)?.command, model: json["model"]?.text(200), branch: json["branch"]?.text(200),
-            status: json["status"]?.text(500), statusAt: json["statusAt"]?.date)
+            status: json["status"]?.text(500), statusAt: json["statusAt"]?.date,
+            delivery: json["delivery"]?.string.flatMap(ClusterDelivery.init(rawValue:)), skipsPrompts: json["skipsPrompts"]?.bool)
     }
 }
 

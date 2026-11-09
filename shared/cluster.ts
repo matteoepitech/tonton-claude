@@ -141,6 +141,34 @@ export function clusterDelivery(
   return chosen === 'live' && skipsPrompts && !order.liveWithoutPrompts ? 'digest' : chosen
 }
 
+/**
+ * What a session's agent puts in its profile about how it takes posts, for every member to see: the delivery it really
+ * gets, and that it skips permission prompts while it does.
+ */
+export function clusterDeliveryProfile(
+  order: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>,
+  skipsPrompts: boolean,
+): Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts'> {
+  return { delivery: clusterDelivery(order, skipsPrompts), ...(skipsPrompts ? { skipsPrompts: true as const } : {}) }
+}
+
+/** Why a session its owner set to live gets digests, as its agent says. */
+export type ClusterDigestReason = 'prompts' | 'codex'
+
+/**
+ * Why a session its owner chose live for gets digests, as its agent says: it skips permission prompts (`prompts`: Live
+ * anyway turns live delivery on), or it is a codex nothing drives (`codex`: a plain `codex` reads posts only at its next
+ * prompt, `tonton codex` takes them live). Null when it gets what was chosen, or for an older agent, which says neither.
+ */
+export function clusterDigestReason(
+  choice: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>,
+  profile: Pick<ClusterSessionProfile, 'delivery' | 'skipsPrompts' | 'tool'> | null | undefined,
+): ClusterDigestReason | null {
+  if ((choice.delivery ?? 'live') !== 'live' || profile?.delivery !== 'digest') return null
+  if (profile.skipsPrompts && !choice.liveWithoutPrompts) return 'prompts'
+  return profile.tool === 'codex' ? 'codex' : null
+}
+
 const isVersion = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1
 
 // MARK: Payloads another member sealed
@@ -185,6 +213,8 @@ export function decodeClusterSessionProfile(value: unknown): ClusterSessionProfi
     branch: text(f.branch, 200),
     status: text(f.status, 500),
     statusAt: date(f.statusAt),
+    delivery: DELIVERIES.includes(f.delivery as ClusterDelivery) ? (f.delivery as ClusterDelivery) : undefined,
+    skipsPrompts: f.skipsPrompts === true ? (true as const) : undefined,
   })
 }
 

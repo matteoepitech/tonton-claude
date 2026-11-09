@@ -8,7 +8,7 @@ import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { ClusterVault, openClusterGrant, sealClusterSessionOrder } from '../../../shared/cluster'
 import { ClusterApi, resolveClusterKeyring } from '../../../shared/cluster-api'
-import type { ClusterDelivery, ClusterSessionProfile, ClusterSummary } from '../../../shared/cluster-protocol'
+import type { ClusterDelivery, ClusterSessionOrder, ClusterSessionProfile, ClusterSummary } from '../../../shared/cluster-protocol'
 import { open, seal } from '../../../shared/crypto'
 import { PoolKeyring } from '../../../shared/pool-keys'
 import type { AgentMessage } from '../../../shared/protocol'
@@ -124,8 +124,8 @@ export class ClusterAutoJoin {
     private readonly cwd: () => string,
     private readonly clusters: SessionClusters,
     private readonly post: Post,
-    /** How the session shows in the cluster, to seal with the order. */
-    private readonly profile: () => ClusterSessionProfile,
+    /** How the session shows in the cluster with this order, to seal with it (`ClusterWork.joinProfile`). */
+    private readonly profile: (order: Pick<ClusterSessionOrder, 'delivery' | 'liveWithoutPrompts'>) => ClusterSessionProfile,
     private readonly api = new ClusterApi({ relay: config.server, token: config.token, agent: true }),
   ) {}
 
@@ -207,7 +207,7 @@ export class ClusterAutoJoin {
       sessionId,
       clusterId: rule.clusterId,
       order: await sealClusterSessionOrder(this.config.key, order),
-      profile: await new ClusterVault(keyring).seal(this.profile()),
+      profile: await new ClusterVault(keyring).seal(this.profile(order)),
     }))
   }
 }

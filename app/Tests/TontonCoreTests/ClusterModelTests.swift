@@ -196,6 +196,28 @@ final class ClusterModelTests: XCTestCase {
         XCTAssertFalse(ClusterSessionChoice(delivery: .muted, liveWithoutPrompts: true).liveWithoutPrompts)
     }
 
+    func testLiveTurnedIntoDigestsSaysWhyAsTheAgentSaysIt() {
+        let turned = ClusterSessionProfile(name: "rig", delivery: .digest, skipsPrompts: true)
+        let live = ClusterSessionChoice.standard
+        let anyway = ClusterSessionChoice(delivery: .live, liveWithoutPrompts: true)
+        XCTAssertEqual(live.digestReason(turned), .prompts)
+        XCTAssertEqual(live.label(for: turned), "Live → digest: skips permission prompts")
+        // Its owner chose a digest, or Live anyway, which its agent has not taken yet: nothing turned.
+        XCTAssertNil(ClusterSessionChoice(delivery: .digest).digestReason(turned))
+        XCTAssertNil(anyway.digestReason(turned))
+        XCTAssertEqual(anyway.label(for: turned), "Live anyway")
+        // A codex nothing drives reads posts at its next prompt, Live anyway or not.
+        let plainCodex = ClusterSessionProfile(name: "rig", tool: "codex", delivery: .digest)
+        XCTAssertEqual(live.digestReason(plainCodex), .codex)
+        XCTAssertEqual(anyway.digestReason(plainCodex), .codex)
+        XCTAssertEqual(live.label(for: plainCodex), "Live → digest: a codex started without tonton codex reads posts at its next prompt")
+        // It asks for permission, or an older agent says neither: the choice alone.
+        XCTAssertNil(live.digestReason(ClusterSessionProfile(name: "rig", delivery: .live)))
+        XCTAssertNil(live.digestReason(ClusterSessionProfile(name: "rig", tool: "codex")))
+        XCTAssertNil(live.digestReason(nil))
+        XCTAssertEqual(live.label(for: nil), "Live")
+    }
+
     func testASessionShowsTheClusterItsNamesNeverItsPath() {
         let mine = SessionSummary(
             id: "s1", machineId: "m1", machine: "Studio", platform: "darwin", cwd: "/Users/val/Secret/jam", project: "jam", title: "Rig",
