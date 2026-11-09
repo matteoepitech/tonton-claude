@@ -75,11 +75,11 @@ public final class CoreAudioClients: AudioClientSource {
         guard let change else { return }
         var seen: Set<pid_t> = []
         let clients = clientListeners.keys.compactMap { client -> SoundingApps.Client? in
-            guard let pid = Self.value(client, kAudioProcessPropertyPID, pid_t(0)), pid > 0 else { return nil }
+            guard let pid = Self.number(client, kAudioProcessPropertyPID).map(pid_t.init(bitPattern:)), pid > 0 else { return nil }
             seen.insert(pid)
             return SoundingApps.Client(
-                app: app(of: pid), output: Self.value(client, kAudioProcessPropertyIsRunningOutput, UInt32(0)) == 1,
-                input: Self.value(client, kAudioProcessPropertyIsRunningInput, UInt32(0)) == 1)
+                app: app(of: pid), output: Self.number(client, kAudioProcessPropertyIsRunningOutput) == 1,
+                input: Self.number(client, kAudioProcessPropertyIsRunningInput) == 1)
         }
         apps = apps.filter { seen.contains($0.key) }
         change(clients)
@@ -110,10 +110,11 @@ public final class CoreAudioClients: AudioClientSource {
         return Array(clients.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
     }
 
-    private static func value<Value>(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector, _ initial: Value) -> Value? {
+    /// A process's pid and its two flags are all 32-bit.
+    private static func number(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> UInt32? {
         var address = address(selector)
-        var value = initial
-        var size = UInt32(MemoryLayout<Value>.size)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
         return AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr ? value : nil
     }
 

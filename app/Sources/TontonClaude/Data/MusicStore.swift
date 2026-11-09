@@ -33,6 +33,8 @@ final class MusicStore: ObservableObject {
     private var coverTask: Task<Void, Never>?
     private var subscriptions = Set<AnyCancellable>()
     private static let automationSettings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+    private static let accessibilitySettings = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
 
     private init() {
         let apps = WorkspaceApps()
@@ -40,6 +42,7 @@ final class MusicStore: ObservableObject {
         players = [
             SpotifyPlayer(apps: apps, notifications: notifications),
             AppleMusicPlayer(apps: apps, notifications: notifications),
+            NowPlayingPlayer(apps: apps),
         ]
         pin = AppSettings.shared.musicPlayer
         covers.countLimit = 50
@@ -81,6 +84,7 @@ final class MusicStore: ObservableObject {
         case .openPlayer: chosen?.launch()
         case .launch(let app): players.first { $0.app == app }?.launch()
         case .openAutomationSettings: if let url = Self.automationSettings { NSWorkspace.shared.open(url) }
+        case .openAccessibilitySettings: if let url = Self.accessibilitySettings { NSWorkspace.shared.open(url) }
         }
     }
 

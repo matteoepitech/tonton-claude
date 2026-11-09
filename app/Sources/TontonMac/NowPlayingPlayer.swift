@@ -3,7 +3,7 @@ import Foundation
 import TontonCore
 
 /// Every player that is neither Spotify nor Apple Music, as macOS's Now Playing sees it: Deezer, a web player in a browser,
-/// VLC. Its `app` and `name` are those of the app playing. It reads through mediaremote-adapter, one `/usr/bin/perl` child
+/// VLC. Its `app` and `name` are those of the app playing, kept once it stops while that app runs. It reads through mediaremote-adapter, one `/usr/bin/perl` child
 /// that runs from `start()` until the app quits and starts again, later each time, when it dies. The controls go through
 /// the adapter too. What the child writes names what plays: it is never logged.
 ///
@@ -11,12 +11,13 @@ import TontonCore
 /// sound), it shows which app plays from Core Audio, and its controls post the media keys, once Accessibility allows it.
 @MainActor
 public final class NowPlayingPlayer: MusicPlayer {
-    /// Its `app` until an app has played through Now Playing.
-    public static let anyApp = "tech.d3l.tontonclaude.now-playing"
+    /// Its `app` while no app plays through Now Playing, and none that did still runs: empty, which Settings leaves out of
+    /// its list of players. It is not installed then either, so that the music view offers nothing to open.
+    public static let noApp = ""
 
-    public private(set) var app = NowPlayingPlayer.anyApp
-    public private(set) var name = String(core: "Other players")
-    public private(set) var state = MusicPlayerState(access: .granted) {
+    public private(set) var app = NowPlayingPlayer.noApp
+    public private(set) var name = ""
+    public private(set) var state = MusicPlayerState(installed: false, access: .granted) {
         didSet { if state != oldValue { onChange?(state) } }
     }
     public var onChange: ((MusicPlayerState) -> Void)?
@@ -134,9 +135,9 @@ public final class NowPlayingPlayer: MusicPlayer {
         }
     }
 
-    public func activate() { if app != Self.anyApp { apps.activate(app) } }
+    public func activate() { if !app.isEmpty { apps.activate(app) } }
 
-    public func launch() { if app != Self.anyApp { apps.launch(app) } }
+    public func launch() { if !app.isEmpty { apps.launch(app) } }
 
     /// The app's name as Finder and the Dock write it.
     public static func appName(_ bundleId: String) -> String? {
@@ -217,16 +218,21 @@ public final class NowPlayingPlayer: MusicPlayer {
         } else {
             now = feed.nowPlaying(at: readAt)
         }
-        if let shown = now?.app, shown != app { show(shown) }
-        state = MusicPlayerState(installed: true, running: now != nil || appRuns, access: .granted, nowPlaying: now, mediaKeys: mediaKeys)
+        if let shown = now?.app {
+            if shown != app { show(shown) }
+        } else if !app.isEmpty, !appRuns {
+            show(Self.noApp)
+        }
+        state = MusicPlayerState(
+            installed: !app.isEmpty, running: now != nil || appRuns, access: .granted, nowPlaying: now, mediaKeys: mediaKeys)
         handOverCovers()
     }
 
     private func show(_ app: String) {
         self.app = app
-        name = names(app) ?? String(core: "Other players")
-        appRuns = apps.isRunning(app)
-        guard observed.insert(app).inserted else { return }
+        name = app.isEmpty ? "" : names(app) ?? app
+        appRuns = !app.isEmpty && apps.isRunning(app)
+        guard !app.isEmpty, observed.insert(app).inserted else { return }
         apps.observe(app) { [weak self] running in
             guard let self, self.app == app else { return }
             self.appRuns = running

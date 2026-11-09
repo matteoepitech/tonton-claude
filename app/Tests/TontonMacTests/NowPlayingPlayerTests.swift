@@ -146,7 +146,7 @@ final class NowPlayingPlayerTests: XCTestCase {
         XCTAssertTrue(launcher.runs.isEmpty)
         XCTAssertFalse(audio.listening)
         XCTAssertNil(player.state.nowPlaying)
-        XCTAssertEqual(player.app, NowPlayingPlayer.anyApp)
+        XCTAssertEqual(player.app, NowPlayingPlayer.noApp)
     }
 
     func testStartRunsTheStreamOnce() throws {
@@ -183,16 +183,18 @@ final class NowPlayingPlayerTests: XCTestCase {
     }
 
     func testSpotifyAndAppleMusicShowNothingHere() {
+        apps.running = [deezer]
         let player = player()
         player.start()
         launcher.write(playing("com.spotify.client"))
         XCTAssertNil(player.state.nowPlaying)
-        XCTAssertEqual(player.app, NowPlayingPlayer.anyApp)
+        XCTAssertEqual(player.app, NowPlayingPlayer.noApp)
         launcher.write(playing())
         launcher.write(playing("com.apple.Music"))
         XCTAssertNil(player.state.nowPlaying)
-        // The app that played stays named, to open it again.
+        // The app that played stays named while it runs, to bring it to the front.
         XCTAssertEqual(player.app, deezer)
+        XCTAssertEqual(player.state.screen, .nothing)
     }
 
     func testOnceItsTrackIsGoneTheAppStaysWhileItRuns() {
@@ -202,12 +204,39 @@ final class NowPlayingPlayerTests: XCTestCase {
         launcher.write(playing())
         launcher.write(nothing)
         XCTAssertEqual(player.state.screen, .nothing)
-        apps.set(deezer, running: false)
-        XCTAssertEqual(player.state.screen, .notRunning)
-        player.launch()
         player.activate()
-        XCTAssertEqual(apps.launched, [deezer])
         XCTAssertEqual(apps.activated, [deezer])
+        // Once it quits, the player names no app again, and the music view offers nothing to open.
+        apps.set(deezer, running: false)
+        XCTAssertEqual(player.app, NowPlayingPlayer.noApp)
+        XCTAssertFalse(player.state.installed)
+        XCTAssertFalse(player.state.running)
+        player.launch()
+        XCTAssertEqual(apps.launched, [])
+    }
+
+    func testNothingToOpenBeforeAnAppPlays() {
+        let player = player()
+        player.start()
+        launcher.write(nothing)
+        XCTAssertEqual(player.app, "")
+        XCTAssertEqual(player.name, "")
+        XCTAssertFalse(player.state.installed)
+        XCTAssertFalse(player.state.running)
+        XCTAssertTrue(MusicChoice.openable([MusicChoice.Player(app: player.app, name: player.name, state: player.state)]).isEmpty)
+    }
+
+    func testAPlayingAppThatQuitsIsForgotten() {
+        apps.running = [deezer]
+        let player = player()
+        player.start()
+        launcher.write(playing())
+        XCTAssertTrue(player.state.installed)
+        apps.set(deezer, running: false)
+        // Still in Now Playing until the adapter says otherwise.
+        XCTAssertEqual(player.app, deezer)
+        launcher.write(nothing)
+        XCTAssertEqual(player.app, "")
     }
 
     func testNoAppNoLaunch() {
@@ -315,7 +344,7 @@ final class NowPlayingPlayerTests: XCTestCase {
         await settle()
         launcher.failsToStart = false
         await eventually("a child once it can start") { self.launcher.streams.count == 1 }
-        XCTAssertEqual(player.state.screen, .notRunning)
+        XCTAssertEqual(player.state.screen, .notInstalled)
     }
 
     /// The adapter runs but sees nothing while an app plays for a while: Apple may have closed its way in.
