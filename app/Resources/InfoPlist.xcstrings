@@ -1,6 +1,24 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "NSAppleEventsUsageDescription" : {
+      "comment" : "Asked the first time Music mode opens, before Tonton reads or controls Spotify. The same English as in scripts/build-app.sh.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the music playing on this Mac in the notch, and control it from there."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affichez dans l’encoche la musique en cours sur ce Mac, et pilotez-la de là."
+          }
+        }
+      }
+    },
     "NSMicrophoneUsageDescription" : {
       "comment" : "Asked before the first dictation. The same English as in scripts/build-app.sh.",
       "extractionState" : "manual",

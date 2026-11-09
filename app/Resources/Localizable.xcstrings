@@ -196,6 +196,26 @@
         }
       }
     },
+    "%@ is not installed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ n’est pas installé"
+          }
+        }
+      }
+    },
+    "%@ is not open" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ n’est pas ouvert"
+          }
+        }
+      }
+    },
     "%@ is offline" : {
       "localizations" : {
         "fr" : {
@@ -3911,6 +3931,16 @@
         }
       }
     },
+    "Connecting to %@…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connexion à %@…"
+          }
+        }
+      }
+    },
     "Connecting…" : {
       "localizations" : {
         "fr" : {
@@ -5537,6 +5567,16 @@
         }
       }
     },
+    "If macOS asks, allow Tonton Claude to control %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si macOS le demande, autorisez Tonton Claude à contrôler %@."
+          }
+        }
+      }
+    },
     "Image" : {
       "localizations" : {
         "fr" : {
@@ -6973,6 +7013,16 @@
         }
       }
     },
+    "Next track" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Morceau suivant"
+          }
+        }
+      }
+    },
     "Next: %@, %@" : {
       "localizations" : {
         "en" : {
@@ -7706,6 +7756,16 @@
         }
       }
     },
+    "Open %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir %@"
+          }
+        }
+      }
+    },
     "Open Focus Settings" : {
       "localizations" : {
         "fr" : {
@@ -7722,6 +7782,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ouvrir les réglages du relais"
+          }
+        }
+      }
+    },
+    "Open System Settings" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir Réglages Système"
           }
         }
       }
@@ -7772,6 +7842,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Invitations ouvertes"
+          }
+        }
+      }
+    },
+    "Open it and the music it plays shows up here, with its controls." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrez-le et la musique qu’il joue s’affiche ici, avec ses commandes."
           }
         }
       }
@@ -8228,12 +8308,32 @@
         }
       }
     },
+    "Play" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire"
+          }
+        }
+      }
+    },
     "Play arena" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jouer dans l’arène"
+          }
+        }
+      }
+    },
+    "Play something in %@ and it shows up here." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lancez un morceau dans %@ et il s’affiche ici."
           }
         }
       }
@@ -8309,6 +8409,16 @@
         }
       }
     },
+    "Position" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Position"
+          }
+        }
+      }
+    },
     "Post to Discord, Slack or any service that takes a JSON webhook, over https only." : {
       "localizations" : {
         "fr" : {
@@ -8335,6 +8445,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Session précédente / suivante"
+          }
+        }
+      }
+    },
+    "Previous track" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Morceau précédent"
           }
         }
       }
@@ -9652,6 +9772,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Partager en lecture seule"
+          }
+        }
+      }
+    },
+    "Show %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher %@"
           }
         }
       }
@@ -11001,12 +11131,12 @@
         }
       }
     },
-    "The music playing on this Mac shows up here." : {
+    "The music it plays shows up here once it is on this Mac." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La musique jouée sur ce Mac s’affiche ici."
+            "value" : "La musique qu’il joue s’affiche ici une fois installé sur ce Mac."
           }
         }
       }
@@ -11510,6 +11640,16 @@
         }
       }
     },
+    "Tonton Claude can't control %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tonton Claude ne peut pas contrôler %@"
+          }
+        }
+      }
+    },
     "Tonton Claude isn't running." : {
       "localizations" : {
         "fr" : {
@@ -11702,6 +11842,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Opérateur de confiance"
+          }
+        }
+      }
+    },
+    "Turn on %@ under Tonton Claude in System Settings › Privacy & Security › Automation." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez %@ sous Tonton Claude dans Réglages Système › Confidentialité et sécurité › Automatisation."
           }
         }
       }
@@ -12032,6 +12182,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voir sur GitHub"
+          }
+        }
+      }
+    },
+    "Volume" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume"
           }
         }
       }
