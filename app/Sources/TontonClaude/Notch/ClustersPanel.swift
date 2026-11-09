@@ -40,10 +40,12 @@ struct ClustersButton: View {
     @EnvironmentObject var state: NotchState
 
     var body: some View {
-        let shown = state.showClusters && !state.showHero
+        let shown = state.showClusters && !state.showHero && state.content.shown == .sessions
         Button {
             state.showClusters = !shown
             if !shown { state.showHero = false }
+            // From the music, the clusters open beside the sessions.
+            state.visitSessions()
         } label: {
             Image(systemName: shown ? "point.3.filled.connected.trianglepath.dotted" : "point.3.connected.trianglepath.dotted")
                 .font(.notch(12))

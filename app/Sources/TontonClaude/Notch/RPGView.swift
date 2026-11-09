@@ -16,8 +16,11 @@ struct RPGButton: View {
 
     var body: some View {
         let live = store.visibleSessions.filter(\.status.isLive).map(\.status)
+        // Under the music it doesn't show: the ring opens it beside the sessions.
+        let open = state.showHero && state.content.shown == .sessions
         Button {
-            state.showHero.toggle()
+            state.showHero = !open
+            state.visitSessions()
         } label: {
             HStack(spacing: 6) {
                 LevelRing(progress: rpg.ready ? rpg.hero.progress : 0, lineWidth: 2) {
@@ -39,14 +42,14 @@ struct RPGButton: View {
                     Text("+\(rpg.gain) XP").font(.notch(11, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.success)
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 8).fill(state.showHero ? Theme.accent.opacity(0.14) : .clear).padding(-3))
+            .background(RoundedRectangle(cornerRadius: 8).fill(open ? Theme.accent.opacity(0.14) : .clear).padding(-3))
         }
         .buttonStyle(.plain)
         .help(help)
         .accessibilityLabel(Text(verbatim: "Tonton"))
         .accessibilityValue(rpg.ready ? Text("Level \(rpg.hero.level)") : Text(verbatim: ""))
-        .accessibilityHint(state.showHero ? Text("Goes back to the conversation") : Text("Opens Tonton's hero screen"))
-        .accessibilityAddTraits(state.showHero ? .isSelected : [])
+        .accessibilityHint(open ? Text("Goes back to the conversation") : Text("Opens Tonton's hero screen"))
+        .accessibilityAddTraits(open ? .isSelected : [])
     }
 
     private var help: String {

@@ -52,6 +52,8 @@ final class NotchWindowController {
     private var previousApp: NSRunningApplication?
     /// ⌃ pressed alone: dictation starts unless another key comes first.
     private var pushToTalkTask: Task<Void, Never>?
+    /// Sessions that finished since the open notch last showed the sessions: in Music mode they keep their pill.
+    private let finishedUnseen = CurrentValueSubject<Set<String>, Never>([])
 
     init(store: SessionStore, settings: AppSettings) {
         self.store = store
@@ -121,6 +123,11 @@ final class NotchWindowController {
 
     private var pointerOnPreview: Bool { previewFrame?.contains(NSEvent.mouseLocation) == true }
 
+    /// Over the banner of a session: a click opens it.
+    private var pointerOnPeek: Bool {
+        state.mode == .peek && state.peekSession != nil && shapeFrame(state.peekSize).contains(NSEvent.mouseLocation)
+    }
+
     /// Frame of the visible shape, in screen coordinates.
     private func shapeFrame(_ size: CGSize) -> NSRect {
         NSRect(x: panel.frame.midX - size.width / 2, y: panel.frame.maxY - size.height, width: size.width, height: size.height)
@@ -132,11 +139,26 @@ final class NotchWindowController {
         peekTask?.cancel()
         collapseTask?.cancel()
         hidePreview()
-        if state.mode != .expanded { openedByHover = byHover }
+        if state.mode != .expanded {
+            openedByHover = byHover
+            // A visit to the sessions from Music mode ended when the notch closed. It is dropped as the notch opens again
+            // rather than as it closes, so the music doesn't show through the closing animation.
+            state.content = state.content.closing()
+        }
         panel.level = NotchPanel.raisedLevel
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { state.mode = .expanded }
         takeFocus()
         watchFloatingWindows()
+    }
+
+    /// Opens the notch on a session, in Music mode too; nil opens the sessions as they were.
+    private func open(session id: String?, byHover: Bool = false) {
+        expand(byHover: byHover)
+        if let id {
+            store.selectedId = id
+            state.showHero = false
+        }
+        state.visitSessions()
     }
 
     /// `force` also closes a pinned notch (escape, opening the settings) and unpins it.
@@ -218,9 +240,7 @@ final class NotchWindowController {
             Notifier.post(session, body: finished ? String(localized: "Claude is done.") : session.displayStatusText)
         }
         if settings.openOnPermission && session.status == .permission {
-            store.selectedId = session.id
-            state.showHero = false
-            expand()
+            open(session: session.id)
         } else {
             peek(session)
         }
@@ -335,12 +355,15 @@ final class NotchWindowController {
             .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
             .sink { [weak self] app in self?.otherAppActivated(app) }
             .store(in: &subscriptions)
+        // What the collapsed notch is about: a visit to the sessions ends with the open notch.
+        let content = state.$content.map(\.saved).removeDuplicates()
         store.sessionsPublisher.combineLatest(settings.$showPills, settings.$hiddenMachines, settings.$pinnedSessions)
-            .combineLatest(settings.$projectTags)
-            .map { [store] values, tags in
+            .combineLatest(settings.$projectTags, content, finishedUnseen)
+            .map { [store] values, tags, content, unseen in
                 let (sessions, on, hidden, pinned) = values
                 let shown = sessions.filter { !hidden.contains($0.machine) }
-                return on ? PillRow(SessionLayout.ordered(shown, pinned: pinned, thisMac: store.thisMachines, tags: tags)) : PillRow([])
+                let ordered = SessionLayout.ordered(shown, pinned: pinned, thisMac: store.thisMachines, tags: tags)
+                return on ? PillRow(content.pills(ordered, finishedUnseen: unseen)) : PillRow([])
             }
             .removeDuplicates()
             .sink { [weak self] row in self?.state.pills = row }
@@ -366,6 +389,25 @@ final class NotchWindowController {
         store.taskDone
             .sink { [weak self] session, _ in self?.lastTurn = (session.id, Date()) }
             .store(in: &subscriptions)
+        store.finished
+            .filter { [state] _ in !Self.showsSessions(state.mode, state.content) }
+            .sink { [finishedUnseen] session in finishedUnseen.send(finishedUnseen.value.union([session.id])) }
+            .store(in: &subscriptions)
+        let notch = state.$mode.combineLatest(state.$content)
+        notch.filter { Self.showsSessions($0, $1) }
+            .sink { [finishedUnseen] _ in if !finishedUnseen.value.isEmpty { finishedUnseen.send([]) } }
+            .store(in: &subscriptions)
+        content.dropFirst().sink { [settings] in settings.notchContent = $0 }.store(in: &subscriptions)
+        // Players get no Apple Events before the user opened Music mode once: from then on, they do from launch.
+        notch.map { [settings] mode, content in
+            NotchContent.listensToPlayers(musicOpened: settings.musicOpened, showing: mode == .expanded ? content.shown : nil)
+        }
+        .first { $0 }
+        .sink { [settings] _ in
+            if !settings.musicOpened { settings.musicOpened = true }
+            MusicStore.shared.start()
+        }
+        .store(in: &subscriptions)
         RPGStore.shared.earned
             .sink { [weak self] earned in self?.earned(earned.xp, level: earned.level) }
             .store(in: &subscriptions)
@@ -389,7 +431,13 @@ final class NotchWindowController {
             .store(in: &subscriptions)
         let shown = store.sessionsPublisher.combineLatest(settings.$hiddenMachines)
             .map { sessions, hidden in sessions.filter { $0.status.isLive && !hidden.contains($0.machine) } }
-        let activity = shown.combineLatest(settings.$liveActivity).map { sessions, on in on ? LiveActivity.pick(sessions) : nil }
+        let playing = MusicStore.shared.$nowPlaying.map { $0?.isPlaying == true }.removeDuplicates()
+        let dots = settings.$showActivityDots.combineLatest(settings.$showMascot).map { $0 || $1 }
+        let wings = shown.combineLatest(dots, settings.$liveActivity, content.combineLatest(playing))
+            .map { sessions, dots, live, music in
+                NotchWings.pick(sessions, content: music.0, playing: music.1, dots: dots, liveActivity: live)
+            }
+        let activity = wings.map(\.session)
         // A new session or a new state animates the wings; a new title within the same state just shows.
         activity
             .removeDuplicates { $0?.id == $1?.id && $0?.status == $1?.status }
@@ -400,8 +448,11 @@ final class NotchWindowController {
         activity
             .sink { [weak self] session in if let self, session?.id == self.state.liveActivity?.id { self.state.liveActivity = session } }
             .store(in: &subscriptions)
-        shown.combineLatest(settings.$showActivityDots.combineLatest(settings.$showMascot).map { $0 || $1 }, activity)
-            .map { sessions, wings, activity in (wings && !sessions.isEmpty) || activity != nil }
+        wings.map { $0 == .music }
+            .removeDuplicates()
+            .sink { [weak self] music in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.musicWings = music } }
+            .store(in: &subscriptions)
+        wings.map { $0 != .hidden }
             .removeDuplicates()
             .sink { [weak self] show in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.showWings = show } }
             .store(in: &subscriptions)
@@ -415,6 +466,11 @@ final class NotchWindowController {
             .removeDuplicates()
             .sink { [weak self] wide in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self?.state.wingCountdown = wide } }
             .store(in: &subscriptions)
+    }
+
+    /// The open notch shows the sessions: the user sees which ones finished.
+    private static func showsSessions(_ mode: NotchState.Mode, _ content: NotchContentChoice) -> Bool {
+        mode == .expanded && content.shown == .sessions
     }
 
     private func installEventMonitors() {
@@ -436,6 +492,10 @@ final class NotchWindowController {
                 if self.state.mode == .expanded { self.openedByHover = false }
                 if self.pointerOnPreview, let index = self.state.previewPill { return self.openPill(index) }
                 if self.pointerOnPills { return self.clickedPill() ? nil : event }
+                if self.pointerOnPeek, let session = self.state.peekSession {
+                    self.open(session: session.id)
+                    return nil
+                }
                 return event
             })
         addMonitor(
@@ -477,13 +537,18 @@ final class NotchWindowController {
         let pointer = NSEvent.mouseLocation
         switch state.mode {
         case .collapsed, .peek:
-            // The panel only takes the mouse over the pills and their preview, so they can be clicked and the menu bar stays
-            // usable.
+            // The panel only takes the mouse over the pills, their preview and a session's banner, so they can be clicked and
+            // the menu bar stays usable.
             updatePreview()
-            panel.ignoresMouseEvents = !(pointerOnPills || pointerOnPreview)
+            panel.ignoresMouseEvents = !(pointerOnPills || pointerOnPreview || pointerOnPeek)
             // A little slack below the shape makes it easy to reach.
             if settings.openOnHover && shapeFrame(state.currentSize).insetBy(dx: -6, dy: -6).contains(pointer) {
-                expand(byHover: true)
+                // In Music mode a session's banner opens on its session, which the music would hide.
+                if state.mode == .peek, let session = state.peekSession, state.content.saved == .music {
+                    open(session: session.id, byHover: true)
+                } else {
+                    expand(byHover: true)
+                }
             }
         case .expanded:
             if shapeFrame(NotchState.expandedSize).insetBy(dx: -24, dy: -24).contains(pointer) {
@@ -513,11 +578,7 @@ final class NotchWindowController {
 
     /// Always nil: the click is used up.
     private func openPill(_ index: Int) -> NSEvent? {
-        if index < state.pills.sessions.count {
-            store.selectedId = state.pills.sessions[index].id
-            state.showHero = false
-        }
-        expand()
+        open(session: index < state.pills.sessions.count ? state.pills.sessions[index].id : nil)
         return nil
     }
 
@@ -559,8 +620,8 @@ final class NotchWindowController {
         collapse()
     }
 
-    /// Escape closes; ⌘1…⌘9 jump to a session in list order, pinned ones first; ⌘↑ and ⌘↓ move through the list; ⌘. stops
-    /// the selected session while it works, like Escape in its terminal.
+    /// Escape closes; ⌘M goes from the sessions to the music and back; ⌘1…⌘9 jump to a session in list order, pinned ones
+    /// first; ⌘↑ and ⌘↓ move through the list; ⌘. stops the selected session while it works, like Escape in its terminal.
     private func handleKey(_ event: NSEvent) -> Bool {
         if state.menu != nil, menuKey(event) { return true }
         if event.keyCode == UInt16(kVK_Escape) {
@@ -592,10 +653,16 @@ final class NotchWindowController {
             state.showNewSession.toggle()
             return true
         }
+        if event.charactersIgnoringModifiers == "m", event.modifierFlags.isDisjoint(with: [.option, .control]) {
+            state.showPalette = false
+            withAnimation(.easeOut(duration: 0.15)) { state.content = state.content.toggled() }
+            return true
+        }
         // The palette's own arrows move its selection, and the panel's field its cursor.
         if state.showPalette || state.showNewSession { return false }
         if event.charactersIgnoringModifiers == "." {
-            guard let session = store.selected, session.accepts(.interrupt) else { return false }
+            // Not a session the music hides.
+            guard state.content.shown == .sessions, let session = store.selected, session.accepts(.interrupt) else { return false }
             store.sendCommand(.interrupt, to: session.id)
             return true
         }
@@ -605,6 +672,7 @@ final class NotchWindowController {
             if digit <= sessions.count {
                 store.selectedId = sessions[digit - 1].id
                 state.showHero = false
+                state.visitSessions()
             }
             return true
         }
@@ -614,6 +682,7 @@ final class NotchWindowController {
         case kVK_DownArrow: store.selectedId = sessions[min(sessions.count - 1, index + 1)].id
         default: return false
         }
+        state.visitSessions()
         return true
     }
 

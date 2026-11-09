@@ -8,6 +8,9 @@ final class NotchState: ObservableObject {
 
     @Published var mode: Mode = .collapsed
     @Published var pinned = false
+    /// Sessions or Music: the window controller saves the choice in the settings. A session opened from Music mode shows
+    /// until the notch closes (NotchContentChoice).
+    @Published var content = NotchContentChoice(saved: AppSettings.shared.notchContent)
     /// The ⌘K command palette is open over the notch.
     @Published var showPalette = false
     /// ⌘N: the panel that starts a session on a machine.
@@ -28,7 +31,8 @@ final class NotchState: ObservableObject {
     var quickLookUnderPointer: (() -> Void)?
     /// The files and images attached to each draft, kept the same way until the message goes.
     var draftAttachments: [String: [Attachment]] = [:]
-    /// Optional activity dots beside the camera (Settings › Notch); off means the notch is fully hidden at rest.
+    /// Wings beside the camera: the optional activity dots (Settings › Notch), a live activity, or the music in Music mode.
+    /// Off means the notch is fully hidden at rest.
     @Published var showWings = false
     /// Set by the open session's composer: files dropped anywhere on the conversation go to it.
     var dropFiles: (([NSItemProvider]) -> Void)?
@@ -57,6 +61,8 @@ final class NotchState: ObservableObject {
     @Published var wingCountdown = false
     /// The session the wings show, widened like the Dynamic Island (Settings › Notch › Live activity).
     @Published var liveActivity: SessionSummary?
+    /// The cover and an equalizer in the wings, while music plays in Music mode (NotchWings).
+    @Published var musicWings = false
     /// The hero screen fills the right column, from Tonton's ring in the bottom bar.
     @Published var showHero = false
     /// Its page and the item tried on, kept here so they survive the column being rebuilt, as when a first session shows up.
@@ -72,10 +78,17 @@ final class NotchState: ObservableObject {
     static let wingWidth: CGFloat = 24
     static let countdownWingWidth: CGFloat = 46
     static let liveActivityWingWidth: CGFloat = 130
+    /// Room for the cover beside the camera.
+    static let musicWingWidth: CGFloat = 30
 
     var currentWingWidth: CGFloat {
-        liveActivity != nil ? Self.liveActivityWingWidth : wingCountdown ? Self.countdownWingWidth : Self.wingWidth
+        if liveActivity != nil { return Self.liveActivityWingWidth }
+        if musicWings { return Self.musicWingWidth }
+        return wingCountdown ? Self.countdownWingWidth : Self.wingWidth
     }
+
+    /// A session opened from the collapsed notch or the keyboard: in Music mode the sessions show until the notch closes.
+    func visitSessions() { content = content.openingSession() }
     /// At rest the shape is exactly the camera housing, so nothing shows (unless activity dots are on).
     var collapsedSize: CGSize { CGSize(width: notchSize.width + (showWings ? currentWingWidth * 2 : 0), height: notchSize.height) }
     var peekSize: CGSize { CGSize(width: max(collapsedSize.width, 380), height: notchSize.height + Self.peekHeight) }

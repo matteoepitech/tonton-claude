@@ -82,6 +82,7 @@ struct CommandPalette: View {
             ) {
                 store.selectedId = session.id
                 state.showHero = false
+                state.visitSessions()
             }
         }
         let machines = Dictionary(grouping: store.orderedSessions, by: \.machine).keys.sorted().map { machine in
@@ -89,6 +90,7 @@ struct CommandPalette: View {
                 // Its first session in the list, the one ⌘1…9 would pick among its own.
                 store.selectedId = store.orderedSessions.first { $0.machine == machine }?.id
                 state.showHero = false
+                state.visitSessions()
             }
         }
         let panes = SettingsPane.allCases.map { pane in
@@ -111,7 +113,15 @@ struct CommandPalette: View {
         ) {
             state.pinned.toggle()
         }
-        return sessions + machines + (AppSettings.shared.isConfigured ? [start] : []) + [pin] + panes
+        let other = state.content.shown.other
+        let content = Item(
+            id: "content", icon: other == .music ? "music.note" : "rectangle.stack",
+            title: other == .music ? String(localized: "Show the music") : String(localized: "Show the sessions"),
+            detail: String(localized: "Notch · ⌘M")
+        ) {
+            state.content = state.content.picking(other)
+        }
+        return sessions + machines + (AppSettings.shared.isConfigured ? [start] : []) + [content, pin] + panes
     }
 
     private func activate(_ items: [Item]) {

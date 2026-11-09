@@ -101,6 +101,10 @@ final class AppSettings: ObservableObject {
     @Published var showPills: Bool
     /// 0 is opaque, 0.5 the original glass, 1 the clearest (see GlassVeil).
     @Published var notchTransparency: Double
+    /// What the notch is about, the sessions or the music (the switch at the top of the open notch).
+    @Published var notchContent: NotchContent
+    /// Music mode was opened once: from then on the players may be asked what they play, from launch. Never reset.
+    @Published var musicOpened: Bool
     @Published var theme: ThemeChoice {
         didSet { Theme.palette = theme.palette(contrast: contrast) }
     }
@@ -225,6 +229,8 @@ final class AppSettings: ObservableObject {
         workingGlow = value("workingGlow", true)
         showPills = value("showPills", false)
         notchTransparency = value("notchTransparency", 0.5)
+        notchContent = choice("notchContent", NotchContent.sessions)
+        musicOpened = value("musicOpened", false)
         let theme = choice("theme", ThemeChoice.midnight)
         self.theme = theme
         let contrast = Self.systemContrast
@@ -291,6 +297,8 @@ final class AppSettings: ObservableObject {
         persist($workingGlow, "workingGlow")
         persist($showPills, "showPills")
         persist($notchTransparency, "notchTransparency")
+        persist($notchContent.map(\.rawValue), "notchContent")
+        persist($musicOpened, "musicOpened")
         persist($theme.map(\.rawValue), "theme")
         persist($openOnPermission, "openOnPermission")
         persist($showAlerts, "showAlerts")
