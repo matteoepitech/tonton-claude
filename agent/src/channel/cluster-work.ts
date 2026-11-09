@@ -109,7 +109,7 @@ export const CLUSTER_TOOLS: ClusterToolSpec[] = [
   {
     name: 'cluster_who',
     description:
-      'The Tonton cluster this session is in: its members and their sessions, with machine, coding tool, model, state, status line, project, branch and last event.',
+      'The Tonton cluster this session is in: its members and their sessions, with machine, coding tool, model, state, status line, project, branch, last event, and when a post for each reaches its Claude: now (live), at its next prompt (digest), never (muted), or unknown for an older agent.',
     params: { cluster: CLUSTER },
   },
   {
@@ -121,7 +121,7 @@ export const CLUSTER_TOOLS: ClusterToolSpec[] = [
   {
     name: 'cluster_send',
     description:
-      'Post to the cluster: to one session, to every session of a member, or to everyone, under a topic if you like. Use it for what the others need (a finished piece, an interface change, a blocker), and with reply_to to answer an ask or follow a post.',
+      'Post to the cluster: to one session, to every session of a member, or to everyone, under a topic if you like. Use it for what the others need (a finished piece, an interface change, a blocker), and with reply_to to answer an ask or follow a post. The result says when a session it names reads it only at its next prompt, or not at all.',
     params: {
       cluster: CLUSTER,
       text: { type: 'string', description: 'The message.', required: true },
@@ -134,12 +134,17 @@ export const CLUSTER_TOOLS: ClusterToolSpec[] = [
   {
     name: 'cluster_ask',
     description:
-      'Ask one session of the cluster a question and wait for its answer (at most 10 minutes). Comes back with the answer, or says it did not come in time: go on without it then.',
+      'Ask one session of the cluster a question and wait for its answer (at most 10 minutes). Comes back with the answer, or says it did not come in time: go on without it then. A session that reads posts only at its next prompt (digest) or never (muted), as cluster_who shows, is not asked: you are told at once, and cluster_send reaches it instead.',
     params: {
       cluster: CLUSTER,
       to_session: { type: 'string', description: 'The session to ask, as cluster_who lists it.', required: true },
       text: { type: 'string', description: 'The question.', required: true },
       minutes: { type: 'number', description: 'How long to wait, from 1 to 10 (10 by default).' },
+      wait_anyway: {
+        type: 'boolean',
+        description:
+          'Ask and wait even when the session reads posts only at its next prompt (digest): it answers only if its user writes to it before the time is up. A muted session is never asked.',
+      },
     },
     waitMs: (MAX_ASK_MINUTES * 60 + 30) * 1000,
   },
@@ -357,6 +362,23 @@ interface Ask {
   answered(post: ClusterPostItem | null): void
 }
 
+/**
+ * How a session takes posts: the delivery it really gets, as its agent reports it in its profile (#396), and whether it
+ * skips permission prompts, which turns live into digest. `unknown`: an older agent, which says neither.
+ */
+interface Reach {
+  delivery: ClusterDelivery | 'unknown'
+  skipsPrompts?: true
+}
+
+/** When a post for a session reaches its Claude, as `cluster_who` says it. */
+const TAKES_POSTS: Record<Reach['delivery'], string> = {
+  live: 'now: an ask or a message sent to it wakes it',
+  digest: 'at its next prompt',
+  muted: 'never: only if its user asks for its inbox',
+  unknown: 'unknown: its agent is older and does not say',
+}
+
 export class ClusterWork {
   /** The last post seen, and the notes' revision, per cluster. */
   private readonly seen = new Map<string, { seq: number; notesRev: number }>()
@@ -418,7 +440,7 @@ export class ClusterWork {
     try {
       switch (name) {
         case 'cluster_who':
-          return this.who(state, me)
+          return this.who(clusterId, state, me)
         case 'cluster_inbox':
           return this.inbox(clusterId, state, me, args)
         case 'cluster_notes_read':
@@ -455,7 +477,7 @@ export class ClusterWork {
 
   // MARK: Reading
 
-  private who(state: ClusterState, me: ClusterSession): string {
+  private who(clusterId: string, state: ClusterState, me: ClusterSession): string {
     const members = state.members.map(member => ({
       name: member.profile?.name ?? 'a member',
       account: member.account,
@@ -466,6 +488,7 @@ export class ClusterWork {
           const event = state.posts.findLast(
             post => post.account === session.account && post.session === session.session && post.body?.kind === 'event',
           )
+          const reach = this.reach(clusterId, session, me)
           return {
             session: session.session,
             name: session.profile?.name,
@@ -479,6 +502,9 @@ export class ClusterWork {
             project: session.profile?.project,
             branch: session.profile?.branch,
             lastEvent: event?.body?.event ? { ...event.body.event, text: event.body.text || undefined, at: event.ts } : undefined,
+            delivery: reach.delivery,
+            takesPosts: TAKES_POSTS[reach.delivery],
+            skipsPrompts: reach.skipsPrompts,
             you: session.session === me.session || undefined,
           }
         }),
@@ -570,7 +596,41 @@ export class ClusterWork {
       ...(replyTo ? { replyTo } : {}),
     }
     const id = newClusterItemId()
-    return (await this.postBody(clusterId, body, id)) ?? `Sent (post ${id}).`
+    const refused = await this.postBody(clusterId, body, id)
+    // An answer that goes back to the session that asked is the result its cluster_ask may still wait for.
+    const answers = kind === 'answer' && !named
+    return refused ?? `Sent (post ${id}).${this.notAtOnce(clusterId, state, me, to?.[0], answers)}`
+  }
+
+  /**
+   * What a post's result adds about the session or the member it names, when a session there will not read it at once: it
+   * gets digests, or it is muted. Nothing for everyone, for a live session, or for an older agent that does not say.
+   */
+  private notAtOnce(clusterId: string, state: ClusterState, me: ClusterSession, to: ClusterTarget | undefined, answers = false): string {
+    if (!to) return ''
+    if (to.session) {
+      const target = state.sessions.find(session => session.account === to.account && session.session === to.session)
+      const reach = target ? this.reach(clusterId, target, me) : undefined
+      if (reach?.delivery !== 'digest' && reach?.delivery !== 'muted') return ''
+      // An ask that still waits takes its answer at once, whatever the delivery of the session that asked.
+      const unless = answers ? ', unless its cluster_ask still waits for this answer' : ''
+      return reach.delivery === 'digest'
+        ? ` It reads this at its next prompt${skipping(reach)}${unless}.`
+        : ` It is muted: it reads this only if its user asks for its inbox${unless}.`
+    }
+    const name = this.memberName(state, to.account)
+    const sessions = state.sessions.filter(session => session.account === to.account && session.session !== me.session)
+    if (!sessions.length) return ` ${name} has no session in this cluster to read it.`
+    const late = sessions.flatMap(session => {
+      const reach = this.reach(clusterId, session, me)
+      const label = `${this.from(state, session)} (session ${session.session})`
+      if (reach.delivery === 'digest') return [`- ${label} reads this at its next prompt${skipping(reach)}.`]
+      if (reach.delivery === 'muted') return [`- ${label} is muted: it reads this only if its user asks for its inbox.`]
+      return []
+    })
+    if (!late.length) return ''
+    const of = sessions.length === 1 ? `${name}'s one session` : `${late.length} of ${name}'s ${sessions.length} sessions`
+    return `\nNot at once for ${of}:\n${late.join('\n')}`
   }
 
   /** `to_session` or `to_member`, as the tools take them: undefined for none, a string when it names no one. */
@@ -754,6 +814,9 @@ export class ClusterWork {
     if (typeof args.to_session !== 'string' || !args.to_session) return 'Say which session to ask in to_session: cluster_who lists them.'
     const target = this.findSession(state, args.to_session, me)
     if (typeof target === 'string') return target
+    const reach = this.reach(clusterId, target, me)
+    const late = this.notAsked(state, target, reach, args.wait_anyway === true)
+    if (late) return late
     const limited = this.limit()
     if (limited) return limited
     const minutes = this.waitMinutes(args)
@@ -774,13 +837,42 @@ export class ClusterWork {
       const post = await answer
       const who = this.from(state, { account: to.account, session: to.session })
       if (!post) {
-        return `No answer from ${who} within ${minutes} minute${minutes === 1 ? '' : 's'}. Go on without it; if the answer comes later, it reaches you as a post (reply to ${id}).`
+        const why =
+          reach.delivery === 'digest'
+            ? ` It reads posts only at its next prompt${skipping(reach)}.`
+            : reach.delivery === 'unknown'
+              ? ' Its agent is older and does not say whether posts wake it: it may read this only at its next prompt.'
+              : ''
+        return `No answer from ${who} within ${minutes} minute${minutes === 1 ? '' : 's'}.${why} Go on without it; if the answer comes later, it reaches you as a post (reply to ${id}).`
       }
       return JSON.stringify({ answer: post.body?.text ?? '', from: who, at: post.ts, id: post.id }, null, 1)
     } finally {
       clearTimeout(timer)
       this.asks.delete(id)
     }
+  }
+
+  /**
+   * Why an ask is not sent, at once rather than after minutes of waiting for nothing: the session reads posts only at its
+   * next prompt (digest), unless the caller waits anyway, or never (muted). A muted session is never asked, as no post
+   * reaches it, not even at its next prompt; cluster_send still puts the question in its inbox. Null: ask it.
+   */
+  private notAsked(state: ClusterState, target: ClusterSession, reach: Reach, anyway: boolean): string | null {
+    const who = this.from(state, target)
+    if (reach.delivery === 'muted') {
+      return `Not asked: ${who} is muted, so no post reaches it, not even at its next prompt, and no answer would come. Go on without it or ask another session; cluster_send still puts it in its inbox, which it reads if its user asks.`
+    }
+    if (reach.delivery !== 'digest' || anyway) return null
+    return `Not asked: ${who} reads posts only at its next prompt${skipping(reach)}, so its answer would not come while you wait. Send it with cluster_send and to_session "${target.session}" instead: it reads it at its next prompt, and its answer reaches you as a post. To ask and wait anyway, call cluster_ask again with wait_anyway: true.`
+  }
+
+  /**
+   * How a session takes posts: this one as it is now, from its own order and hooks, which its next profile says; another
+   * as its agent last said in its profile (#396).
+   */
+  private reach(clusterId: string, session: ClusterSession, me: ClusterSession): Reach {
+    const said = session.session === me.session ? this.deliveryOf(clusterId) : (session.profile ?? {})
+    return { delivery: said.delivery ?? 'unknown', ...(said.skipsPrompts ? { skipsPrompts: true as const } : {}) }
   }
 
   private async writeNotes(clusterId: string, args: Args): Promise<string> {
@@ -1339,6 +1431,9 @@ function holderTool(state: ClusterState, claim: ClusterClaim): string {
   const tool = state.sessions.find(session => session.account === claim.account && session.session === claim.session)?.profile?.tool
   return tool === 'codex' ? 'Codex' : tool === 'opencode' ? 'OpenCode' : 'Claude'
 }
+
+/** That a digest session skips permission prompts: what turns live into digest, unless its owner chose Live anyway. */
+const skipping = (reach: Reach) => (reach.skipsPrompts ? ' (it skips permission prompts)' : '')
 
 /** Leaves out the fields that are missing. */
 const defined = <T extends object>(value: T): T => Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T

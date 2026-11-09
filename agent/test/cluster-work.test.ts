@@ -16,13 +16,14 @@ import type {
   ClusterDocWire,
   ClusterPostBody,
   ClusterPostWire,
+  ClusterSessionProfile,
   ClusterSessionWire,
   ClusterSnapshot,
   ClusterUpdate,
 } from '../../shared/cluster-protocol'
 import { newAccountKey } from '../../shared/crypto'
 import type { AgentMessage } from '../../shared/protocol'
-import { ClusterWork, clockMarks, clusterEnvelope, MAX_POSTS_PER_MINUTE, WAKES_PER_HOUR } from '../src/channel/cluster-work'
+import { CLUSTER_TOOLS, ClusterWork, clockMarks, clusterEnvelope, MAX_POSTS_PER_MINUTE, WAKES_PER_HOUR } from '../src/channel/cluster-work'
 import { SessionClusters } from '../src/channel/clusters'
 import { readGuardState } from '../src/cluster/guard'
 
@@ -684,6 +685,183 @@ describe('tools', () => {
     await join()
     expect(await call('cluster_who', { cluster: 'Other' })).toBe('This session is not in the cluster Other.')
     expect(JSON.parse(await call('cluster_who', { cluster: 'Jam' })).id).toBe(CLUSTER)
+  })
+})
+
+describe('what the tools say of how the others take posts (#397)', () => {
+  /** What Ana's agent says of one of her sessions, as the relay sends it to every member: its delivery, from #396. */
+  async function anaSays(profile: ClusterSessionProfile, session = ANA) {
+    const wire = relay.sessions.find(s => s.session === session) ?? {
+      account: 'acc_ana',
+      session,
+      machine: 'm2',
+      joinedAt: 'now',
+      profile: null,
+      online: true,
+      ready: true,
+    }
+    const updated = { ...wire, profile: await vault.seal({ machine: 'ana-pc', tool: 'opencode', ...profile }) }
+    relay.sessions = [...relay.sessions.filter(s => s.session !== session), updated]
+    clusters.apply({ t: 'cluster_session', clusterId: CLUSTER, session: updated })
+    await settle()
+  }
+  const posted = () => relay.sent.filter(message => message.t === 'cluster_post')
+  const sessionsOf = (who: { members: { name: string; sessions: { session: string; skipsPrompts?: true }[] }[] }) =>
+    Object.fromEntries(who.members.flatMap(member => member.sessions.map(session => [session.session, session])))
+
+  test('cluster_who: whether a post wakes each session now, waits for its next prompt, or never comes; unknown for an older agent', async () => {
+    await join()
+    let sessions = sessionsOf(JSON.parse(await call('cluster_who')))
+    // This session, from its own order; Ana's agent says nothing yet.
+    expect(sessions[ME]).toMatchObject({ delivery: 'live', takesPosts: 'now: an ask or a message sent to it wakes it' })
+    expect(sessions[ANA]).toMatchObject({ delivery: 'unknown', takesPosts: 'unknown: its agent is older and does not say' })
+    expect(sessions[ANA].skipsPrompts).toBeUndefined()
+
+    await anaSays({ delivery: 'digest', skipsPrompts: true })
+    sessions = sessionsOf(JSON.parse(await call('cluster_who')))
+    expect(sessions[ANA]).toMatchObject({ delivery: 'digest', takesPosts: 'at its next prompt', skipsPrompts: true })
+    await anaSays({ delivery: 'muted' })
+    sessions = sessionsOf(JSON.parse(await call('cluster_who')))
+    expect(sessions[ANA]).toMatchObject({ delivery: 'muted', takesPosts: 'never: only if its user asks for its inbox' })
+
+    // Its own: live turns into digest while it skips permission prompts, unless its owner chose live anyway.
+    skipsPrompts = true
+    expect(sessionsOf(JSON.parse(await call('cluster_who')))[ME]).toMatchObject({ delivery: 'digest', skipsPrompts: true })
+    await join({ liveWithoutPrompts: true })
+    expect(sessionsOf(JSON.parse(await call('cluster_who')))[ME]).toMatchObject({ delivery: 'live', skipsPrompts: true })
+  })
+
+  test('cluster_send says when the session it names reads the post only at its next prompt, or not at all', async () => {
+    await join()
+    // An older agent, or live: nothing to add.
+    expect(await call('cluster_send', { text: 'hi', to_session: ANA })).toMatch(/^Sent \(post [\w-]+\)\.$/)
+    await anaSays({ delivery: 'live' })
+    expect(await call('cluster_send', { text: 'hi', to_session: ANA })).toMatch(/^Sent \(post [\w-]+\)\.$/)
+
+    await anaSays({ delivery: 'digest' })
+    expect(await call('cluster_send', { text: 'hi', to_session: ANA })).toMatch(
+      /^Sent \(post [\w-]+\)\. It reads this at its next prompt\.$/,
+    )
+    // For everyone: no session named.
+    expect(await call('cluster_send', { text: 'hi' })).toMatch(/^Sent \(post [\w-]+\)\.$/)
+    await anaSays({ delivery: 'digest', skipsPrompts: true })
+    expect(await call('cluster_send', { text: 'hi', to_session: ANA })).toEndWith(
+      ' It reads this at its next prompt (it skips permission prompts).',
+    )
+    await anaSays({ delivery: 'muted' })
+    expect(await call('cluster_send', { text: 'hi', to_session: ANA })).toEndWith(
+      ' It is muted: it reads this only if its user asks for its inbox.',
+    )
+    // Each was sent all the same.
+    expect(posted()).toHaveLength(6)
+  })
+
+  test('cluster_send to a member says which of its sessions read it only at their next prompt, or not at all', async () => {
+    await join()
+    await anaSays({ delivery: 'live' })
+    expect(await call('cluster_send', { text: 'hi', to_member: 'Ana' })).toMatch(/^Sent \(post [\w-]+\)\.$/)
+    await anaSays({ delivery: 'digest' })
+    expect(await call('cluster_send', { text: 'hi', to_member: 'Ana' })).toEndWith(
+      `\nNot at once for Ana's one session:\n- Ana · ana-pc · opencode (session ${ANA}) reads this at its next prompt.`,
+    )
+    await anaSays({ delivery: 'live', machine: 'ana-mac', tool: 'claude' }, 'ses_ana2')
+    await anaSays({ delivery: 'muted', machine: 'ana-pc', tool: 'codex' }, 'ses_ana3')
+    await anaSays({ tool: 'claude' }, 'ses_ana4')
+    const result = await call('cluster_send', { text: 'hi', to_member: 'acc_ana' })
+    expect(result.split('\n')).toEqual([
+      expect.stringMatching(/^Sent \(post [\w-]+\)\.$/),
+      "Not at once for 2 of Ana's 4 sessions:",
+      `- Ana · ana-pc · opencode (session ${ANA}) reads this at its next prompt.`,
+      '- Ana · ana-pc · codex (session ses_ana3) is muted: it reads this only if its user asks for its inbox.',
+    ])
+    // A member with no session in the cluster.
+    const bob = { account: 'acc_bob', role: 'member' as const, joinedAt: 'now', profile: await vault.seal({ name: 'Bob' }), publicKeys: [] }
+    clusters.apply({ t: 'cluster_member', clusterId: CLUSTER, member: bob })
+    await settle()
+    expect(await call('cluster_send', { text: 'hi', to_member: 'Bob' })).toEndWith(' Bob has no session in this cluster to read it.')
+  })
+
+  test('an answer to a digest session says it reads it at its next prompt, unless its ask still waits for it', async () => {
+    await join()
+    await anaSays({ delivery: 'digest' })
+    const ask = await relay.fromAna({ kind: 'ask', text: 'Which port?', to: [{ account: 'acc_me', session: ME }] }, 'ask1')
+    expect(await call('cluster_send', { text: '7777', reply_to: ask.id })).toEndWith(
+      ' It reads this at its next prompt, unless its cluster_ask still waits for this answer.',
+    )
+    // Sent to another session than the one that asked: no ask of its own waits for it.
+    await anaSays({ delivery: 'digest' }, 'ses_ana2')
+    expect(await call('cluster_send', { text: '7777', reply_to: ask.id, to_session: 'ses_ana2' })).toMatch(
+      /^Sent \(post [\w-]+\)\. It reads this at its next prompt\.$/,
+    )
+  })
+
+  test('cluster_ask to a digest session says so at once, asks nothing, and points to cluster_send', async () => {
+    await join()
+    await anaSays({ delivery: 'digest' })
+    const before = posted().length
+    const result = await call('cluster_ask', { to_session: ANA, text: 'Ready?' })
+    expect(result).toStartWith('Not asked: Ana · ana-pc · opencode reads posts only at its next prompt, so its answer would not come')
+    expect(result).toContain(`cluster_send and to_session "${ANA}"`)
+    expect(result).toContain('wait_anyway: true')
+    expect(posted()).toHaveLength(before)
+
+    // Set to live, but it skips permission prompts: the same, with why.
+    await anaSays({ delivery: 'digest', skipsPrompts: true })
+    expect(await call('cluster_ask', { to_session: ANA, text: 'Ready?' })).toStartWith(
+      'Not asked: Ana · ana-pc · opencode reads posts only at its next prompt (it skips permission prompts), so',
+    )
+    expect(posted()).toHaveLength(before)
+  })
+
+  test('cluster_ask with wait_anyway asks a digest session and waits, and says why no answer came', async () => {
+    await join()
+    await anaSays({ delivery: 'digest', skipsPrompts: true })
+    const result = await call('cluster_ask', { to_session: ANA, text: 'Ready?', minutes: 0.001, wait_anyway: true })
+    expect(result).toStartWith(
+      'No answer from Ana · ana-pc · opencode within 0.001 minutes. It reads posts only at its next prompt (it skips permission prompts). Go on without it',
+    )
+    const ask = posted().at(-1)
+    if (ask?.t !== 'cluster_post') throw new Error('no ask')
+    expect(await vault.read(ask.blob, value => value as ClusterPostBody)).toMatchObject({ kind: 'ask', text: 'Ready?' })
+
+    // Its user wrote to it in time: the answer is the result.
+    const asked = work.call('cluster_ask', { to_session: ANA, text: 'Which socket?', wait_anyway: true })
+    await settle()
+    const second = posted().at(-1)
+    if (second?.t !== 'cluster_post') throw new Error('no ask')
+    await relay.fromAna({ kind: 'answer', text: 'hand_r', replyTo: second.id, to: [{ account: 'acc_me', session: ME }] })
+    expect(JSON.parse(await asked)).toMatchObject({ answer: 'hand_r' })
+  })
+
+  test('cluster_ask never asks a muted session, even waiting anyway: no post reaches it, not even at its next prompt', async () => {
+    await join()
+    await anaSays({ delivery: 'muted' })
+    for (const args of [{}, { wait_anyway: true }]) {
+      const result = await call('cluster_ask', { to_session: ANA, text: 'Ready?', ...args })
+      expect(result).toStartWith('Not asked: Ana · ana-pc · opencode is muted, so no post reaches it')
+      expect(result).toContain('cluster_send still puts it in its inbox')
+    }
+    expect(posted()).toEqual([])
+  })
+
+  test('cluster_ask to a live session waits as before; to an older agent, its timeout says it may not have been woken', async () => {
+    await join()
+    await anaSays({ delivery: 'live' })
+    expect(await call('cluster_ask', { to_session: ANA, text: 'Ready?', minutes: 0.001 })).toMatch(
+      /^No answer from Ana · ana-pc · opencode within 0\.001 minutes\. Go on without it;/,
+    )
+    await anaSays({})
+    expect(await call('cluster_ask', { to_session: ANA, text: 'Ready?', minutes: 0.001 })).toContain(
+      'within 0.001 minutes. Its agent is older and does not say whether posts wake it',
+    )
+    expect(posted()).toHaveLength(2)
+  })
+
+  test('cluster_ask describes wait_anyway in its schema, optional', () => {
+    const spec = CLUSTER_TOOLS.find(tool => tool.name === 'cluster_ask')
+    expect(spec?.params.wait_anyway).toMatchObject({ type: 'boolean' })
+    expect(spec?.params.wait_anyway?.required).toBeUndefined()
+    expect(spec?.description).toContain('cluster_send reaches it instead')
   })
 })
 
