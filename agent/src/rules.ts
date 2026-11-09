@@ -199,6 +199,18 @@ export function modeAllows(mode: PoolMode | null, toolName: string, toolInput: u
   return target === root || target.startsWith(root.endsWith(sep) ? root : root + sep)
 }
 
+/**
+ * The same for a call Codex asks about, in the names the notch knows (agent/src/codex/driver.ts): `full` passes
+ * anything; `edits` a patch, which can change several files at once, only when every file it names is in the session's
+ * folder. A patch whose files are not known asks, and so does any other call.
+ */
+export function codexModeAllows(mode: PoolMode | null, toolName: string, paths: readonly string[] = []): boolean {
+  if (mode?.mode === 'full') return true
+  return (
+    mode?.mode === 'edits' && toolName === 'Edit' && paths.length > 0 && paths.every(path => modeAllows(mode, 'Edit', { file_path: path }))
+  )
+}
+
 /** The path with its links resolved, as far as it exists: a file about to be written does not exist yet. */
 function real(path: string): string {
   const missing: string[] = []

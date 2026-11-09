@@ -1,7 +1,7 @@
 // What keeps a pool session in its owner's hands (docs/pools.md, Control). The agent counts what the session spends in
 // each pool, from its own meta, and tells the pool; past a budget it takes no more pool tasks. When the owner or an admin
 // stops the session's pool work, it interrupts the turn. And it applies the pool rules its machine owner accepted for
-// it, never a proposal by itself. Used by the channel of a Claude Code session and by the OpenCode bridge alike.
+// it, never a proposal by itself. Used by the channels of Claude Code and Codex sessions and by the OpenCode bridge alike.
 
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -20,8 +20,8 @@ export interface SessionUsage {
 }
 
 export interface PoolSafetyActions {
-  /** Stops Claude where it is, like Escape in the terminal. Null when it was, otherwise why not. */
-  interrupt(): string | null
+  /** Stops Claude where it is, like Escape in the terminal, or Codex's turn on its app-server. Null when it was, otherwise why not. */
+  interrupt(): string | null | Promise<string | null>
   /** A line in the conversation, for the user. */
   notice(text: string): void
   /** The pool rules the machine owner accepted for this session, all pools together, to apply from now on. */
@@ -93,14 +93,18 @@ export class PoolSafety {
     }
   }
 
+  /** Codex's turn stops on its app-server, which answers later: the user is told once it did. */
   private stopped(poolId: string) {
     const name = this.pools.state(poolId)?.info?.name ?? 'the pool'
+    const tell = (why: string | null) =>
+      this.actions.notice(
+        why
+          ? `The owner of ${name} stopped this session's pool work. It was not interrupted: ${why}`
+          : `The owner of ${name} stopped this session's pool work: Claude was interrupted, and the session left the pool.`,
+      )
     const why = this.actions.interrupt()
-    this.actions.notice(
-      why
-        ? `The owner of ${name} stopped this session's pool work. It was not interrupted: ${why}`
-        : `The owner of ${name} stopped this session's pool work: Claude was interrupted, and the session left the pool.`,
-    )
+    if (why instanceof Promise) void why.catch(error => String(error)).then(tell)
+    else tell(why)
   }
 
   /** Posts the spend when it moved, and tells the pool once when a budget is reached. */

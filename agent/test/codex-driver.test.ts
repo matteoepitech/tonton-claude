@@ -73,6 +73,8 @@ describe('driving a Codex thread', () => {
   test('a prompt starts a turn, with its images by path, and joins the turn that runs', async () => {
     const { driver } = await attach()
     expect(sent('thread/resume')[0]?.params).toEqual({ threadId: 't1' })
+    // The model the thread runs on, as the server said it: what a pool machine checks it started the task's session on.
+    expect(driver.model).toBe('gpt-5-codex')
     expect(driver.working).toBe(false)
     await driver.prompt('Fix the build', ['/inbox/a.png'])
     expect(sent('turn/start')[0]?.params).toEqual({

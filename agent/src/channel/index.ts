@@ -17,6 +17,8 @@ import { isClusterTool } from './cluster-work'
 import { Conversation } from './conversation'
 import { saveToInbox } from './inbox'
 import { ChannelServer } from './mcp'
+import { deliverToCodex } from './pool-held'
+import { ALL_POOL_TOOLS } from './pool-work'
 import { RelayConnection } from './relay-connection'
 import { type SessionLink, SessionLinkWatcher } from './session-link'
 import { runCommand } from './terminal'
@@ -32,11 +34,13 @@ const PARENT_CHECK_MS = 5000
 export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
   const codex = tool === 'codex'
   let conversation: Conversation | null = null
-  // The pool tools and the cluster tools, side by side: a session can be in a pool and a cluster at once.
+  // The pool tools and the cluster tools, side by side: a session can be in a pool and a cluster at once. Codex lists an
+  // MCP server's tools once, when it starts it, and does not take the news that they changed: it gets every pool tool
+  // from the start, as OpenCode does, and outside a pool they say so.
   const mcp = new ChannelServer(
     (requestId, detail) => conversation?.addPermission(requestId, detail),
     {
-      list: () => [...(conversation?.work.tools() ?? []), ...(conversation?.cluster.tools() ?? [])],
+      list: () => [...(codex ? ALL_POOL_TOOLS : (conversation?.work.tools() ?? [])), ...(conversation?.cluster.tools() ?? [])],
       call: (name, args) =>
         isClusterTool(name)
           ? (conversation?.cluster.call(name, args) ?? Promise.resolve('This session is not in a cluster.'))
@@ -131,9 +135,14 @@ export async function runChannel(tool: 'claude' | 'codex' = 'claude') {
     if (!result.typed && result.why) conversation.notice(`/${command.name} was not run: ${result.why}`)
   }
 
-  // What its pools and clusters send a Codex session has no way in yet: it waits for the Codex delivery of #371 and #372.
+  // What its pools send a Codex session goes in through its app-server when `tonton codex` runs it, or waits for its
+  // next prompt (pool-held.ts); a pool that stops it interrupts its turn there. What its clusters send waits for #371.
   const pool = codex
-    ? { deliver: () => {}, toolsChanged: () => void mcp.toolsChanged() }
+    ? {
+        deliver: (text: string) => void deliverToCodex(notch ? t => notch.inject(t) : null, conversation?.link.sessionId, text),
+        toolsChanged: () => void mcp.toolsChanged(),
+        interrupt: async () => (notch ? notch.interrupt() : 'a codex started without tonton codex takes nothing from Tonton.'),
+      }
     : { deliver: (text: string) => void mcp.inject(text, 'pool'), toolsChanged: () => void mcp.toolsChanged() }
   const cluster = codex
     ? { live: () => {}, toolsChanged: () => void mcp.toolsChanged() }

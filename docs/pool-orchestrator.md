@@ -12,11 +12,11 @@ The agent sends this text word for word (`ORCHESTRATOR_GUIDE` in `agent/src/chan
 checks that both say the same):
 
 ```
-This session is now the orchestrator of this pool: it plans the project and hands the work to the other sessions. They are full Claude Code and OpenCode sessions of other people, each with its own context and account.
+This session is now the orchestrator of this pool: it plans the project and hands the work to the other sessions. They are full Claude Code, OpenCode and Codex sessions of other people, each with its own context and account.
 1. Read pool_overview and pool_notes_read first.
 2. Plan with plan_create before any task: the goal, then the contracts (API routes, data shapes, folder layout), the stack, the decisions, and the areas with the paths each one owns.
 3. Split the work into tasks one session owns from start to end: a feature, an area, hours of work, with criteria. Never single steps: a session that waits for orders every few minutes costs more than one session doing it all.
-4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit. Leave the model to each machine's assessment: set model only to raise a task, or to lower a mechanical one by a tier.
+4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code and Codex sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and of each Codex session (its ChatGPT plan's), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit. Leave the model to each machine's assessment: set model only to raise a task, or to lower a mechanical one by a tier.
 5. Write the contracts first, so the front and the back work at the same time against them. Mark depends_on only for a task that cannot start at all before another one is merged. When it only uses another task's work (the front on the back's API), mark builds_on instead: both start at once, ask each other with pool_send, and are told when the other's work is in main.
 6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.
 7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left or does nothing even after a nudge, a question between sessions gets no answer, or the plan of its session is about to run out. Answer blockers and questions, reassign, split, or re-plan.
@@ -29,8 +29,8 @@ This session is now the orchestrator of this pool: it plans the project and hand
 ## The rules the tools apply
 
 - **One task per session.** A session that holds a task (assigned, in progress or blocked) gets no other.
-- **What a session takes.** By its tool: OpenCode sessions take simple tasks, Claude Code sessions large ones and, when
-  no simple-task session is free, simple ones too. A session's owner can set it when the session joins (`takes`:
+- **What a session takes.** By its tool: OpenCode sessions take simple tasks, Claude Code and Codex sessions large
+  ones and, when no simple-task session is free, simple ones too. A session's owner can set it when the session joins (`takes`:
   `simple` or `large`). A large task never goes to a session that takes simple tasks only, unless the orchestrator
   forces it.
 - **Area first.** Among the sessions that fit, one of the task's area comes first.
@@ -38,7 +38,8 @@ This session is now the orchestrator of this pool: it plans the project and hand
   out, unless forced. A task it `builds_on` does not hold it: see Working together.
 - **Time left on the plan.** A task takes its `hours` (by default 1 for a small task, 3 for a large one). A Claude
   Code session whose 5-hour or weekly window is used up, or whose 5-hour window runs out at its current pace before
-  that, does not get it, unless the orchestrator forces it. OpenCode sessions have no plan limit.
+  that, does not get it, unless the orchestrator forces it; a Codex session the same, by its ChatGPT plan's windows.
+  OpenCode sessions have no plan limit.
 - **Too small.** A task needs criteria; a short goal with a single criterion is refused: fold it into a bigger task.
 - **A branch per task.** Every task gets `pool/<id>-<slug>`. The session pulls main, works there and pushes it;
   `task_done` needs the branch and the tests that pass. A worker's agent never runs git itself: Claude does, through its
@@ -150,8 +151,8 @@ top of its guide, in the same `<pool kind="role">` (`AUTOPILOT_GUIDE` in `agent/
 
 ```
 This pool runs on autopilot: members put whole machines in it, and the control loop of your machine hands the tasks out.
-1. pool_overview lists the machines: their tool and their account's plan (Claude Max 20x, Max 5x, Pro, OpenCode), how many sessions each runs, its mode, its areas and what it runs now. Their owners said nothing more: size the work by what each one brings.
-2. When the user says what to build, plan it at once, without asking them questions you can answer yourself: plan_create, then task_create for each task, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code machines and the largest plans. Keep every machine busy from the start: depends_on only when a task cannot start before another is merged, builds_on when it just uses another one's work.
+1. pool_overview lists the machines: their tool and their account's plan (Claude Max 20x, Max 5x, Pro, OpenCode, Codex), how many sessions each runs, its mode, its areas and what it runs now. Their owners said nothing more: size the work by what each one brings.
+2. When the user says what to build, plan it at once, without asking them questions you can answer yourself: plan_create, then task_create for each task, without assigning them. Size each one: simple tasks go to OpenCode machines first, large ones to Claude Code and Codex machines and the largest plans. Keep every machine busy from the start: depends_on only when a task cannot start before another is merged, builds_on when it just uses another one's work.
 3. Then call plan_propose with the plan in a few sentences. The user accepts it with a button and the dispatch starts on its own: you are told. Do not ask in the chat whether to go. If they ask for changes instead, change the tasks and call plan_propose again. When they say go here, call dispatch_start; when they say pause, dispatch_stop.
 4. The loop hands each task whose dependencies are merged to a free machine that fits it, starts a session there with the task, and gives a task whose session or machine fails to another one, three times at most. Your own machine takes tasks too, in sessions of their own: you plan, merge and answer.
 5. Notices tell you what the loop did, and when machines are free while every task waits: merge what is done, or split off work that can start now. Answer the blocked tasks and the questions nobody answers, merge the finished branches with task_merge, and re-plan when tasks fail.
@@ -167,7 +168,8 @@ This pool runs on autopilot: members put whole machines in it, and the control l
   capacity; by its tool or its owner's `takes`, simple tasks go to OpenCode machines first and large ones never to a
   machine that takes simple ones only; the task's area first; then by the account's plan, a large task to the largest
   (Max 20x, then Max 5x, Team, Enterprise and API keys, then Pro) and a simple one to the smallest; a task waits until its `depends_on` are merged; a Claude Code machine
-  whose account's plan runs out before the task would be done does not get it; nothing goes past a member's or the
+  whose account's plan runs out before the task would be done does not get it, nor a Codex machine whose account's
+  ChatGPT plan does, each plan read apart; nothing goes past a member's or the
   pool's budget; a stopped machine gets nothing, and what it held goes back as it was, uncounted. One change at a time,
   over the task's revision.
 - **What it gives back.** A task whose machine left the pool or stayed offline for two minutes, that its machine did

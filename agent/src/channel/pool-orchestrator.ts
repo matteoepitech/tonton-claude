@@ -1,10 +1,10 @@
 // The orchestrator's side of a pool (docs/pools.md, docs/pool-orchestrator.md): the session an owner or an admin made the
 // pool's orchestrator plans the project in the shared notes, writes feature-sized tasks and hands each one to the session
 // that fits it, by area and by what it takes: simple, well-bounded tasks to OpenCode sessions first, the features to
-// Claude Code sessions, as each session's owner may override. Its agent also watches the pool and tells it when to
+// Claude Code and Codex sessions, as each session's owner may override. Its agent also watches the pool and tells it when to
 // re-plan: a task blocked or finished, a session gone, a task that stopped moving, a question nobody answered; it nudges
 // the session first, which costs the orchestrator no tokens (pool-team.ts). Finished branches are merged into main
-// through `task_merge` (pool-merge.ts). Claude Code and OpenCode alike.
+// through `task_merge` (pool-merge.ts). Claude Code, OpenCode and Codex alike.
 
 import { newPoolItemId, overBudget, type PoolSession, type PoolState, type PoolTaskItem } from '../../../shared/pool'
 import { countdown, FINAL_CHECKLIST, type TimeMark, timeMarks, timeNotice } from '../../../shared/pool-hackathon'
@@ -160,7 +160,7 @@ export function tooSmall(task: Pick<PoolTask, 'goal' | 'criteria'>): string | nu
   const criteria = task.criteria?.filter(c => c.trim()) ?? []
   if (!criteria.length) return 'Say what "done" means in criteria: at least one check.'
   if (goal.length < MIN_GOAL && criteria.length < 2) {
-    return 'Too small for a pool session: each one is a full Claude Code or OpenCode session with its own context. Give it a whole feature or area, with its goal and criteria, or fold this step into a bigger task.'
+    return 'Too small for a pool session: each one is a full Claude Code, OpenCode or Codex session with its own context. Give it a whole feature or area, with its goal and criteria, or fold this step into a bigger task.'
   }
   return null
 }
@@ -267,7 +267,7 @@ export function refusal(
   const description = descriptions.get(`${session.account}/${session.session}`)
   const kind = sessionKind(session, description)
   if ((task.size ?? 'large') === 'large' && kind === 'simple') {
-    return 'That session takes simple tasks only (its tool or its owner says so): give it a simple task, or this one to a Claude Code session.'
+    return 'That session takes simple tasks only (its tool or its owner says so): give it a simple task, or this one to a Claude Code or Codex session.'
   }
   const short = shortOfTime(description?.limits, expectedHours(task), now)
   if (short) return `That session's plan leaves no time for it: ${short}. Give it a shorter task, or this one to another session.`
@@ -885,11 +885,11 @@ const strings = (value: unknown): string[] | undefined =>
  * docs/pool-orchestrator.md, which a test checks.
  */
 export const ORCHESTRATOR_GUIDE = [
-  'This session is now the orchestrator of this pool: it plans the project and hands the work to the other sessions. They are full Claude Code and OpenCode sessions of other people, each with its own context and account.',
+  'This session is now the orchestrator of this pool: it plans the project and hands the work to the other sessions. They are full Claude Code, OpenCode and Codex sessions of other people, each with its own context and account.',
   '1. Read pool_overview and pool_notes_read first.',
   '2. Plan with plan_create before any task: the goal, then the contracts (API routes, data shapes, folder layout), the stack, the decisions, and the areas with the paths each one owns.',
   '3. Split the work into tasks one session owns from start to end: a feature, an area, hours of work, with criteria. Never single steps: a session that waits for orders every few minutes costs more than one session doing it all.',
-  "4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit. Leave the model to each machine's assessment: set model only to raise a task, or to lower a mechanical one by a tier.",
+  "4. Size each task. simple: tests, docs, small fixes, boilerplate, a page that follows an existing pattern; they go to OpenCode sessions first. large: features that need broad context; they go to Claude Code and Codex sessions. A session whose owner set what it takes keeps to it. Give each task its hours too: pool_overview shows the plan of each Claude Code session (its 5-hour and weekly windows, and when it runs out at this pace), and of each Codex session (its ChatGPT plan's), and a session whose plan runs out before the task would be done does not get it. OpenCode sessions have no plan limit. Leave the model to each machine's assessment: set model only to raise a task, or to lower a mechanical one by a tier.",
   "5. Write the contracts first, so the front and the back work at the same time against them. Mark depends_on only for a task that cannot start at all before another one is merged. When it only uses another task's work (the front on the back's API), mark builds_on instead: both start at once, ask each other with pool_send, and are told when the other's work is in main.",
   '6. Hand out tasks with task_create (assign "auto") or task_assign: one task per session, in its area, on its own branch.',
   '7. Follow the pool: notices tell you when a task is blocked, done, stalled, sent back by review, its session left or does nothing even after a nudge, a question between sessions gets no answer, or the plan of its session is about to run out. Answer blockers and questions, reassign, split, or re-plan.',

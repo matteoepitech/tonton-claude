@@ -197,7 +197,10 @@ export interface PoolEventBody {
   /** `spend` events: what the session spent since it joined the pool, as its agent counts it. */
   costUSD?: number
   seconds?: number
-  /** `limits` events: the account's plan usage, as the session's agent last read it. Claude Code only. */
+  /**
+   * `limits` events: the account's Claude plan usage, as a Claude Code session's agent last read it. `codex_limits`
+   * events: a Codex session's ChatGPT plan, in the same shape, never read as the account's Claude plan.
+   */
   limits?: PoolLimits
   /** `plan_proposed` events: the plan the orchestrator asks an admin to accept (shared/pool-plan.ts). */
   proposal?: PoolPlanProposal
@@ -218,7 +221,7 @@ export interface PoolPlanProposal {
  */
 export interface PoolUsage {
   tokens?: { input: number; output: number }
-  /** Claude Code only: OpenCode has no plan limits. */
+  /** The session's own plan: Claude Code's, or a Codex session's ChatGPT plan. OpenCode has no plan limits. */
   fiveHour?: { usedPercent: number; resetsAt?: string }
   sevenDay?: { usedPercent: number; resetsAt?: string }
 }
@@ -249,14 +252,14 @@ export interface PoolBudgets {
   members?: Record<string, PoolBudget>
 }
 
-/** A window of a Claude plan: how much of it is used, and when it starts over. */
+/** A window of a Claude plan, or of Codex's ChatGPT plan: how much of it is used, and when it starts over. */
 export interface PoolLimitWindow {
   /** 0 to 100. */
   usedPercent: number
   resetsAt: string
 }
 
-/** What a Claude Code session shares of its account's plan, so the orchestrator plans around it. */
+/** What a Claude Code or Codex session shares of its plan, so the orchestrator plans around it. */
 export interface PoolLimits {
   fiveHour?: PoolLimitWindow
   sevenDay?: PoolLimitWindow
@@ -290,7 +293,7 @@ export interface PoolMachineProfile {
   models?: PoolModelPolicy
   /**
    * The Claude plan its Claude Code is signed in with, as its agent reported it when the machine joined, so that the
-   * orchestrator and the control loop know what it can take. Missing for OpenCode, and when it was not known.
+   * orchestrator and the control loop know what it can take. Missing for OpenCode and Codex, and when it was not known.
    */
   plan?: ClaudePlan
 }

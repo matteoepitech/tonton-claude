@@ -252,7 +252,7 @@ const EVENT_LABELS: Record<string, string> = {
 }
 
 /** Kinds kept out of the activity: they say how a session is doing, not what happened. */
-const QUIET_KINDS = new Set(['usage', 'spend'])
+const QUIET_KINDS = new Set(['usage', 'spend', 'limits', 'codex_limits'])
 
 export const eventLabel = (kind: string): string => EVENT_LABELS[kind] ?? kind.replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase())
 

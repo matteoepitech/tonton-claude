@@ -145,7 +145,7 @@ describe('the orchestrator machine', () => {
     watch.setOrchestratorMachine(poolId, { account: accountId, machine: machine.machineId })
     const lead = await eventually(() => state()?.orchestrator, 'the orchestrator session')
     expect(lead).toEqual({ account: accountId, session: 'ses_lead_1' })
-    // Claude Code, whatever its workers run, in the repository.
+    // Claude Code on an OpenCode machine, in the repository: OpenCode's sessions take the simple tasks.
     expect(launched[0]).toEqual({ id: `lead-${poolId}`, cwd: join(dir, 'work', 'repo'), tool: 'claude' })
     expect(running.lead.session(poolId)).toBe('ses_lead_1')
   })
@@ -172,5 +172,18 @@ describe('the orchestrator machine', () => {
     await eventually(() => running.lead.session(poolId) === null, 'the session ended')
     expect([...sessions.values()].every(session => !session.alive)).toBe(true)
     await eventually(() => !state()?.sessions.some(s => s.session === 'ses_lead_2'), 'the session out of the pool')
+  })
+
+  test('a Codex machine leads with Codex, which joins the pool as a Codex session', async () => {
+    await watch.addMachine(poolId, machine.machineId, { tool: 'codex', capacity: 1, workdir: join(dir, 'work'), mode: 'full' })
+    await eventually(() => running.pools.order(poolId)?.profile.tool === 'codex', 'the Codex order')
+    watch.setOrchestratorMachine(poolId, { account: accountId, machine: machine.machineId })
+    const lead = await eventually(() => state()?.orchestrator, 'the Codex orchestrator')
+    expect(lead).toEqual({ account: accountId, session: 'ses_lead_3' })
+    expect(launched.at(-1)).toEqual({ id: `lead-${poolId}`, cwd: join(dir, 'work', 'repo'), tool: 'codex' })
+    const session = await eventually(() => state()?.sessions.find(s => s.session === 'ses_lead_3'), 'its session in the pool')
+    expect(session.profile?.tool).toBe('codex')
+    watch.setOrchestratorMachine(poolId, null)
+    await eventually(() => running.lead.session(poolId) === null, 'the session ended')
   })
 })

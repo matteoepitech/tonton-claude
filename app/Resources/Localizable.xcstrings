@@ -1925,12 +1925,12 @@
         }
       }
     },
-    "A Claude Code alias or model id, or an OpenCode provider/model. Empty: its default model." : {
+    "A Claude Code alias or model id, an OpenCode provider/model, or a Codex model. Empty: its default model." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un alias ou un identifiant de modèle Claude Code, ou un fournisseur/modèle OpenCode. Vide : son modèle par défaut."
+            "value" : "Un alias ou un identifiant de modèle Claude Code, un fournisseur/modèle OpenCode, ou un modèle Codex. Vide : son modèle par défaut."
           }
         }
       }
@@ -7069,12 +7069,12 @@
         }
       }
     },
-    "No coding tool on this machine: install Claude Code or OpenCode there first." : {
+    "No coding tool on this machine: install Claude Code, OpenCode or Codex there first." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun outil de code sur cette machine : installez-y d’abord Claude Code ou OpenCode."
+            "value" : "Aucun outil de code sur cette machine : installez-y d’abord Claude Code, OpenCode ou Codex."
           }
         }
       }

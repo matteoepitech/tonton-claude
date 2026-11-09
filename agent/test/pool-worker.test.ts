@@ -75,7 +75,8 @@ const launch: typeof launchForPool = async (taskId, cwd, tool, options) => {
   const id = `ses_${taskId}`
   if (options?.model) {
     models.set(taskId, options.model)
-    reported.set(id, { model: `claude-${options.model}-4-5` })
+    // Claude Code's status line gives an alias's full id; Codex's server, the model as it was asked.
+    reported.set(id, { model: tool === 'codex' ? options.model : `claude-${options.model}-4-5` })
   }
   const socket = new WebSocket(`${base.replace('http', 'ws')}/ws/agent`, { headers: { authorization: `Bearer ${machine.token}` } } as never)
   const session: FakeSession = { id, socket, messages: [], alive: true }
@@ -408,6 +409,21 @@ describe('a pool machine at work', () => {
     await eventually(() => state()?.events.some(e => e.body?.kind === 'model_problem' && e.body.taskId === next), 'the problem event')
     silent = false
     ;(sessions.get(`ses_${next}`) as FakeSession).alive = false
+    running.work.changed(poolId)
+    await eventually(() => running.work.running(poolId).length === 0, 'the slot free')
+  })
+
+  test("on a Codex machine, its sessions run Codex, on Codex's models, confirmed by Codex's server", async () => {
+    expect(await watch.addMachine(poolId, machine.machineId, { ...profile, tool: 'codex' })).toBe(true)
+    await eventually(() => running.pools.order(poolId)?.profile.tool === 'codex', 'the Codex order')
+    const id = await dispatch('Cart and checkout', { area: 'front' })
+    const item = await eventually(() => taskOf(id)?.task?.route && taskOf(id), 'the task with its route')
+    expect(launched.at(-1)).toEqual({ taskId: id, cwd: join(dir, 'work', 'tasks', id), tool: 'codex' })
+    expect(item.task?.route).toMatchObject({ tier: 'balanced', model: 'gpt-5.4', confirmed: 'gpt-5.4' })
+    const worker = await eventually(() => state()?.sessions.find(s => s.session === `ses_${id}`), 'the Codex worker in the pool')
+    // A Codex session takes large tasks, as Claude Code's do.
+    expect(worker.profile).toMatchObject({ tool: 'codex', machine: 'Studio', area: 'front' })
+    ;(sessions.get(`ses_${id}`) as FakeSession).alive = false
     running.work.changed(poolId)
     await eventually(() => running.work.running(poolId).length === 0, 'the slot free')
   })

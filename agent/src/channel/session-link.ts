@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { newestRollout } from '../codex/home'
+import { readServerRecord } from '../codex/wrapper'
 import { claudeConfigDir, paths } from '../config'
 import type { TerminalPane } from './terminal'
 
@@ -43,7 +44,9 @@ export function hookState(file = join(paths.run, `${process.ppid}.json`)): { bus
 /**
  * Finds which Claude Code or Codex session this channel belongs to. Hooks and the channel are both children of the same
  * claude or codex process, so hooks write `run/<parent pid>.json` and the channel reads its own. If no hook wrote it yet,
- * the newest transcript or rollout of the working directory is used: Codex runs no hook its user has not trusted.
+ * a Codex run by `tonton codex` is the first thread its server started, as `tonton codex` records it: Codex runs no
+ * hook its user has not trusted, and writes no rollout before the first prompt, which for a pool machine's session is
+ * the task the channel hands it. Otherwise the newest transcript or rollout of the working directory is used.
  */
 export class SessionLinkWatcher {
   private current: SessionLink | null = null
@@ -66,7 +69,10 @@ export class SessionLinkWatcher {
   }
 
   private poll() {
-    let next = this.readLinkFile() ?? (this.current || Date.now() - this.startedAt < GUESS_AFTER_MS ? null : this.guessFromCwd())
+    let next =
+      this.readLinkFile() ??
+      this.fromServer() ??
+      (this.current || Date.now() - this.startedAt < GUESS_AFTER_MS ? null : this.guessFromCwd())
     if (!next) return
     // Some hook events carry no transcript path: keep the one already known for this session.
     if (next.sessionId === this.current?.sessionId && !next.transcriptPath) next = { ...next, transcriptPath: this.current.transcriptPath }
@@ -83,6 +89,14 @@ export class SessionLinkWatcher {
     } catch {
       return null
     }
+  }
+
+  /** The thread `tonton codex` started for this codex: the session the notch or a pool machine started. */
+  private fromServer(): SessionLink | null {
+    if (this.tool !== 'codex') return null
+    const thread = readServerRecord(process.ppid)?.threads[0]
+    if (!thread) return null
+    return { sessionId: thread.id, transcriptPath: thread.path ?? null, cwd: thread.cwd ?? process.cwd(), tool: 'codex' }
   }
 
   private guessFromCwd(): SessionLink | null {

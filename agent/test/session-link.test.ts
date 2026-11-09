@@ -2,7 +2,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { newestTranscript } from '../src/channel/session-link'
+import { newestTranscript, type SessionLink, SessionLinkWatcher } from '../src/channel/session-link'
+import { codexRun } from '../src/codex/wrapper'
 
 const AGENT = join(import.meta.dir, '../src/main.ts')
 const temps: string[] = []
@@ -91,4 +92,31 @@ test('transcripts are looked for where CLAUDE_CONFIG_DIR puts them', () => {
   writeFileSync(join(configDir, 'projects', '-work-game', 'abc.jsonl'), '')
   process.env.CLAUDE_CONFIG_DIR = configDir
   expect(newestTranscript('/work/game')).toMatchObject({ sessionId: 'abc', file: join(configDir, 'projects', '-work-game', 'abc.jsonl') })
+})
+
+test('a Codex run by tonton codex is followed from the first thread its server started, before any hook or rollout', () => {
+  // As `tonton codex` records its server, the parent of this channel, while its wrapper (this process here) runs.
+  mkdirSync(codexRun(), { recursive: true })
+  const record = join(codexRun(), `${process.ppid}.json`)
+  const threads = [
+    { id: 'thread-1', cwd: '/work/shop', path: '/codex/sessions/rollout-1.jsonl' },
+    { id: 'thread-2', cwd: '/work/shop' },
+  ]
+  writeFileSync(record, JSON.stringify({ socket: '/s.sock', serverPid: process.ppid, wrapperPid: process.pid, startedAt: '', threads }))
+  try {
+    const follow = (tool: 'claude' | 'codex') => {
+      const seen: SessionLink[] = []
+      const watcher = new SessionLinkWatcher(link => seen.push(link), tool)
+      watcher.start()
+      watcher.stop()
+      return seen
+    }
+    expect(follow('codex')).toEqual([
+      { sessionId: 'thread-1', transcriptPath: '/codex/sessions/rollout-1.jsonl', cwd: '/work/shop', tool: 'codex' },
+    ])
+    // Claude Code's channel has no such server.
+    expect(follow('claude')).toEqual([])
+  } finally {
+    rmSync(record, { force: true })
+  }
 })

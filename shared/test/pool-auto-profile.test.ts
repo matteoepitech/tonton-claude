@@ -16,7 +16,7 @@ import cases from './pool-auto-profile.json'
 
 interface Case {
   name: string
-  machine: { name: string; health: { tools: ('claude' | 'opencode')[]; plan?: ClaudePlan; memoryTotal: number } | null }
+  machine: { name: string; health: { tools: ('claude' | 'opencode' | 'codex')[]; plan?: ClaudePlan; memoryTotal: number } | null }
   pool: { id: string; name?: string }
   mode: PoolMachineMode
   profile: object | null
@@ -38,6 +38,7 @@ describe('a machine joins a pool on its own', () => {
     expect(machinePlanLabel({ tool: 'claude' })).toBe('Claude Code')
     expect(machinePlanLabel({ tool: 'claude', plan: 'max_50x' as ClaudePlan })).toBe('Claude Code')
     expect(machinePlanLabel({ tool: 'opencode' })).toBe('OpenCode')
+    expect(machinePlanLabel({ tool: 'codex' })).toBe('Codex')
     expect(machinePlanLabel(null)).toBe('Claude Code')
   })
 })
@@ -77,8 +78,8 @@ describe('the machines that join with their member', () => {
     expect(picks[0].profile).toMatchObject({ tool: 'claude', capacity: 3, mode: 'full', plan: 'max_20x' })
   })
 
-  test('the orchestrator: Claude Code, online, the largest plan', () => {
-    const profile = (tool: 'claude' | 'opencode', plan?: ClaudePlan) => ({
+  test('the orchestrator: Claude Code or Codex, online, Claude Code first, the largest plan', () => {
+    const profile = (tool: 'claude' | 'opencode' | 'codex', plan?: ClaudePlan) => ({
       tool,
       capacity: 1,
       workdir: '~/p',
@@ -92,5 +93,9 @@ describe('the machines that join with their member', () => {
     expect(bestOrchestrator([open, pro, away, max])?.id).toBe('max')
     expect(bestOrchestrator([away, open])?.id).toBe('away')
     expect(bestOrchestrator([open])).toBeNull()
+    const codex = { id: 'codex', online: true, profile: profile('codex') }
+    expect(bestOrchestrator([codex, pro])?.id).toBe('pro')
+    expect(bestOrchestrator([open, codex, away])?.id).toBe('codex')
+    expect(bestOrchestrator([open, { ...codex, online: false }])?.id).toBe('codex')
   })
 })

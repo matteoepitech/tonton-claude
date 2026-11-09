@@ -55,7 +55,7 @@ struct AddToPoolView: View {
                 } else if let profile = automatic {
                     summary(profile)
                 } else {
-                    Text("No coding tool on this machine: install Claude Code or OpenCode there first.")
+                    Text("No coding tool on this machine: install Claude Code, OpenCode or Codex there first.")
                         .font(.system(size: 12)).foregroundStyle(Theme.danger)
                 }
                 Toggle(isOn: $full) {
@@ -142,9 +142,11 @@ struct AddToPoolView: View {
             ForEach(PoolModelTier.allCases) { tier in
                 HStack {
                     Toggle(tier.label, isOn: allows(tier, in: form)).disabled(form.wrappedValue.lock != nil)
-                    TextField("Model", text: model(of: tier, in: form), prompt: Text(verbatim: tier.defaultModel))
-                        .labelsHidden()
-                        .frame(width: 150)
+                    TextField(
+                        "Model", text: model(of: tier, in: form), prompt: Text(verbatim: tier.defaultModel(for: form.wrappedValue.tool))
+                    )
+                    .labelsHidden()
+                    .frame(width: 150)
                 }
             }
             Picker("After a session fails a task", selection: form.escalations) {
@@ -157,7 +159,8 @@ struct AddToPoolView: View {
                 switch form.wrappedValue.problem {
                 case .tiers: Text("Allow at least one tier.").foregroundStyle(Theme.danger)
                 case .model: Text("Not a model name: use an alias, a model id or provider/model.").foregroundStyle(Theme.danger)
-                default: Text("A Claude Code alias or model id, or an OpenCode provider/model. Empty: its default model.")
+                default:
+                    Text("A Claude Code alias or model id, an OpenCode provider/model, or a Codex model. Empty: its default model.")
                 }
             }
             .font(.system(size: 11.5))

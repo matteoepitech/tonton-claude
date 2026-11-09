@@ -9,6 +9,8 @@ import { join } from 'node:path'
 import type { PoolState, PoolTaskItem } from '../../../shared/pool'
 import { choiceText, chooseModel, modelMatches } from '../../../shared/pool-model'
 import type { PoolMachineOrder, PoolSessionProfile, PoolTask, PoolTaskRoute } from '../../../shared/pool-protocol'
+import type { CodingTool } from '../../../shared/protocol'
+import { codingToolLabel } from '../../../shared/session'
 import { accountLimits, nearLimit } from '../channel/pool-limits'
 import { paths } from '../config'
 import { effectiveModel, endPoolSession, launchForPool, poolSessionRuns } from '../launch'
@@ -223,15 +225,13 @@ export class PoolWorker {
     const { poolId, taskId } = slot
     const repo = this.pools.state(poolId)?.info?.repo
     if (!repo) return 'the pool has no repository to clone.'
-    // A profile from a newer app: this agent does not start Codex for pool tasks yet.
-    if (order.profile.tool === 'codex') return 'this agent cannot start Codex for pool tasks yet. Update it.'
     const prepare = this.options.prepare ?? prepareTaskTree
     const tree = await prepare(order.profile.workdir, repo, taskId, taskBranch(taskId, task.title, task.branch))
     if (typeof tree === 'string') return tree
     // The model is chosen for this task alone, from its owner's policy in the order: an escalation stays with the task
-    // that earned it. Its plan is spared while it runs low.
+    // that earned it. Its plan is spared while it runs low: Claude Code's or Codex's, each its own.
     const state = this.pools.state(poolId)
-    const spare = order.profile.tool === 'claude' && state ? nearLimit(accountLimits(state, account)) : null
+    const spare = state ? nearLimit(accountLimits(state, account, order.profile.tool)) : null
     const choice = chooseModel({ task, tool: order.profile.tool, policy: order.profile.models, spare })
     const launched = await (this.options.launch ?? launchForPool)(taskId, tree.cwd, order.profile.tool, { model: choice.model })
     if (typeof launched === 'string') return launched
@@ -283,14 +283,10 @@ export class PoolWorker {
 
   /**
    * Waits a moment for the session to say which model it runs on (Claude Code's status line, the OpenCode bridge's
-   * switch), before it gets the task: the model asked for, another one, or that it could not tell. The session runs
+   * switch, Codex's app-server), before it gets the task: the model asked for, another one, or that it could not tell. The session runs
    * either way; the pool sees which.
    */
-  private async confirm(
-    sessionId: string,
-    tool: 'claude' | 'opencode',
-    asked: string,
-  ): Promise<Pick<PoolTaskRoute, 'confirmed' | 'problem'>> {
+  private async confirm(sessionId: string, tool: CodingTool, asked: string): Promise<Pick<PoolTaskRoute, 'confirmed' | 'problem'>> {
     const read = this.options.effectiveModel ?? effectiveModel
     const until = Date.now() + (this.options.confirmMs ?? CONFIRM_MS)
     let said = read(tool, sessionId)
@@ -301,7 +297,7 @@ export class PoolWorker {
     const runs = said?.model
     if (runs && modelMatches(asked, runs)) return { confirmed: runs }
     if (runs) return { confirmed: runs, problem: `asked for ${asked}, it runs on ${runs}` }
-    return { problem: said?.problem ?? `${tool === 'claude' ? 'Claude Code' : 'OpenCode'} did not say which model it runs on` }
+    return { problem: said?.problem ?? `${codingToolLabel(tool)} did not say which model it runs on` }
   }
 
   /** Ends the slot: its session's tmux goes, it leaves the pool, and the slot is free. */

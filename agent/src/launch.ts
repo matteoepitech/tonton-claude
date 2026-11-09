@@ -1,16 +1,17 @@
-// Starts claude or opencode from the notch. An interactive Claude Code needs a terminal, so it runs in a detached tmux
-// session; the questions it asks on the way (loading the channel, trusting the folder) go to the notch, and only the
+// Starts claude, opencode or codex from the notch. An interactive Claude Code needs a terminal, so it runs in a detached
+// tmux session; the questions it asks on the way (loading the channel, trusting the folder) go to the notch, and only the
 // user's answer moves it on. OpenCode asks nothing: its session is made in its background service when it has one.
-// Pool machines start their sessions the same way (agent/src/service/pool-worker.ts), in the folder their owner chose.
+// Codex runs through `tonton codex`, in tmux too. Pool machines start their sessions the same way
+// (agent/src/service/pool-worker.ts), in the folder their owner chose.
 
 import { mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { open, seal } from '../../shared/crypto'
 import { isModelId } from '../../shared/pool-model'
-import type { StartAnswer, StartDetail, StartOrder, StartState } from '../../shared/protocol'
+import type { CodingTool, StartAnswer, StartDetail, StartOrder, StartState } from '../../shared/protocol'
 import type { RelayConnection } from './channel/relay-connection'
-import { serverRecords } from './codex/wrapper'
+import { codexModelFile, serverRecords } from './codex/wrapper'
 import { type AgentConfig, paths } from './config'
 import { binaryPath } from './install/system'
 import { log } from './log'
@@ -203,7 +204,10 @@ export async function handleStartOrder(
 
 /** How a pool task's session starts: with the model its machine chose for it (shared/pool-model.ts). */
 export interface PoolLaunchOptions extends LaunchOptions {
-  /** A Claude Code alias or id, an OpenCode `provider/model` or family. Checked with isModelId: it reaches a command line. */
+  /**
+   * A Claude Code alias or id, an OpenCode `provider/model` or family, a Codex model. Checked with isModelId: it reaches
+   * a command line.
+   */
   model?: string
 }
 
@@ -220,14 +224,15 @@ const POOL_TASK_ID = /^[A-Za-z0-9_-]{8,40}$/
 export const poolTmuxName = (taskId: string) => `tonton-pool-${taskId}`
 
 /**
- * Starts a session for a task a pool machine took, in the task's worktree: Claude Code in a detached tmux, or OpenCode
- * through its service and a terminal on it. Claude Code's questions are answered yes without asking: the machine owner
- * put the machine in the pool with this folder. The session id, or why it did not start.
+ * Starts a session for a task a pool machine took, in the task's worktree: Claude Code in a detached tmux, OpenCode
+ * through its service and a terminal on it, or Codex through `tonton codex` in a detached tmux, so that its channel
+ * hands it the task on its app-server. The questions Claude Code and Codex ask are answered yes without asking: the
+ * machine owner put the machine in the pool with this folder. The session id, or why it did not start.
  */
 export async function launchForPool(
   taskId: string,
   cwd: string,
-  tool: 'claude' | 'opencode',
+  tool: CodingTool,
   options: PoolLaunchOptions = {},
 ): Promise<PoolLaunch | string> {
   if (!POOL_TASK_ID.test(taskId)) return 'The task has no id this machine can use.'
@@ -247,18 +252,13 @@ export async function launchForPool(
   }
   running++
   try {
+    const run = options.run ?? paths.run
     const sessionId =
       tool === 'opencode'
         ? await runOpenCodeLaunch(`pool-${taskId}`, cwd, report, options, name, options.model)
-        : await runLaunch(
-            `pool-${taskId}`,
-            cwd,
-            report,
-            async () => true,
-            { ...options, run: options.run ?? paths.run },
-            name,
-            options.model,
-          )
+        : tool === 'codex'
+          ? await runCodexLaunch(`pool-${taskId}`, cwd, report, async () => true, { ...options, run }, name, options.model)
+          : await runLaunch(`pool-${taskId}`, cwd, report, async () => true, { ...options, run }, name, options.model)
     if (sessionId) return { sessionId, tmux: name }
     tmux(['kill-session', '-t', `=${name}`])
     return failure
@@ -495,20 +495,21 @@ export const openCodeStarts = (run: string) => join(run, 'opencode')
 /** Where the bridge says which model it switched a launched session to, or why it could not. */
 export const openCodeModelFile = (run: string, sessionId: string) => join(openCodeStarts(run), `${sessionId}.model`)
 
-/** What a pool session reported running on: from Claude Code's status line, or from the OpenCode bridge. */
+/** What a pool session reported running on: from Claude Code's status line, the OpenCode bridge, or Codex's channel. */
 export interface EffectiveModel {
   model?: string
   problem?: string
 }
 
 /** The model the session runs on as far as it said, or null while it said nothing. */
-export function effectiveModel(tool: 'claude' | 'opencode', sessionId: string, run = paths.run): EffectiveModel | null {
+export function effectiveModel(tool: CodingTool, sessionId: string, run = paths.run): EffectiveModel | null {
   try {
     if (tool === 'claude') {
       const model = (JSON.parse(readFileSync(usageFile(sessionId), 'utf8')) as { model?: unknown }).model
       return typeof model === 'string' ? { model } : null
     }
-    const said = JSON.parse(readFileSync(openCodeModelFile(run, sessionId), 'utf8')) as { model?: unknown; problem?: unknown }
+    const file = tool === 'codex' ? codexModelFile(sessionId, run) : openCodeModelFile(run, sessionId)
+    const said = JSON.parse(readFileSync(file, 'utf8')) as { model?: unknown; problem?: unknown }
     if (typeof said.model === 'string') return { model: said.model }
     return typeof said.problem === 'string' ? { problem: said.problem } : null
   } catch {

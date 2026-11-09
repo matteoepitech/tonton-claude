@@ -123,9 +123,15 @@ describe('Codex through the relay', () => {
       project: 'HeroProject',
       tool: 'codex',
     })
-    // Codex is told about the tools only: no channel to receive messages or permission prompts.
+    // Codex is told about the tools only: no channel to receive messages or permission prompts. It lists them once, so
+    // every pool tool is there from the start, and says outside a pool that the session is not in one.
     expect(codex.getServerCapabilities()?.experimental).toBeUndefined()
-    expect((await codex.listTools()).tools).toEqual([])
+    const names = (await codex.listTools()).tools.map(tool => tool.name)
+    expect(names).toContain('task_claim')
+    expect(names).toContain('plan_create')
+    expect(await codex.callTool({ name: 'pool_status', arguments: {} })).toMatchObject({
+      content: [{ type: 'text', text: 'This session is not in a pool.' }],
+    })
   })
 
   test('the app decrypts the conversation of the rollout, the relay only sees ciphertext', async () => {

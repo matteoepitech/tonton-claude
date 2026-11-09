@@ -1,16 +1,19 @@
 // What the notch, the website and the iPhone send a Codex session that runs through `tonton codex`: its messages with
 // images, `/compact` and interrupt, and the answers to its approvals, through a CodexDriver on the session's app-server.
-// The auto-approve rules answer what they match first, as Claude Code's PermissionRequest hook does. A Codex started
-// plainly (`codex`) has no server Tonton reaches: the notch only shows it.
+// The auto-approve rules answer what they match first, as Claude Code's PermissionRequest hook does, then the pool
+// rules its owner accepted and a pool machine's mode. What its pools and clusters send it goes in the same way, and a
+// pool stops its turn through it. A Codex started plainly (`codex`) has no server Tonton reaches: the notch only shows it.
 
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { open } from '../../../shared/crypto'
 import type { PermissionDetail, PromptPayload, RelayToAgent, SessionCommand } from '../../../shared/protocol'
 import { saveToInbox } from '../channel/inbox'
 import { claimCommand, whyInvalid } from '../channel/terminal'
 import { paths, VERSION } from '../config'
 import { log } from '../log'
-import { addSessionRules, matchingRule, openSessionRules, readRules, sessionRules } from '../rules'
+import { addSessionRules, codexModeAllows, matchingRule, openSessionRules, poolMode, poolRules, readRules, sessionRules } from '../rules'
 import { type CodexApproval, CodexDriver } from './driver'
+import { codexModelFile, codexRun } from './wrapper'
 
 /** What the notch can ask a Codex session to run. */
 export const CODEX_COMMANDS: SessionCommand['name'][] = ['compact', 'interrupt']
@@ -37,6 +40,8 @@ export function codexPrompt(prompt: PromptPayload, inbox = paths.inbox): { text:
 export class CodexNotch {
   private driver: CodexDriver | null = null
   private attaching: Promise<void> = Promise.resolve()
+  /** Posts go in one after the other: the first may start a turn, which the next ones then join. */
+  private injecting: Promise<unknown> = Promise.resolve()
 
   constructor(
     private readonly socket: string,
@@ -57,9 +62,47 @@ export class CodexNotch {
     }).then(
       driver => {
         this.driver = driver
+        if (driver.model) this.sayModel(threadId, { model: driver.model })
       },
-      error => log('codex: could not join the thread on its app-server', String(error)),
+      error => {
+        log('codex: could not join the thread on its app-server', String(error))
+        this.sayModel(threadId, { problem: 'Tonton could not join the Codex thread on its app-server' })
+      },
     )
+  }
+
+  /**
+   * Puts text from a pool or a cluster in front of Codex: into the running turn (turn/steer), else a new turn.
+   * False when Codex cannot be reached (a plain codex, or its server gone).
+   */
+  async inject(text: string): Promise<boolean> {
+    const sent = this.injecting.then(async () => {
+      await this.attaching
+      const driver = this.driver
+      if (!driver) return false
+      try {
+        await driver.prompt(text)
+        return true
+      } catch (error) {
+        log('codex: a post did not reach Codex', messageOf(error))
+        return false
+      }
+    })
+    this.injecting = sent
+    return sent
+  }
+
+  /** Stops the running turn, for a pool that stops the session's work: null when stopped or none ran, otherwise why not. */
+  async interrupt(): Promise<string | null> {
+    await this.attaching
+    const driver = this.driver
+    if (!driver) return 'Codex cannot be reached on its app-server.'
+    try {
+      await driver.interrupt()
+      return null
+    } catch (error) {
+      return `Codex did not take it: ${messageOf(error)}`
+    }
   }
 
   async receive(message: Extract<RelayToAgent, { t: 'prompt' | 'verdict' }>) {
@@ -91,15 +134,31 @@ export class CodexNotch {
     this.driver = null
   }
 
-  /** An auto-approve rule, or one allowed for this session, answers at once; otherwise the notch asks. */
+  /**
+   * An auto-approve rule, one allowed for this session, or one its owner accepted from a pool answers at once, and so
+   * does a pool machine's mode; otherwise the notch asks.
+   */
   private approval(threadId: string, approval: CodexApproval) {
-    const rules = [...(readRules()?.rules ?? []), ...sessionRules(threadId)]
-    if (matchingRule(rules, approval.detail.toolName, approval.input)) {
-      log('approved by an auto-approve rule', { tool: approval.detail.toolName })
+    const tool = approval.detail.toolName
+    const rules = [...(readRules()?.rules ?? []), ...sessionRules(threadId), ...poolRules(threadId)]
+    const rule = matchingRule(rules, tool, approval.input)
+    const listed = approval.input.paths
+    const files = Array.isArray(listed) ? listed.filter((file): file is string => typeof file === 'string') : []
+    if (rule || codexModeAllows(poolMode(threadId), tool, files)) {
+      log(rule ? 'approved by an auto-approve rule' : 'approved by the pool machine’s mode', { tool })
       this.driver?.answer(approval.requestId, 'accept')
       return
     }
     this.session()?.addPermission(approval.requestId, approval.detail)
+  }
+
+  private sayModel(threadId: string, said: { model?: string; problem?: string }) {
+    try {
+      mkdirSync(codexRun(), { recursive: true, mode: 0o700 })
+      writeFileSync(codexModelFile(threadId), JSON.stringify(said), { mode: 0o600 })
+    } catch (error) {
+      log('codex: could not say which model the thread runs on', String(error))
+    }
   }
 
   private async command(command: SessionCommand, session: CodexNotchSession, driver: CodexDriver) {

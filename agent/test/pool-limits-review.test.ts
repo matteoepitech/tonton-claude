@@ -14,7 +14,8 @@ import type {
   PoolUpdate,
 } from '../../shared/pool-protocol'
 import type { AgentMessage, UsageLimit } from '../../shared/protocol'
-import { LimitsReporter, limitsMark, nearLimit, shortOfTime, shouldPost } from '../src/channel/pool-limits'
+import { machineCandidates } from '../src/channel/pool-dispatch'
+import { accountLimits, LimitsReporter, limitsMark, limitsTool, nearLimit, shortOfTime, shouldPost } from '../src/channel/pool-limits'
 import { candidates, refusal } from '../src/channel/pool-orchestrator'
 import { reviewers } from '../src/channel/pool-review'
 import { PoolWork, type SessionDescription } from '../src/channel/pool-work'
@@ -61,7 +62,7 @@ describe('the rules', () => {
     expect(shouldPost({ mark: 'other', at: NOW }, mark, NOW + 61_000)).toBe(true)
   })
 
-  const session = (id: string, tool: 'claude' | 'opencode', area?: string): PoolSession => ({
+  const session = (id: string, tool: 'claude' | 'opencode' | 'codex', area?: string): PoolSession => ({
     account: `acc_${id}`,
     session: id,
     joinedAt: `t-${id}`,
@@ -111,6 +112,43 @@ describe('the rules', () => {
     expect(refusal(s, { title: 'x', state: 'todo' }, low, descriptions, NOW)).toContain('plan leaves no time')
   })
 
+  test("an account's Claude plan and its Codex plan stay apart: neither stands for the other, and OpenCode has none", () => {
+    const claude = { fiveHour: window(100, 90) }
+    const codex = { fiveHour: window(30) }
+    const s = state([session('cc', 'claude'), session('cx', 'codex')])
+    const event = (seq: number, sessionId: string, body: PoolEventBody) => ({
+      id: `e${seq}`,
+      seq,
+      ts: 'then',
+      account: 'acc_one',
+      session: sessionId,
+      body,
+    })
+    s.events = [event(1, 'cc', { kind: 'limits', limits: claude }), event(2, 'cx', { kind: 'codex_limits', limits: codex })]
+    expect(accountLimits(s, 'acc_one')).toEqual(claude)
+    expect(accountLimits(s, 'acc_one', 'claude')).toEqual(claude)
+    expect(accountLimits(s, 'acc_one', 'codex')).toEqual(codex)
+    expect(accountLimits(s, 'acc_one', 'opencode')).toBeUndefined()
+    expect(limitsTool({ kind: 'limits' })).toBe('claude')
+    expect(limitsTool({ kind: 'codex_limits' })).toBe('codex')
+    expect(limitsTool({ kind: 'usage' })).toBeNull()
+
+    // The control loop: the account's Claude Code machine is out of time, its Codex machine is not.
+    const machine = (id: string, tool: 'claude' | 'codex') => ({
+      account: 'acc_one',
+      machine: id,
+      addedAt: `t-${id}`,
+      online: true,
+      ready: true,
+      profile: { tool, capacity: 1, workdir: '~/p', mode: 'edits' as const },
+    })
+    s.machines = [machine('mac', 'claude'), machine('box', 'codex')]
+    expect(machineCandidates(s, { size: 'large' }, NOW).map(m => m.machine)).toEqual(['box'])
+    // And the other way round.
+    s.events = [event(1, 'cc', { kind: 'limits', limits: codex }), event(2, 'cx', { kind: 'codex_limits', limits: claude })]
+    expect(machineCandidates(s, { size: 'large' }, NOW).map(m => m.machine)).toEqual(['mac'])
+  })
+
   test('the reviewer is of the review area, never the author, the last reviewer first', () => {
     const s = state([session('author', 'claude'), session('rev1', 'claude', 'review'), session('rev2', 'opencode', 'review')])
     const author = { account: 'acc_author', session: 'author' }
@@ -131,7 +169,7 @@ interface Peer {
   account: string
   session: string
   area?: string
-  tool: 'claude' | 'opencode'
+  tool: 'claude' | 'opencode' | 'codex'
   limits?: PoolLimits
 }
 
@@ -212,7 +250,7 @@ let work: PoolWork
 let delivered: string[]
 let plan: SessionDescription['plan']
 
-async function start(me: string, tool: 'claude' | 'opencode', peers: Peer[], orchestrator: PoolSessionRef | null) {
+async function start(me: string, tool: 'claude' | 'opencode' | 'codex', peers: Peer[], orchestrator: PoolSessionRef | null) {
   relay = new FakeRelay(me)
   let outbox = Promise.resolve()
   const post = (build: () => Promise<AgentMessage | null>) => {
@@ -266,7 +304,7 @@ async function start(me: string, tool: 'claude' | 'opencode', peers: Peer[], orc
       peers
         .flatMap(p => [
           { p, body: { kind: 'session', tool: p.tool } },
-          ...(p.limits ? [{ p, body: { kind: 'limits', limits: p.limits } }] : []),
+          ...(p.limits ? [{ p, body: { kind: p.tool === 'codex' ? 'codex_limits' : 'limits', limits: p.limits } }] : []),
         ])
         .map(async ({ p, body }, i) => ({
           id: `e${i}`,
@@ -329,6 +367,37 @@ describe('limits in the pool', () => {
     work.reportLimits()
     await settle()
     expect(await relay.events('limits')).toEqual([])
+  })
+
+  test("a Codex session shares its ChatGPT plan apart, as codex_limits, and is told to hand over by Codex's plan", async () => {
+    plan = { fiveHour: { usedPercent: 97, resetsAt: later } }
+    await start('cx', 'codex', [{ account: 'acc_lead', session: 'lead', tool: 'claude' }], { account: 'acc_lead', session: 'lead' })
+    await relay.otherTask(
+      't1',
+      { ...big('Checkout'), state: 'in_progress', assignee: { account: 'acc_cx', session: 'cx' }, branch: 'pool/t1-checkout' },
+      { account: 'acc_lead', session: 'lead' },
+    )
+    work.reportLimits()
+    await settle()
+    expect(await relay.events('limits')).toEqual([])
+    expect((await relay.events('codex_limits'))[0]?.limits).toEqual({ fiveHour: { usedPercent: 97, resetsAt: later } })
+    expect(delivered.filter(d => d.includes("Codex's plan's 5-hour window") && d.includes('Handover:'))).toHaveLength(1)
+
+    // The orchestrator reads that session's plan as Codex's, and its rules skip it for a task it has no time for.
+    await start(
+      'lead',
+      'claude',
+      [
+        { account: 'acc_cx', session: 'cx', tool: 'codex', limits: { fiveHour: { usedPercent: 100, resetsAt: later } } },
+        { account: 'acc_ok', session: 'ok', tool: 'codex', limits: { fiveHour: { usedPercent: 12, resetsAt: later } } },
+      ],
+      { account: 'acc_lead', session: 'lead' },
+    )
+    const overview = JSON.parse(await call('pool_overview'))
+    const cx = overview.sessions.find((s: { session: string }) => s.session === 'cx')
+    expect(cx).toMatchObject({ tool: 'codex', takes: 'large' })
+    expect(cx.plan.fiveHour).toContain('100 % used')
+    expect(await call('task_create', big('Checkout', { assign: 'auto' } as never))).toContain('(ok)')
   })
 
   test('the orchestrator sees each plan, and its rules skip a session about to run out', async () => {
