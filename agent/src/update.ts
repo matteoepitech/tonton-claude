@@ -11,7 +11,8 @@ import { restartService } from './service/control'
 
 /** Older orders are refused so the relay cannot replay one later. Generous for machines whose clock drifts. */
 const ORDER_TTL_MS = 10 * 60_000
-const DOWNLOAD_TIMEOUT_MS = 180_000
+/** No limit on a whole download, which a slow connection needs: only one that receives nothing for this long is dropped. */
+const STALL_TIMEOUT_MS = 120_000
 
 let running = false
 
@@ -70,7 +71,7 @@ export async function applyUpdate(config: AgentConfig, sealedOrder: string): Pro
     if (!isOlder(installedVersion(), order.version)) return installedVersion()
 
     const release = `${RELEASES_URL}/download/v${order.version}`
-    const sums = parseChecksums(await (await download(`${release}/SHA256SUMS`)).text())
+    const sums = parseChecksums(new TextDecoder().decode(await download(`${release}/SHA256SUMS`)))
     const binary = await verified(release, agentBinaryName(), sums)
     const tray = process.platform === 'darwin' ? await verified(release, TRAY_HELPER_NAME, sums) : null
 
@@ -92,17 +93,46 @@ export async function applyUpdate(config: AgentConfig, sealedOrder: string): Pro
   }
 }
 
-async function download(url: string): Promise<Response> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) }).catch(() => null)
-  if (!response) throw new Error(`could not reach ${new URL(url).host}`)
-  if (!response.ok) throw new Error(`download failed: ${url.split('/').pop()} (HTTP ${response.status})`)
-  return response
+/** The whole file, however long it takes, as long as bytes keep coming. */
+export async function download(url: string, stallMs = STALL_TIMEOUT_MS): Promise<Uint8Array> {
+  const name = url.split('/').pop()
+  const stalled = new AbortController()
+  let timer = setTimeout(() => stalled.abort(), stallMs)
+  const progressed = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => stalled.abort(), stallMs)
+  }
+  try {
+    const response = await fetch(url, { signal: stalled.signal }).catch(() => null)
+    if (!response) throw new Error(`could not reach ${new URL(url).host}`)
+    if (!response.ok) throw new Error(`download failed: ${name} (HTTP ${response.status})`)
+    const chunks: Uint8Array[] = []
+    if (response.body) {
+      const reader = response.body.getReader()
+      for (;;) {
+        const chunk = await reader.read().catch(() => null)
+        if (!chunk) throw new Error(`the download of ${name} stopped: nothing came for ${Math.round(stallMs / 1000)} s`)
+        if (chunk.done) break
+        chunks.push(chunk.value)
+        progressed()
+      }
+    }
+    const data = new Uint8Array(chunks.reduce((size, chunk) => size + chunk.length, 0))
+    let offset = 0
+    for (const chunk of chunks) {
+      data.set(chunk, offset)
+      offset += chunk.length
+    }
+    return data
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function verified(release: string, name: string, sums: Map<string, string>): Promise<Uint8Array> {
   const expected = sums.get(name)
   if (!expected) throw new Error(`${name} is not part of this release`)
-  const data = await (await download(`${release}/${name}`)).bytes()
+  const data = await download(`${release}/${name}`)
   const actual = new Bun.CryptoHasher('sha256').update(data).digest('hex')
   if (actual !== expected) throw new Error(`${name} does not match its checksum`)
   return data
