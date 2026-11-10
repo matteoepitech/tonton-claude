@@ -675,9 +675,10 @@ final class SessionStore: ObservableObject {
         updatingMachines.insert(machine.id)
         updateErrors[machine.id] = nil
         socket.send(["t": "update_agent", "machineId": machine.id, "order": order])
-        // No answer comes back if the session running the update closes in the middle.
+        // No answer comes back if the session running the update closes in the middle. Long enough for a slow connection:
+        // the agent has no limit on a download that keeps going.
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(180))
+            try? await Task.sleep(for: .seconds(30 * 60))
             self?.updatingMachines.remove(machine.id)
         }
     }

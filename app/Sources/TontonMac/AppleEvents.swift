@@ -71,11 +71,20 @@ public struct SystemAutomationAccess: AutomationAccess {
         await withCheckedContinuation { continuation in
             // It waits for the user to answer the prompt: never on the main thread.
             DispatchQueue.global(qos: .userInitiated).async {
-                let target = NSAppleEventDescriptor(bundleIdentifier: bundleId)
+                guard let target = Self.target(bundleId) else { return continuation.resume(returning: .unknown) }
                 let status = AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, true)
                 continuation.resume(returning: MusicAccess(automationStatus: status))
             }
         }
+    }
+
+    /// The running app, by its process rather than its bundle id: when another copy of the app is registered, as the one
+    /// Spotify's updater leaves in its cache, macOS never answers for the bundle id. Nil while it doesn't run.
+    static func target(
+        _ bundleId: String,
+        running: (String) -> [NSRunningApplication] = NSRunningApplication.runningApplications(withBundleIdentifier:)
+    ) -> NSAppleEventDescriptor? {
+        running(bundleId).first.map { NSAppleEventDescriptor(processIdentifier: $0.processIdentifier) }
     }
 }
 

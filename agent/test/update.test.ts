@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { seal } from '../../shared/crypto'
 import { isOlder } from '../../shared/version'
-import { agentBinaryName, parseChecksums, readOrder } from '../src/update'
+import { agentBinaryName, download, parseChecksums, readOrder } from '../src/update'
 
 const newKey = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
 const minutes = (count: number) => count * 60_000
@@ -51,4 +51,46 @@ test('release checksums are read from SHA256SUMS', () => {
   expect(sums.get('tonton-linux-x64')).toBe('a'.repeat(64))
   expect(sums.get('tonton-windows-x64.exe')).toBe('b'.repeat(64))
   expect(sums.size).toBe(2)
+})
+
+describe('agent downloads', () => {
+  /** Serves `chunks` bytes, one every `gapMs`, then ends the response, or never ends it with `hang`. */
+  function slowServer(chunks: number, gapMs: number, hang = false) {
+    return Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(
+          new ReadableStream({
+            async start(controller) {
+              for (let i = 0; i < chunks; i++) {
+                controller.enqueue(new Uint8Array([i]))
+                await Bun.sleep(gapMs)
+              }
+              if (!hang) controller.close()
+            },
+          }),
+        ),
+    })
+  }
+
+  test('take as long as they need while bytes keep coming', async () => {
+    // 8 chunks 40 ms apart: far longer in all than the 100 ms without any.
+    const server = slowServer(8, 40)
+    try {
+      expect(await download(`http://localhost:${server.port}/tonton-darwin-arm64`, 100)).toEqual(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]))
+    } finally {
+      server.stop(true)
+    }
+  })
+
+  test('stop once nothing comes', async () => {
+    const server = slowServer(1, 0, true)
+    try {
+      await expect(download(`http://localhost:${server.port}/tonton-darwin-arm64`, 100)).rejects.toThrow(
+        'the download of tonton-darwin-arm64 stopped',
+      )
+    } finally {
+      server.stop(true)
+    }
+  })
 })
